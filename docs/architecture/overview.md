@@ -1,7 +1,7 @@
 # Architecture overview
 
 ## Runtime stack
-- Spring Boot 3.5.x application with Java 17.
+- Spring Boot 3.5.x application with Java 21.
 - Layering built on Spring Web, Spring Security, Spring Data JPA, Flyway, and PostgreSQL.
 - Stateless JWT authentication for protected endpoints.
 - Stripe integration for payment intent creation and webhook reconciliation.
