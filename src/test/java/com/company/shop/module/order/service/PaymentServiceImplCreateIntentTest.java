@@ -34,6 +34,7 @@ import com.company.shop.module.order.exception.PaymentProcessingException;
 import com.company.shop.module.order.exception.PaymentRecordNotFoundException;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
+import com.company.shop.module.order.repository.StripeWebhookEventRepository;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.user.entity.User;
 import com.stripe.model.PaymentIntent;
@@ -52,11 +53,14 @@ class PaymentServiceImplCreateIntentTest {
 	@Mock
 	private CartService cartService;
 
+	@Mock
+	private StripeWebhookEventRepository stripeWebhookEventRepository;
+
 	private PaymentServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
-		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService);
+		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRepository);
 		setField(service, "publicKey", "pk_test_123");
 	}
 

@@ -9,22 +9,26 @@
 package com.company.shop.module.order.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.common.exception.BusinessException;
 import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
-import com.company.shop.module.order.entity.Payment;
-import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderStatus;
+import com.company.shop.module.order.entity.Payment;
+import com.company.shop.module.order.entity.PaymentStatus;
+import com.company.shop.module.order.entity.StripeWebhookEvent;
 import com.company.shop.module.order.exception.OrderNotFoundException;
 import com.company.shop.module.order.exception.PaymentAlreadyCompletedException;
 import com.company.shop.module.order.exception.PaymentProcessingException;
@@ -34,6 +38,7 @@ import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
+import com.company.shop.module.order.repository.StripeWebhookEventRepository;
 import com.stripe.Stripe;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.RequestOptions;
@@ -46,6 +51,7 @@ import jakarta.annotation.PostConstruct;
 public class PaymentServiceImpl implements PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
+    private static final String STRIPE_EVENT_ID_UNIQUE_CONSTRAINT = "uq_stripe_webhook_events_stripe_event_id";
 
     @Value("${stripe.api-key}")
     private String secretKey;
@@ -59,11 +65,14 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepo;
     private final PaymentRepository paymentRepo;
     private final CartService cartService;
+    private final StripeWebhookEventRepository stripeWebhookEventRepository;
 
-    public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo, CartService cartService) {
+    public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo, CartService cartService,
+            StripeWebhookEventRepository stripeWebhookEventRepository) {
         this.orderRepo = orderRepo;
         this.paymentRepo = paymentRepo;
         this.cartService = cartService;
+        this.stripeWebhookEventRepository = stripeWebhookEventRepository;
     }
 
     @PostConstruct
@@ -128,7 +137,22 @@ public class PaymentServiceImpl implements PaymentService {
         try {
             var event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
 
-            if (!"payment_intent.succeeded".equals(event.getType())) {
+            String eventId = event.getId();
+            if (eventId == null || eventId.isBlank()) {
+                throw new WebhookSignatureInvalidException("Missing Stripe event id in webhook payload.");
+            }
+
+            String eventType = event.getType();
+            if (eventType == null || eventType.isBlank()) {
+                throw new WebhookSignatureInvalidException("Missing Stripe event type in webhook payload.");
+            }
+
+            if (!registerWebhookEvent(eventId, eventType)) {
+                log.info("Ignoring duplicate Stripe webhook eventId={} type={}", eventId, eventType);
+                return;
+            }
+
+            if (!"payment_intent.succeeded".equals(eventType)) {
                 return;
             }
 
@@ -179,6 +203,37 @@ public class PaymentServiceImpl implements PaymentService {
             log.error("Stripe webhook processing failed", e);
             throw new WebhookProcessingException("Unable to process Stripe webhook event.");
         }
+    }
+
+    private boolean registerWebhookEvent(String eventId, String eventType) {
+        try {
+            // Registered in the same transaction as business effects; if processing rolls back,
+            // the webhook event record also rolls back and can be retried safely.
+            StripeWebhookEvent webhookEvent = new StripeWebhookEvent(eventId, eventType, LocalDateTime.now());
+            stripeWebhookEventRepository.saveAndFlush(webhookEvent);
+            return true;
+        } catch (DataIntegrityViolationException ex) {
+            if (isDuplicateStripeEventConstraintViolation(ex)) {
+                return false;
+            }
+            throw ex;
+        }
+    }
+
+    private boolean isDuplicateStripeEventConstraintViolation(DataIntegrityViolationException ex) {
+        String constraintName = extractConstraintName(ex);
+        return STRIPE_EVENT_ID_UNIQUE_CONSTRAINT.equals(constraintName);
+    }
+
+    private String extractConstraintName(Throwable throwable) {
+        Throwable cursor = throwable;
+        while (cursor != null) {
+            if (cursor instanceof ConstraintViolationException constraintViolationException) {
+                return constraintViolationException.getConstraintName();
+            }
+            cursor = cursor.getCause();
+        }
+        return null;
     }
 
     private void validatePaymentIntentMatchesOrder(PaymentIntent intent, Order order) {
