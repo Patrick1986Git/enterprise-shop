@@ -104,6 +104,23 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
+    void handleWebhook_shouldIgnoreFailedEventWhenDeserializerObjectMissing() {
+        Event event = failedEvent("evt_failed_missing_intent", null);
+        EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+        when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+        when(deserializer.getObject()).thenReturn(Optional.empty());
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+
+            verifyWebhookEventRegistered("evt_failed_missing_intent", "payment_intent.payment_failed");
+            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+        }
+    }
+
+    @Test
     void handleWebhook_shouldRegisterSupportedEventBeforeBusinessValidationFailure() {
         Event event = event("evt_missing_order_id", "payment_intent.succeeded");
         EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
@@ -126,6 +143,22 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
+    void handleWebhook_shouldRegisterFailedEventBeforeBusinessValidationFailure() {
+        Event event = failedEvent("evt_failed_missing_order_id", paymentIntentWithEmptyMetadata());
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("orderId");
+
+            verifyWebhookEventRegistered("evt_failed_missing_order_id", "payment_intent.payment_failed");
+            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+        }
+    }
+
+    @Test
     void handleWebhook_shouldThrowWhenOrderIdMetadataIsNotValidUuid() {
         Event event = event("evt_invalid_uuid", "payment_intent.succeeded");
         EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
@@ -142,6 +175,28 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class);
 
             verifyWebhookEventRegistered("evt_invalid_uuid", "payment_intent.succeeded");
+            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldThrowWhenPaymentIntentMetadataIsNull() {
+        Event event = event("evt_null_metadata", "payment_intent.succeeded");
+        EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+        PaymentIntent intent = mock(PaymentIntent.class);
+
+        when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+        when(deserializer.getObject()).thenReturn(Optional.of(intent));
+        when(intent.getMetadata()).thenReturn(null);
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("orderId");
+
+            verifyWebhookEventRegistered("evt_null_metadata", "payment_intent.succeeded");
             verifyNoInteractions(orderRepository, paymentRepository, cartService);
         }
     }
@@ -238,6 +293,24 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
+    void handleWebhook_shouldIgnoreDuplicatePaymentFailedWebhookEvent() {
+        Event event = event("evt_failed_duplicate", "payment_intent.payment_failed");
+        ConstraintViolationException cve = new ConstraintViolationException("duplicate", null,
+                "uq_stripe_webhook_events_stripe_event_id");
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate", cve))
+                .when(stripeWebhookEventRepository).saveAndFlush(any(StripeWebhookEvent.class));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+
+            verify(stripeWebhookEventRepository).saveAndFlush(any(StripeWebhookEvent.class));
+            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+        }
+    }
+
+    @Test
     void handleWebhook_shouldThrowWhenWebhookEventInsertFailsWithUnknownConstraint() {
         Event event = event("evt_unknown_constraint", "payment_intent.succeeded");
         ConstraintViolationException cve = new ConstraintViolationException("unknown", null, "another_constraint");
@@ -302,7 +375,6 @@ class PaymentServiceImplWebhookTest {
                 paymentIntentWithMetadataAndAmountReceivedAndCurrency(order.getId(), 1999L, "pln"));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
         when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.empty());
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
@@ -313,7 +385,8 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("Unable to process Stripe webhook event.");
 
             verifyWebhookEventRegistered("evt_payment_missing", "payment_intent.succeeded");
-            verify(orderRepository).save(order);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            verify(orderRepository, never()).save(order);
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             verify(paymentRepository, never()).save(any(Payment.class));
             verify(cartService, never()).clearCartForUser(order.getUser().getId());
@@ -330,7 +403,6 @@ class PaymentServiceImplWebhookTest {
                 paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(order.getId(), 2500L, "pln", "pi_actual"));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
-        when(orderRepository.save(order)).thenReturn(order);
         when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
@@ -341,11 +413,87 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("does not match");
 
             verifyWebhookEventRegistered("evt_provider_mismatch", "payment_intent.succeeded");
-            verify(orderRepository).save(order);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            verify(orderRepository, never()).save(order);
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
             verify(paymentRepository, never()).save(payment);
             verify(cartService, never()).clearCartForUser(order.getUser().getId());
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldThrowWhenFailedEventProviderPaymentIdDiffers() {
+        Order order = orderWithTotal(BigDecimal.valueOf(25));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        payment.attachProviderPayment("pi_existing", "cs_any");
+
+        Event event = failedEvent("evt_failed_provider_mismatch",
+                paymentIntentWithMetadataAndId(order.getId(), "pi_other"));
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("does not match");
+
+            verifyWebhookEventRegistered("evt_failed_provider_mismatch", "payment_intent.payment_failed");
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            verify(paymentRepository, never()).save(payment);
+            verify(orderRepository, never()).save(order);
+            verifyNoInteractions(cartService);
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldMarkPaymentFailedWhenPaymentIntentFailedEventValid() {
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        Event event = failedEvent("evt_payment_failed", paymentIntentWithMetadata(order.getId()));
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+        when(paymentRepository.save(payment)).thenReturn(payment);
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+
+            verifyWebhookEventRegistered("evt_payment_failed", "payment_intent.payment_failed");
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            verify(paymentRepository).save(payment);
+            verify(orderRepository, never()).save(order);
+            verifyNoInteractions(cartService);
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldNotMarkCompletedPaymentAsFailedWhenPaymentIntentFailedArrivesLate() {
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        payment.markAsCompleted();
+        Event event = failedEvent("evt_payment_failed_late", paymentIntentWithMetadata(order.getId()));
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+
+            verifyWebhookEventRegistered("evt_payment_failed_late", "payment_intent.payment_failed");
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            verify(paymentRepository, never()).save(payment);
+            verify(orderRepository, never()).save(order);
+            verifyNoInteractions(cartService);
         }
     }
 
@@ -476,9 +624,29 @@ class PaymentServiceImplWebhookTest {
         return event;
     }
 
+    private Event failedEvent(String eventId, PaymentIntent intent) {
+        Event event = event(eventId, "payment_intent.payment_failed");
+        EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+        when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+        when(deserializer.getObject()).thenReturn(Optional.ofNullable(intent));
+        return event;
+    }
+
     private PaymentIntent paymentIntentWithMetadata(UUID orderId) {
         PaymentIntent intent = mock(PaymentIntent.class);
         when(intent.getMetadata()).thenReturn(Map.of("orderId", orderId.toString()));
+        return intent;
+    }
+
+    private PaymentIntent paymentIntentWithEmptyMetadata() {
+        PaymentIntent intent = mock(PaymentIntent.class);
+        when(intent.getMetadata()).thenReturn(Map.of());
+        return intent;
+    }
+
+    private PaymentIntent paymentIntentWithMetadataAndId(UUID orderId, String intentId) {
+        PaymentIntent intent = paymentIntentWithMetadata(orderId);
+        when(intent.getId()).thenReturn(intentId);
         return intent;
     }
 
