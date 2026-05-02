@@ -85,4 +85,10 @@ public class Payment extends SoftDeleteEntity {
 	public void markAsCompleted() {
 		this.status = PaymentStatus.COMPLETED;
 	}
+
+	public void markAsFailed() {
+		if (this.status != PaymentStatus.COMPLETED) {
+			this.status = PaymentStatus.FAILED;
+		}
+	}
 }

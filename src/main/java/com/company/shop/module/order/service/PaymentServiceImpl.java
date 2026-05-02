@@ -10,6 +10,7 @@ package com.company.shop.module.order.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -152,48 +153,15 @@ public class PaymentServiceImpl implements PaymentService {
                 return;
             }
 
-            if (!"payment_intent.succeeded".equals(eventType)) {
+            if ("payment_intent.succeeded".equals(eventType)) {
+                handlePaymentIntentSucceeded(event);
                 return;
             }
 
-            var deserializer = event.getDataObjectDeserializer();
-            PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
-            if (intent == null) {
+            if ("payment_intent.payment_failed".equals(eventType)) {
+                handlePaymentIntentFailed(event);
                 return;
             }
-
-            String orderId = intent.getMetadata().get("orderId");
-            if (orderId == null || orderId.isBlank()) {
-                throw new WebhookSignatureInvalidException("Missing orderId metadata in Stripe webhook.");
-            }
-
-            UUID parsedOrderId = UUID.fromString(orderId);
-            Order order = orderRepo.findByIdForUpdate(parsedOrderId)
-                    .orElseThrow(() -> new OrderNotFoundException(parsedOrderId));
-
-            if (order.getStatus() == OrderStatus.PAID) {
-                log.info("Ignoring duplicate payment webhook for already paid orderId={}", order.getId());
-                return;
-            }
-
-            validatePaymentIntentMatchesOrder(intent, order);
-
-            order.markAsPaid();
-            orderRepo.save(order);
-
-            Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
-                    .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
-
-            if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
-                    && !payment.getProviderPaymentId().equals(intent.getId())) {
-                throw new WebhookSignatureInvalidException(
-                        "Webhook paymentIntent id does not match stored provider payment id.");
-            }
-
-            payment.markAsCompleted();
-            paymentRepo.save(payment);
-
-            cartService.clearCartForUser(order.getUser().getId());
         } catch (com.stripe.exception.SignatureVerificationException | IllegalArgumentException ex) {
             log.warn("Invalid Stripe webhook payload/signature", ex);
             throw new WebhookSignatureInvalidException();
@@ -202,6 +170,77 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (Exception e) {
             log.error("Stripe webhook processing failed", e);
             throw new WebhookProcessingException("Unable to process Stripe webhook event.");
+        }
+    }
+
+    private void handlePaymentIntentSucceeded(com.stripe.model.Event event) {
+        var deserializer = event.getDataObjectDeserializer();
+        PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
+        if (intent == null) {
+            return;
+        }
+
+        Order order = findOrderByWebhookMetadata(intent);
+        if (order.getStatus() == OrderStatus.PAID) {
+            log.info("Ignoring duplicate payment webhook for already paid orderId={}", order.getId());
+            return;
+        }
+
+        validatePaymentIntentMatchesOrder(intent, order);
+
+        Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
+                .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
+
+        validateProviderPaymentId(intent, payment);
+
+        order.markAsPaid();
+        orderRepo.save(order);
+
+        payment.markAsCompleted();
+        paymentRepo.save(payment);
+
+        cartService.clearCartForUser(order.getUser().getId());
+    }
+
+    private void handlePaymentIntentFailed(com.stripe.model.Event event) {
+        var deserializer = event.getDataObjectDeserializer();
+        PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
+        if (intent == null) {
+            return;
+        }
+
+        Order order = findOrderByWebhookMetadata(intent);
+        Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
+                .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
+
+        validateProviderPaymentId(intent, payment);
+
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            log.info("Ignoring payment_failed webhook for already completed payment orderId={}", order.getId());
+            return;
+        }
+
+        payment.markAsFailed();
+        paymentRepo.save(payment);
+    }
+
+    private Order findOrderByWebhookMetadata(PaymentIntent intent) {
+        Map<String, String> metadata = intent.getMetadata();
+        String orderId = metadata != null ? metadata.get("orderId") : null;
+        if (orderId == null || orderId.isBlank()) {
+            throw new WebhookSignatureInvalidException("Missing orderId metadata in Stripe webhook.");
+        }
+
+        UUID parsedOrderId = UUID.fromString(orderId);
+        return orderRepo.findByIdForUpdate(parsedOrderId)
+                .orElseThrow(() -> new OrderNotFoundException(parsedOrderId));
+    }
+
+    private void validateProviderPaymentId(PaymentIntent intent, Payment payment) {
+        if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
+                && !payment.getProviderPaymentId().equals(intent.getId())) {
+            throw new WebhookSignatureInvalidException(
+                    "Webhook paymentIntent id does not match stored provider payment id.");
         }
     }
 
