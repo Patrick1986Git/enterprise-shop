@@ -13,6 +13,9 @@ import org.springframework.boot.actuate.autoconfigure.endpoint.EndpointAutoConfi
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.health.HealthContributorAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.info.InfoContributorAutoConfiguration;
+import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration;
+import org.springframework.boot.actuate.autoconfigure.metrics.export.simple.SimpleMetricsExportAutoConfiguration;
+import org.springframework.boot.actuate.autoconfigure.metrics.MetricsEndpointAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -31,7 +34,10 @@ import com.company.shop.security.jwt.JwtTokenProvider;
         EndpointAutoConfiguration.class,
         WebEndpointAutoConfiguration.class,
         HealthContributorAutoConfiguration.class,
-        InfoContributorAutoConfiguration.class
+        InfoContributorAutoConfiguration.class,
+        MetricsAutoConfiguration.class,
+        MetricsEndpointAutoConfiguration.class,
+        SimpleMetricsExportAutoConfiguration.class
 })
 class ActuatorSecurityTest {
 
