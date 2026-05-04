@@ -8,11 +8,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -62,8 +60,7 @@ public class GlobalExceptionHandler {
 		ex.getBindingResult().getGlobalErrors()
 				.forEach(error -> addValidationError(errors, "_global", error.getDefaultMessage()));
 
-		String traceId = Objects.toString(MDC.get("traceId"), "-");
-		log.warn("Input validation failed fields={} traceId={}", errors.keySet(), traceId);
+		log.warn("Input validation failed fields={}", errors.keySet());
 
 		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(), "Validation failed", "VALIDATION_FAILED", errors);
 
@@ -85,20 +82,17 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleBusinessException(BusinessException ex) {
 
 		String errorCode = ex.getErrorCode() != null ? ex.getErrorCode() : "UNKNOWN_BUSINESS_ERROR";
-		String traceId = Objects.toString(MDC.get("traceId"), "-");
 		if (ex.getStatus().is5xxServerError()) {
-			log.error("Business invariant/server exception occurred [{}] status={} type={} traceId={}",
+			log.error("Business invariant/server exception occurred [{}] status={} type={}",
 				errorCode,
 				ex.getStatus().value(),
 				ex.getClass().getSimpleName(),
-				traceId,
 				ex);
 		} else {
-			log.warn("Business exception occurred [{}] status={} type={} traceId={}",
+			log.warn("Business exception occurred [{}] status={} type={}",
 				errorCode,
 				ex.getStatus().value(),
-				ex.getClass().getSimpleName(),
-				traceId);
+				ex.getClass().getSimpleName());
 		}
 
 		ApiError apiError = new ApiError(ex.getStatus().value(), ex.getMessage(), errorCode);
@@ -110,11 +104,9 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(ObjectOptimisticLockingFailureException.class)
 	public ResponseEntity<ApiError> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
 
-		String traceId = Objects.toString(MDC.get("traceId"), "-");
-		log.warn("Optimistic lock conflict status={} type={} traceId={}",
+		log.warn("Optimistic lock conflict status={} type={}",
 				HttpStatus.CONFLICT.value(),
-				ex.getClass().getSimpleName(),
-				traceId);
+				ex.getClass().getSimpleName());
 
 		ApiError apiError = new ApiError(HttpStatus.CONFLICT.value(),
 				"Resource was modified by another transaction. Please refresh and retry.",
@@ -244,6 +236,7 @@ public class GlobalExceptionHandler {
 		return null;
 	}
 
+
 	private void addValidationError(Map<String, List<String>> errors, String key, String message) {
 		errors.computeIfAbsent(key, k -> new ArrayList<>()).add(message);
 	}
@@ -262,7 +255,7 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiError> handleAllExceptions(Exception ex) {
 
-		log.error("Unhandled application exception:", ex);
+		log.error("Unhandled application exception type={}", ex.getClass().getSimpleName(), ex);
 
 		ApiError apiError = new ApiError(HttpStatus.INTERNAL_SERVER_ERROR.value(),
 				"An unexpected server error occurred. Please contact support if the problem persists.");

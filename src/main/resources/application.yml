@@ -63,7 +63,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: when_authorized
@@ -79,3 +79,6 @@ stripe:
   webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
   # Public key for client-side Stripe Elements/SDK initialization
   public-key: ${STRIPE_PUBLIC_KEY:pk_test_placeholder}
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} requestId=%X{requestId} - %msg%n"

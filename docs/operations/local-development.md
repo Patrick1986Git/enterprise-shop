@@ -38,3 +38,19 @@ Default active profile is `dev` (from `application.yml`).
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PUBLIC_KEY`
 - `JWT_SECRET`
+
+## Observability (baseline)
+- Actuator endpoints exposed in this project:
+  - `GET /actuator/health` (public, no JWT)
+  - `GET /actuator/info` (requires `ROLE_ADMIN`)
+  - `GET /actuator/metrics` (requires `ROLE_ADMIN`)
+- Request correlation header:
+  - Send `X-Request-Id` to propagate your request identifier.
+  - If header is missing or invalid, server generates UUID and returns it in response header `X-Request-Id`.
+  - `X-Request-Id` is an exposed CORS response header for frontend clients.
+- Logs include correlation id in pattern as `requestId=%X{requestId}`.
+- Sensitive data policy:
+  - do not log JWT tokens
+  - do not log passwords
+  - do not log card data or secrets
+  - request/response body logging is intentionally disabled

@@ -128,6 +128,7 @@ class SecurityConfigWebMvcTest {
                 new ProductReviewResponseDTO(UUID.randomUUID(), "tester", 5, "ok", LocalDateTime.now()));
     }
 
+
     @ParameterizedTest
     @MethodSource("publicGetEndpoints")
     void publicGetEndpoints_shouldBeAccessibleForAnonymous(String endpoint) throws Exception {
