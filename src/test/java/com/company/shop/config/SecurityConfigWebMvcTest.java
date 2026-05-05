@@ -1,5 +1,6 @@
 package com.company.shop.config;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -10,7 +11,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -211,6 +214,25 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(get(endpoint)
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
+    }
+
+
+    @Test
+    void corsPreflight_shouldAllowXRequestIdHeader() throws Exception {
+        mockMvc.perform(options("/api/v1/products")
+                        .header("Origin", "http://localhost:3000")
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "X-Request-Id"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-Request-Id")));
+    }
+
+    @Test
+    void corsActualRequest_shouldExposeXRequestIdHeader() throws Exception {
+        mockMvc.perform(get("/api/v1")
+                        .header("Origin", "http://localhost:3000"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Expose-Headers", containsString("X-Request-Id")));
     }
 
     @Test
