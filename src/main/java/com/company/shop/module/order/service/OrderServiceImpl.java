@@ -10,6 +10,8 @@ package com.company.shop.module.order.service;
 
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OrderServiceImpl implements OrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
+
     private final OrderRepository orderRepo;
     private final ProductRepository productRepo;
     private final PaymentRepository paymentRepo;
@@ -77,6 +81,9 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponseDTO placeOrderFromCart(OrderCheckoutRequestDTO request) {
         Order savedOrder = createPendingOrder(request);
+        log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
+                savedOrder.getId(), savedOrder.getUser().getId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
+                savedOrder.getItems().size());
         PaymentIntentResponseDTO stripeInfo = paymentService.createPaymentIntent(savedOrder);
 
         OrderResponseDTO baseDto = mapper.toDto(savedOrder);
@@ -90,6 +97,7 @@ public class OrderServiceImpl implements OrderService {
 
     private Order createPendingOrder(OrderCheckoutRequestDTO request) {
         User user = userService.getCurrentUserEntity();
+        log.info("Checkout started for userId={}", user.getId());
         Cart cart = cartService.getCartEntityForUser(user.getId());
 
         if (cart.getItems().isEmpty()) {

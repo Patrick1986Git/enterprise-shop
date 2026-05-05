@@ -91,6 +91,8 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentIntentResponseDTO createPaymentIntent(Order order) {
         try {
+            log.info("Payment intent initialization started for orderId={} userId={}", order.getId(),
+                    order.getUser().getId());
             Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
                     .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
 
@@ -100,6 +102,8 @@ public class PaymentServiceImpl implements PaymentService {
 
             if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
                     && payment.getClientSecret() != null && !payment.getClientSecret().isBlank()) {
+                log.info("Reusing existing payment intent for orderId={} paymentId={} providerPaymentId={} paymentStatus={}",
+                        order.getId(), payment.getId(), payment.getProviderPaymentId(), payment.getStatus());
                 return new PaymentIntentResponseDTO(payment.getClientSecret(), publicKey);
             }
 
@@ -116,6 +120,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentIntent intent = PaymentIntent.create(params, requestOptions);
             payment.attachProviderPayment(intent.getId(), intent.getClientSecret());
             paymentRepo.save(payment);
+            log.info("Payment intent created for orderId={} paymentId={} providerPaymentId={} paymentStatus={}",
+                    order.getId(), payment.getId(), intent.getId(), payment.getStatus());
 
             return new PaymentIntentResponseDTO(intent.getClientSecret(), publicKey);
         } catch (BusinessException ex) {
@@ -141,9 +147,10 @@ public class PaymentServiceImpl implements PaymentService {
             if (eventType == null || eventType.isBlank()) {
                 throw new WebhookSignatureInvalidException("Missing Stripe event type in webhook payload.");
             }
+            log.info("Stripe webhook received stripeEventId={} stripeEventType={}", eventId, eventType);
 
             if (!stripeWebhookEventRegistrar.register(eventId, eventType)) {
-                log.info("Ignoring duplicate Stripe webhook eventId={} type={}", eventId, eventType);
+                log.info("Ignoring duplicate Stripe webhook stripeEventId={} stripeEventType={}", eventId, eventType);
                 return;
             }
 
@@ -156,6 +163,7 @@ public class PaymentServiceImpl implements PaymentService {
                 handlePaymentIntentFailed(event);
                 return;
             }
+            log.warn("Unhandled Stripe webhook event type stripeEventId={} stripeEventType={}", eventId, eventType);
         } catch (com.stripe.exception.SignatureVerificationException | IllegalArgumentException ex) {
             log.warn("Invalid Stripe webhook payload/signature", ex);
             throw new WebhookSignatureInvalidException();
@@ -171,6 +179,8 @@ public class PaymentServiceImpl implements PaymentService {
         var deserializer = event.getDataObjectDeserializer();
         PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
         if (intent == null) {
+            log.warn("Stripe webhook payload could not be deserialized to PaymentIntent stripeEventId={} stripeEventType={}",
+                    event.getId(), event.getType());
             return;
         }
 
@@ -192,6 +202,9 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.markAsCompleted();
         paymentRepo.save(payment);
+        log.info("Order marked as paid orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
+                order.getId(), payment.getId(), order.getUser().getId(), intent.getId(), order.getStatus(),
+                payment.getStatus());
 
         cartService.clearCartForUser(order.getUser().getId());
     }
@@ -200,6 +213,8 @@ public class PaymentServiceImpl implements PaymentService {
         var deserializer = event.getDataObjectDeserializer();
         PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
         if (intent == null) {
+            log.warn("Stripe webhook payload could not be deserialized to PaymentIntent stripeEventId={} stripeEventType={}",
+                    event.getId(), event.getType());
             return;
         }
 
@@ -216,12 +231,16 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.markAsFailed();
         paymentRepo.save(payment);
+        log.info("Payment marked as failed from webhook orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
+                order.getId(), payment.getId(), order.getUser().getId(), intent.getId(), order.getStatus(),
+                payment.getStatus());
     }
 
     private Order findOrderByWebhookMetadata(PaymentIntent intent) {
         Map<String, String> metadata = intent.getMetadata();
         String orderId = metadata != null ? metadata.get("orderId") : null;
         if (orderId == null || orderId.isBlank()) {
+            log.warn("Stripe webhook missing orderId metadata providerPaymentId={}", intent.getId());
             throw new WebhookSignatureInvalidException("Missing orderId metadata in Stripe webhook.");
         }
 
@@ -233,6 +252,8 @@ public class PaymentServiceImpl implements PaymentService {
     private void validateProviderPaymentId(PaymentIntent intent, Payment payment) {
         if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
                 && !payment.getProviderPaymentId().equals(intent.getId())) {
+            log.warn("Stripe providerPaymentId mismatch orderId={} paymentId={} storedProviderPaymentId={} incomingProviderPaymentId={}",
+                    payment.getOrder().getId(), payment.getId(), payment.getProviderPaymentId(), intent.getId());
             throw new WebhookSignatureInvalidException(
                     "Webhook paymentIntent id does not match stored provider payment id.");
         }
@@ -249,12 +270,16 @@ public class PaymentServiceImpl implements PaymentService {
 
         long expectedAmount = order.getTotalAmount().movePointRight(2).longValue();
         if (amount.longValue() != expectedAmount) {
+            log.warn("Stripe amount mismatch orderId={} providerPaymentId={} expectedAmount={} actualAmount={}",
+                    order.getId(), intent.getId(), expectedAmount, amount);
             throw new WebhookSignatureInvalidException(
                     "Stripe webhook payment amount does not match order total.");
         }
 
         String currency = intent.getCurrency();
         if (currency == null || !"pln".equals(currency.toLowerCase(Locale.ROOT))) {
+            log.warn("Stripe currency mismatch orderId={} providerPaymentId={} expectedCurrency=pln actualCurrency={}",
+                    order.getId(), intent.getId(), currency);
             throw new WebhookSignatureInvalidException("Stripe webhook currency does not match expected currency.");
         }
 
