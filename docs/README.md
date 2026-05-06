@@ -9,6 +9,7 @@ This `docs/` folder contains only documentation that is currently justified by t
 - [`architecture/module-map.md`](./architecture/module-map.md) — module responsibilities and package ownership.
 - [`architecture/security-architecture.md`](./architecture/security-architecture.md) — JWT and authorization model.
 - [`architecture/error-handling.md`](./architecture/error-handling.md) — API error contract and exception mapping strategy.
+- [`architecture/archunit.md`](./architecture/archunit.md) — ArchUnit quality gate and currently enforced architecture rules.
 
 ### API
 - [`api/overview.md`](./api/overview.md) — endpoint inventory grouped by area, with auth expectations.
