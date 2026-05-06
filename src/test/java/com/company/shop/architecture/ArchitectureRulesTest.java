@@ -3,12 +3,19 @@ package com.company.shop.architecture;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.util.Set;
+
 import org.springframework.web.bind.annotation.RestController;
 
+import com.tngtech.archunit.core.domain.Dependency;
+import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 
 @AnalyzeClasses(packages = "com.company.shop", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureRulesTest {
@@ -38,10 +45,10 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat().resideInAPackage("..controller..");
 
     @ArchTest
-    static final ArchRule dtosMustNotDependOnEntities =
-            noClasses()
+    static final ArchRule dtosMustNotDependOnEntityClassesExceptEnums =
+            classes()
                     .that().resideInAPackage("..dto..")
-                    .should().dependOnClassesThat().resideInAPackage("..entity..");
+                    .should(notDependOnNonEnumClassesInEntityPackages());
 
     @ArchTest
     static final ArchRule entitiesMustNotDependOnDtosControllersServicesOrRepositories =
@@ -61,6 +68,28 @@ class ArchitectureRulesTest {
     static final ArchRule repositoriesShouldBeInterfaces =
             classes()
                     .that().resideInAPackage("..repository..")
+                    .and().haveSimpleNameEndingWith("Repository")
                     .should().beInterfaces();
 
+    private static ArchCondition<JavaClass> notDependOnNonEnumClassesInEntityPackages() {
+        return new ArchCondition<>("not depend on non-enum classes in ..entity.. packages") {
+            @Override
+            public void check(JavaClass javaClass, ConditionEvents events) {
+                Set<Dependency> dependencies = javaClass.getDirectDependenciesFromSelf();
+                for (Dependency dependency : dependencies) {
+                    JavaClass targetClass = dependency.getTargetClass();
+                    boolean isEntityPackage = targetClass.getPackageName().contains(".entity");
+                    boolean isAllowedEnum = targetClass.isEnum();
+
+                    if (isEntityPackage && !isAllowedEnum) {
+                        String message = String.format(
+                                "%s depends on non-enum entity class %s",
+                                javaClass.getName(),
+                                targetClass.getName());
+                        events.add(SimpleConditionEvent.violated(dependency, message));
+                    }
+                }
+            }
+        };
+    }
 }

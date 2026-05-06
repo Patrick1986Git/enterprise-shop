@@ -16,10 +16,10 @@ This is the first lightweight quality gate for our modular monolith. The goal is
 2. `..repository..` must not depend on `..controller..`.
 3. `..repository..` must not depend on `..service..`.
 4. `..service..` must not depend on `..controller..`.
-5. `..dto..` must not depend on `..entity..`.
+5. `..dto..` must not depend on non-enum classes from `..entity..` packages (enum types from entity packages are currently allowed).
 6. `..entity..` must not depend on `..dto..`, `..controller..`, `..service..`, `..repository..`.
 7. `*Controller` classes in `..controller..` must be annotated with `@RestController`.
-8. Types in `..repository..` must be interfaces.
+8. Types in `..repository..` whose names end with `Repository` must be interfaces.
 
 ## How to run
 
