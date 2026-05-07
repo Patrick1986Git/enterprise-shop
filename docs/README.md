@@ -21,6 +21,7 @@ This `docs/` folder contains only documentation that is currently justified by t
 - [`operations/local-development.md`](./operations/local-development.md) — local setup and app startup flow.
 - [`operations/database.md`](./operations/database.md) — PostgreSQL setup model and schema ownership.
 - [`operations/migrations.md`](./operations/migrations.md) — Flyway migration baseline and rules for future changes.
+- [`operations/observability.md`](./operations/observability.md) — request-id based HTTP/log correlation and debugging flow.
 
 ## Intentionally skipped for now
 
