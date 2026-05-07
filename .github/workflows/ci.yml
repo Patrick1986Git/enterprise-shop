@@ -24,4 +24,5 @@ jobs:
       - name: Verify with Maven
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
+          SPRING_PROFILES_ACTIVE: test
         run: mvn -B clean verify
