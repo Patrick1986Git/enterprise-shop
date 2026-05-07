@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +28,8 @@ import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
 
 @WebMvcTest(controllers = RequestIdFilterErrorWebMvcTest.TestErrorController.class)
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, RequestIdFilter.class, GlobalExceptionHandler.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, RequestIdFilter.class, GlobalExceptionHandler.class,
+        RequestIdFilterErrorWebMvcTest.TestErrorController.class })
 class RequestIdFilterErrorWebMvcTest {
 
     @Autowired
@@ -50,6 +52,8 @@ class RequestIdFilterErrorWebMvcTest {
                         .header(RequestIdFilter.REQUEST_ID_HEADER, "incoming-error-request-id")
                         .with(user("test-user").roles("USER")))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("REQUEST_INVALID"))
                 .andExpect(header().string(RequestIdFilter.REQUEST_ID_HEADER, "incoming-error-request-id"));
     }
 
