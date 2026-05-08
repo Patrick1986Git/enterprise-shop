@@ -10,7 +10,7 @@
 docker compose up -d
 ```
 
-This starts `enterprise-shop-db` on `localhost:5432`.
+This starts `enterprise-shop-db` on `localhost:5433` (mapped host port used by `application-dev.yml`).
 
 ## 2) Prepare database user/permissions
 Run the SQL bootstrap script as a PostgreSQL superuser:
@@ -23,7 +23,7 @@ For details about what the script creates and when to run it, see [database.md](
 
 ## 3) Run the application
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 Default active profile is `dev` (from `application.yml`).
@@ -34,10 +34,18 @@ Default active profile is `dev` (from `application.yml`).
 - OpenAPI JSON: `http://localhost:8080/api-docs`
 
 ## Important environment variables
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PUBLIC_KEY`
-- `JWT_SECRET`
+- `JWT_SECRET` *(optional in local dev; if missing, app uses explicit dev-only fallback from `application-dev.yml`)*
+- `STRIPE_SECRET_KEY` *(optional in local dev; defaults to placeholder value from `application.yml`)*
+- `STRIPE_WEBHOOK_SECRET` *(optional in local dev; defaults to placeholder value from `application.yml`)*
+- `STRIPE_PUBLIC_KEY` *(optional in local dev; defaults to placeholder value from `application.yml`)*
+
+For production profile (`prod`), `JWT_SECRET`, `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` are required and have no defaults.
+
+
+## 5) Recommended local verification
+```bash
+./mvnw clean verify
+```
 
 ## Observability (baseline)
 - Actuator endpoints exposed in this project:
