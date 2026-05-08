@@ -40,7 +40,7 @@ security:
   jwt:
     # Security Notice: 
     # The JWT_SECRET must be a Base64-encoded string of at least 256 bits for HS256.
-    # The placeholder value is strictly for local development isolation.
+    # Local development only, never production, override with JWT_SECRET.
     secret: ${JWT_SECRET:dev-only-secret-that-should-not-be-used-in-production-at-least-256-bits}
     
     # Token Lifespan Management

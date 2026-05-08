@@ -7,8 +7,8 @@
 
 ## Connection model
 ### Development profile (`application-dev.yml`)
-- URL: `jdbc:postgresql://localhost:5432/enterprise_shop_dev`
-- User/password: `shop_dev` / `shop_dev`
+- URL: `jdbc:postgresql://localhost:5433/enterprise_shop_dev`
+- User/password: `postgres` / `postgres`
 - JPA `ddl-auto=validate` (schema must match migrations)
 - Flyway enabled and pointed to `classpath:db/migration`
 
