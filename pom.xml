@@ -24,7 +24,7 @@
 			<mapstruct.version>1.6.3</mapstruct.version>
 			<jjwt.version>0.13.0</jjwt.version>
 			<stripe.version>32.1.0</stripe.version>
-			<springdoc.version>2.8.5</springdoc.version>
+			<springdoc.version>3.0.3</springdoc.version>
 			<hibernate-jpamodelgen.version>${hibernate.version}</hibernate-jpamodelgen.version>
 			<argLine></argLine>
 		</properties>
