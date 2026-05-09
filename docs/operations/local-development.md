@@ -41,11 +41,13 @@ Default active profile is `dev` (from `application.yml`).
 
 For production profile (`prod`), `JWT_SECRET`, `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` are required and have no defaults.
 
-
 ## 5) Recommended local verification
 ```bash
 ./mvnw clean verify
 ```
+
+## Editor configuration baseline
+This repository uses a root [`.editorconfig`](../../.editorconfig) as a lightweight, non-invasive baseline for line endings, encoding, and indentation defaults across editors.
 
 ## Observability (baseline)
 - Actuator endpoints exposed in this project:
