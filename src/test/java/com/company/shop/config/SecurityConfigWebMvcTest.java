@@ -235,6 +235,27 @@ class SecurityConfigWebMvcTest {
                 .andExpect(header().string("Access-Control-Expose-Headers", containsString("X-Request-Id")));
     }
 
+
+    @Test
+    void publicEndpoint_shouldContainCoreSecurityHeaders() throws Exception {
+        mockMvc.perform(get("/api/v1"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"))
+                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+                .andExpect(header().string("Cache-Control", containsString("no-cache")))
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().string("Pragma", "no-cache"))
+                .andExpect(header().string("Expires", "0"));
+    }
+
+    @Test
+    void secureRequest_shouldContainHstsHeader() throws Exception {
+        mockMvc.perform(get("/api/v1").secure(true))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Strict-Transport-Security", containsString("max-age=")));
+    }
+
     @Test
     void methodSecuredReviewEndpoint_shouldRequireAuthenticatedUser() throws Exception {
         String body = "{\"productId\":\"" + UUID.randomUUID() + "\",\"rating\":5,\"comment\":\"great\"}";
