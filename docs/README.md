@@ -22,6 +22,7 @@ This `docs/` folder contains only documentation that is currently justified by t
 - [`operations/database.md`](./operations/database.md) — PostgreSQL setup model and schema ownership.
 - [`operations/migrations.md`](./operations/migrations.md) — Flyway migration baseline and rules for future changes.
 - [`operations/observability.md`](./operations/observability.md) — request-id based HTTP/log correlation and debugging flow.
+- [`operations/release-checklist.md`](./operations/release-checklist.md) — lightweight pre-merge release checklist for larger changes.
 
 ## Intentionally skipped for now
 
@@ -30,7 +31,7 @@ The following candidate docs from the target structure were **not** created beca
 - `architecture/decisions/*.md` (ADRs): no recorded decision history exists in repo commits/docs yet.
 - `api/authentication.md`, `api/errors.md`, and per-resource API files (`carts.md`, `orders.md`, etc.): endpoint set is still compact enough for one maintainable inventory file.
 - `testing/test-pyramid.md`, detailed guideline docs, and `testing/plans/*`: no formal test governance process or active plan artifacts are present.
-- `operations/docker.md`, `operations/troubleshooting.md`, `operations/release-checklist.md`: current operational surface is small; splitting would add maintenance overhead without new clarity.
+- `operations/docker.md`, `operations/troubleshooting.md`: current operational surface is small; splitting would add maintenance overhead without new clarity.
 - `domain/*.md`: domain behavior is still best represented directly in entities/services/tests; separate domain docs would mostly restate code.
 - `contributors/*.md`: no repository-level contribution convention beyond existing `AGENTS.md`; creating a second policy source risks drift.
 
