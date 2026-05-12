@@ -74,3 +74,70 @@ At this stage we intentionally do **not** add:
 - Docker build/publish changes.
 
 Goal of this baseline is only to keep minimal, secure, testable observability in the existing application architecture.
+
+## 5) Preparatory audit for future business metrics (small-step plan)
+
+### Current instrumentation-friendly points in code
+
+The following points are already good candidates for future low-risk metric increments:
+
+- **Checkout flow (`OrderServiceImpl.placeOrderFromCart`)**
+  - attempt marker at checkout start,
+  - success marker after order + payment intent response,
+  - failure marker through existing exception path (`BusinessException` / fallback `Exception`).
+- **Payment intent initialization (`PaymentServiceImpl.createPaymentIntent`)**
+  - success marker for new Stripe PaymentIntent,
+  - success marker for idempotent reuse of existing provider intent,
+  - failure marker for Stripe/runtime errors mapped to `PaymentProcessingException`.
+- **Stripe webhook handling (`PaymentServiceImpl.handleWebhook`)**
+  - received marker by stable `eventType`,
+  - duplicate/ignored marker when registrar detects replay,
+  - handled success marker for supported event types,
+  - failure marker for invalid signature/payload and processing failures.
+- **Global business errors (`GlobalExceptionHandler.handleBusinessException`)**
+  - counter by stable `errorCode` and status class (4xx/5xx),
+  - no request-unique identifiers in tags.
+
+### Safe tagging rules for future metrics
+
+When adding meters in a next step, keep tags bounded and low-cardinality:
+
+- **Allowed examples**:
+  - `result=success|failure|duplicate|reused`,
+  - `flow=checkout|payment_intent|stripe_webhook`,
+  - `event_type=payment_intent.succeeded|payment_intent.payment_failed|other` (small controlled set),
+  - `error_code=<stable business code>` from `BusinessException`.
+- **Forbidden examples** (high cardinality / sensitive):
+  - `userId`, `orderId`, `email`, `paymentId`, Stripe intent id, raw exception messages.
+
+### Minimal implementation sequence (future PRs)
+
+1. Add only a **small number of counters** via existing Micrometer API already present in Spring Boot Actuator.
+2. Start with **one module path at a time**:
+   - PR-1: checkout + payment-intent counters,
+   - PR-2: webhook counters,
+   - PR-3: business exception counters by `errorCode`.
+3. Keep naming stable and explicit, e.g.:
+   - `shop.checkout.attempts`,
+   - `shop.checkout.completed`,
+   - `shop.checkout.failed`,
+   - `shop.payment_intent.created`,
+   - `shop.payment_intent.reused`,
+   - `shop.payment_intent.failed`,
+   - `shop.webhook.received`,
+   - `shop.webhook.processed`,
+   - `shop.webhook.duplicate`,
+   - `shop.webhook.failed`,
+   - `shop.business_exception.total`.
+4. Validate through `/actuator/metrics` (admin-only) before any external scraping/export.
+
+### What we intentionally do NOT add in this preparatory stage
+
+- no Prometheus registry,
+- no Grafana or dashboards,
+- no deployment/CI/container changes,
+- no endpoint contract changes,
+- no request/response body logging,
+- no high-cardinality tags.
+
+This keeps the change review-safe and aligned with incremental enterprise hardening.
