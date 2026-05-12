@@ -37,6 +37,11 @@ The baseline exposes only:
 
 Health details are configured with `show-details: when_authorized`.
 
+### Test boundary
+Actuator authorization is verified only in dedicated integration-style security tests where Actuator auto-configuration and mappings are present.
+
+`SecurityConfigWebMvcTest` remains focused on business/API controller security and must not assert `/actuator/...` endpoints, because this slice does not provide real Actuator mappings.
+
 ## 3) Local curl examples
 
 Without token (anonymous):

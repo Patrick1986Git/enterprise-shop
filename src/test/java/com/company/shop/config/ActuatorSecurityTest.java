@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -56,33 +58,24 @@ class ActuatorSecurityTest {
                 .andExpect(status().isOk());
     }
 
-    @Test
-    void actuatorInfo_shouldBeProtectedForAnonymous() throws Exception {
-        mockMvc.perform(get("/actuator/info"))
+    @ParameterizedTest
+    @ValueSource(strings = { "/actuator/info", "/actuator/metrics" })
+    void actuatorPrivilegedEndpoints_shouldDenyAnonymous(String endpoint) throws Exception {
+        mockMvc.perform(get(endpoint))
                 .andExpect(status().isForbidden());
     }
 
-    @Test
-    void actuatorMetrics_shouldBeProtectedForAnonymous() throws Exception {
-        mockMvc.perform(get("/actuator/metrics"))
+    @ParameterizedTest
+    @ValueSource(strings = { "/actuator/info", "/actuator/metrics" })
+    void actuatorPrivilegedEndpoints_shouldDenyRoleUser(String endpoint) throws Exception {
+        mockMvc.perform(get(endpoint).with(user("user").roles("USER")))
                 .andExpect(status().isForbidden());
     }
 
-    @Test
-    void actuatorInfoAndMetrics_shouldRejectRoleUser() throws Exception {
-        mockMvc.perform(get("/actuator/info").with(user("user").roles("USER")))
-                .andExpect(status().isForbidden());
-
-        mockMvc.perform(get("/actuator/metrics").with(user("user").roles("USER")))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void actuatorInfoAndMetrics_shouldAllowRoleAdmin() throws Exception {
-        mockMvc.perform(get("/actuator/info").with(user("admin").roles("ADMIN")))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(get("/actuator/metrics").with(user("admin").roles("ADMIN")))
+    @ParameterizedTest
+    @ValueSource(strings = { "/actuator/info", "/actuator/metrics" })
+    void actuatorPrivilegedEndpoints_shouldAllowRoleAdmin(String endpoint) throws Exception {
+        mockMvc.perform(get(endpoint).with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
     }
 
