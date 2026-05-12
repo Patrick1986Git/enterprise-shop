@@ -131,7 +131,6 @@ class SecurityConfigWebMvcTest {
                 new ProductReviewResponseDTO(UUID.randomUUID(), "tester", 5, "ok", LocalDateTime.now()));
     }
 
-
     @ParameterizedTest
     @MethodSource("publicGetEndpoints")
     void publicGetEndpoints_shouldBeAccessibleForAnonymous(String endpoint) throws Exception {
@@ -216,6 +215,11 @@ class SecurityConfigWebMvcTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void actuatorHealth_shouldBeAccessibleForAnonymous() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk());
+    }
 
     @Test
     void corsPreflight_shouldAllowXRequestIdHeader() throws Exception {
@@ -234,7 +238,6 @@ class SecurityConfigWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Expose-Headers", containsString("X-Request-Id")));
     }
-
 
     @Test
     void publicEndpoint_shouldContainCoreSecurityHeaders() throws Exception {
@@ -366,7 +369,6 @@ class SecurityConfigWebMvcTest {
                 .andExpect(status().isBadRequest());
     }
 
-
     @Test
     void adminProductCreate_shouldDenyUserRole_evenWithCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/admin/products")
@@ -377,7 +379,6 @@ class SecurityConfigWebMvcTest {
                 .andExpect(status().isForbidden());
     }
 
-
     @Test
     void adminProductCreate_shouldDenyAnonymous_evenWithCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/admin/products")
@@ -386,7 +387,6 @@ class SecurityConfigWebMvcTest {
                         .content("{}"))
                 .andExpect(status().isForbidden());
     }
-
 
     @Test
     void adminCategoryUpdate_shouldEnforceRoleAndCsrf() throws Exception {
@@ -448,6 +448,8 @@ class SecurityConfigWebMvcTest {
                 "/api/v1/admin/orders",
                 "/api/v1/admin/users",
                 "/api/v1/admin/products/" + UUID.randomUUID(),
-                "/api/v1/admin/categories/" + UUID.randomUUID());
+                "/api/v1/admin/categories/" + UUID.randomUUID(),
+                "/actuator/info",
+                "/actuator/metrics");
     }
 }
