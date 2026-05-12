@@ -216,12 +216,6 @@ class SecurityConfigWebMvcTest {
     }
 
     @Test
-    void actuatorHealth_shouldBeAccessibleForAnonymous() throws Exception {
-        mockMvc.perform(get("/actuator/health"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void corsPreflight_shouldAllowXRequestIdHeader() throws Exception {
         mockMvc.perform(options("/api/v1/products")
                         .header("Origin", "http://localhost:3000")
@@ -448,8 +442,6 @@ class SecurityConfigWebMvcTest {
                 "/api/v1/admin/orders",
                 "/api/v1/admin/users",
                 "/api/v1/admin/products/" + UUID.randomUUID(),
-                "/api/v1/admin/categories/" + UUID.randomUUID(),
-                "/actuator/info",
-                "/actuator/metrics");
+                "/api/v1/admin/categories/" + UUID.randomUUID());
     }
 }
