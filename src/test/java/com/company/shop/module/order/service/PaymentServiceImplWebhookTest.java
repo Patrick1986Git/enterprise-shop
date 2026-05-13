@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.service.CartService;
@@ -63,7 +64,8 @@ class PaymentServiceImplWebhookTest {
 
     @BeforeEach
     void setUp() {
-        service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar);
+        service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar,
+                new SimpleMeterRegistry());
         setField(service, "webhookSecret", "whsec_test_123");
     }
 

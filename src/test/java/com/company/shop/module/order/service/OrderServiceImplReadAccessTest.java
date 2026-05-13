@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.service.CartService;
@@ -72,8 +73,9 @@ class OrderServiceImplReadAccessTest {
 
 	@BeforeEach
 	void setUp() {
+		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 		service = new OrderServiceImpl(orderRepository, productRepository, paymentRepository, discountCodeRepository,
-				userService, cartService, orderMapper, paymentService);
+				userService, cartService, orderMapper, paymentService, meterRegistry);
 	}
 
 	@Nested

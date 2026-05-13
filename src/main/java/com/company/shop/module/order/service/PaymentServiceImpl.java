@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import com.company.shop.common.exception.BusinessException;
 import com.company.shop.module.cart.service.CartService;
@@ -47,6 +48,8 @@ import jakarta.annotation.PostConstruct;
 public class PaymentServiceImpl implements PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
+    private static final String PAYMENT_INTENT_METRIC = "shop.payment_intent.total";
+    private static final String RESULT_TAG = "result";
 
     @Value("${stripe.api-key}")
     private String secretKey;
@@ -61,13 +64,15 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepo;
     private final CartService cartService;
     private final StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
+    private final MeterRegistry meterRegistry;
 
     public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo, CartService cartService,
-            StripeWebhookEventRegistrar stripeWebhookEventRegistrar) {
+            StripeWebhookEventRegistrar stripeWebhookEventRegistrar, MeterRegistry meterRegistry) {
         this.orderRepo = orderRepo;
         this.paymentRepo = paymentRepo;
         this.cartService = cartService;
         this.stripeWebhookEventRegistrar = stripeWebhookEventRegistrar;
+        this.meterRegistry = meterRegistry;
     }
 
     @PostConstruct
@@ -104,6 +109,7 @@ public class PaymentServiceImpl implements PaymentService {
                     && payment.getClientSecret() != null && !payment.getClientSecret().isBlank()) {
                 log.info("Reusing existing payment intent for orderId={} paymentId={} providerPaymentId={} paymentStatus={}",
                         order.getId(), payment.getId(), payment.getProviderPaymentId(), payment.getStatus());
+                incrementPaymentIntentMetric("reused");
                 return new PaymentIntentResponseDTO(payment.getClientSecret(), publicKey);
             }
 
@@ -122,14 +128,21 @@ public class PaymentServiceImpl implements PaymentService {
             paymentRepo.save(payment);
             log.info("Payment intent created for orderId={} paymentId={} providerPaymentId={} paymentStatus={}",
                     order.getId(), payment.getId(), intent.getId(), payment.getStatus());
+            incrementPaymentIntentMetric("created");
 
             return new PaymentIntentResponseDTO(intent.getClientSecret(), publicKey);
         } catch (BusinessException ex) {
+            incrementPaymentIntentMetric("failed");
             throw ex;
         } catch (Exception e) {
+            incrementPaymentIntentMetric("failed");
             log.error("Stripe PaymentIntent creation failed for orderId={}", order.getId(), e);
             throw new PaymentProcessingException("Failed to initialize payment for order: " + order.getId());
         }
+    }
+
+    private void incrementPaymentIntentMetric(String result) {
+        meterRegistry.counter(PAYMENT_INTENT_METRIC, RESULT_TAG, result).increment();
     }
 
     @Override

@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.entity.Cart;
@@ -74,12 +75,14 @@ class OrderServiceImplCheckoutTest {
 	@Mock
 	private PaymentService paymentService;
 
+	private SimpleMeterRegistry meterRegistry;
 	private OrderServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
+		meterRegistry = new SimpleMeterRegistry();
 		service = new OrderServiceImpl(orderRepository, productRepository, paymentRepository, discountCodeRepository,
-				userService, cartService, orderMapper, paymentService);
+				userService, cartService, orderMapper, paymentService, meterRegistry);
 	}
 
 	@Nested
@@ -145,6 +148,8 @@ class OrderServiceImplCheckoutTest {
 			verify(paymentService).createPaymentIntent(savedOrder);
 			verify(orderMapper).toDto(savedOrder);
 			verify(discountCodeRepository, never()).findByCodeIgnoreCase(any(String.class));
+			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "attempt").counter().count()).isEqualTo(1);
+			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "success").counter().count()).isEqualTo(1);
 		}
 
 		@Test
@@ -247,6 +252,8 @@ class OrderServiceImplCheckoutTest {
 
 			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(EmptyCartCheckoutException.class);
+			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "attempt").counter().count()).isEqualTo(1);
+			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "failure").counter().count()).isEqualTo(1);
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());

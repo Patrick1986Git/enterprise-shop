@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import com.company.shop.module.cart.entity.Cart;
 import com.company.shop.module.cart.entity.CartItem;
@@ -49,6 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderServiceImpl implements OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderServiceImpl.class);
+    private static final String CHECKOUT_METRIC = "shop.checkout.total";
+    private static final String RESULT_TAG = "result";
 
     private final OrderRepository orderRepo;
     private final ProductRepository productRepo;
@@ -58,6 +61,7 @@ public class OrderServiceImpl implements OrderService {
     private final CartService cartService;
     private final OrderMapper mapper;
     private final PaymentService paymentService;
+    private final MeterRegistry meterRegistry;
 
     public OrderServiceImpl(OrderRepository orderRepo,
             ProductRepository productRepo,
@@ -66,7 +70,8 @@ public class OrderServiceImpl implements OrderService {
             UserService userService,
             CartService cartService,
             OrderMapper mapper,
-            PaymentService paymentService) {
+            PaymentService paymentService,
+            MeterRegistry meterRegistry) {
         this.orderRepo = orderRepo;
         this.productRepo = productRepo;
         this.paymentRepo = paymentRepo;
@@ -75,24 +80,36 @@ public class OrderServiceImpl implements OrderService {
         this.cartService = cartService;
         this.mapper = mapper;
         this.paymentService = paymentService;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
     @Transactional
     public OrderResponseDTO placeOrderFromCart(OrderCheckoutRequestDTO request) {
-        Order savedOrder = createPendingOrder(request);
-        log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
-                savedOrder.getId(), savedOrder.getUser().getId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
-                savedOrder.getItems().size());
-        PaymentIntentResponseDTO stripeInfo = paymentService.createPaymentIntent(savedOrder);
+        incrementCheckoutMetric("attempt");
+        try {
+            Order savedOrder = createPendingOrder(request);
+            log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
+                    savedOrder.getId(), savedOrder.getUser().getId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
+                    savedOrder.getItems().size());
+            PaymentIntentResponseDTO stripeInfo = paymentService.createPaymentIntent(savedOrder);
 
-        OrderResponseDTO baseDto = mapper.toDto(savedOrder);
-        return new OrderResponseDTO(
-                baseDto.id(),
-                baseDto.status(),
-                baseDto.totalAmount(),
-                baseDto.createdAt(),
-                stripeInfo);
+            OrderResponseDTO baseDto = mapper.toDto(savedOrder);
+            incrementCheckoutMetric("success");
+            return new OrderResponseDTO(
+                    baseDto.id(),
+                    baseDto.status(),
+                    baseDto.totalAmount(),
+                    baseDto.createdAt(),
+                    stripeInfo);
+        } catch (Exception ex) {
+            incrementCheckoutMetric("failure");
+            throw ex;
+        }
+    }
+
+    private void incrementCheckoutMetric(String result) {
+        meterRegistry.counter(CHECKOUT_METRIC, RESULT_TAG, result).increment();
     }
 
     private Order createPendingOrder(OrderCheckoutRequestDTO request) {

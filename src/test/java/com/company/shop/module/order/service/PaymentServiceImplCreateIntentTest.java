@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.service.CartService;
@@ -55,11 +56,14 @@ class PaymentServiceImplCreateIntentTest {
 	@Mock
 	private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
 
+	private SimpleMeterRegistry meterRegistry;
 	private PaymentServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
-		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar);
+		meterRegistry = new SimpleMeterRegistry();
+		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar,
+				meterRegistry);
 		setField(service, "publicKey", "pk_test_123");
 	}
 
@@ -75,6 +79,7 @@ class PaymentServiceImplCreateIntentTest {
 
 		assertThat(result.clientSecret()).isEqualTo("cs_existing");
 		assertThat(result.publishableKey()).isEqualTo("pk_test_123");
+		assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "reused").counter().count()).isEqualTo(1);
 
 		verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 		verify(paymentRepository, never()).save(any(Payment.class));
@@ -87,6 +92,7 @@ class PaymentServiceImplCreateIntentTest {
 
 		assertThatThrownBy(() -> service.createPaymentIntent(order)).isInstanceOf(PaymentRecordNotFoundException.class)
 				.hasMessageContaining(order.getId().toString());
+		assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "failed").counter().count()).isEqualTo(1);
 
 		verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 		verify(paymentRepository, never()).save(any(Payment.class));
@@ -102,6 +108,7 @@ class PaymentServiceImplCreateIntentTest {
 
 		assertThatThrownBy(() -> service.createPaymentIntent(order))
 				.isInstanceOf(PaymentAlreadyCompletedException.class).hasMessageContaining(order.getId().toString());
+		assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "failed").counter().count()).isEqualTo(1);
 
 		verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 		verify(paymentRepository, never()).save(any(Payment.class));
@@ -121,6 +128,7 @@ class PaymentServiceImplCreateIntentTest {
 
 			assertThatThrownBy(() -> service.createPaymentIntent(order)).isInstanceOf(PaymentProcessingException.class)
 					.hasMessageContaining(order.getId().toString());
+			assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "failed").counter().count()).isEqualTo(1);
 
 			verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 			verify(paymentRepository, never()).save(any(Payment.class));
@@ -155,6 +163,7 @@ class PaymentServiceImplCreateIntentTest {
 			assertThat(savedPayment.getProviderPaymentId()).isEqualTo("pi_123");
 			assertThat(savedPayment.getClientSecret()).isEqualTo("cs_123");
 			assertThat(savedPayment.getAmount()).isEqualByComparingTo("24.50");
+			assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "created").counter().count()).isEqualTo(1);
 
 			verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 			paymentIntentStatic.verify(

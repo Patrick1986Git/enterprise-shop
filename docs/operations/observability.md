@@ -75,7 +75,16 @@ At this stage we intentionally do **not** add:
 
 Goal of this baseline is only to keep minimal, secure, testable observability in the existing application architecture.
 
-## 5) Preparatory audit for future business metrics (small-step plan)
+## 5) First business metrics available
+
+The first low-risk business counters are now exposed through Spring Boot Actuator metrics endpoint:
+
+- `shop.checkout.total` with `result=attempt|success|failure`,
+- `shop.payment_intent.total` with `result=created|reused|failed`.
+
+These metrics are available under `/actuator/metrics` (admin-only access as defined above), with bounded low-cardinality tags only.
+
+## 6) Future metrics (preparatory audit)
 
 ### Current instrumentation-friendly points in code
 
