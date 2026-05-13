@@ -49,7 +49,13 @@ public class PaymentServiceImpl implements PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
     private static final String PAYMENT_INTENT_METRIC = "shop.payment_intent.total";
+    private static final String WEBHOOK_METRIC = "shop.webhook.total";
     private static final String RESULT_TAG = "result";
+    private static final String RESULT_RECEIVED = "received";
+    private static final String RESULT_PROCESSED = "processed";
+    private static final String RESULT_DUPLICATE = "duplicate";
+    private static final String RESULT_IGNORED = "ignored";
+    private static final String RESULT_FAILED = "failed";
 
     @Value("${stripe.api-key}")
     private String secretKey;
@@ -145,6 +151,10 @@ public class PaymentServiceImpl implements PaymentService {
         meterRegistry.counter(PAYMENT_INTENT_METRIC, RESULT_TAG, result).increment();
     }
 
+    private void incrementWebhookMetric(String result) {
+        meterRegistry.counter(WEBHOOK_METRIC, RESULT_TAG, result).increment();
+    }
+
     @Override
     @Transactional
     public void handleWebhook(String payload, String sigHeader) {
@@ -161,46 +171,56 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new WebhookSignatureInvalidException("Missing Stripe event type in webhook payload.");
             }
             log.info("Stripe webhook received stripeEventId={} stripeEventType={}", eventId, eventType);
+            incrementWebhookMetric(RESULT_RECEIVED);
 
             if (!stripeWebhookEventRegistrar.register(eventId, eventType)) {
+                incrementWebhookMetric(RESULT_DUPLICATE);
                 log.info("Ignoring duplicate Stripe webhook stripeEventId={} stripeEventType={}", eventId, eventType);
                 return;
             }
 
             if ("payment_intent.succeeded".equals(eventType)) {
-                handlePaymentIntentSucceeded(event);
+                incrementWebhookHandledMetric(handlePaymentIntentSucceeded(event));
                 return;
             }
 
             if ("payment_intent.payment_failed".equals(eventType)) {
-                handlePaymentIntentFailed(event);
+                incrementWebhookHandledMetric(handlePaymentIntentFailed(event));
                 return;
             }
+            incrementWebhookMetric(RESULT_IGNORED);
             log.warn("Unhandled Stripe webhook event type stripeEventId={} stripeEventType={}", eventId, eventType);
         } catch (com.stripe.exception.SignatureVerificationException | IllegalArgumentException ex) {
+            incrementWebhookMetric(RESULT_FAILED);
             log.warn("Invalid Stripe webhook payload/signature", ex);
             throw new WebhookSignatureInvalidException();
         } catch (OrderNotFoundException | WebhookSignatureInvalidException ex) {
+            incrementWebhookMetric(RESULT_FAILED);
             throw ex;
         } catch (Exception e) {
+            incrementWebhookMetric(RESULT_FAILED);
             log.error("Stripe webhook processing failed", e);
             throw new WebhookProcessingException("Unable to process Stripe webhook event.");
         }
     }
 
-    private void handlePaymentIntentSucceeded(com.stripe.model.Event event) {
+    private void incrementWebhookHandledMetric(boolean handled) {
+        incrementWebhookMetric(handled ? RESULT_PROCESSED : RESULT_IGNORED);
+    }
+
+    private boolean handlePaymentIntentSucceeded(com.stripe.model.Event event) {
         var deserializer = event.getDataObjectDeserializer();
         PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
         if (intent == null) {
             log.warn("Stripe webhook payload could not be deserialized to PaymentIntent stripeEventId={} stripeEventType={}",
                     event.getId(), event.getType());
-            return;
+            return false;
         }
 
         Order order = findOrderByWebhookMetadata(intent);
         if (order.getStatus() == OrderStatus.PAID) {
             log.info("Ignoring duplicate payment webhook for already paid orderId={}", order.getId());
-            return;
+            return false;
         }
 
         validatePaymentIntentMatchesOrder(intent, order);
@@ -220,15 +240,16 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.getStatus());
 
         cartService.clearCartForUser(order.getUser().getId());
+        return true;
     }
 
-    private void handlePaymentIntentFailed(com.stripe.model.Event event) {
+    private boolean handlePaymentIntentFailed(com.stripe.model.Event event) {
         var deserializer = event.getDataObjectDeserializer();
         PaymentIntent intent = (PaymentIntent) deserializer.getObject().orElse(null);
         if (intent == null) {
             log.warn("Stripe webhook payload could not be deserialized to PaymentIntent stripeEventId={} stripeEventType={}",
                     event.getId(), event.getType());
-            return;
+            return false;
         }
 
         Order order = findOrderByWebhookMetadata(intent);
@@ -239,7 +260,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment.getStatus() == PaymentStatus.COMPLETED) {
             log.info("Ignoring payment_failed webhook for already completed payment orderId={}", order.getId());
-            return;
+            return false;
         }
 
         payment.markAsFailed();
@@ -247,6 +268,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Payment marked as failed from webhook orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
                 order.getId(), payment.getId(), order.getUser().getId(), intent.getId(), order.getStatus(),
                 payment.getStatus());
+        return true;
     }
 
     private Order findOrderByWebhookMetadata(PaymentIntent intent) {

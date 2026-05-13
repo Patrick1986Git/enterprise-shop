@@ -61,11 +61,13 @@ class PaymentServiceImplWebhookTest {
     private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
 
     private PaymentServiceImpl service;
+    private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar,
-                new SimpleMeterRegistry());
+                meterRegistry);
         setField(service, "webhookSecret", "whsec_test_123");
     }
 
@@ -80,6 +82,8 @@ class PaymentServiceImplWebhookTest {
             service.handleWebhook("payload", "sig");
 
             verifyWebhookEventRegistered("evt_unsupported", "payment_intent.processing");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("ignored", 1);
             verifyNoInteractions(orderRepository, paymentRepository, cartService);
         }
     }
@@ -98,6 +102,8 @@ class PaymentServiceImplWebhookTest {
             service.handleWebhook("payload", "sig");
 
             verifyWebhookEventRegistered("evt_missing_intent", "payment_intent.succeeded");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("ignored", 1);
             verifyNoInteractions(orderRepository, paymentRepository, cartService);
         }
     }
@@ -139,6 +145,8 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("orderId");
 
             verifyWebhookEventRegistered("evt_missing_order_id", "payment_intent.succeeded");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("failed", 1);
             verifyNoInteractions(orderRepository, paymentRepository, cartService);
         }
     }
@@ -216,6 +224,7 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class)
                     .hasMessageContaining("event id");
 
+            assertWebhookMetricCount("failed", 1);
             verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
         }
     }
@@ -246,6 +255,7 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class)
                     .hasMessageContaining("event type");
 
+            assertWebhookMetricCount("failed", 1);
             verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
         }
     }
@@ -274,6 +284,7 @@ class PaymentServiceImplWebhookTest {
             assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
                     .isInstanceOf(WebhookSignatureInvalidException.class);
 
+            assertWebhookMetricCount("failed", 1);
             verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
         }
     }
@@ -289,6 +300,8 @@ class PaymentServiceImplWebhookTest {
             service.handleWebhook("payload", "sig");
 
             verify(stripeWebhookEventRegistrar).register("evt_duplicate", "payment_intent.succeeded");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("duplicate", 1);
             verifyNoInteractions(orderRepository, paymentRepository, cartService);
         }
     }
@@ -551,6 +564,8 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("Unable to process Stripe webhook event.");
 
             verifyWebhookEventRegistered("evt_unexpected", "payment_intent.succeeded");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("failed", 1);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
             verify(cartService, never()).clearCartForUser(order.getUser().getId());
@@ -577,6 +592,8 @@ class PaymentServiceImplWebhookTest {
             service.handleWebhook("payload", "sig");
 
             verifyWebhookEventRegistered("evt_success", "payment_intent.succeeded");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("processed", 1);
             assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
             verify(orderRepository).save(order);
@@ -604,6 +621,11 @@ class PaymentServiceImplWebhookTest {
         Event event = mock(Event.class);
         when(event.getId()).thenReturn(eventId);
         return event;
+    }
+
+    private void assertWebhookMetricCount(String result, double expectedCount) {
+        assertThat(meterRegistry.get("shop.webhook.total").tag("result", result).counter().count())
+                .isEqualTo(expectedCount);
     }
 
     private Event succeededEvent(String eventId, PaymentIntent intent) {

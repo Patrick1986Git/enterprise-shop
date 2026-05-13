@@ -80,9 +80,11 @@ Goal of this baseline is only to keep minimal, secure, testable observability in
 The first low-risk business counters are now exposed through Spring Boot Actuator metrics endpoint:
 
 - `shop.checkout.total` with `result=attempt|success|failure`,
-- `shop.payment_intent.total` with `result=created|reused|failed`.
+- `shop.payment_intent.total` with `result=created|reused|failed`,
+- `shop.webhook.total` with `result=received|processed|duplicate|failed|ignored`.
 
-These metrics are available under `/actuator/metrics` (admin-only access as defined above), with bounded low-cardinality tags only.
+These metrics are available under `/actuator/metrics` (admin-only access as defined above), with bounded low-cardinality tags only.  
+For webhook metrics we intentionally do not add high-cardinality tags (for example `eventId`, `orderId`, `userId`, `paymentId`, Stripe intent id, or raw exception message).
 
 ## 6) Future metrics (preparatory audit)
 
