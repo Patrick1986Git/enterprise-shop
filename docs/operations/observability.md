@@ -44,7 +44,37 @@ Actuator authorization is verified only in dedicated integration-style security 
 
 `SecurityConfigWebMvcTest` remains focused on business/API controller security and must not assert `/actuator/...` endpoints, because this slice does not provide real Actuator mappings.
 
-## 3) Local curl examples
+## 3) Quick local smoke check for Actuator metrics/prometheus
+
+1. Verify public health endpoint works without token:
+
+```bash
+curl -i http://localhost:8080/actuator/health
+```
+
+Expected: `200 OK` for anonymous access (`permitAll`).
+
+2. Verify metrics endpoint requires and accepts ADMIN token:
+
+```bash
+curl -i -H "Authorization: Bearer <ADMIN_JWT>" http://localhost:8080/actuator/metrics
+```
+
+Expected: `200 OK` with ADMIN token. Without token (or non-admin token) access should be rejected.
+
+3. Verify prometheus endpoint requires and accepts ADMIN token:
+
+```bash
+curl -i -H "Authorization: Bearer <ADMIN_JWT>" http://localhost:8080/actuator/prometheus
+```
+
+Expected: `200 OK` with Prometheus text output when called as ADMIN.
+
+4. Operational note:
+- `/actuator/prometheus` is the application scraping endpoint intended for future external Prometheus collection.
+- Metric history is still **not** persisted in the application itself; without an external Prometheus (or other TSDB), only current in-process values are available.
+
+## 4) Local curl examples
 
 Without token (anonymous):
 
@@ -69,7 +99,7 @@ Request id visibility:
 curl -i -H "X-Request-Id: demo-123" http://localhost:8080/api/v1/products
 ```
 
-## 4) Out of scope for current baseline (intentional)
+## 5) Out of scope for current baseline (intentional)
 
 At this stage we intentionally do **not** add:
 - Grafana dashboards,
@@ -78,7 +108,7 @@ At this stage we intentionally do **not** add:
 
 Goal of this baseline is only to keep minimal, secure, testable observability in the existing application architecture.
 
-## 5) First business metrics available
+## 6) First business metrics available
 
 The first low-risk business counters are now exposed through Spring Boot Actuator metrics endpoint:
 
@@ -90,7 +120,7 @@ The first low-risk business counters are now exposed through Spring Boot Actuato
 These metrics are available under `/actuator/metrics` (admin-only access as defined above, intended for manual inspection), with bounded low-cardinality tags only. Prometheus should scrape `/actuator/prometheus` (also admin-only).  
 For webhook and business-exception metrics we intentionally do not add high-cardinality tags (for example `requestId`, `userId`, `orderId`, `email`, `paymentId`, Stripe intent id, or raw exception message).
 
-## 6) Future metrics (preparatory audit)
+## 7) Future metrics (preparatory audit)
 
 ### Current instrumentation-friendly points in code
 
