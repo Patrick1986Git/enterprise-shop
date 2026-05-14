@@ -14,10 +14,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
@@ -29,6 +33,8 @@ import com.company.shop.security.jwt.JwtTokenProvider;
         properties = {
                 "management.endpoints.web.exposure.include=health,info,metrics,prometheus",
                 "management.endpoint.health.show-details=when_authorized",
+                "management.endpoint.prometheus.enabled=true",
+                "management.prometheus.metrics.export.enabled=true",
                 "spring.autoconfigure.exclude="
                         + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
                         + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
@@ -83,6 +89,11 @@ class ActuatorSecurityTest {
     @EnableAutoConfiguration
     @Import({ SecurityConfig.class, JwtAuthenticationFilter.class })
     static class TestApplication {
+
+        @Bean
+        PrometheusMeterRegistry prometheusMeterRegistry() {
+            return new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        }
 
     }
 }
