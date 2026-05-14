@@ -31,7 +31,7 @@ import com.company.shop.support.TestMeterRegistryConfig;
 
 @WebMvcTest(controllers = RequestIdFilterErrorWebMvcTest.TestErrorController.class)
 @Import({ SecurityConfig.class, JwtAuthenticationFilter.class, RequestIdFilter.class, GlobalExceptionHandler.class,
-        TestMeterRegistryConfig.class })
+        RequestIdFilterErrorWebMvcTest.TestErrorController.class, TestMeterRegistryConfig.class })
 class RequestIdFilterErrorWebMvcTest {
 
     @Autowired

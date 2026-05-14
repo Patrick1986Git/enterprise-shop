@@ -64,6 +64,7 @@ import com.company.shop.security.AuthService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
+import com.company.shop.support.TestMeterRegistryConfig;
 
 @WebMvcTest(controllers = {
         AuthController.class,
@@ -82,7 +83,7 @@ import com.company.shop.security.jwt.JwtTokenProvider;
         AdminOrderController.class,
         StripeWebhookController.class
 })
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class })
 class SecurityConfigWebMvcTest {
 
     @Autowired

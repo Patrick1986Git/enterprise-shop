@@ -69,7 +69,7 @@ import jakarta.validation.constraints.NotBlank;
  */
 @WebMvcTest(controllers = GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
+@Import({ GlobalExceptionHandler.class, GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, TestMeterRegistryConfig.class })
 class GlobalExceptionHandlerWebMvcTest {
 
 	private static final String TIMESTAMP_REGEX = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$";
