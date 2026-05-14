@@ -19,11 +19,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -38,9 +36,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
+import com.company.shop.support.TestMeterRegistryConfig;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
@@ -71,8 +69,7 @@ import jakarta.validation.constraints.NotBlank;
  */
 @WebMvcTest(controllers = GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ GlobalExceptionHandler.class, GlobalExceptionHandlerWebMvcTest.TestExceptionController.class,
-		GlobalExceptionHandlerWebMvcTest.TestMetricsConfig.class })
+@Import({ GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
 class GlobalExceptionHandlerWebMvcTest {
 
 	private static final String TIMESTAMP_REGEX = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$";
@@ -238,15 +235,6 @@ class GlobalExceptionHandlerWebMvcTest {
 				.counter()
 				.count();
 		assertThat(counter).isEqualTo(expectedCount);
-	}
-
-	@TestConfiguration
-	static class TestMetricsConfig {
-
-		@Bean
-		MeterRegistry meterRegistry() {
-			return new SimpleMeterRegistry();
-		}
 	}
 
 	@RestController
