@@ -5,10 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Bean;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 @SpringBootTest(classes = ObservabilityConfigValidationTest.TestApplication.class)
 class ObservabilityConfigValidationTest {
@@ -38,7 +39,11 @@ class ObservabilityConfigValidationTest {
     }
 
     @SpringBootConfiguration
-    @EnableAutoConfiguration
     static class TestApplication {
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
     }
 }
