@@ -20,6 +20,7 @@ public class ProductCreateDTO {
 	@Size(max = 50, message = "SKU nie może przekraczać 50 znaków")
 	private String sku;
 
+	@Size(max = 5000, message = "Opis produktu nie może przekraczać 5000 znaków")
 	private String description;
 
 	@NotNull(message = "Cena jest wymagana")

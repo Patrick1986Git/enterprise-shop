@@ -319,6 +319,37 @@ class AdminProductControllerWebMvcTest {
         }
 
         @Test
+        void createProduct_shouldReturnBadRequestWhenDescriptionExceedsMaxLength() throws Exception {
+            String invalidBody = """
+                    {
+                      "name": "Gaming Laptop",
+                      "sku": "SKU-200",
+                      "description": "%s",
+                      "price": 199.99,
+                      "stock": 1,
+                      "categoryId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                      "imageUrls": []
+                    }
+                    """.formatted("a".repeat(5001));
+
+            mockMvc.perform(post(ADMIN_PRODUCTS_URL)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidBody))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.message").value("Validation failed"))
+                    .andExpect(jsonPath("$.errors.description").isArray())
+                    .andExpect(jsonPath("$.errors.description", not(empty())))
+                    .andExpect(jsonPath("$.timestamp").exists());
+
+            verifyNoInteractions(productService);
+        }
+
+        @Test
         void createProduct_shouldReturnConflictWhenSkuAlreadyExists() throws Exception {
             ProductCreateDTO request = sampleCreateDto();
             when(productService.create(any(ProductCreateDTO.class)))

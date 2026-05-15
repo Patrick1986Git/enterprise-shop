@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
@@ -62,6 +63,7 @@ public class OrderCreateRequestDTO {
         /**
          * The number of units for the specified product.
          */
+        @Min(1)
         private int quantity;
 
         public UUID getProductId() {
