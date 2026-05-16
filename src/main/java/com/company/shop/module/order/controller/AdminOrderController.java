@@ -11,9 +11,15 @@ import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.order.dto.OrderResponseDTO;
 import com.company.shop.module.order.service.OrderService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/api/v1/admin/orders")
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Admin Orders", description = "Administracyjne endpointy zamówień.")
 public class AdminOrderController {
 
     private final OrderService orderService;
@@ -23,6 +29,12 @@ public class AdminOrderController {
     }
 
     @GetMapping
+    @Operation(summary = "Lista zamówień")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Zamówienia pobrane poprawnie."),
+            @ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
+            @ApiResponse(responseCode = "403", description = "Brak uprawnień.")
+    })
     public PageResponseDTO<OrderResponseDTO> getOrders(@PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(orderService.findAll(pageable));
     }
