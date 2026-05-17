@@ -27,6 +27,7 @@ import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
 import com.company.shop.module.product.service.ProductReviewService;
 import com.company.shop.module.product.service.ProductService;
 import com.company.shop.module.system.service.ApplicationStatusService;
@@ -79,6 +80,8 @@ class OpenApiDocsSmokeTest {
     private OrderService orderService;
     @MockitoBean
     private PaymentService paymentService;
+    @MockitoBean
+    private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
 
     @BeforeEach
     void setUp() {
