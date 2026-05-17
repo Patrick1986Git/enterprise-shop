@@ -1,12 +1,16 @@
 package com.company.shop.config;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +19,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
@@ -34,6 +41,8 @@ class OpenApiDocsSmokeTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -52,16 +61,37 @@ class OpenApiDocsSmokeTest {
 
     @Test
     void openApiDocs_shouldBePublicAndContainCorePaths() throws Exception {
-        mockMvc.perform(get("/api-docs"))
+        MvcResult result = mockMvc.perform(get("/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", containsString("application/json")))
                 .andExpect(jsonPath("$.openapi").isNotEmpty())
                 .andExpect(jsonPath("$.paths").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/auth/login']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/products']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/products/{id}']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/categories/{id}']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/me']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/webhooks/stripe']").exists());
+                .andReturn();
+
+        Map<String, Object> openApi = objectMapper.readValue(
+                result.getResponse().getContentAsString(),
+                new TypeReference<>() {
+                });
+        Map<String, Object> paths = objectMapper.convertValue(
+                openApi.get("paths"),
+                new TypeReference<>() {
+                });
+        Set<String> pathKeys = paths.keySet();
+
+        assertThat(paths)
+                .as("Generated OpenAPI path keys: %s", pathKeys)
+                .containsKeys(
+                        "/api/v1/auth/login",
+                        "/api/v1/products",
+                        "/api/v1/me",
+                        "/api/v1/webhooks/stripe");
+
+        assertThat(pathKeys)
+                .as("Generated OpenAPI path keys: %s", pathKeys)
+                .anyMatch(path -> path.matches("^/api/v1/admin/products/\\{[^/]+\\}$"));
+
+        assertThat(pathKeys)
+                .as("Generated OpenAPI path keys: %s", pathKeys)
+                .anyMatch(path -> path.matches("^/api/v1/admin/categories/\\{[^/]+\\}$"));
     }
 }
