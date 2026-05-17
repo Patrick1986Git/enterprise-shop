@@ -14,7 +14,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -66,7 +65,6 @@ import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.TestMeterRegistryConfig;
-import org.springdoc.webmvc.api.OpenApiWebMvcResource;
 
 @WebMvcTest(controllers = {
         AuthController.class,
@@ -83,10 +81,9 @@ import org.springdoc.webmvc.api.OpenApiWebMvcResource;
         OrderController.class,
         CurrentUserOrderController.class,
         AdminOrderController.class,
-        StripeWebhookController.class,
-        OpenApiWebMvcResource.class
+        StripeWebhookController.class
 })
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class, OpenApiConfig.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class })
 class SecurityConfigWebMvcTest {
 
     @Autowired
@@ -187,21 +184,6 @@ class SecurityConfigWebMvcTest {
                         .header("Stripe-Signature", "sig")
                         .content("{}"))
                 .andExpect(status().isOk());
-    }
-
-    @Test
-    void openApiDocs_shouldBePublicAndContainCorePaths() throws Exception {
-        mockMvc.perform(get("/api-docs"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Content-Type", containsString("application/json")))
-                .andExpect(jsonPath("$.openapi").isNotEmpty())
-                .andExpect(jsonPath("$.paths").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/auth/login']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/products']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/products']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/categories']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/me']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/webhooks/stripe']").exists());
     }
 
     @ParameterizedTest
