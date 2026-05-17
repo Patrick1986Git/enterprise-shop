@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -82,6 +83,8 @@ class OpenApiDocsSmokeTest {
     private PaymentService paymentService;
     @MockitoBean
     private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
+    @MockitoBean(name = "jpaMappingContext")
+    private JpaMetamodelMappingContext jpaMappingContext;
 
     @BeforeEach
     void setUp() {
