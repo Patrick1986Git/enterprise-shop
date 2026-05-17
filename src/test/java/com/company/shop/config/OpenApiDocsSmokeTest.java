@@ -59,8 +59,8 @@ class OpenApiDocsSmokeTest {
                 .andExpect(jsonPath("$.paths").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/login']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/products']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/products']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/admin/categories']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/products/{id}']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/categories/{id}']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/me']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/webhooks/stripe']").exists());
     }
