@@ -22,7 +22,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -197,10 +196,5 @@ class OpenApiDocsSmokeTest {
             return mock(StripeWebhookEventRegistrar.class);
         }
 
-        @Bean(name = "jpaMappingContext")
-        @Primary
-        JpaMetamodelMappingContext jpaMappingContext() {
-            return mock(JpaMetamodelMappingContext.class);
-        }
     }
 }
