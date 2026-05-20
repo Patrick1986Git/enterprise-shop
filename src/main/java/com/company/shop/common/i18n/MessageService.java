@@ -1,17 +1,19 @@
 package com.company.shop.common.i18n;
 
 import java.util.Locale;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.context.NoSuchMessageException;
-import org.springframework.stereotype.Service;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class MessageService {
 
     private final MessageSource messageSource;
+
+    public MessageService(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
 
     public String getMessage(final String key, final Object... args) {
         final Locale locale = LocaleContextHolder.getLocale();
