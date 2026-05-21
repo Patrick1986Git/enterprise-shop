@@ -57,6 +57,7 @@ import com.company.shop.module.system.service.ApplicationStatusService;
 import com.company.shop.module.user.controller.AdminUserController;
 import com.company.shop.module.user.controller.UserController;
 import com.company.shop.module.user.dto.AuthResponseDTO;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.module.user.dto.UserResponseDTO;
 import com.company.shop.module.user.service.UserService;
 import com.company.shop.security.AuthController;
@@ -83,7 +84,7 @@ import com.company.shop.support.TestMeterRegistryConfig;
         AdminOrderController.class,
         StripeWebhookController.class
 })
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class, MessageService.class })
 class SecurityConfigWebMvcTest {
 
     @Autowired
