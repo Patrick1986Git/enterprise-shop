@@ -34,6 +34,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.common.exception.GlobalExceptionHandler;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.config.SecurityConfig;
 import com.company.shop.module.order.dto.OrderResponseDTO;
 import com.company.shop.module.order.entity.OrderStatus;
@@ -45,7 +46,7 @@ import com.company.shop.support.TestMeterRegistryConfig;
 
 @WebMvcTest(controllers = AdminOrderController.class)
 @ActiveProfiles("test")
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, MessageService.class, TestMeterRegistryConfig.class })
 class AdminOrderControllerWebMvcTest {
 
     private static final String ADMIN_ORDERS_URL = "/api/v1/admin/orders";

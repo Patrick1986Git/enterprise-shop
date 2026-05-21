@@ -26,6 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.common.exception.GlobalExceptionHandler;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
 import com.company.shop.module.order.service.PaymentService;
@@ -38,7 +39,7 @@ import com.company.shop.support.TestMeterRegistryConfig;
 )
 @ActiveProfiles("test")
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
+@Import({ GlobalExceptionHandler.class, MessageService.class, TestMeterRegistryConfig.class })
 class StripeWebhookControllerWebMvcTest {
 
 	private static final String WEBHOOK_URL = "/api/v1/webhooks/stripe";

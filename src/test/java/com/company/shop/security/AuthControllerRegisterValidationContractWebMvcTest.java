@@ -24,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.common.exception.GlobalExceptionHandler;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +32,7 @@ import com.company.shop.support.TestMeterRegistryConfig;
 
 @WebMvcTest(controllers = AuthController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
+@Import({ GlobalExceptionHandler.class, MessageService.class, TestMeterRegistryConfig.class })
 class AuthControllerRegisterValidationContractWebMvcTest {
 
     @Autowired

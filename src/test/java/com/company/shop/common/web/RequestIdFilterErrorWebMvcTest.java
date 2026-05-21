@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.common.exception.BusinessException;
 import com.company.shop.common.exception.GlobalExceptionHandler;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.config.SecurityConfig;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
@@ -30,7 +31,7 @@ import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.TestMeterRegistryConfig;
 
 @WebMvcTest(controllers = RequestIdFilterErrorWebMvcTest.TestErrorController.class)
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, RequestIdFilter.class, GlobalExceptionHandler.class,
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, RequestIdFilter.class, GlobalExceptionHandler.class, MessageService.class,
         RequestIdFilterErrorWebMvcTest.TestErrorController.class, TestMeterRegistryConfig.class })
 class RequestIdFilterErrorWebMvcTest {
 

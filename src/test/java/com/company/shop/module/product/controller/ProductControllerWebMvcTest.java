@@ -35,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.common.exception.GlobalExceptionHandler;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.config.SecurityConfig;
 import com.company.shop.module.product.dto.ProductResponseDTO;
 import com.company.shop.module.product.dto.ProductSearchCriteria;
@@ -46,7 +47,7 @@ import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.TestMeterRegistryConfig;
 
 @WebMvcTest(controllers = ProductController.class)
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, MessageService.class, TestMeterRegistryConfig.class })
 class ProductControllerWebMvcTest {
 
     private static final String PRODUCTS_URL = "/api/v1/products";

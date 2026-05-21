@@ -35,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.common.exception.GlobalExceptionHandler;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.config.SecurityConfig;
 import com.company.shop.module.cart.dto.AddToCartRequestDTO;
 import com.company.shop.module.cart.dto.CartItemResponseDTO;
@@ -50,7 +51,7 @@ import com.company.shop.support.TestMeterRegistryConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = CartController.class)
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, TestMeterRegistryConfig.class })
+@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, MessageService.class, TestMeterRegistryConfig.class })
 class CartControllerWebMvcTest {
 
     @Autowired
