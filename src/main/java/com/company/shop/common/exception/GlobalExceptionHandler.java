@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
+import com.company.shop.common.i18n.MessageService;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
@@ -53,9 +54,11 @@ public class GlobalExceptionHandler {
 	private static final String UNKNOWN_BUSINESS_ERROR = "UNKNOWN_BUSINESS_ERROR";
 
 	private final MeterRegistry meterRegistry;
+	private final MessageService messageService;
 
-	public GlobalExceptionHandler(MeterRegistry meterRegistry) {
+	public GlobalExceptionHandler(MeterRegistry meterRegistry, MessageService messageService) {
 		this.meterRegistry = meterRegistry;
+		this.messageService = messageService;
 	}
 
 	/**
@@ -75,7 +78,7 @@ public class GlobalExceptionHandler {
 
 		log.warn("Input validation failed fields={}", errors.keySet());
 
-		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(), "Validation failed", "VALIDATION_FAILED", errors);
+		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(), messageService.getMessage("error.validation.failed"), "VALIDATION_FAILED", errors);
 
 		return new ResponseEntity<>(apiError, HttpStatus.BAD_REQUEST);
 	}
@@ -124,7 +127,7 @@ public class GlobalExceptionHandler {
 				ex.getClass().getSimpleName());
 
 		ApiError apiError = new ApiError(HttpStatus.CONFLICT.value(),
-				"Resource was modified by another transaction. Please refresh and retry.",
+				messageService.getMessage("error.optimistic.lock.conflict"),
 				"OPTIMISTIC_LOCK_CONFLICT");
 
 		return new ResponseEntity<>(apiError, HttpStatus.CONFLICT);
@@ -137,7 +140,7 @@ public class GlobalExceptionHandler {
 		Map<String, String> details = Map.of("parameter", ex.getName(), "expectedType", expectedType);
 
 		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(),
-				"Invalid request parameter: " + ex.getName(),
+				messageService.getMessage("error.request.invalid.parameter", ex.getName()),
 				"REQUEST_INVALID",
 				details);
 
@@ -148,9 +151,9 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
 
 		Throwable rootCause = findCause(ex, JsonParseException.class, InvalidFormatException.class);
-		String message = "Request body contains invalid values.";
+		String message = messageService.getMessage("error.request.invalid.body.values");
 		if (rootCause instanceof JsonParseException) {
-			message = "Request body is malformed.";
+			message = messageService.getMessage("error.request.invalid.body.malformed");
 		}
 
 		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(),
@@ -167,7 +170,7 @@ public class GlobalExceptionHandler {
 		ex.getConstraintViolations().forEach(v -> errors.put(v.getPropertyPath().toString(), v.getMessage()));
 
 		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(),
-				"Validation failed",
+				messageService.getMessage("error.validation.failed"),
 				"VALIDATION_FAILED",
 				errors);
 
@@ -180,7 +183,7 @@ public class GlobalExceptionHandler {
 		Map<String, String> details = Map.of("parameter", ex.getParameterName(), "expectedType", ex.getParameterType());
 
 		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(),
-				"Missing required request parameter: " + ex.getParameterName(),
+				messageService.getMessage("error.request.missing.parameter", ex.getParameterName()),
 				"REQUEST_INVALID",
 				details);
 
@@ -199,7 +202,7 @@ public class GlobalExceptionHandler {
 		Map<String, String> details = Map.of("parameter", ex.getHeaderName(), "expectedType", expectedType);
 
 		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(),
-				"Missing required request header: " + ex.getHeaderName(),
+				messageService.getMessage("error.request.missing.header", ex.getHeaderName()),
 				"REQUEST_INVALID",
 				details);
 
@@ -216,7 +219,7 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
 
 		ApiError apiError = new ApiError(HttpStatus.FORBIDDEN.value(),
-				"Insufficient permissions to access this resource",
+				messageService.getMessage("error.access.denied"),
 				"ACCESS_DENIED");
 
 		return new ResponseEntity<>(apiError, HttpStatus.FORBIDDEN);
@@ -232,7 +235,7 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ApiError> handleNoHandlerFound(NoHandlerFoundException ex) {
 
 		ApiError apiError = new ApiError(HttpStatus.NOT_FOUND.value(),
-				"No endpoint found for: " + ex.getHttpMethod() + " " + ex.getRequestURL(),
+				messageService.getMessage("error.endpoint.not.found", ex.getHttpMethod(), ex.getRequestURL()),
 				"ENDPOINT_NOT_FOUND");
 
 		return new ResponseEntity<>(apiError, HttpStatus.NOT_FOUND);
@@ -290,7 +293,7 @@ public class GlobalExceptionHandler {
 		log.error("Unhandled application exception type={}", ex.getClass().getSimpleName(), ex);
 
 		ApiError apiError = new ApiError(HttpStatus.INTERNAL_SERVER_ERROR.value(),
-				"An unexpected server error occurred. Please contact support if the problem persists.");
+				messageService.getMessage("error.unexpected.server"));
 
 		return new ResponseEntity<>(apiError, HttpStatus.INTERNAL_SERVER_ERROR);
 	}

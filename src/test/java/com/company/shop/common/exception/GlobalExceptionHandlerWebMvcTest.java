@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.support.TestMeterRegistryConfig;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -69,7 +70,8 @@ import jakarta.validation.constraints.NotBlank;
  */
 @WebMvcTest(controllers = GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ GlobalExceptionHandler.class, GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, TestMeterRegistryConfig.class })
+@Import({ GlobalExceptionHandler.class, MessageService.class, GlobalExceptionHandlerWebMvcTest.TestExceptionController.class,
+		TestMeterRegistryConfig.class })
 class GlobalExceptionHandlerWebMvcTest {
 
 	private static final String TIMESTAMP_REGEX = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$";
@@ -87,7 +89,7 @@ class GlobalExceptionHandlerWebMvcTest {
 
 	@Test
 	void validationException_shouldReturnApiErrorContract() throws Exception {
-		mockMvc.perform(post("/test-exceptions/validation").contentType(MediaType.APPLICATION_JSON).content("{}"))
+		mockMvc.perform(post("/test-exceptions/validation").header("Accept-Language", "en").contentType(MediaType.APPLICATION_JSON).content("{}"))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
 				.andExpect(jsonPath("$.message").value("Validation failed"))
 				.andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
@@ -95,6 +97,23 @@ class GlobalExceptionHandlerWebMvcTest {
 				.andExpect(jsonPath("$.errors.name[0]").value("name must not be blank"))
 				.andExpect(jsonPath("$.timestamp", matchesPattern(TIMESTAMP_REGEX)));
 	}
+
+	@Test
+	void validationException_shouldResolvePolishMessageForAcceptLanguage() throws Exception {
+		mockMvc.perform(post("/test-exceptions/validation").header("Accept-Language", "pl").contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.message").value("Walidacja nie powiodła się"))
+				.andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+	}
+
+	@Test
+	void accessDenied_shouldResolvePolishMessageForAcceptLanguage() throws Exception {
+		mockMvc.perform(get("/test-exceptions/access-denied").header("Accept-Language", "pl")).andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.status").value(403))
+				.andExpect(jsonPath("$.message").value("Brak uprawnień do dostępu do tego zasobu"))
+				.andExpect(jsonPath("$.errorCode").value("ACCESS_DENIED"));
+	}
+
 
 	@Test
 	void validationExceptionWithGlobalError_shouldReturnApiErrorWithGlobalEntry() throws Exception {
@@ -324,4 +343,5 @@ class GlobalExceptionHandlerWebMvcTest {
 			super(status, message);
 		}
 	}
+
 }
