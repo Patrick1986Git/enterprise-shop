@@ -18,15 +18,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.MessageSource;
+import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,6 +42,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
+import com.company.shop.common.i18n.MessageService;
 import com.company.shop.support.TestMeterRegistryConfig;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -69,7 +76,8 @@ import jakarta.validation.constraints.NotBlank;
  */
 @WebMvcTest(controllers = GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = JwtAuthenticationFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
-@Import({ GlobalExceptionHandler.class, GlobalExceptionHandlerWebMvcTest.TestExceptionController.class, TestMeterRegistryConfig.class })
+@Import({ GlobalExceptionHandler.class, GlobalExceptionHandlerWebMvcTest.TestExceptionController.class,
+		TestMeterRegistryConfig.class, GlobalExceptionHandlerWebMvcTest.TestI18nConfig.class })
 class GlobalExceptionHandlerWebMvcTest {
 
 	private static final String TIMESTAMP_REGEX = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$";
@@ -339,6 +347,32 @@ class GlobalExceptionHandlerWebMvcTest {
 	static class TestBusinessExceptionWithoutErrorCode extends BusinessException {
 		TestBusinessExceptionWithoutErrorCode(HttpStatus status, String message) {
 			super(status, message);
+		}
+	}
+
+	@TestConfiguration
+	static class TestI18nConfig {
+
+		@Bean
+		MessageSource messageSource() {
+			ResourceBundleMessageSource source = new ResourceBundleMessageSource();
+			source.setBasename("i18n/messages");
+			source.setDefaultEncoding("UTF-8");
+			source.setFallbackToSystemLocale(false);
+			return source;
+		}
+
+		@Bean
+		MessageService messageService(MessageSource messageSource) {
+			return new MessageService(messageSource);
+		}
+
+		@Bean
+		LocaleResolver localeResolver() {
+			AcceptHeaderLocaleResolver resolver = new AcceptHeaderLocaleResolver();
+			resolver.setSupportedLocales(java.util.List.of(java.util.Locale.forLanguageTag("pl"), java.util.Locale.ENGLISH));
+			resolver.setDefaultLocale(java.util.Locale.ENGLISH);
+			return resolver;
 		}
 	}
 }
