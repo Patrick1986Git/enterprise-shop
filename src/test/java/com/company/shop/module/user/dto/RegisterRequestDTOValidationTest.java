@@ -3,36 +3,47 @@ package com.company.shop.module.user.dto;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.annotation.Annotation;
-import java.util.Set;
 import java.util.Locale;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 class RegisterRequestDTOValidationTest {
 
-	private ValidatorFactory validatorFactory;
+	private LocalValidatorFactoryBean validatorFactory;
 	private Validator validator;
+	private Locale previousLocale;
 
 	@BeforeEach
 	void setUp() {
+		previousLocale = Locale.getDefault();
 		Locale.setDefault(Locale.ENGLISH);
-		validatorFactory = Validation.buildDefaultValidatorFactory();
+
+		ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+		messageSource.setBasename("i18n/messages");
+		messageSource.setDefaultEncoding("UTF-8");
+
+		validatorFactory = new LocalValidatorFactoryBean();
+		validatorFactory.setValidationMessageSource(messageSource);
+		validatorFactory.afterPropertiesSet();
+
 		validator = validatorFactory.getValidator();
 	}
 
 	@AfterEach
 	void tearDown() {
-		validatorFactory.close();
+		validatorFactory.destroy();
+		Locale.setDefault(previousLocale);
 	}
 
 	@Test

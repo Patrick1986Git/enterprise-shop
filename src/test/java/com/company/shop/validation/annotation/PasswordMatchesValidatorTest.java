@@ -2,34 +2,47 @@ package com.company.shop.validation.annotation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Locale;
 import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.ResourceBundleMessageSource;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import com.company.shop.module.user.dto.RegisterRequestDTO;
 
 import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
 
 class PasswordMatchesValidatorTest {
 
-    private ValidatorFactory validatorFactory;
+    private LocalValidatorFactoryBean validatorFactory;
     private Validator validator;
     private final PasswordMatchesValidator passwordMatchesValidator = new PasswordMatchesValidator();
+    private Locale previousLocale;
 
     @BeforeEach
     void setUp() {
-        validatorFactory = Validation.buildDefaultValidatorFactory();
+        previousLocale = Locale.getDefault();
+        Locale.setDefault(Locale.ENGLISH);
+
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasename("i18n/messages");
+        messageSource.setDefaultEncoding("UTF-8");
+
+        validatorFactory = new LocalValidatorFactoryBean();
+        validatorFactory.setValidationMessageSource(messageSource);
+        validatorFactory.afterPropertiesSet();
+
         validator = validatorFactory.getValidator();
     }
 
     @AfterEach
     void tearDown() {
-        validatorFactory.close();
+        validatorFactory.destroy();
+        Locale.setDefault(previousLocale);
     }
 
     @Test
@@ -39,7 +52,7 @@ class PasswordMatchesValidatorTest {
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
         assertThat(violations).noneMatch(v -> v.getPropertyPath().toString().equals("passwordRepeat")
-                && v.getMessage().equals("Hasła nie są identyczne"));
+                && v.getMessage().equals("Passwords do not match"));
     }
 
     @Test
@@ -51,7 +64,7 @@ class PasswordMatchesValidatorTest {
         assertThat(violations)
                 .anySatisfy(violation -> {
                     assertThat(violation.getPropertyPath().toString()).isEqualTo("passwordRepeat");
-                    assertThat(violation.getMessage()).isEqualTo("Hasła nie są identyczne");
+                    assertThat(violation.getMessage()).isEqualTo("Passwords do not match");
                 });
     }
 
@@ -64,7 +77,7 @@ class PasswordMatchesValidatorTest {
         assertThat(violations)
                 .anySatisfy(violation -> {
                     assertThat(violation.getPropertyPath().toString()).isEqualTo("passwordRepeat");
-                    assertThat(violation.getMessage()).isEqualTo("Hasła nie są identyczne");
+                    assertThat(violation.getMessage()).isEqualTo("Passwords do not match");
                 });
     }
 
@@ -75,7 +88,7 @@ class PasswordMatchesValidatorTest {
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
         assertThat(violations)
-                .filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+                .filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
                 .isEmpty();
     }
 
@@ -86,7 +99,7 @@ class PasswordMatchesValidatorTest {
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
         assertThat(violations)
-                .filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+                .filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
                 .isEmpty();
     }
 
@@ -104,7 +117,7 @@ class PasswordMatchesValidatorTest {
         Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
         assertThat(violations)
-                .filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+                .filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
                 .extracting(violation -> violation.getPropertyPath().toString())
                 .containsOnly("passwordRepeat");
     }
