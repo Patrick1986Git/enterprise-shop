@@ -12,25 +12,25 @@ import jakarta.validation.constraints.Size;
 
 public class ProductCreateDTO {
 
-	@NotBlank(message = "Nazwa produktu nie może być pusta")
-	@Size(max = 255, message = "Nazwa produktu nie może przekraczać 255 znaków")
+	@NotBlank(message = "{validation.product.name.required}")
+	@Size(max = 255, message = "{validation.product.name.size}")
 	private String name;
 
-	@NotBlank(message = "SKU nie może być puste")
-	@Size(max = 50, message = "SKU nie może przekraczać 50 znaków")
+	@NotBlank(message = "{validation.product.sku.required}")
+	@Size(max = 50, message = "{validation.product.sku.size}")
 	private String sku;
 
-	@Size(max = 5000, message = "Opis produktu nie może przekraczać 5000 znaków")
+	@Size(max = 5000, message = "{validation.product.description.size}")
 	private String description;
 
-	@NotNull(message = "Cena jest wymagana")
-	@DecimalMin(value = "0.01", message = "Cena musi być większa niż 0")
+	@NotNull(message = "{validation.product.price.required}")
+	@DecimalMin(value = "0.01", message = "{validation.product.price.min}")
 	private BigDecimal price;
 
-	@PositiveOrZero(message = "Stan magazynowy nie może być ujemny")
+	@PositiveOrZero(message = "{validation.product.stock.positiveOrZero}")
 	private int stock;
 
-	@NotNull(message = "Kategoria jest wymagana")
+	@NotNull(message = "{validation.product.category.required}")
 	private UUID categoryId;
 
 	private List<String> imageUrls;

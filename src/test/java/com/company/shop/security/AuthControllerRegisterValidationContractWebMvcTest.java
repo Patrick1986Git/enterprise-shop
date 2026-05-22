@@ -67,7 +67,7 @@ class AuthControllerRegisterValidationContractWebMvcTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.errors.passwordRepeat", hasItem("Hasła nie są identyczne")))
+                .andExpect(jsonPath("$.errors.passwordRepeat", hasItem("Passwords do not match")))
                 .andExpect(jsonPath("$.timestamp").exists());
 
         verify(authService, never()).register(any());
@@ -94,10 +94,23 @@ class AuthControllerRegisterValidationContractWebMvcTest {
                 .andExpect(jsonPath("$.errors.firstName", not(empty())))
                 .andExpect(jsonPath("$.errors.lastName").isArray())
                 .andExpect(jsonPath("$.errors.lastName", not(empty())))
-                .andExpect(jsonPath("$.errors.passwordRepeat", hasItem("Hasła nie są identyczne")))
+                .andExpect(jsonPath("$.errors.passwordRepeat", hasItem("Passwords do not match")))
                 .andExpect(jsonPath("$.timestamp").exists());
 
         verify(authService, never()).register(any());
+    }
+
+    @Test
+    void registerValidationContract_shouldReturnPolishValidationMessagesWhenAcceptLanguageIsPolish() throws Exception {
+        RegisterRequestDTO request = new RegisterRequestDTO("user@example.com", "secret123", "different123", "John", "Doe");
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .header("Accept-Language", "pl")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Walidacja nie powiodła się"))
+                .andExpect(jsonPath("$.errors.passwordRepeat", hasItem("Hasła nie są identyczne")));
     }
 
     @Test

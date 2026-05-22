@@ -15,7 +15,7 @@ import jakarta.validation.Payload;
 @Constraint(validatedBy = PasswordMatchesValidator.class)
 @Documented
 public @interface PasswordMatches {
-	String message() default "Hasła nie są identyczne";
+	String message() default "{validation.user.password.confirmation.matches}";
 
 	Class<?>[] groups() default {};
 

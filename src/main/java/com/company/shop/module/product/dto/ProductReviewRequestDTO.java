@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record ProductReviewRequestDTO(
-    @NotNull UUID productId,
-    @Min(1) @Max(5) int rating,
-    @Size(max = 1000) String comment
+    @NotNull(message = "{validation.review.product.required}") UUID productId,
+    @Min(value = 1, message = "{validation.review.rating.min}") @Max(value = 5, message = "{validation.review.rating.max}") int rating,
+    @Size(max = 1000, message = "{validation.review.comment.size}") String comment
 ) {}

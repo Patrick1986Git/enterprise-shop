@@ -25,9 +25,9 @@ import jakarta.validation.constraints.NotNull;
  * @since 1.0.0
  */
 public record AddToCartRequestDTO(
-        @NotNull(message = "{cart.product.required}") 
+        @NotNull(message = "{validation.cart.product.required}") 
         UUID productId,
         
-        @Min(value = 1, message = "{cart.quantity.min}") 
+        @Min(value = 1, message = "{validation.cart.quantity.min}") 
         int quantity
 ) {}

@@ -9,21 +9,21 @@ import jakarta.validation.constraints.Size;
 @PasswordMatches
 public class RegisterRequestDTO {
 
-	@Email
-	@NotBlank
+	@Email(message = "{validation.user.email.invalid}")
+	@NotBlank(message = "{validation.user.email.required}")
 	private String email;
 
-	@NotBlank
-	@Size(min = 8)
+	@NotBlank(message = "{validation.user.password.required}")
+	@Size(min = 8, message = "{validation.user.password.size}")
 	private String password;
 
-	@NotBlank
+	@NotBlank(message = "{validation.user.password.confirmation.required}")
 	private String passwordRepeat;
 
-	@NotBlank
+	@NotBlank(message = "{validation.user.firstName.required}")
 	private String firstName;
 
-	@NotBlank
+	@NotBlank(message = "{validation.user.lastName.required}")
 	private String lastName;
 
 	public RegisterRequestDTO() {
