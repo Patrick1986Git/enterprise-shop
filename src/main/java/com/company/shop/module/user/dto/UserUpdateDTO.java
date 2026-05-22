@@ -5,12 +5,12 @@ import jakarta.validation.constraints.Size;
 
 public class UserUpdateDTO {
 
-	@NotBlank(message = "Imię nie może być puste")
-	@Size(max = 100, message = "Imię nie może przekraczać 100 znaków")
+	@NotBlank(message = "{validation.user.firstName.required}")
+	@Size(max = 100, message = "{validation.user.firstName.size}")
 	private String firstName;
 
-	@NotBlank(message = "Nazwisko nie może być puste")
-	@Size(max = 100, message = "Nazwisko nie może przekraczać 100 znaków")
+	@NotBlank(message = "{validation.user.lastName.required}")
+	@Size(max = 100, message = "{validation.user.lastName.size}")
 	private String lastName;
 
 	// Pusty konstruktor dla biblioteki Jackson

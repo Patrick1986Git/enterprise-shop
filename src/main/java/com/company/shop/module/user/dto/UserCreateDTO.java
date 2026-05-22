@@ -9,20 +9,20 @@ import jakarta.validation.constraints.Size;
  */
 public class UserCreateDTO {
 
-	@Email(message = "Niepoprawny format adresu email")
-	@NotBlank(message = "Email nie może być pusty")
+	@Email(message = "{validation.user.email.invalid}")
+	@NotBlank(message = "{validation.user.email.required}")
 	private String email;
 
-	@NotBlank(message = "Hasło nie może być puste")
-	@Size(min = 8, message = "Hasło musi mieć co najmniej 8 znaków")
+	@NotBlank(message = "{validation.user.password.required}")
+	@Size(min = 8, message = "{validation.user.password.size}")
 	private String password;
 
-	@NotBlank(message = "Imię nie może być puste")
-	@Size(max = 100, message = "Imię nie może przekraczać 100 znaków")
+	@NotBlank(message = "{validation.user.firstName.required}")
+	@Size(max = 100, message = "{validation.user.firstName.size}")
 	private String firstName;
 
-	@NotBlank(message = "Nazwisko nie może być puste")
-	@Size(max = 100, message = "Nazwisko nie może przekraczać 100 znaków")
+	@NotBlank(message = "{validation.user.lastName.required}")
+	@Size(max = 100, message = "{validation.user.lastName.size}")
 	private String lastName;
 
 	// Pusty konstruktor - wymagany przez bibliotekę Jackson do deserializacji JSON

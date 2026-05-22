@@ -34,12 +34,12 @@ public record ProductSearchCriteria(
         String query,
         UUID categoryId,
         
-        @PositiveOrZero(message = "{price.min.positive}")
+        @PositiveOrZero(message = "{validation.product.price.min.positiveOrZero}")
         BigDecimal minPrice,
         
-        @PositiveOrZero(message = "{price.max.positive}")
+        @PositiveOrZero(message = "{validation.product.price.max.positiveOrZero}")
         BigDecimal maxPrice,
         
-        @Min(0) @Max(5)
+        @Min(value = 0, message = "{validation.product.rating.min}") @Max(value = 5, message = "{validation.product.rating.max}")
         Double minRating
 ) {}

@@ -24,9 +24,9 @@ import jakarta.validation.constraints.Size;
  * @since 1.0.0
  */
 public record OrderCheckoutRequestDTO(
-    @Size(min = 3, max = 20, message = "Discount code must be between 3 and 20 characters")
+    @Size(min = 3, max = 20, message = "{validation.order.discountCode.size}")
     String discountCode,
     
-    @Size(max = 500, message = "Customer notes cannot exceed 500 characters")
+    @Size(max = 500, message = "{validation.order.customerNotes.size}")
     String customerNotes
 ) {}

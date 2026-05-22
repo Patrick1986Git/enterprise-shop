@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.annotation.Annotation;
 import java.util.Set;
+import java.util.Locale;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ class RegisterRequestDTOValidationTest {
 
 	@BeforeEach
 	void setUp() {
+		Locale.setDefault(Locale.ENGLISH);
 		validatorFactory = Validation.buildDefaultValidatorFactory();
 		validator = validatorFactory.getValidator();
 	}
@@ -40,7 +42,7 @@ class RegisterRequestDTOValidationTest {
 		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
 		assertFieldHasConstraint(violations, "email", Email.class);
-		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
 				.isEmpty();
 	}
 
@@ -51,7 +53,7 @@ class RegisterRequestDTOValidationTest {
 		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
 
 		assertFieldHasConstraint(violations, "password", Size.class);
-		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
 				.isEmpty();
 	}
 
@@ -67,7 +69,7 @@ class RegisterRequestDTOValidationTest {
 		assertFieldHasConstraint(violations, "firstName", NotBlank.class);
 		assertFieldHasConstraint(violations, "lastName", NotBlank.class);
 
-		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
 				.isEmpty();
 	}
 
@@ -83,7 +85,7 @@ class RegisterRequestDTOValidationTest {
 		assertFieldHasConstraint(violations, "firstName", NotBlank.class);
 		assertFieldHasConstraint(violations, "lastName", NotBlank.class);
 
-		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
 				.isEmpty();
 	}
 
@@ -99,7 +101,7 @@ class RegisterRequestDTOValidationTest {
 		assertFieldHasConstraint(violations, "firstName", NotBlank.class);
 		assertFieldHasConstraint(violations, "lastName", NotBlank.class);
 
-		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Hasła nie są identyczne"))
+		assertThat(violations).filteredOn(violation -> violation.getMessage().equals("Passwords do not match"))
 				.isEmpty();
 	}
 
@@ -115,7 +117,7 @@ class RegisterRequestDTOValidationTest {
 		assertFieldHasConstraint(violations, "lastName", NotBlank.class);
 
 		assertThat(violations).filteredOn(violation -> violation.getPropertyPath().toString().equals("passwordRepeat"))
-				.extracting(ConstraintViolation::getMessage).contains("Hasła nie są identyczne");
+				.extracting(ConstraintViolation::getMessage).contains("Passwords do not match");
 	}
 
 	private void assertFieldHasConstraint(Set<ConstraintViolation<RegisterRequestDTO>> violations, String field,

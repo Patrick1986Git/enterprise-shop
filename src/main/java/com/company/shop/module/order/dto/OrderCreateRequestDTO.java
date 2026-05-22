@@ -32,7 +32,7 @@ public class OrderCreateRequestDTO {
      * List of items to be included in the order.
      * Must not be empty and each item will be validated individually.
      */
-    @NotEmpty
+    @NotEmpty(message = "{validation.order.items.required}")
     @Valid
     private List<OrderItemRequestDTO> items;
 
@@ -57,13 +57,13 @@ public class OrderCreateRequestDTO {
         /**
          * Unique identifier of the product.
          */
-        @NotNull
+        @NotNull(message = "{validation.order.item.product.required}")
         private UUID productId;
 
         /**
          * The number of units for the specified product.
          */
-        @Min(1)
+        @Min(value = 1, message = "{validation.order.item.quantity.min}")
         private int quantity;
 
         public UUID getProductId() {

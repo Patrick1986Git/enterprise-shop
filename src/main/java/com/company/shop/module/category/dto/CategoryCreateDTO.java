@@ -10,11 +10,11 @@ import jakarta.validation.constraints.Size;
  */
 public class CategoryCreateDTO {
 
-	@NotBlank(message = "Nazwa kategorii nie może być pusta")
-	@Size(max = 150, message = "Nazwa kategorii nie może przekraczać 150 znaków")
+	@NotBlank(message = "{validation.category.name.required}")
+	@Size(max = 150, message = "{validation.category.name.size}")
 	private String name;
 
-	@Size(max = 500, message = "Opis nie może przekraczać 500 znaków")
+	@Size(max = 500, message = "{validation.category.description.size}")
 	private String description;
 
 	// UUID kategorii nadrzędnej (opcjonalne)
