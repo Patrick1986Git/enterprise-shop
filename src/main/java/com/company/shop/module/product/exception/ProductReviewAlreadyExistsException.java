@@ -10,7 +10,9 @@ public class ProductReviewAlreadyExistsException extends BusinessException {
 
     public ProductReviewAlreadyExistsException(UUID productId) {
         super(HttpStatus.CONFLICT,
-                "Review already exists for product: " + productId,
-                "PRODUCT_REVIEW_ALREADY_EXISTS");
+                "PRODUCT_REVIEW_ALREADY_EXISTS",
+                "error.business.productReview.alreadyExists",
+                new Object[] { productId },
+                "Review already exists for product: " + productId);
     }
 }

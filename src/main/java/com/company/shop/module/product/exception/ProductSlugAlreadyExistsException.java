@@ -8,7 +8,9 @@ public class ProductSlugAlreadyExistsException extends BusinessException {
 
     public ProductSlugAlreadyExistsException(String slug) {
         super(HttpStatus.CONFLICT,
-                "Product already exists with slug: " + slug,
-                "PRODUCT_SLUG_ALREADY_EXISTS");
+                "PRODUCT_SLUG_ALREADY_EXISTS",
+                "error.business.product.slugAlreadyExists",
+                new Object[] { slug },
+                "Product already exists with slug: " + slug);
     }
 }

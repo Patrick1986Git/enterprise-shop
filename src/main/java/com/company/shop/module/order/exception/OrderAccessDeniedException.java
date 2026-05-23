@@ -10,6 +10,6 @@ import com.company.shop.common.exception.BusinessException;
 public class OrderAccessDeniedException extends BusinessException {
 
     public OrderAccessDeniedException() {
-        super(HttpStatus.FORBIDDEN, "You are not authorized to access this order.", "ORDER_ACCESS_DENIED");
+        super(HttpStatus.FORBIDDEN, "ORDER_ACCESS_DENIED", "error.business.order.accessDenied", new Object[0], "You are not authorized to access this order.");
     }
 }

@@ -10,6 +10,6 @@ import com.company.shop.common.exception.BusinessException;
 public class EmptyCartCheckoutException extends BusinessException {
 
     public EmptyCartCheckoutException() {
-        super(HttpStatus.CONFLICT, "Cannot place order: cart is empty.", "ORDER_CART_EMPTY");
+        super(HttpStatus.CONFLICT, "ORDER_CART_EMPTY", "error.business.order.emptyCartCheckout", new Object[0], "Cannot place order: cart is empty.");
     }
 }

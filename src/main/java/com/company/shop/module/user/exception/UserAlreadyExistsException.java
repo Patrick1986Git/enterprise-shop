@@ -8,7 +8,9 @@ public class UserAlreadyExistsException extends BusinessException {
 
     public UserAlreadyExistsException() {
         super(HttpStatus.CONFLICT,
-                "User account already exists",
-                UserErrorCodes.USER_ALREADY_EXISTS);
+                UserErrorCodes.USER_ALREADY_EXISTS,
+                "error.business.user.alreadyExists",
+                new Object[0],
+                "User account already exists");
     }
 }

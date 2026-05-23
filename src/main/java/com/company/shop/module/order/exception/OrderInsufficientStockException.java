@@ -13,8 +13,10 @@ public class OrderInsufficientStockException extends BusinessException {
 
     public OrderInsufficientStockException(UUID productId, int requestedQuantity, int availableQuantity) {
         super(HttpStatus.CONFLICT,
+                "ORDER_INSUFFICIENT_STOCK",
+                "error.business.order.insufficientStock",
+                new Object[] { productId, requestedQuantity, availableQuantity },
                 "Insufficient stock for product " + productId + ". Requested: " + requestedQuantity + ", available: "
-                        + availableQuantity,
-                "ORDER_INSUFFICIENT_STOCK");
+                        + availableQuantity);
     }
 }

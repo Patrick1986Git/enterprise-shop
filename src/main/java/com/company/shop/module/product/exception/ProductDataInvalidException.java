@@ -7,6 +7,6 @@ import com.company.shop.common.exception.BusinessException;
 public class ProductDataInvalidException extends BusinessException {
 
     public ProductDataInvalidException(String message) {
-        super(HttpStatus.BAD_REQUEST, message, "PRODUCT_DATA_INVALID");
+        super(HttpStatus.BAD_REQUEST, "PRODUCT_DATA_INVALID", "error.business.product.dataInvalid", new Object[] { message }, message);
     }
 }

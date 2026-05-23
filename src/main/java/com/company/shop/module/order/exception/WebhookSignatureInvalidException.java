@@ -14,6 +14,6 @@ public class WebhookSignatureInvalidException extends BusinessException {
     }
 
     public WebhookSignatureInvalidException(String message) {
-        super(HttpStatus.BAD_REQUEST, message, "STRIPE_WEBHOOK_SIGNATURE_INVALID");
+        super(HttpStatus.BAD_REQUEST, "STRIPE_WEBHOOK_SIGNATURE_INVALID", "error.business.webhook.signatureInvalid", new Object[] { message }, message);
     }
 }

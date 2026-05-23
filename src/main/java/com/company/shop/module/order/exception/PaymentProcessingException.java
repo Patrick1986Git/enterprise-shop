@@ -10,6 +10,6 @@ import com.company.shop.common.exception.BusinessException;
 public class PaymentProcessingException extends BusinessException {
 
     public PaymentProcessingException(String message) {
-        super(HttpStatus.BAD_GATEWAY, message, "PAYMENT_PROCESSING_ERROR");
+        super(HttpStatus.BAD_GATEWAY, "PAYMENT_PROCESSING_ERROR", "error.business.payment.processingFailed", new Object[] { message }, message);
     }
 }

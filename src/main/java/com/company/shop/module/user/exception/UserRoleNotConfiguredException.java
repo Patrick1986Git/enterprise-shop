@@ -11,7 +11,9 @@ public class UserRoleNotConfiguredException extends BusinessException {
 
     public UserRoleNotConfiguredException(String roleName) {
         super(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Required system role is not configured: " + roleName,
-                UserErrorCodes.USER_ROLE_NOT_CONFIGURED);
+                UserErrorCodes.USER_ROLE_NOT_CONFIGURED,
+                "error.business.user.roleNotConfigured",
+                new Object[] { roleName },
+                "Required system role is not configured: " + roleName);
     }
 }

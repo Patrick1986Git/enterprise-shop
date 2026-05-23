@@ -10,6 +10,6 @@ import com.company.shop.common.exception.BusinessException;
 public class WebhookProcessingException extends BusinessException {
 
     public WebhookProcessingException(String message) {
-        super(HttpStatus.INTERNAL_SERVER_ERROR, message, "STRIPE_WEBHOOK_PROCESSING_ERROR");
+        super(HttpStatus.INTERNAL_SERVER_ERROR, "STRIPE_WEBHOOK_PROCESSING_ERROR", "error.business.webhook.processingFailed", new Object[] { message }, message);
     }
 }

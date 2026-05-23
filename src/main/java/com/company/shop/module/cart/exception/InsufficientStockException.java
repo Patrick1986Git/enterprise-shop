@@ -7,6 +7,6 @@ import com.company.shop.common.exception.BusinessException;
 public class InsufficientStockException extends BusinessException {
 
 	public InsufficientStockException(int available) {
-		super(HttpStatus.CONFLICT, "Insufficient stock. Available: " + available, "INSUFFICIENT_STOCK");
+		super(HttpStatus.CONFLICT, "INSUFFICIENT_STOCK", "error.business.cart.insufficientStock", new Object[] { available }, "Insufficient stock. Available: " + available);
 	}
 }

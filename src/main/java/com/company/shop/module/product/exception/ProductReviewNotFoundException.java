@@ -10,7 +10,9 @@ public class ProductReviewNotFoundException extends BusinessException {
 
     public ProductReviewNotFoundException(UUID reviewId) {
         super(HttpStatus.NOT_FOUND,
-                "Product review not found: " + reviewId,
-                "PRODUCT_REVIEW_NOT_FOUND");
+                "PRODUCT_REVIEW_NOT_FOUND",
+                "error.business.productReview.notFound",
+                new Object[] { reviewId },
+                "Product review not found: " + reviewId);
     }
 }

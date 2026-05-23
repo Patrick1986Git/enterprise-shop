@@ -13,7 +13,9 @@ public class PaymentRecordNotFoundException extends BusinessException {
 
     public PaymentRecordNotFoundException(UUID orderId) {
         super(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Payment record not found for order: " + orderId,
-                "PAYMENT_RECORD_MISSING");
+                "PAYMENT_RECORD_MISSING",
+                "error.business.payment.recordNotFound",
+                new Object[] { orderId },
+                "Payment record not found for order: " + orderId);
     }
 }

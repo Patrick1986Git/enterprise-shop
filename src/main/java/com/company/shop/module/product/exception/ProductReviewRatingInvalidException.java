@@ -8,7 +8,9 @@ public class ProductReviewRatingInvalidException extends BusinessException {
 
     public ProductReviewRatingInvalidException(int rating) {
         super(HttpStatus.BAD_REQUEST,
-                "Product review rating must be between 1 and 5. Provided: " + rating,
-                "PRODUCT_REVIEW_RATING_INVALID");
+                "PRODUCT_REVIEW_RATING_INVALID",
+                "error.business.productReview.ratingInvalid",
+                new Object[] { rating },
+                "Product review rating must be between 1 and 5. Provided: " + rating);
     }
 }

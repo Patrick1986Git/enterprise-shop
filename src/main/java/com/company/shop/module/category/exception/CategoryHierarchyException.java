@@ -22,6 +22,6 @@ public class CategoryHierarchyException extends BusinessException {
      * @param errorCode unique business error code for client-side handling.
      */
     public CategoryHierarchyException(String message, String errorCode) {
-        super(HttpStatus.CONFLICT, message, errorCode);
+        super(HttpStatus.CONFLICT, errorCode, "error.business.category.hierarchyInvalid", new Object[] { message }, message);
     }
 }
