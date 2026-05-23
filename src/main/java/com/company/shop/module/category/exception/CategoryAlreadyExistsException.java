@@ -22,6 +22,6 @@ public class CategoryAlreadyExistsException extends BusinessException {
      * @param name the name that caused the conflict.
      */
     public CategoryAlreadyExistsException(String name) {
-        super(HttpStatus.CONFLICT, "Category already exists with name: " + name, "CATEGORY_ALREADY_EXISTS");
+        super(HttpStatus.CONFLICT, "CATEGORY_ALREADY_EXISTS", "error.business.category.alreadyExists", new Object[] {name}, "Category already exists with name: " + name);
     }
 }

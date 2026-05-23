@@ -113,7 +113,8 @@ public class GlobalExceptionHandler {
 
 		incrementBusinessExceptionMetric(errorCode, ex.getStatus());
 
-		ApiError apiError = new ApiError(ex.getStatus().value(), ex.getMessage(), errorCode);
+		String resolvedMessage = resolveBusinessMessage(ex);
+		ApiError apiError = new ApiError(ex.getStatus().value(), resolvedMessage, errorCode);
 
 		return new ResponseEntity<>(apiError, ex.getStatus());
 	}
@@ -239,6 +240,13 @@ public class GlobalExceptionHandler {
 				"ENDPOINT_NOT_FOUND");
 
 		return new ResponseEntity<>(apiError, HttpStatus.NOT_FOUND);
+	}
+
+	private String resolveBusinessMessage(BusinessException ex) {
+		if (ex.getMessageKey() != null && !ex.getMessageKey().isBlank()) {
+			return messageService.getMessage(ex.getMessageKey(), ex.getMessageArgs());
+		}
+		return ex.getMessage() != null ? ex.getMessage() : messageService.getMessage("error.business.generic");
 	}
 
 	private void incrementBusinessExceptionMetric(String errorCode, HttpStatus status) {
