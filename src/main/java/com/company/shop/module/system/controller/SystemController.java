@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/v1/system")
-@Tag(name = "System", description = "Publiczne endpointy techniczne systemu.")
+@Tag(name = "System", description = "Public technical system endpoints.")
 public class SystemController {
 
     private final ApplicationStatusService statusService;
@@ -25,9 +25,9 @@ public class SystemController {
     }
 
     @GetMapping("/status")
-    @Operation(summary = "Status aplikacji")
+    @Operation(summary = "Get application status")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Status aplikacji pobrany poprawnie.")
+            @ApiResponse(responseCode = "200", description = "Application status returned successfully.")
     })
     public ResponseEntity<ApplicationStatusDTO> getSystemStatus() {
         return ResponseEntity.ok(statusService.getApplicationStatus());

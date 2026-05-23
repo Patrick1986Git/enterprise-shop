@@ -16,7 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/v1/me")
 @PreAuthorize("isAuthenticated()")
-@Tag(name = "Users", description = "Endpointy profilu aktualnie zalogowanego użytkownika.")
+@Tag(name = "Users", description = "Endpoints for the authenticated user profile.")
 public class UserController {
 
 	private final UserService service;
@@ -26,10 +26,10 @@ public class UserController {
 	}
 
 	@GetMapping
-	@Operation(summary = "Profil aktualnego użytkownika")
+	@Operation(summary = "Get the authenticated user profile")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Profil użytkownika pobrany poprawnie."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+			@ApiResponse(responseCode = "200", description = "User profile returned successfully."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized.")
 	})
 	public UserResponseDTO getCurrentUser() {
 		return service.getCurrentUserProfile();

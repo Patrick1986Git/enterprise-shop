@@ -25,7 +25,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/me/orders")
 @PreAuthorize("isAuthenticated()")
-@Tag(name = "Current User Orders", description = "Zamówienia aktualnie zalogowanego użytkownika.")
+@Tag(name = "Orders", description = "Operations on orders owned by the authenticated user.")
 public class CurrentUserOrderController {
 
     private final OrderService orderService;
@@ -35,10 +35,10 @@ public class CurrentUserOrderController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista zamówień użytkownika")
+    @Operation(summary = "List the authenticated user's orders")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Lista zamówień pobrana poprawnie."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "200", description = "Orders returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public PageResponseDTO<OrderResponseDTO> getCurrentUserOrders(@PageableDefault(size = 10) Pageable pageable) {
         return PageResponseDTO.from(orderService.findMyOrders(pageable));
@@ -46,11 +46,11 @@ public class CurrentUserOrderController {
 
     @PostMapping("/checkout")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Checkout koszyka do zamówienia")
+    @Operation(summary = "Checkout the cart and create an order")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Zamówienie utworzone poprawnie."),
-            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "201", description = "Order created successfully."),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public OrderResponseDTO checkout(@Valid @RequestBody OrderCheckoutRequestDTO request) {
         return orderService.placeOrderFromCart(request);

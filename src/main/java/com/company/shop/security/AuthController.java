@@ -19,7 +19,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Authentication", description = "Endpointy logowania i rejestracji użytkowników.")
+@Tag(name = "Authentication", description = "Public authentication endpoints for user registration and login.")
 public class AuthController {
 
 	private final AuthService authService;
@@ -29,10 +29,10 @@ public class AuthController {
 	}
 
 	@PostMapping("/login")
-	@Operation(summary = "Logowanie użytkownika")
+	@Operation(summary = "Authenticate a user and return a JWT access token")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Użytkownik zalogowany poprawnie."),
-			@ApiResponse(responseCode = "401", description = "Nieprawidłowe dane logowania.")
+			@ApiResponse(responseCode = "200", description = "Authentication successful."),
+			@ApiResponse(responseCode = "401", description = "Invalid credentials.")
 	})
 	public AuthResponseDTO login(@Valid @RequestBody LoginRequestDTO request) {
 		return authService.login(request);
@@ -40,10 +40,10 @@ public class AuthController {
 
 	@PostMapping("/register")
 	@ResponseStatus(HttpStatus.CREATED)
-	@Operation(summary = "Rejestracja użytkownika")
+	@Operation(summary = "Register a new user account")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "201", description = "Użytkownik zarejestrowany poprawnie."),
-			@ApiResponse(responseCode = "409", description = "Użytkownik o podanym e-mailu już istnieje.")
+			@ApiResponse(responseCode = "201", description = "User account registered successfully."),
+			@ApiResponse(responseCode = "409", description = "A user with the provided email already exists.")
 	})
 	public void register(@Valid @RequestBody RegisterRequestDTO request) {
 		authService.register(request);

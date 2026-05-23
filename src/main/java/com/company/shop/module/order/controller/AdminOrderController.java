@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/v1/admin/orders")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin Orders", description = "Administracyjne endpointy zamówień.")
+@Tag(name = "Admin Orders", description = "Admin-only order management endpoints.")
 public class AdminOrderController {
 
     private final OrderService orderService;
@@ -29,11 +29,11 @@ public class AdminOrderController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista zamówień")
+    @Operation(summary = "List orders (admin-only)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Zamówienia pobrane poprawnie."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-            @ApiResponse(responseCode = "403", description = "Brak uprawnień.")
+            @ApiResponse(responseCode = "200", description = "Orders returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
     })
     public PageResponseDTO<OrderResponseDTO> getOrders(@PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(orderService.findAll(pageable));

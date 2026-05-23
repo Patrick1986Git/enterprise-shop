@@ -27,7 +27,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/me/cart")
 @PreAuthorize("isAuthenticated()")
-@Tag(name = "Cart", description = "Operacje na koszyku aktualnie zalogowanego użytkownika.")
+@Tag(name = "Cart", description = "Operations on the authenticated user's cart.")
 public class CartController {
 
     private final CartService cartService;
@@ -37,32 +37,32 @@ public class CartController {
     }
 
     @GetMapping
-    @Operation(summary = "Pobranie koszyka użytkownika")
+    @Operation(summary = "Get the authenticated user's cart")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Koszyk pobrany poprawnie."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "200", description = "Cart returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public ResponseEntity<CartResponseDTO> getCart() {
         return ResponseEntity.ok(cartService.getMyCart());
     }
 
     @PostMapping("/items")
-    @Operation(summary = "Dodanie produktu do koszyka")
+    @Operation(summary = "Add a product to the cart")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Produkt dodany do koszyka."),
-            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "200", description = "Product added to cart."),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public ResponseEntity<CartResponseDTO> addCartItem(@Valid @RequestBody AddToCartRequestDTO request) {
         return ResponseEntity.ok(cartService.addToCart(request));
     }
 
     @PatchMapping("/items/{productId}")
-    @Operation(summary = "Aktualizacja ilości produktu w koszyku")
+    @Operation(summary = "Update cart item quantity")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Ilość produktu zaktualizowana."),
-            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "200", description = "Cart item quantity updated."),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public ResponseEntity<CartResponseDTO> updateCartItemQuantity(
             @PathVariable UUID productId,
@@ -71,20 +71,20 @@ public class CartController {
     }
 
     @DeleteMapping("/items/{productId}")
-    @Operation(summary = "Usunięcie produktu z koszyka")
+    @Operation(summary = "Remove a product from the cart")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Produkt usunięty z koszyka."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "200", description = "Product removed from cart."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public ResponseEntity<CartResponseDTO> removeCartItem(@PathVariable UUID productId) {
         return ResponseEntity.ok(cartService.removeItem(productId));
     }
 
     @DeleteMapping
-    @Operation(summary = "Wyczyszczenie koszyka")
+    @Operation(summary = "Clear the cart")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Koszyk wyczyszczony."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji.")
+            @ApiResponse(responseCode = "204", description = "Cart cleared successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized.")
     })
     public ResponseEntity<Void> clearCart() {
         cartService.clearCart();

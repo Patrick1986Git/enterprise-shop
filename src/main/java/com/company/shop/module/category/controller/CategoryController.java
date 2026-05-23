@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/v1/categories")
-@Tag(name = "Categories", description = "Publiczne endpointy kategorii.")
+@Tag(name = "Categories", description = "Public category endpoints.")
 public class CategoryController {
 
 	private final CategoryService service;
@@ -29,9 +29,9 @@ public class CategoryController {
 	}
 
 	@GetMapping
-	@Operation(summary = "Lista kategorii")
+	@Operation(summary = "List categories")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Kategorie pobrane poprawnie.")
+			@ApiResponse(responseCode = "200", description = "Categories returned successfully.")
 	})
 	public Page<CategoryResponseDTO> getCategories(
 			@RequestParam(defaultValue = "0") int page,
@@ -41,10 +41,10 @@ public class CategoryController {
 	}
 
 	@GetMapping("/slug/{slug}")
-	@Operation(summary = "Szczegóły kategorii po slug")
+	@Operation(summary = "Get category details by slug")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Kategoria znaleziona."),
-			@ApiResponse(responseCode = "404", description = "Kategoria nie została znaleziona.")
+			@ApiResponse(responseCode = "200", description = "Category found."),
+			@ApiResponse(responseCode = "404", description = "Category not found.")
 	})
 	public CategoryResponseDTO getCategoryBySlug(@PathVariable String slug) {
 		return service.findBySlug(slug);

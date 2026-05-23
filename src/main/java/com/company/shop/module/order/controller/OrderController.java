@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/api/v1/orders")
 @PreAuthorize("isAuthenticated()")
-@Tag(name = "Orders", description = "Endpointy zamówień użytkownika.")
+@Tag(name = "Orders", description = "Authenticated user order endpoints.")
 public class OrderController {
 
     private final OrderService orderService;
@@ -29,12 +29,12 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Szczegóły zamówienia po ID")
+    @Operation(summary = "Get order details by ID")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Zamówienie znalezione."),
-            @ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-            @ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-            @ApiResponse(responseCode = "404", description = "Zamówienie nie zostało znalezione.")
+            @ApiResponse(responseCode = "200", description = "Order found."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden."),
+            @ApiResponse(responseCode = "404", description = "Order not found.")
     })
     public OrderDetailedResponseDTO getOrderById(@PathVariable UUID id) {
         return orderService.findById(id);
