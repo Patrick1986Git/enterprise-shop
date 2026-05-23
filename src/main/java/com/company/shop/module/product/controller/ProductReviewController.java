@@ -27,7 +27,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1")
-@Tag(name = "Product Reviews", description = "Endpointy opinii o produktach.")
+@Tag(name = "Product Reviews", description = "Product review endpoints.")
 public class ProductReviewController {
 
 	private final ProductReviewService reviewService;
@@ -39,23 +39,23 @@ public class ProductReviewController {
 	@PostMapping("/reviews")
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("isAuthenticated()")
-	@Operation(summary = "Dodanie opinii do produktu")
+	@Operation(summary = "Create a product review")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "201", description = "Opinia dodana poprawnie."),
-			@ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "404", description = "Produkt nie został znaleziony."),
-			@ApiResponse(responseCode = "409", description = "Użytkownik już ocenił ten produkt.")
+			@ApiResponse(responseCode = "201", description = "Review created successfully."),
+			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "404", description = "Product not found."),
+			@ApiResponse(responseCode = "409", description = "User has already reviewed this product.")
 	})
 	public ProductReviewResponseDTO createReview(@Valid @RequestBody ProductReviewRequestDTO dto) {
 		return reviewService.addReview(dto);
 	}
 
 	@GetMapping("/products/{productId}/reviews")
-	@Operation(summary = "Lista opinii produktu")
+	@Operation(summary = "List product reviews")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Opinie pobrane poprawnie."),
-			@ApiResponse(responseCode = "404", description = "Produkt nie został znaleziony.")
+			@ApiResponse(responseCode = "200", description = "Reviews returned successfully."),
+			@ApiResponse(responseCode = "404", description = "Product not found.")
 	})
 	public Page<ProductReviewResponseDTO> getProductReviews(@PathVariable UUID productId, Pageable pageable) {
 		return reviewService.getProductReviews(productId, pageable);
@@ -64,12 +64,12 @@ public class ProductReviewController {
 	@DeleteMapping("/reviews/{reviewId}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@PreAuthorize("isAuthenticated()")
-	@Operation(summary = "Usunięcie opinii")
+	@Operation(summary = "Delete a product review")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "204", description = "Opinia usunięta poprawnie."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Opinia nie została znaleziona.")
+			@ApiResponse(responseCode = "204", description = "Review deleted successfully."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden."),
+			@ApiResponse(responseCode = "404", description = "Review not found.")
 	})
 	public void deleteReview(@PathVariable UUID reviewId) {
 		reviewService.deleteReview(reviewId);

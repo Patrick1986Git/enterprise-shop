@@ -29,7 +29,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/admin/users")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin Users", description = "Administracyjne endpointy użytkowników.")
+@Tag(name = "Admin Users", description = "Admin-only user management endpoints.")
 public class AdminUserController {
 
 	private final UserService service;
@@ -39,37 +39,37 @@ public class AdminUserController {
 	}
 
 	@GetMapping
-	@Operation(summary = "Lista użytkowników")
+	@Operation(summary = "List users (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Użytkownicy pobrani poprawnie."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień.")
+			@ApiResponse(responseCode = "200", description = "Users returned successfully."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
 	})
 	public Page<UserResponseDTO> getUsers(@PageableDefault(size = 20) Pageable pageable) {
 		return service.findAll(pageable);
 	}
 
 	@GetMapping("/{id}")
-	@Operation(summary = "Szczegóły użytkownika po ID")
+	@Operation(summary = "Get user details by ID (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Użytkownik znaleziony."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Użytkownik nie został znaleziony.")
+			@ApiResponse(responseCode = "200", description = "User found."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "404", description = "User not found.")
 	})
 	public UserResponseDTO getUserById(@PathVariable UUID id) {
 		return service.findById(id);
 	}
 
 	@PutMapping("/{id}")
-	@Operation(summary = "Aktualizacja użytkownika")
+	@Operation(summary = "Update a user (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Użytkownik zaktualizowany poprawnie."),
-			@ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Użytkownik nie został znaleziony."),
-			@ApiResponse(responseCode = "409", description = "Konflikt danych użytkownika.")
+			@ApiResponse(responseCode = "200", description = "User updated successfully."),
+			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "404", description = "User not found."),
+			@ApiResponse(responseCode = "409", description = "User data conflict.")
 	})
 	public UserResponseDTO updateUser(@PathVariable UUID id, @Valid @RequestBody UserUpdateDTO dto) {
 		return service.update(id, dto);
@@ -77,12 +77,12 @@ public class AdminUserController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@Operation(summary = "Usunięcie użytkownika")
+	@Operation(summary = "Delete a user (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "204", description = "Użytkownik usunięty poprawnie."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Użytkownik nie został znaleziony.")
+			@ApiResponse(responseCode = "204", description = "User deleted successfully."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "404", description = "User not found.")
 	})
 	public void deleteUser(@PathVariable UUID id) {
 		service.delete(id);

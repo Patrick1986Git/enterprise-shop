@@ -16,7 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/v1/webhooks/stripe")
-@Tag(name = "Stripe Webhook", description = "Webhook zdarzeń płatności Stripe.")
+@Tag(name = "Webhooks", description = "Stripe payment webhook endpoint.")
 public class StripeWebhookController {
 
 	private final PaymentService paymentService;
@@ -26,12 +26,12 @@ public class StripeWebhookController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Obsługa webhooka Stripe")
+	@Operation(summary = "Handle Stripe webhook events")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Webhook przetworzony poprawnie."),
-			@ApiResponse(responseCode = "400", description = "Nieprawidłowy payload lub podpis."),
-			@ApiResponse(responseCode = "404", description = "Zamówienie powiązane z płatnością nie zostało znalezione."),
-			@ApiResponse(responseCode = "409", description = "Konflikt stanu płatności lub zamówienia.")
+			@ApiResponse(responseCode = "200", description = "Webhook processed successfully."),
+			@ApiResponse(responseCode = "400", description = "Invalid payload or signature."),
+			@ApiResponse(responseCode = "404", description = "Order associated with the payment was not found."),
+			@ApiResponse(responseCode = "409", description = "Payment or order state conflict.")
 	})
 	public ResponseEntity<Void> handleStripeWebhook(@RequestBody String payload,
 			@RequestHeader("Stripe-Signature") String sigHeader) {

@@ -27,7 +27,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/admin/categories")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin Categories", description = "Administracyjne zarządzanie kategoriami.")
+@Tag(name = "Categories", description = "Admin-only category management endpoints.")
 public class AdminCategoryController {
 
 	private final CategoryService service;
@@ -37,12 +37,12 @@ public class AdminCategoryController {
 	}
 
 	@GetMapping("/{id}")
-	@Operation(summary = "Szczegóły kategorii po ID")
+	@Operation(summary = "Get category by ID (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Kategoria znaleziona."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Kategoria nie została znaleziona.")
+			@ApiResponse(responseCode = "200", description = "Category found."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "404", description = "Category not found.")
 	})
 	public CategoryResponseDTO getCategoryById(@PathVariable UUID id) {
 		return service.findById(id);
@@ -50,27 +50,27 @@ public class AdminCategoryController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@Operation(summary = "Utworzenie kategorii")
+	@Operation(summary = "Create a category (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "201", description = "Kategoria utworzona poprawnie."),
-			@ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "409", description = "Konflikt danych kategorii.")
+			@ApiResponse(responseCode = "201", description = "Category created successfully."),
+			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "409", description = "Category data conflict.")
 	})
 	public CategoryResponseDTO createCategory(@Valid @RequestBody CategoryCreateDTO dto) {
 		return service.create(dto);
 	}
 
 	@PutMapping("/{id}")
-	@Operation(summary = "Aktualizacja kategorii")
+	@Operation(summary = "Update a category (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "Kategoria zaktualizowana poprawnie."),
-			@ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Kategoria nie została znaleziona."),
-			@ApiResponse(responseCode = "409", description = "Konflikt danych kategorii.")
+			@ApiResponse(responseCode = "200", description = "Category updated successfully."),
+			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "404", description = "Category not found."),
+			@ApiResponse(responseCode = "409", description = "Category data conflict.")
 	})
 	public CategoryResponseDTO updateCategory(@PathVariable UUID id, @Valid @RequestBody CategoryCreateDTO dto) {
 		return service.update(id, dto);
@@ -78,12 +78,12 @@ public class AdminCategoryController {
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@Operation(summary = "Usunięcie kategorii")
+	@Operation(summary = "Delete a category (admin-only)")
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "204", description = "Kategoria usunięta poprawnie."),
-			@ApiResponse(responseCode = "401", description = "Brak autoryzacji."),
-			@ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-			@ApiResponse(responseCode = "404", description = "Kategoria nie została znaleziona.")
+			@ApiResponse(responseCode = "204", description = "Category deleted successfully."),
+			@ApiResponse(responseCode = "401", description = "Unauthorized."),
+			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+			@ApiResponse(responseCode = "404", description = "Category not found.")
 	})
 	public void deleteCategory(@PathVariable UUID id) {
 		service.delete(id);

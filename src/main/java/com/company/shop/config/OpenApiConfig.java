@@ -53,9 +53,9 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Enterprise Shop API")
                         .version("1.0.0")
-                        .description("Kompleksowe API dla systemu e-commerce klasy Enterprise.")
+                        .description("REST API for enterprise-grade e-commerce operations.")
                         .contact(new Contact()
-                                .name("Dział IT")
+                                .name("IT Department")
                                 .email("dev-team@company.com")
                                 .url("https://company.com"))
                         .license(new License()
@@ -69,6 +69,6 @@ public class OpenApiConfig {
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
-                                        .description("Wprowadź token JWT w formacie: {token}")));
+                                        .description("Provide a JWT bearer token in the Authorization header.")));
     }
 }

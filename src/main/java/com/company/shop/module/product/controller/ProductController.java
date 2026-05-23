@@ -26,7 +26,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/v1/products")
-@Tag(name = "Products", description = "Publiczne endpointy produktów i wyszukiwania.")
+@Tag(name = "Products", description = "Public product browsing and search endpoints.")
 public class ProductController {
 
     private final ProductService productService;
@@ -36,9 +36,9 @@ public class ProductController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista produktów")
+    @Operation(summary = "List products")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Lista produktów pobrana poprawnie.")
+            @ApiResponse(responseCode = "200", description = "Products returned successfully.")
     })
     public Page<ProductResponseDTO> getProducts(
             @RequestParam(defaultValue = "0") int page,
@@ -49,10 +49,10 @@ public class ProductController {
     }
 
     @GetMapping("/category/{categoryId}")
-    @Operation(summary = "Lista produktów w kategorii")
+    @Operation(summary = "List products by category")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Produkty kategorii pobrane poprawnie."),
-            @ApiResponse(responseCode = "404", description = "Kategoria nie została znaleziona.")
+            @ApiResponse(responseCode = "200", description = "Category products returned successfully."),
+            @ApiResponse(responseCode = "404", description = "Category not found.")
     })
     public Page<ProductResponseDTO> getProductsByCategory(
             @PathVariable UUID categoryId,
@@ -64,19 +64,19 @@ public class ProductController {
     }
 
     @GetMapping("/slug/{slug}")
-    @Operation(summary = "Szczegóły produktu po slug")
+    @Operation(summary = "Get product details by slug")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Produkt znaleziony."),
-            @ApiResponse(responseCode = "404", description = "Produkt nie został znaleziony.")
+            @ApiResponse(responseCode = "200", description = "Product found."),
+            @ApiResponse(responseCode = "404", description = "Product not found.")
     })
     public ProductResponseDTO getProductBySlug(@PathVariable String slug) {
         return productService.findBySlug(slug);
     }
 
     @GetMapping("/search")
-    @Operation(summary = "Wyszukiwanie produktów")
+    @Operation(summary = "Search products")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Wyniki wyszukiwania pobrane poprawnie.")
+            @ApiResponse(responseCode = "200", description = "Search results returned successfully.")
     })
     public Page<ProductResponseDTO> searchProducts(
             @Valid @ModelAttribute ProductSearchCriteria criteria,

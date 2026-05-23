@@ -27,7 +27,7 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/v1/admin/products")
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin Products", description = "Administracyjne zarządzanie produktami.")
+@Tag(name = "Products", description = "Admin-only product management endpoints.")
 public class AdminProductController {
 
     private final ProductService productService;
@@ -37,11 +37,11 @@ public class AdminProductController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Pobranie produktu po ID (admin)")
+    @Operation(summary = "Get product by ID (admin-only)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Produkt znaleziony."),
-            @ApiResponse(responseCode = "404", description = "Produkt nie został znaleziony."),
-            @ApiResponse(responseCode = "403", description = "Brak uprawnień.")
+            @ApiResponse(responseCode = "200", description = "Product found."),
+            @ApiResponse(responseCode = "404", description = "Product not found."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
     })
     public ProductResponseDTO getProductById(@PathVariable UUID id) {
         return productService.findById(id);
@@ -49,23 +49,23 @@ public class AdminProductController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Utworzenie produktu (admin)")
+    @Operation(summary = "Create a product (admin-only)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Produkt utworzony poprawnie."),
-            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-            @ApiResponse(responseCode = "403", description = "Brak uprawnień.")
+            @ApiResponse(responseCode = "201", description = "Product created successfully."),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
     })
     public ProductResponseDTO createProduct(@Valid @RequestBody ProductCreateDTO dto) {
         return productService.create(dto);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Aktualizacja produktu (admin)")
+    @Operation(summary = "Update a product (admin-only)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Produkt zaktualizowany poprawnie."),
-            @ApiResponse(responseCode = "400", description = "Nieprawidłowe dane żądania."),
-            @ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-            @ApiResponse(responseCode = "404", description = "Produkt nie został znaleziony.")
+            @ApiResponse(responseCode = "200", description = "Product updated successfully."),
+            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+            @ApiResponse(responseCode = "404", description = "Product not found.")
     })
     public ProductResponseDTO updateProduct(@PathVariable UUID id, @Valid @RequestBody ProductCreateDTO dto) {
         return productService.update(id, dto);
@@ -73,11 +73,11 @@ public class AdminProductController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Usunięcie produktu (admin)")
+    @Operation(summary = "Delete a product (admin-only)")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Produkt usunięty."),
-            @ApiResponse(responseCode = "403", description = "Brak uprawnień."),
-            @ApiResponse(responseCode = "404", description = "Produkt nie został znaleziony.")
+            @ApiResponse(responseCode = "204", description = "Product deleted successfully."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+            @ApiResponse(responseCode = "404", description = "Product not found.")
     })
     public void deleteProduct(@PathVariable UUID id) {
         productService.delete(id);
