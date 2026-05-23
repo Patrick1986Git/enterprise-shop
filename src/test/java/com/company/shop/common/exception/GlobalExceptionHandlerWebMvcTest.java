@@ -285,7 +285,7 @@ class GlobalExceptionHandlerWebMvcTest {
 
 		@GetMapping("/business-server-error")
 		void businessServerError() {
-			throw new TestBusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Business server error", "BUSINESS_SERVER_ERROR");
+			throw new TestBusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "BUSINESS_SERVER_ERROR", "error.business.test.serverError", new Object[0], "Business server error");
 		}
 
 		@GetMapping("/type-mismatch")
