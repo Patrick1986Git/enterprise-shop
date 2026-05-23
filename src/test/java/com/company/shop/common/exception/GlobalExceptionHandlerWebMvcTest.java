@@ -132,14 +132,22 @@ class GlobalExceptionHandlerWebMvcTest {
 
 	@Test
 	void businessException_shouldReturnApiErrorContract() throws Exception {
-		mockMvc.perform(get("/test-exceptions/business")).andExpect(status().isNotFound())
+		mockMvc.perform(get("/test-exceptions/business").header("Accept-Language", "en")).andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.status").value(404))
-				.andExpect(jsonPath("$.message").value("Business resource not found"))
+				.andExpect(jsonPath("$.message").value("Business resource not found: A1"))
 				.andExpect(jsonPath("$.errorCode").value("BUSINESS_NOT_FOUND"))
 				.andExpect(jsonPath("$.errors").value(nullValue()))
 				.andExpect(jsonPath("$.timestamp", matchesPattern(TIMESTAMP_REGEX)));
 
 		assertBusinessExceptionMetric("BUSINESS_NOT_FOUND", "4xx", 1.0d);
+	}
+
+	@Test
+	void businessException_shouldResolvePolishMessageForAcceptLanguage() throws Exception {
+		mockMvc.perform(get("/test-exceptions/business").header("Accept-Language", "pl")).andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.status").value(404))
+				.andExpect(jsonPath("$.message").value("Nie znaleziono zasobu biznesowego: A1"))
+				.andExpect(jsonPath("$.errorCode").value("BUSINESS_NOT_FOUND"));
 	}
 
 	@Test
@@ -267,7 +275,7 @@ class GlobalExceptionHandlerWebMvcTest {
 
 		@GetMapping("/business")
 		void business() {
-			throw new TestBusinessException(HttpStatus.NOT_FOUND, "Business resource not found", "BUSINESS_NOT_FOUND");
+			throw new TestBusinessException(HttpStatus.NOT_FOUND, "BUSINESS_NOT_FOUND", "error.business.test.notFound", new Object[] {"A1"}, "Business resource not found: A1");
 		}
 
 		@GetMapping("/business-without-code")
@@ -277,7 +285,7 @@ class GlobalExceptionHandlerWebMvcTest {
 
 		@GetMapping("/business-server-error")
 		void businessServerError() {
-			throw new TestBusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "Business server error", "BUSINESS_SERVER_ERROR");
+			throw new TestBusinessException(HttpStatus.INTERNAL_SERVER_ERROR, "BUSINESS_SERVER_ERROR", "error.business.test.serverError", new Object[0], "Business server error");
 		}
 
 		@GetMapping("/type-mismatch")
@@ -333,8 +341,8 @@ class GlobalExceptionHandlerWebMvcTest {
 	}
 
 	static class TestBusinessException extends BusinessException {
-		TestBusinessException(HttpStatus status, String message, String errorCode) {
-			super(status, message, errorCode);
+		TestBusinessException(HttpStatus status, String errorCode, String messageKey, Object[] args, String fallbackMessage) {
+			super(status, errorCode, messageKey, args, fallbackMessage);
 		}
 	}
 

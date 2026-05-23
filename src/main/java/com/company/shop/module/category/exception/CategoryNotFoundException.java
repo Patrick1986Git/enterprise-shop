@@ -19,7 +19,7 @@ public class CategoryNotFoundException extends BusinessException {
      * @param categoryId the UUID of the missing category.
      */
     public CategoryNotFoundException(UUID categoryId) {
-        super(HttpStatus.NOT_FOUND, "Category not found: " + categoryId, "CATEGORY_NOT_FOUND");
+        super(HttpStatus.NOT_FOUND, "CATEGORY_NOT_FOUND", "error.business.category.notFound", new Object[] {categoryId}, "Category not found: " + categoryId);
     }
 
     /**
@@ -28,6 +28,6 @@ public class CategoryNotFoundException extends BusinessException {
      * @param slug the URL-friendly identifier of the missing category.
      */
     public CategoryNotFoundException(String slug) {
-        super(HttpStatus.NOT_FOUND, "Category not found for slug: " + slug, "CATEGORY_NOT_FOUND");
+        super(HttpStatus.NOT_FOUND, "CATEGORY_NOT_FOUND", "error.business.category.notFoundBySlug", new Object[] {slug}, "Category not found for slug: " + slug);
     }
 }

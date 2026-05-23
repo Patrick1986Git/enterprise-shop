@@ -8,7 +8,9 @@ public class ProductReviewAccessDeniedException extends BusinessException {
 
     public ProductReviewAccessDeniedException() {
         super(HttpStatus.FORBIDDEN,
-                "You are not allowed to delete this product review.",
-                "PRODUCT_REVIEW_ACCESS_DENIED");
+                "PRODUCT_REVIEW_ACCESS_DENIED",
+                "error.business.productReview.accessDenied",
+                new Object[0],
+                "You are not allowed to delete this product review.");
     }
 }

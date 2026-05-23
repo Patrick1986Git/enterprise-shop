@@ -10,7 +10,9 @@ public class CartNotFoundException extends BusinessException {
 
     public CartNotFoundException(UUID userId) {
         super(HttpStatus.NOT_FOUND,
-              "Cart not found for user: " + userId,
-              "CART_NOT_FOUND");
+              "CART_NOT_FOUND",
+              "error.business.cart.notFound",
+              new Object[] { userId },
+              "Cart not found for user: " + userId);
     }
 }

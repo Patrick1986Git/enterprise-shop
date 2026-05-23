@@ -11,7 +11,9 @@ public class UserAuthenticationRequiredException extends BusinessException {
 
     public UserAuthenticationRequiredException() {
         super(HttpStatus.UNAUTHORIZED,
-                "Authentication is required to access user profile data",
-                UserErrorCodes.USER_AUTHENTICATION_REQUIRED);
+                UserErrorCodes.USER_AUTHENTICATION_REQUIRED,
+                "error.business.user.authenticationRequired",
+                new Object[0],
+                "Authentication is required to access user profile data");
     }
 }

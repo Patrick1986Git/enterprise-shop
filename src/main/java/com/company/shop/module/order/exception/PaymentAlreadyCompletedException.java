@@ -12,6 +12,6 @@ import com.company.shop.common.exception.BusinessException;
 public class PaymentAlreadyCompletedException extends BusinessException {
 
     public PaymentAlreadyCompletedException(UUID orderId) {
-        super(HttpStatus.CONFLICT, "Payment already completed for order: " + orderId, "PAYMENT_ALREADY_COMPLETED");
+        super(HttpStatus.CONFLICT, "PAYMENT_ALREADY_COMPLETED", "error.business.payment.alreadyCompleted", new Object[] {orderId}, "Payment already completed for order: " + orderId);
     }
 }

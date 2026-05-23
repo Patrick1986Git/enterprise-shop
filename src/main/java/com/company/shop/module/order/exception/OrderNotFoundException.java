@@ -12,6 +12,6 @@ import com.company.shop.common.exception.BusinessException;
 public class OrderNotFoundException extends BusinessException {
 
     public OrderNotFoundException(UUID orderId) {
-        super(HttpStatus.NOT_FOUND, "Order not found: " + orderId, "ORDER_NOT_FOUND");
+        super(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "error.business.order.notFound", new Object[] {orderId}, "Order not found: " + orderId);
     }
 }

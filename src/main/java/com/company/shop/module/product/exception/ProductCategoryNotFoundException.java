@@ -10,7 +10,9 @@ public class ProductCategoryNotFoundException extends BusinessException {
 
     public ProductCategoryNotFoundException(UUID categoryId) {
         super(HttpStatus.NOT_FOUND,
-                "Category not found for product operation: " + categoryId,
-                "PRODUCT_CATEGORY_NOT_FOUND");
+                "PRODUCT_CATEGORY_NOT_FOUND",
+                "error.business.product.categoryNotFound",
+                new Object[] { categoryId },
+                "Category not found for product operation: " + categoryId);
     }
 }

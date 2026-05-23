@@ -8,7 +8,9 @@ public class ProductInvariantViolationException extends BusinessException {
 
     public ProductInvariantViolationException(String message) {
         super(HttpStatus.INTERNAL_SERVER_ERROR,
-                message,
-                "PRODUCT_INVARIANT_VIOLATION");
+                "PRODUCT_INVARIANT_VIOLATION",
+                "error.business.product.invariantViolation",
+                new Object[] { message },
+                message);
     }
 }

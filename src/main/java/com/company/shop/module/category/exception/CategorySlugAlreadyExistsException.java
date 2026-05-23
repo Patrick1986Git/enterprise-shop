@@ -19,6 +19,6 @@ public class CategorySlugAlreadyExistsException extends BusinessException {
      * @param slug the URL-friendly string that is already taken.
      */
     public CategorySlugAlreadyExistsException(String slug) {
-        super(HttpStatus.CONFLICT, "Category already exists with slug: " + slug, "CATEGORY_SLUG_ALREADY_EXISTS");
+        super(HttpStatus.CONFLICT, "CATEGORY_SLUG_ALREADY_EXISTS", "error.business.category.slugAlreadyExists", new Object[] {slug}, "Category already exists with slug: " + slug);
     }
 }
