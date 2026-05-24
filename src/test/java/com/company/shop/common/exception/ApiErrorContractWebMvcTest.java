@@ -16,7 +16,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -44,7 +46,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 		ProductController.class,
 		ApiErrorContractWebMvcTest.TestBusinessExceptionController.class
 })
-@Import({ WebMvcSliceTestConfig.class, SecurityConfig.class })
+@Import({ WebMvcSliceTestConfig.class, SecurityConfig.class, ApiErrorContractWebMvcTest.TestControllerConfig.class })
 class ApiErrorContractWebMvcTest {
 
 	@Autowired
@@ -164,7 +166,8 @@ class ApiErrorContractWebMvcTest {
 				.header("Accept-Language", "pl"));
 
 		assertApiErrorShape(polishResult, 404, "PRODUCT_NOT_FOUND")
-				.andExpect(jsonPath("$.message").value("Nie znaleziono produktu dla sluga: missing-product"));
+				.andExpect(jsonPath("$.message").value("Nie znaleziono produktu dla sluga: missing-product"))
+				.andExpect(jsonPath("$.errors").value(nullValue()));
 	}
 
 	private ResultActions assertApiErrorShape(ResultActions result, int expectedStatus, String expectedErrorCode)
@@ -174,8 +177,16 @@ class ApiErrorContractWebMvcTest {
 				.andExpect(jsonPath("$.status").value(expectedStatus))
 				.andExpect(jsonPath("$.message").exists())
 				.andExpect(jsonPath("$.errorCode").value(expectedErrorCode))
-				.andExpect(jsonPath("$.errors").exists())
 				.andExpect(jsonPath("$.timestamp").exists());
+	}
+
+	@TestConfiguration
+	static class TestControllerConfig {
+
+		@Bean
+		TestBusinessExceptionController testBusinessExceptionController() {
+			return new TestBusinessExceptionController();
+		}
 	}
 
 	@RestController
