@@ -37,9 +37,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.company.shop.common.exception.GlobalExceptionHandler;
-import com.company.shop.common.i18n.MessageService;
-import com.company.shop.config.SecurityConfig;
+import com.company.shop.support.WebMvcSliceTestConfig;
 import com.company.shop.module.category.dto.CategoryCreateDTO;
 import com.company.shop.module.category.dto.CategoryResponseDTO;
 import com.company.shop.module.category.exception.CategoryAlreadyExistsException;
@@ -50,11 +48,10 @@ import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
-import com.company.shop.support.TestMeterRegistryConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = AdminCategoryController.class)
-@Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, MessageService.class, TestMeterRegistryConfig.class })
+@Import(WebMvcSliceTestConfig.class)
 class AdminCategoryControllerWebMvcTest {
 
     private static final String ADMIN_CATEGORIES_URL = "/api/v1/admin/categories";
