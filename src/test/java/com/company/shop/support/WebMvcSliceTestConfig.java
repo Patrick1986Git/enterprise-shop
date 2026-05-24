@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Import;
 import com.company.shop.common.exception.GlobalExceptionHandler;
 import com.company.shop.common.i18n.MessageService;
 import com.company.shop.config.SecurityConfig;
-import com.company.shop.security.JwtAuthenticationFilter;
+import com.company.shop.security.jwt.JwtAuthenticationFilter;
 
 @Configuration
 @Import({ SecurityConfig.class, JwtAuthenticationFilter.class, GlobalExceptionHandler.class, MessageService.class,
