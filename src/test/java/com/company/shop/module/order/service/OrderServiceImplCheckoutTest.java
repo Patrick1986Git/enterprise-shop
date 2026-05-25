@@ -104,9 +104,9 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 1))
+			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 2))
 					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
-			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 2))
+			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 3))
 					.thenReturn(new CheckoutProduct(secondProduct.getId(), secondProduct.getName(), secondProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
 				Order order = invocation.getArgument(0);
@@ -362,9 +362,9 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 2))
+			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 1))
 					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
-			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 3))
+			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 2))
 					.thenReturn(new CheckoutProduct(secondProduct.getId(), secondProduct.getName(), secondProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
