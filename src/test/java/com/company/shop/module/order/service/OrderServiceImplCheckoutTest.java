@@ -42,9 +42,11 @@ import com.company.shop.module.order.mapper.OrderMapper;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
+import com.company.shop.module.product.api.internal.CheckoutProduct;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
+import com.company.shop.module.product.exception.ProductInsufficientStockException;
 import com.company.shop.module.product.exception.ProductNotFoundException;
-import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
 
@@ -55,7 +57,7 @@ class OrderServiceImplCheckoutTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private ProductRepository productRepository;
+	private ProductCatalogFacade productCatalogFacade;
 
 	@Mock
 	private PaymentRepository paymentRepository;
@@ -81,7 +83,7 @@ class OrderServiceImplCheckoutTest {
 	@BeforeEach
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
-		service = new OrderServiceImpl(orderRepository, productRepository, paymentRepository, discountCodeRepository,
+		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
 				userService, cartService, orderMapper, paymentService, meterRegistry);
 	}
 
@@ -102,8 +104,10 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(firstProduct.getId())).thenReturn(Optional.of(firstProduct));
-			when(productRepository.findByIdWithLock(secondProduct.getId())).thenReturn(Optional.of(secondProduct));
+			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 1))
+					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
+			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 2))
+					.thenReturn(new CheckoutProduct(secondProduct.getId(), secondProduct.getName(), secondProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
 				Order order = invocation.getArgument(0);
 				setEntityId(order, savedOrderId);
@@ -122,10 +126,7 @@ class OrderServiceImplCheckoutTest {
 			assertThat(result.createdAt()).isEqualTo(createdAt);
 			assertThat(result.paymentInfo()).isEqualTo(paymentIntent);
 
-			assertThat(firstProduct.getStock()).isEqualTo(8);
-			assertThat(secondProduct.getStock()).isEqualTo(5);
-
-			ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());
 			Order savedOrder = orderCaptor.getValue();
 			assertThat(savedOrder.getUser()).isEqualTo(user);
@@ -167,7 +168,8 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE10"))
 					.thenReturn(Optional.of(discountCode));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
@@ -184,9 +186,7 @@ class OrderServiceImplCheckoutTest {
 
 			assertThat(result.totalAmount()).isEqualByComparingTo("90.00");
 			assertThat(result.paymentInfo()).isEqualTo(paymentIntent);
-			assertThat(product.getStock()).isEqualTo(9);
-
-			ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());
 			Order savedOrder = orderCaptor.getValue();
 			assertThat(savedOrder.getTotalAmount()).isEqualByComparingTo("90.00");
@@ -212,7 +212,8 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
 				Order order = invocation.getArgument(0);
 				setEntityId(order, savedOrderId);
@@ -226,9 +227,7 @@ class OrderServiceImplCheckoutTest {
 			OrderResponseDTO result = service.placeOrderFromCart(request);
 
 			assertThat(result.totalAmount()).isEqualByComparingTo("40.00");
-			assertThat(product.getStock()).isEqualTo(2);
-
-			ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());
 			Order savedOrder = orderCaptor.getValue();
 			assertThat(savedOrder.getTotalAmount()).isEqualByComparingTo("40.00");
@@ -257,7 +256,7 @@ class OrderServiceImplCheckoutTest {
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());
-			verifyNoInteractions(productRepository, discountCodeRepository, orderRepository, paymentRepository,
+			verifyNoInteractions(productCatalogFacade, discountCodeRepository, orderRepository, paymentRepository,
 					paymentService, orderMapper);
 		}
 
@@ -269,14 +268,15 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(missingProduct.getId())).thenReturn(Optional.empty());
+			when(productCatalogFacade.reserveProductForCheckout(missingProduct.getId(), 1))
+					.thenThrow(new ProductNotFoundException(missingProduct.getId()));
 
 			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(ProductNotFoundException.class);
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());
-			verify(productRepository).findByIdWithLock(missingProduct.getId());
+			verify(productCatalogFacade).reserveProductForCheckout(missingProduct.getId(), 1);
 			verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
 					orderMapper);
 		}
@@ -289,16 +289,16 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
 
 			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(OrderInsufficientStockException.class);
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());
-			verify(productRepository).findByIdWithLock(product.getId());
-			assertThat(product.getStock()).isEqualTo(1);
-			verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
+			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
+						verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
 					orderMapper);
 		}
 
@@ -310,7 +310,8 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE20")).thenReturn(Optional.empty());
 
 			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(" SAVE20 ", null)))
@@ -318,7 +319,7 @@ class OrderServiceImplCheckoutTest {
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());
-			verify(productRepository).findByIdWithLock(product.getId());
+			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE20");
 			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
 		}
@@ -333,7 +334,8 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
 			when(discountCodeRepository.findByCodeIgnoreCase("EXPIRED10"))
 					.thenReturn(Optional.of(discountCode));
 
@@ -342,7 +344,7 @@ class OrderServiceImplCheckoutTest {
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());
-			verify(productRepository).findByIdWithLock(product.getId());
+			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 			verify(discountCodeRepository).findByCodeIgnoreCase("EXPIRED10");
 			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
 		}
@@ -360,8 +362,10 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(firstProduct.getId())).thenReturn(Optional.of(firstProduct));
-			when(productRepository.findByIdWithLock(secondProduct.getId())).thenReturn(Optional.of(secondProduct));
+			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 2))
+					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
+			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 3))
+					.thenReturn(new CheckoutProduct(secondProduct.getId(), secondProduct.getName(), secondProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentService.createPaymentIntent(any(Order.class)))
@@ -371,8 +375,8 @@ class OrderServiceImplCheckoutTest {
 
 			service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
 
-			verify(productRepository).findByIdWithLock(firstProduct.getId());
-			verify(productRepository).findByIdWithLock(secondProduct.getId());
+			verify(productCatalogFacade).reserveProductForCheckout(firstProduct.getId(), 1);
+			verify(productCatalogFacade).reserveProductForCheckout(secondProduct.getId(), 2);
 		}
 
 		@Test
@@ -384,8 +388,10 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(firstProduct.getId())).thenReturn(Optional.of(firstProduct));
-			when(productRepository.findByIdWithLock(secondProduct.getId())).thenReturn(Optional.of(secondProduct));
+			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 2))
+					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
+			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 3))
+					.thenReturn(new CheckoutProduct(secondProduct.getId(), secondProduct.getName(), secondProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentService.createPaymentIntent(any(Order.class)))
@@ -395,10 +401,7 @@ class OrderServiceImplCheckoutTest {
 
 			service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
 
-			assertThat(firstProduct.getStock()).isEqualTo(8);
-			assertThat(secondProduct.getStock()).isEqualTo(5);
-
-			ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());
 			Order savedOrder = orderCaptor.getValue();
 
@@ -425,7 +428,8 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productRepository.findByIdWithLock(cartProduct.getId())).thenReturn(Optional.of(lockedProduct));
+			when(productCatalogFacade.reserveProductForCheckout(cartProduct.getId(), 2))
+					.thenReturn(new CheckoutProduct(lockedProduct.getId(), lockedProduct.getName(), lockedProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(paymentService.createPaymentIntent(any(Order.class)))

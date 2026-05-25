@@ -71,6 +71,40 @@ class ArchitectureRulesTest {
                     .and().haveSimpleNameEndingWith("Repository")
                     .should().beInterfaces();
 
+
+    @ArchTest
+    static final ArchRule modulesMustNotDependOnOtherModulesRepositories =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.(*)..")
+                    .should().dependOnClassesThat(new ArchCondition<>("reside in another module repository package") {
+                        @Override
+                        public void check(JavaClass javaClass, ConditionEvents events) {
+                            String sourceModule = moduleName(javaClass.getPackageName());
+                            for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
+                                JavaClass target = dependency.getTargetClass();
+                                String targetPackage = target.getPackageName();
+                                String targetModule = moduleName(targetPackage);
+                                if (sourceModule != null
+                                        && targetModule != null
+                                        && !sourceModule.equals(targetModule)
+                                        && targetPackage.contains(".repository")) {
+                                    events.add(SimpleConditionEvent.violated(dependency,
+                                            javaClass.getName() + " depends on repository " + target.getName()));
+                                }
+                            }
+                        }
+                    });
+    private static String moduleName(String packageName) {
+        String prefix = "com.company.shop.module.";
+        int prefixIndex = packageName.indexOf(prefix);
+        if (prefixIndex < 0) {
+            return null;
+        }
+        int start = prefixIndex + prefix.length();
+        int end = packageName.indexOf('.', start);
+        return end < 0 ? packageName.substring(start) : packageName.substring(start, end);
+    }
+
     private static ArchCondition<JavaClass> notDependOnNonEnumClassesInEntityPackages() {
         return new ArchCondition<>("not depend on non-enum classes in ..entity.. packages") {
             @Override
