@@ -36,7 +36,7 @@ import com.company.shop.module.order.mapper.OrderMapper;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
-import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
@@ -49,7 +49,7 @@ class OrderServiceImplReadAccessTest {
 	private OrderRepository orderRepository;
 
 	@Mock
-	private ProductRepository productRepository;
+	private ProductCatalogFacade productCatalogFacade;
 
 	@Mock
 	private PaymentRepository paymentRepository;
@@ -74,7 +74,7 @@ class OrderServiceImplReadAccessTest {
 	@BeforeEach
 	void setUp() {
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-		service = new OrderServiceImpl(orderRepository, productRepository, paymentRepository, discountCodeRepository,
+		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
 				userService, cartService, orderMapper, paymentService, meterRegistry);
 	}
 

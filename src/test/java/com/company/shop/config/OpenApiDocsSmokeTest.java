@@ -29,6 +29,7 @@ import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
 import com.company.shop.module.product.service.ProductReviewService;
 import com.company.shop.module.product.service.ProductService;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.system.service.ApplicationStatusService;
 import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.module.user.service.UserService;
@@ -82,6 +83,9 @@ class OpenApiDocsSmokeTest {
 
     @MockitoBean
     private ProductService productService;
+
+    @MockitoBean
+    private ProductCatalogFacade productCatalogFacade;
 
     @MockitoBean
     private ProductReviewService productReviewService;

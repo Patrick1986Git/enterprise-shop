@@ -37,9 +37,8 @@ import com.company.shop.module.order.mapper.OrderMapper;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
-import com.company.shop.module.product.entity.Product;
-import com.company.shop.module.product.exception.ProductNotFoundException;
-import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.product.api.internal.CheckoutProduct;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
 import com.company.shop.security.SecurityConstants;
@@ -54,7 +53,7 @@ public class OrderServiceImpl implements OrderService {
     private static final String RESULT_TAG = "result";
 
     private final OrderRepository orderRepo;
-    private final ProductRepository productRepo;
+    private final ProductCatalogFacade productCatalogFacade;
     private final PaymentRepository paymentRepo;
     private final DiscountCodeRepository discountCodeRepo;
     private final UserService userService;
@@ -64,7 +63,7 @@ public class OrderServiceImpl implements OrderService {
     private final MeterRegistry meterRegistry;
 
     public OrderServiceImpl(OrderRepository orderRepo,
-            ProductRepository productRepo,
+            ProductCatalogFacade productCatalogFacade,
             PaymentRepository paymentRepo,
             DiscountCodeRepository discountCodeRepo,
             UserService userService,
@@ -73,7 +72,7 @@ public class OrderServiceImpl implements OrderService {
             PaymentService paymentService,
             MeterRegistry meterRegistry) {
         this.orderRepo = orderRepo;
-        this.productRepo = productRepo;
+        this.productCatalogFacade = productCatalogFacade;
         this.paymentRepo = paymentRepo;
         this.discountCodeRepo = discountCodeRepo;
         this.userService = userService;
@@ -124,15 +123,15 @@ public class OrderServiceImpl implements OrderService {
         Order order = new Order(user);
 
         for (CartItem cartItem : cart.getItems()) {
-            Product product = productRepo.findByIdWithLock(cartItem.getProduct().getId())
-                    .orElseThrow(() -> new ProductNotFoundException(cartItem.getProduct().getId()));
-
-            if (product.getStock() < cartItem.getQuantity()) {
-                throw new OrderInsufficientStockException(product.getId(), cartItem.getQuantity(), product.getStock());
+            try {
+                CheckoutProduct product = productCatalogFacade.reserveProductForCheckout(
+                        cartItem.getProduct().getId(),
+                        cartItem.getQuantity());
+                order.addItem(new OrderItem(cartItem.getProduct(), cartItem.getQuantity(), product.price()));
+            } catch (com.company.shop.module.product.exception.ProductInsufficientStockException ex) {
+                throw new OrderInsufficientStockException(cartItem.getProduct().getId(), cartItem.getQuantity(),
+                        ex.getAvailableQuantity());
             }
-
-            product.decreaseStock(cartItem.getQuantity());
-            order.addItem(new OrderItem(product, cartItem.getQuantity(), product.getPrice()));
         }
 
         if (request.discountCode() != null && !request.discountCode().isBlank()) {

@@ -71,6 +71,16 @@ class ArchitectureRulesTest {
                     .and().haveSimpleNameEndingWith("Repository")
                     .should().beInterfaces();
 
+
+    // TODO: Expand this rule to additional repositories after CartFacade,
+    // UserLookupFacade, CategoryFacade, and other module APIs are introduced.
+    @ArchTest
+    static final ArchRule orderModuleMustNotDependOnProductRepository =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.order..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.product.repository..");
+
     private static ArchCondition<JavaClass> notDependOnNonEnumClassesInEntityPackages() {
         return new ArchCondition<>("not depend on non-enum classes in ..entity.. packages") {
             @Override
