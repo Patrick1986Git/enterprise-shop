@@ -74,26 +74,40 @@ class ArchitectureRulesTest {
 
     @ArchTest
     static final ArchRule modulesMustNotDependOnOtherModulesRepositories =
-            noClasses()
-                    .that().resideInAPackage("com.company.shop.module.(*)..")
-                    .should().dependOnClassesThat(new ArchCondition<>("reside in another module repository package") {
-                        @Override
-                        public void check(JavaClass javaClass, ConditionEvents events) {
-                            String sourceModule = moduleName(javaClass.getPackageName());
-                            for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
-                                JavaClass target = dependency.getTargetClass();
-                                String targetPackage = target.getPackageName();
-                                String targetModule = moduleName(targetPackage);
-                                if (sourceModule != null
-                                        && targetModule != null
-                                        && !sourceModule.equals(targetModule)
-                                        && targetPackage.contains(".repository")) {
-                                    events.add(SimpleConditionEvent.violated(dependency,
-                                            javaClass.getName() + " depends on repository " + target.getName()));
-                                }
-                            }
-                        }
-                    });
+            classes()
+                    .that().resideInAPackage("com.company.shop.module..")
+                    .should(notDependOnRepositoriesFromOtherModules());
+
+    private static ArchCondition<JavaClass> notDependOnRepositoriesFromOtherModules() {
+        return new ArchCondition<>("not depend on repositories from other modules") {
+            @Override
+            public void check(JavaClass sourceClass, ConditionEvents events) {
+                String sourceModule = moduleName(sourceClass.getPackageName());
+
+                for (Dependency dependency : sourceClass.getDirectDependenciesFromSelf()) {
+                    JavaClass targetClass = dependency.getTargetClass();
+                    String targetPackage = targetClass.getPackageName();
+                    String targetModule = moduleName(targetPackage);
+
+                    boolean targetIsRepositoryPackage = targetPackage.contains(".repository");
+
+                    if (sourceModule != null
+                            && targetModule != null
+                            && !sourceModule.equals(targetModule)
+                            && targetIsRepositoryPackage) {
+
+                        String message = String.format(
+                                "%s depends on repository from another module: %s",
+                                sourceClass.getName(),
+                                targetClass.getName());
+
+                        events.add(SimpleConditionEvent.violated(dependency, message));
+                    }
+                }
+            }
+        };
+    }
+
     private static String moduleName(String packageName) {
         String prefix = "com.company.shop.module.";
         int prefixIndex = packageName.indexOf(prefix);

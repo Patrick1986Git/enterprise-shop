@@ -69,7 +69,7 @@ class ProductCatalogFacadeImplTest {
     }
 
     private Product product(UUID id, int stock, BigDecimal price) {
-        Category category = new Category("Tech", "tech");
+        Category category = new Category("Tech", "tech", "Test category");
         Product product = new Product("Phone", "phone", "SKU-1", "desc", price, stock, category);
         setEntityId(product, id);
         return product;
