@@ -72,52 +72,19 @@ class ArchitectureRulesTest {
                     .should().beInterfaces();
 
 
+    // TODO: Expand this rule to all modules after CartFacade, UserLookupFacade,
+    // and other module APIs are introduced.
     @ArchTest
-    static final ArchRule modulesMustNotDependOnOtherModulesRepositories =
-            classes()
-                    .that().resideInAPackage("com.company.shop.module..")
-                    .should(notDependOnRepositoriesFromOtherModules());
-
-    private static ArchCondition<JavaClass> notDependOnRepositoriesFromOtherModules() {
-        return new ArchCondition<>("not depend on repositories from other modules") {
-            @Override
-            public void check(JavaClass sourceClass, ConditionEvents events) {
-                String sourceModule = moduleName(sourceClass.getPackageName());
-
-                for (Dependency dependency : sourceClass.getDirectDependenciesFromSelf()) {
-                    JavaClass targetClass = dependency.getTargetClass();
-                    String targetPackage = targetClass.getPackageName();
-                    String targetModule = moduleName(targetPackage);
-
-                    boolean targetIsRepositoryPackage = targetPackage.contains(".repository");
-
-                    if (sourceModule != null
-                            && targetModule != null
-                            && !sourceModule.equals(targetModule)
-                            && targetIsRepositoryPackage) {
-
-                        String message = String.format(
-                                "%s depends on repository from another module: %s",
-                                sourceClass.getName(),
-                                targetClass.getName());
-
-                        events.add(SimpleConditionEvent.violated(dependency, message));
-                    }
-                }
-            }
-        };
-    }
-
-    private static String moduleName(String packageName) {
-        String prefix = "com.company.shop.module.";
-        int prefixIndex = packageName.indexOf(prefix);
-        if (prefixIndex < 0) {
-            return null;
-        }
-        int start = prefixIndex + prefix.length();
-        int end = packageName.indexOf('.', start);
-        return end < 0 ? packageName.substring(start) : packageName.substring(start, end);
-    }
+    static final ArchRule orderModuleMustNotDependOnOtherModulesRepositories =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.order..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage(
+                            "com.company.shop.module.product.repository..",
+                            "com.company.shop.module.cart.repository..",
+                            "com.company.shop.module.user.repository..",
+                            "com.company.shop.module.category.repository.."
+                    );
 
     private static ArchCondition<JavaClass> notDependOnNonEnumClassesInEntityPackages() {
         return new ArchCondition<>("not depend on non-enum classes in ..entity.. packages") {
