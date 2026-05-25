@@ -168,7 +168,7 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 1))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE10"))
 					.thenReturn(Optional.of(discountCode));
@@ -213,7 +213,7 @@ class OrderServiceImplCheckoutTest {
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
-					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
+					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
 				Order order = invocation.getArgument(0);
 				setEntityId(order, savedOrderId);
@@ -310,8 +310,8 @@ class OrderServiceImplCheckoutTest {
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
-			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
-					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 1))
+					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE20")).thenReturn(Optional.empty());
 
 			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(" SAVE20 ", null)))
@@ -319,7 +319,7 @@ class OrderServiceImplCheckoutTest {
 
 			verify(userService).getCurrentUserEntity();
 			verify(cartService).getCartEntityForUser(user.getId());
-			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
+			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 1);
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE20");
 			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
 		}
@@ -335,7 +335,7 @@ class OrderServiceImplCheckoutTest {
 			when(userService.getCurrentUserEntity()).thenReturn(user);
 			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
-					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
+					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("EXPIRED10"))
 					.thenReturn(Optional.of(discountCode));
 
