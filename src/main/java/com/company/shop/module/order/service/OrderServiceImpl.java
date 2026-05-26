@@ -126,7 +126,14 @@ public class OrderServiceImpl implements OrderService {
             try {
                 CheckoutProduct product = productCatalogFacade.reserveProductForCheckout(
                         cartItem.productId(),
-                        cartItem.quantity());                order.addItem(new OrderItem(product.id(), product.name(), cartItem.quantity(), product.price()));
+                        cartItem.quantity());
+
+                order.addItem(new OrderItem(
+                        product.id(),
+                        product.name(),
+                        product.sku(),
+                        cartItem.quantity(),
+                        product.price()));
             } catch (com.company.shop.module.product.exception.ProductInsufficientStockException ex) {
                 throw new OrderInsufficientStockException(cartItem.productId(), cartItem.quantity(),
                         ex.getAvailableQuantity());

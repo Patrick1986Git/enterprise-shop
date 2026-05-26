@@ -66,7 +66,7 @@ public interface OrderMapper {
      */
     @Mapping(target = "productId", source = "productId")
     @Mapping(target = "productName", source = "productName")
-    @Mapping(target = "sku", ignore = true)
+    @Mapping(target = "sku", source = "productSku")
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(item))")
     OrderItemResponseDTO toItemDto(OrderItem item);
 

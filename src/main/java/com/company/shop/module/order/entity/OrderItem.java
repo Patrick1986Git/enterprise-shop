@@ -31,6 +31,9 @@ public class OrderItem {
 	@Column(name = "product_name", nullable = false)
 	private String productName;
 
+	@Column(name = "product_sku", nullable = false, length = 50)
+	private String productSku;
+
 	@Column(nullable = false)
 	private int quantity;
 
@@ -40,9 +43,10 @@ public class OrderItem {
 	protected OrderItem() {
 	}
 
-	public OrderItem(UUID productId, String productName, int quantity, BigDecimal price) {
+	public OrderItem(UUID productId, String productName, String productSku, int quantity, BigDecimal price) {
 		this.productId = productId;
 		this.productName = productName;
+		this.productSku = productSku;
 		this.quantity = quantity;
 		this.price = price;
 	}
@@ -61,6 +65,10 @@ public class OrderItem {
 
 	public String getProductName() {
 		return productName;
+	}
+
+	public String getProductSku() {
+		return productSku;
 	}
 
 	public int getQuantity() {
