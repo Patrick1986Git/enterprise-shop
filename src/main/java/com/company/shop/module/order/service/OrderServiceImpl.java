@@ -45,7 +45,6 @@ import com.company.shop.security.SecurityConstants;
 
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.persistence.EntityManager;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -63,8 +62,6 @@ public class OrderServiceImpl implements OrderService {
     private final OrderMapper mapper;
     private final PaymentService paymentService;
     private final MeterRegistry meterRegistry;
-    private final EntityManager entityManager;
-
     public OrderServiceImpl(OrderRepository orderRepo,
             ProductCatalogFacade productCatalogFacade,
             PaymentRepository paymentRepo,
@@ -73,8 +70,7 @@ public class OrderServiceImpl implements OrderService {
             CartCheckoutFacade cartCheckoutFacade,
             OrderMapper mapper,
             PaymentService paymentService,
-            MeterRegistry meterRegistry,
-            EntityManager entityManager) {
+            MeterRegistry meterRegistry) {
         this.orderRepo = orderRepo;
         this.productCatalogFacade = productCatalogFacade;
         this.paymentRepo = paymentRepo;
@@ -84,7 +80,6 @@ public class OrderServiceImpl implements OrderService {
         this.mapper = mapper;
         this.paymentService = paymentService;
         this.meterRegistry = meterRegistry;
-        this.entityManager = entityManager;
     }
 
     @Override
@@ -131,10 +126,7 @@ public class OrderServiceImpl implements OrderService {
             try {
                 CheckoutProduct product = productCatalogFacade.reserveProductForCheckout(
                         cartItem.productId(),
-                        cartItem.quantity());
-                // TODO: Replace Product entity reference with immutable product snapshot on OrderItem.
-                order.addItem(new OrderItem(entityManager.getReference(com.company.shop.module.product.entity.Product.class,
-                        cartItem.productId()), cartItem.quantity(), product.price()));
+                        cartItem.quantity());                order.addItem(new OrderItem(product.id(), product.name(), cartItem.quantity(), product.price()));
             } catch (com.company.shop.module.product.exception.ProductInsufficientStockException ex) {
                 throw new OrderInsufficientStockException(cartItem.productId(), cartItem.quantity(),
                         ex.getAvailableQuantity());
