@@ -81,6 +81,16 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.product.repository..");
 
+
+
+    // TODO: Expand cart/order entity boundary rules after order item product snapshot decoupling.
+    @ArchTest
+    static final ArchRule orderModuleMustNotDependOnCartEntities =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.order..")
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage("com.company.shop.module.cart.entity..");
+
     private static ArchCondition<JavaClass> notDependOnNonEnumClassesInEntityPackages() {
         return new ArchCondition<>("not depend on non-enum classes in ..entity.. packages") {
             @Override

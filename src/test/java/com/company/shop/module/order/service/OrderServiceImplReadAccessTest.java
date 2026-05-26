@@ -25,7 +25,7 @@ import org.springframework.data.domain.PageRequest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.order.dto.OrderDetailedResponseDTO;
 import com.company.shop.module.order.dto.OrderResponseDTO;
 import com.company.shop.module.order.entity.Order;
@@ -41,6 +41,8 @@ import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
 import com.company.shop.security.SecurityConstants;
+
+import jakarta.persistence.EntityManager;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplReadAccessTest {
@@ -61,7 +63,7 @@ class OrderServiceImplReadAccessTest {
 	private UserService userService;
 
 	@Mock
-	private CartService cartService;
+	private CartCheckoutFacade cartCheckoutFacade;
 
 	@Mock
 	private OrderMapper orderMapper;
@@ -69,13 +71,16 @@ class OrderServiceImplReadAccessTest {
 	@Mock
 	private PaymentService paymentService;
 
+	@Mock
+	private EntityManager entityManager;
+
 	private OrderServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
-				userService, cartService, orderMapper, paymentService, meterRegistry);
+				userService, cartCheckoutFacade, orderMapper, paymentService, meterRegistry, entityManager);
 	}
 
 	@Nested

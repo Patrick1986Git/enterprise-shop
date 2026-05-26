@@ -17,9 +17,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import io.micrometer.core.instrument.MeterRegistry;
 
-import com.company.shop.module.cart.entity.Cart;
-import com.company.shop.module.cart.entity.CartItem;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
+import com.company.shop.module.cart.api.internal.CartCheckoutItem;
+import com.company.shop.module.cart.api.internal.CartCheckoutSnapshot;
 import com.company.shop.module.order.dto.OrderCheckoutRequestDTO;
 import com.company.shop.module.order.dto.OrderDetailedResponseDTO;
 import com.company.shop.module.order.dto.OrderResponseDTO;
@@ -45,6 +45,8 @@ import com.company.shop.security.SecurityConstants;
 
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+
 @Service
 public class OrderServiceImpl implements OrderService {
 
@@ -57,29 +59,32 @@ public class OrderServiceImpl implements OrderService {
     private final PaymentRepository paymentRepo;
     private final DiscountCodeRepository discountCodeRepo;
     private final UserService userService;
-    private final CartService cartService;
+    private final CartCheckoutFacade cartCheckoutFacade;
     private final OrderMapper mapper;
     private final PaymentService paymentService;
     private final MeterRegistry meterRegistry;
+    private final EntityManager entityManager;
 
     public OrderServiceImpl(OrderRepository orderRepo,
             ProductCatalogFacade productCatalogFacade,
             PaymentRepository paymentRepo,
             DiscountCodeRepository discountCodeRepo,
             UserService userService,
-            CartService cartService,
+            CartCheckoutFacade cartCheckoutFacade,
             OrderMapper mapper,
             PaymentService paymentService,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            EntityManager entityManager) {
         this.orderRepo = orderRepo;
         this.productCatalogFacade = productCatalogFacade;
         this.paymentRepo = paymentRepo;
         this.discountCodeRepo = discountCodeRepo;
         this.userService = userService;
-        this.cartService = cartService;
+        this.cartCheckoutFacade = cartCheckoutFacade;
         this.mapper = mapper;
         this.paymentService = paymentService;
         this.meterRegistry = meterRegistry;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -114,22 +119,24 @@ public class OrderServiceImpl implements OrderService {
     private Order createPendingOrder(OrderCheckoutRequestDTO request) {
         User user = userService.getCurrentUserEntity();
         log.info("Checkout started for userId={}", user.getId());
-        Cart cart = cartService.getCartEntityForUser(user.getId());
+        CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(user.getId());
 
-        if (cart.getItems().isEmpty()) {
+        if (cart.isEmpty()) {
             throw new EmptyCartCheckoutException();
         }
 
         Order order = new Order(user);
 
-        for (CartItem cartItem : cart.getItems()) {
+        for (CartCheckoutItem cartItem : cart.items()) {
             try {
                 CheckoutProduct product = productCatalogFacade.reserveProductForCheckout(
-                        cartItem.getProduct().getId(),
-                        cartItem.getQuantity());
-                order.addItem(new OrderItem(cartItem.getProduct(), cartItem.getQuantity(), product.price()));
+                        cartItem.productId(),
+                        cartItem.quantity());
+                // TODO: Replace Product entity reference with immutable product snapshot on OrderItem.
+                order.addItem(new OrderItem(entityManager.getReference(com.company.shop.module.product.entity.Product.class,
+                        cartItem.productId()), cartItem.quantity(), product.price()));
             } catch (com.company.shop.module.product.exception.ProductInsufficientStockException ex) {
-                throw new OrderInsufficientStockException(cartItem.getProduct().getId(), cartItem.getQuantity(),
+                throw new OrderInsufficientStockException(cartItem.productId(), cartItem.quantity(),
                         ex.getAvailableQuantity());
             }
         }

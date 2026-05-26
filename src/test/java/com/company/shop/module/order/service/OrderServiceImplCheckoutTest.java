@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,8 +26,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
-import com.company.shop.module.cart.entity.Cart;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
+import com.company.shop.module.cart.api.internal.CartCheckoutItem;
+import com.company.shop.module.cart.api.internal.CartCheckoutSnapshot;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.order.dto.OrderCheckoutRequestDTO;
 import com.company.shop.module.order.dto.OrderResponseDTO;
@@ -47,6 +49,8 @@ import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductInsufficientStockException;
 import com.company.shop.module.product.exception.ProductNotFoundException;
+
+import jakarta.persistence.EntityManager;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
 
@@ -69,13 +73,16 @@ class OrderServiceImplCheckoutTest {
 	private UserService userService;
 
 	@Mock
-	private CartService cartService;
+	private CartCheckoutFacade cartCheckoutFacade;
 
 	@Mock
 	private OrderMapper orderMapper;
 
 	@Mock
 	private PaymentService paymentService;
+
+	@Mock
+	private EntityManager entityManager;
 
 	private SimpleMeterRegistry meterRegistry;
 	private OrderServiceImpl service;
@@ -84,7 +91,7 @@ class OrderServiceImplCheckoutTest {
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
 		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
-				userService, cartService, orderMapper, paymentService, meterRegistry);
+				userService, cartCheckoutFacade, orderMapper, paymentService, meterRegistry, entityManager);
 	}
 
 	@Nested
@@ -95,7 +102,7 @@ class OrderServiceImplCheckoutTest {
 			User user = user();
 			Product firstProduct = product(1, 10, BigDecimal.valueOf(10));
 			Product secondProduct = product(2, 8, BigDecimal.valueOf(5));
-			Cart cart = cart(user, firstProduct, 2, secondProduct, 3);
+			CartCheckoutSnapshot cart = cart(user, firstProduct, 2, secondProduct, 3);
 
 			OrderCheckoutRequestDTO request = new OrderCheckoutRequestDTO(null, "deliver quickly");
 			PaymentIntentResponseDTO paymentIntent = new PaymentIntentResponseDTO("pi_secret", "pk_test");
@@ -103,7 +110,9 @@ class OrderServiceImplCheckoutTest {
 			UUID savedOrderId = UUID.randomUUID();
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(firstProduct);
+			stubProductReference(secondProduct);
 			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 2))
 					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
 			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 3))
@@ -131,10 +140,10 @@ class OrderServiceImplCheckoutTest {
 			Order savedOrder = orderCaptor.getValue();
 			assertThat(savedOrder.getUser()).isEqualTo(user);
 			assertThat(savedOrder.getItems()).hasSize(2);
-			assertThat(savedOrder.getItems().get(0).getProduct()).isEqualTo(firstProduct);
+			assertThat(savedOrder.getItems().get(0).getProduct().getId()).isEqualTo(firstProduct.getId());
 			assertThat(savedOrder.getItems().get(0).getQuantity()).isEqualTo(2);
 			assertThat(savedOrder.getItems().get(0).getPrice()).isEqualByComparingTo("10.00");
-			assertThat(savedOrder.getItems().get(1).getProduct()).isEqualTo(secondProduct);
+			assertThat(savedOrder.getItems().get(1).getProduct().getId()).isEqualTo(secondProduct.getId());
 			assertThat(savedOrder.getItems().get(1).getQuantity()).isEqualTo(3);
 			assertThat(savedOrder.getItems().get(1).getPrice()).isEqualByComparingTo("5.00");
 			assertThat(savedOrder.getTotalAmount()).isEqualByComparingTo("35.00");
@@ -157,7 +166,7 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldApplyDiscountWhenValidCodeProvided() {
 			User user = user();
 			Product product = product(3, 10, BigDecimal.valueOf(100));
-			Cart cart = cart(user, product, 1);
+			CartCheckoutSnapshot cart = cart(user, product, 1);
 			DiscountCode discountCode = mock(DiscountCode.class);
 			when(discountCode.canBeUsed()).thenReturn(true);
 			when(discountCode.getDiscountPercent()).thenReturn(10);
@@ -167,7 +176,8 @@ class OrderServiceImplCheckoutTest {
 			UUID savedOrderId = UUID.randomUUID();
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(product);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 1))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE10"))
@@ -204,14 +214,15 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldIgnoreBlankDiscountCode() {
 			User user = user();
 			Product product = product(4, 4, BigDecimal.valueOf(20));
-			Cart cart = cart(user, product, 2);
+			CartCheckoutSnapshot cart = cart(user, product, 2);
 
 			OrderCheckoutRequestDTO request = new OrderCheckoutRequestDTO("   ", "no notes");
 			PaymentIntentResponseDTO paymentIntent = new PaymentIntentResponseDTO("pi_blank", "pk_blank");
 			UUID savedOrderId = UUID.randomUUID();
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(product);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
@@ -244,10 +255,10 @@ class OrderServiceImplCheckoutTest {
 		@Test
 		void placeOrderFromCart_shouldThrowWhenCartIsEmpty() {
 			User user = user();
-			Cart cart = new Cart(user);
+			CartCheckoutSnapshot cart = new CartCheckoutSnapshot(UUID.randomUUID(), java.util.List.of());
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 
 			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(EmptyCartCheckoutException.class);
@@ -255,7 +266,7 @@ class OrderServiceImplCheckoutTest {
 			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "failure").counter().count()).isEqualTo(1);
 
 			verify(userService).getCurrentUserEntity();
-			verify(cartService).getCartEntityForUser(user.getId());
+			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verifyNoInteractions(productCatalogFacade, discountCodeRepository, orderRepository, paymentRepository,
 					paymentService, orderMapper);
 		}
@@ -264,10 +275,10 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldThrowWhenLockedProductNotFound() {
 			User user = user();
 			Product missingProduct = product(5, 10, BigDecimal.TEN);
-			Cart cart = cart(user, missingProduct, 1);
+			CartCheckoutSnapshot cart = cart(user, missingProduct, 1);
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(missingProduct.getId(), 1))
 					.thenThrow(new ProductNotFoundException(missingProduct.getId()));
 
@@ -275,7 +286,7 @@ class OrderServiceImplCheckoutTest {
 					.isInstanceOf(ProductNotFoundException.class);
 
 			verify(userService).getCurrentUserEntity();
-			verify(cartService).getCartEntityForUser(user.getId());
+			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(missingProduct.getId(), 1);
 			verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
 					orderMapper);
@@ -285,10 +296,10 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldThrowWhenInsufficientStock() {
 			User user = user();
 			Product product = product(6, 1, BigDecimal.valueOf(12));
-			Cart cart = cart(user, product, 2);
+			CartCheckoutSnapshot cart = cart(user, product, 2);
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
 
@@ -296,7 +307,7 @@ class OrderServiceImplCheckoutTest {
 					.isInstanceOf(OrderInsufficientStockException.class);
 
 			verify(userService).getCurrentUserEntity();
-			verify(cartService).getCartEntityForUser(user.getId());
+			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 						verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
 					orderMapper);
@@ -306,10 +317,11 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldThrowWhenDiscountCodeNotFound() {
 			User user = user();
 			Product product = product(7, 8, BigDecimal.valueOf(50));
-			Cart cart = cart(user, product, 1);
+			CartCheckoutSnapshot cart = cart(user, product, 1);
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(product);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 1))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE20")).thenReturn(Optional.empty());
@@ -318,7 +330,7 @@ class OrderServiceImplCheckoutTest {
 					.isInstanceOf(DiscountCodeInvalidException.class).hasMessageContaining("SAVE20");
 
 			verify(userService).getCurrentUserEntity();
-			verify(cartService).getCartEntityForUser(user.getId());
+			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 1);
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE20");
 			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
@@ -328,12 +340,13 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldThrowWhenDiscountCodeCannotBeUsed() {
 			User user = user();
 			Product product = product(8, 9, BigDecimal.valueOf(30));
-			Cart cart = cart(user, product, 2);
+			CartCheckoutSnapshot cart = cart(user, product, 2);
 			DiscountCode discountCode = mock(DiscountCode.class);
 			when(discountCode.canBeUsed()).thenReturn(false);
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(product);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("EXPIRED10"))
@@ -343,7 +356,7 @@ class OrderServiceImplCheckoutTest {
 					.isInstanceOf(DiscountCodeInvalidException.class).hasMessageContaining("EXPIRED10");
 
 			verify(userService).getCurrentUserEntity();
-			verify(cartService).getCartEntityForUser(user.getId());
+			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 			verify(discountCodeRepository).findByCodeIgnoreCase("EXPIRED10");
 			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
@@ -358,10 +371,12 @@ class OrderServiceImplCheckoutTest {
 			User user = user();
 			Product firstProduct = product(9, 10, BigDecimal.valueOf(9));
 			Product secondProduct = product(10, 7, BigDecimal.valueOf(4));
-			Cart cart = cart(user, firstProduct, 1, secondProduct, 2);
+			CartCheckoutSnapshot cart = cart(user, firstProduct, 1, secondProduct, 2);
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(firstProduct);
+			stubProductReference(secondProduct);
 			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 1))
 					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
 			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 2))
@@ -384,10 +399,12 @@ class OrderServiceImplCheckoutTest {
 			User user = user();
 			Product firstProduct = product(11, 10, BigDecimal.valueOf(3));
 			Product secondProduct = product(12, 8, BigDecimal.valueOf(6));
-			Cart cart = cart(user, firstProduct, 2, secondProduct, 3);
+			CartCheckoutSnapshot cart = cart(user, firstProduct, 2, secondProduct, 3);
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(firstProduct);
+			stubProductReference(secondProduct);
 			when(productCatalogFacade.reserveProductForCheckout(firstProduct.getId(), 2))
 					.thenReturn(new CheckoutProduct(firstProduct.getId(), firstProduct.getName(), firstProduct.getPrice()));
 			when(productCatalogFacade.reserveProductForCheckout(secondProduct.getId(), 3))
@@ -407,11 +424,11 @@ class OrderServiceImplCheckoutTest {
 
 			assertThat(savedOrder.getItems()).hasSize(2);
 			assertThat(savedOrder.getItems()).anySatisfy(item -> {
-				assertThat(item.getProduct()).isEqualTo(firstProduct);
+				assertThat(item.getProduct().getId()).isEqualTo(firstProduct.getId());
 				assertThat(item.getQuantity()).isEqualTo(2);
 				assertThat(item.getPrice()).isEqualByComparingTo("3.00");
 			}).anySatisfy(item -> {
-				assertThat(item.getProduct()).isEqualTo(secondProduct);
+				assertThat(item.getProduct().getId()).isEqualTo(secondProduct.getId());
 				assertThat(item.getQuantity()).isEqualTo(3);
 				assertThat(item.getPrice()).isEqualByComparingTo("6.00");
 			});
@@ -421,13 +438,14 @@ class OrderServiceImplCheckoutTest {
 		void placeOrderFromCart_shouldPreserveUnitPriceFromLockedProductDuringOrderCreation() {
 			User user = user();
 			Product cartProduct = product(15, 5, BigDecimal.valueOf(99));
-			Cart cart = cart(user, cartProduct, 2);
+			CartCheckoutSnapshot cart = cart(user, cartProduct, 2);
 
 			Product lockedProduct = product(16, 5, BigDecimal.valueOf(12.50));
 			setEntityId(lockedProduct, cartProduct.getId());
 
 			when(userService.getCurrentUserEntity()).thenReturn(user);
-			when(cartService.getCartEntityForUser(user.getId())).thenReturn(cart);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			stubProductReference(lockedProduct);
 			when(productCatalogFacade.reserveProductForCheckout(cartProduct.getId(), 2))
 					.thenReturn(new CheckoutProduct(lockedProduct.getId(), lockedProduct.getName(), lockedProduct.getPrice()));
 			when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -449,6 +467,11 @@ class OrderServiceImplCheckoutTest {
 		}
 	}
 
+
+	private void stubProductReference(Product product) {
+		when(entityManager.getReference(Product.class, product.getId())).thenReturn(product);
+	}
+
 	private User user() {
 		User user = new User("john@example.com", "encoded", "John", "Doe");
 		setEntityId(user, UUID.randomUUID());
@@ -463,17 +486,15 @@ class OrderServiceImplCheckoutTest {
 		return product;
 	}
 
-	private Cart cart(User user, Product firstProduct, int firstQuantity) {
-		Cart cart = new Cart(user);
-		cart.addItem(firstProduct, firstQuantity);
-		return cart;
+	private CartCheckoutSnapshot cart(User user, Product firstProduct, int firstQuantity) {
+		return new CartCheckoutSnapshot(UUID.randomUUID(),
+				List.of(new CartCheckoutItem(firstProduct.getId(), firstQuantity)));
 	}
 
-	private Cart cart(User user, Product firstProduct, int firstQuantity, Product secondProduct, int secondQuantity) {
-		Cart cart = new Cart(user);
-		cart.addItem(firstProduct, firstQuantity);
-		cart.addItem(secondProduct, secondQuantity);
-		return cart;
+	private CartCheckoutSnapshot cart(User user, Product firstProduct, int firstQuantity, Product secondProduct, int secondQuantity) {
+		return new CartCheckoutSnapshot(UUID.randomUUID(), List.of(
+				new CartCheckoutItem(firstProduct.getId(), firstQuantity),
+				new CartCheckoutItem(secondProduct.getId(), secondQuantity)));
 	}
 
 	private void setEntityId(Object entity, UUID id) {
