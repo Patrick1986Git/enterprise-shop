@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import io.micrometer.core.instrument.MeterRegistry;
 
+import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.cart.api.internal.CartCheckoutSnapshot;
@@ -167,7 +168,7 @@ public class OrderServiceImpl implements OrderService {
     private User toUserReference(CurrentUserSnapshot currentUser) {
         try {
             User user = new User(currentUser.email(), "N/A", "", "");
-            Method setId = user.getClass().getSuperclass().getSuperclass().getDeclaredMethod("setId", UUID.class);
+            Method setId = BaseEntity.class.getDeclaredMethod("setId", UUID.class);
             setId.setAccessible(true);
             setId.invoke(user, currentUser.id());
             return user;
