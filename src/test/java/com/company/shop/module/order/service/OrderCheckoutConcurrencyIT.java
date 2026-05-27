@@ -42,6 +42,8 @@ import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
