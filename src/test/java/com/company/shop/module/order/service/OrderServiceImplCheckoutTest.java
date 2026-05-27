@@ -463,9 +463,8 @@ class OrderServiceImplCheckoutTest {
 
 
 		private CurrentUserSnapshot snapshot(User user) {
-		return new CurrentUserSnapshot(user.getId(), user.getEmail(),
-				user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet()));
-	}
+			return new CurrentUserSnapshot(user.getId(), user.getEmail(), java.util.Set.of());
+		}
 
 	private User user() {
 		User user = new User("john@example.com", "encoded", "John", "Doe");
