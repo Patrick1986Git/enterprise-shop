@@ -39,7 +39,8 @@ import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.service.UserService;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.security.SecurityConstants;
 
 
@@ -59,7 +60,7 @@ class OrderServiceImplReadAccessTest {
 	private DiscountCodeRepository discountCodeRepository;
 
 	@Mock
-	private UserService userService;
+	private CurrentUserFacade currentUserFacade;
 
 	@Mock
 	private CartCheckoutFacade cartCheckoutFacade;
@@ -76,7 +77,7 @@ class OrderServiceImplReadAccessTest {
 	void setUp() {
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
-				userService, cartCheckoutFacade, orderMapper, paymentService, meterRegistry);
+				currentUserFacade, cartCheckoutFacade, orderMapper, paymentService, meterRegistry);
 	}
 
 	@Nested
@@ -91,7 +92,7 @@ class OrderServiceImplReadAccessTest {
 					.hasMessageContaining(orderId.toString());
 
 			verify(orderRepository).findById(orderId);
-			verifyNoInteractions(userService, orderMapper);
+			verifyNoInteractions(currentUserFacade, orderMapper);
 		}
 
 		@Test
@@ -105,14 +106,14 @@ class OrderServiceImplReadAccessTest {
 					BigDecimal.valueOf(42), LocalDateTime.now(), owner.getEmail(), List.of());
 
 			when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-			when(userService.getCurrentUserEntity()).thenReturn(owner);
+			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(owner));
 			when(orderMapper.toDetailedDto(order)).thenReturn(detailedDto);
 
 			OrderDetailedResponseDTO result = service.findById(orderId);
 
 			assertThat(result).isEqualTo(detailedDto);
 			verify(orderRepository).findById(orderId);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(orderMapper).toDetailedDto(order);
 		}
 
@@ -130,14 +131,14 @@ class OrderServiceImplReadAccessTest {
 					BigDecimal.valueOf(10), LocalDateTime.now(), owner.getEmail(), List.of());
 
 			when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-			when(userService.getCurrentUserEntity()).thenReturn(admin);
+			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(admin));
 			when(orderMapper.toDetailedDto(order)).thenReturn(detailedDto);
 
 			OrderDetailedResponseDTO result = service.findById(orderId);
 
 			assertThat(result).isEqualTo(detailedDto);
 			verify(orderRepository).findById(orderId);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(orderMapper).toDetailedDto(order);
 		}
 
@@ -153,12 +154,12 @@ class OrderServiceImplReadAccessTest {
 			setEntityId(order, orderId);
 
 			when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
-			when(userService.getCurrentUserEntity()).thenReturn(differentUser);
+			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(differentUser));
 
 			assertThatThrownBy(() -> service.findById(orderId)).isInstanceOf(OrderAccessDeniedException.class);
 
 			verify(orderRepository).findById(orderId);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verifyNoInteractions(orderMapper);
 		}
 	}
@@ -183,7 +184,7 @@ class OrderServiceImplReadAccessTest {
 			assertThat(result.getContent()).containsExactly(dto);
 			verify(orderRepository).findAll(pageable);
 			verify(orderMapper).toDto(order);
-			verifyNoInteractions(userService);
+			verifyNoInteractions(currentUserFacade);
 		}
 
 		@Test
@@ -195,17 +196,22 @@ class OrderServiceImplReadAccessTest {
 			PageRequest pageable = PageRequest.of(0, 5);
 			Page<Order> page = new PageImpl<>(List.of(order));
 
-			when(userService.getCurrentUserEntity()).thenReturn(currentUser);
-			when(orderRepository.findByUser(currentUser, pageable)).thenReturn(page);
+			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(currentUser));
+			when(orderRepository.findByUserId(currentUser.getId(), pageable)).thenReturn(page);
 			when(orderMapper.toDto(order)).thenReturn(dto);
 
 			Page<OrderResponseDTO> result = service.findMyOrders(pageable);
 
 			assertThat(result.getContent()).containsExactly(dto);
-			verify(userService).getCurrentUserEntity();
-			verify(orderRepository).findByUser(currentUser, pageable);
+			verify(currentUserFacade).getCurrentUser();
+			verify(orderRepository).findByUserId(currentUser.getId(), pageable);
 			verify(orderMapper).toDto(order);
 		}
+	}
+
+	private CurrentUserSnapshot snapshot(User user) {
+		return new CurrentUserSnapshot(user.getId(), user.getEmail(),
+				user.getRoles().stream().map(Role::getName).collect(java.util.stream.Collectors.toSet()));
 	}
 
 	private User user() {
