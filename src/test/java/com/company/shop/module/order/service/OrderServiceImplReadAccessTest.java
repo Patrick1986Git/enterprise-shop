@@ -42,7 +42,6 @@ import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
 import com.company.shop.security.SecurityConstants;
 
-import jakarta.persistence.EntityManager;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplReadAccessTest {
@@ -71,16 +70,13 @@ class OrderServiceImplReadAccessTest {
 	@Mock
 	private PaymentService paymentService;
 
-	@Mock
-	private EntityManager entityManager;
-
 	private OrderServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
-				userService, cartCheckoutFacade, orderMapper, paymentService, meterRegistry, entityManager);
+				userService, cartCheckoutFacade, orderMapper, paymentService, meterRegistry);
 	}
 
 	@Nested

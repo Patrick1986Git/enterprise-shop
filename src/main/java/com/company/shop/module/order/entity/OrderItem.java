@@ -3,8 +3,6 @@ package com.company.shop.module.order.entity;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-import com.company.shop.module.product.entity.Product;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -27,9 +25,14 @@ public class OrderItem {
 	@JoinColumn(name = "order_id")
 	private Order order;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "product_id")
-	private Product product;
+	@Column(name = "product_id", nullable = false)
+	private UUID productId;
+
+	@Column(name = "product_name", nullable = false)
+	private String productName;
+
+	@Column(name = "product_sku", nullable = false, length = 50)
+	private String productSku;
 
 	@Column(nullable = false)
 	private int quantity;
@@ -40,8 +43,10 @@ public class OrderItem {
 	protected OrderItem() {
 	}
 
-	public OrderItem(Product product, int quantity, BigDecimal price) {
-		this.product = product;
+	public OrderItem(UUID productId, String productName, String productSku, int quantity, BigDecimal price) {
+		this.productId = productId;
+		this.productName = productName;
+		this.productSku = productSku;
 		this.quantity = quantity;
 		this.price = price;
 	}
@@ -54,8 +59,16 @@ public class OrderItem {
 		return id;
 	}
 
-	public Product getProduct() {
-		return product;
+	public UUID getProductId() {
+		return productId;
+	}
+
+	public String getProductName() {
+		return productName;
+	}
+
+	public String getProductSku() {
+		return productSku;
 	}
 
 	public int getQuantity() {

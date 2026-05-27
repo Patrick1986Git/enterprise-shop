@@ -692,7 +692,7 @@ class PaymentServiceImplWebhookTest {
 
         Order order = new Order(user);
         setEntityId(order, UUID.randomUUID());
-        order.addItem(new OrderItem(product, 1, unitPrice));
+        order.addItem(new OrderItem(product.getId(), product.getName(), product.getSku(), 1, unitPrice));
         return order;
     }
 

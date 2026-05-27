@@ -64,9 +64,9 @@ public interface OrderMapper {
      * @param item the order line item.
      * @return mapped order item DTO.
      */
-    @Mapping(target = "productId", source = "product.id")
-    @Mapping(target = "productName", source = "product.name")
-    @Mapping(target = "sku", source = "product.sku")
+    @Mapping(target = "productId", source = "productId")
+    @Mapping(target = "productName", source = "productName")
+    @Mapping(target = "sku", source = "productSku")
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(item))")
     OrderItemResponseDTO toItemDto(OrderItem item);
 

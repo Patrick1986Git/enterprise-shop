@@ -26,6 +26,6 @@ public class ProductCatalogFacadeImpl implements ProductCatalogFacade {
 
         product.decreaseStock(quantity);
 
-        return new CheckoutProduct(product.getId(), product.getName(), product.getPrice());
+        return new CheckoutProduct(product.getId(), product.getName(), product.getSku(), product.getPrice());
     }
 }

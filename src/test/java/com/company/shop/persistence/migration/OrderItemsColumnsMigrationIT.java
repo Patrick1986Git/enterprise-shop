@@ -40,7 +40,9 @@ class OrderItemsColumnsMigrationIT extends PostgresContainerSupport {
         				"order_id",
         				"product_id",
         				"quantity",
-        				"price")
+        				"price",
+					"product_name",
+						"product_sku")
                 .doesNotContain(
                         "created_at",
                         "created_by",

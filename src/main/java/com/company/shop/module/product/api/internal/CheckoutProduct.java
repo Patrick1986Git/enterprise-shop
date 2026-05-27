@@ -6,6 +6,7 @@ import java.util.UUID;
 public record CheckoutProduct(
         UUID id,
         String name,
+        String sku,
         BigDecimal price
 ) {
 }
