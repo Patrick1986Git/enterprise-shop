@@ -10,12 +10,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.company.shop.module.order.entity.Order;
-import com.company.shop.module.user.entity.User;
 
 import jakarta.persistence.LockModeType;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
-	Page<Order> findByUser(User user, Pageable pageable);
+	Page<Order> findByUserId(UUID userId, Pageable pageable);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("SELECT o FROM Order o WHERE o.id = :id")

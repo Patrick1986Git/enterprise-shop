@@ -42,9 +42,10 @@ import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.UserRepository;
-import com.company.shop.module.user.service.UserService;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
 import jakarta.persistence.OptimisticLockException;
@@ -79,7 +80,7 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
     private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
-    private UserService userService;
+    private CurrentUserFacade currentUserFacade;
 
     @MockitoBean
     private PaymentService paymentService;
@@ -90,7 +91,10 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
     void setUp() {
         truncateTestData();
         // Stub current-user resolution only to decouple this test from security plumbing.
-        when(userService.getCurrentUserEntity()).thenAnswer(invocation -> currentUser.get());
+        when(currentUserFacade.getCurrentUser()).thenAnswer(invocation -> {
+            User user = currentUser.get();
+            return new CurrentUserSnapshot(user.getId(), user.getEmail(), java.util.Set.of());
+        });
         // Stub Stripe integration because this test verifies DB locking and stock consistency.
         when(paymentService.createPaymentIntent(any(Order.class)))
                 .thenReturn(new com.company.shop.module.order.dto.PaymentIntentResponseDTO("pi_test", "pk_test"));

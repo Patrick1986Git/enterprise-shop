@@ -8,6 +8,7 @@
 
 package com.company.shop.module.order.service;
 
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import io.micrometer.core.instrument.MeterRegistry;
 
+import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.cart.api.internal.CartCheckoutSnapshot;
@@ -39,8 +41,9 @@ import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.product.api.internal.CheckoutProduct;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.service.UserService;
 import com.company.shop.security.SecurityConstants;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +60,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductCatalogFacade productCatalogFacade;
     private final PaymentRepository paymentRepo;
     private final DiscountCodeRepository discountCodeRepo;
-    private final UserService userService;
+    private final CurrentUserFacade currentUserFacade;
     private final CartCheckoutFacade cartCheckoutFacade;
     private final OrderMapper mapper;
     private final PaymentService paymentService;
@@ -66,7 +69,7 @@ public class OrderServiceImpl implements OrderService {
             ProductCatalogFacade productCatalogFacade,
             PaymentRepository paymentRepo,
             DiscountCodeRepository discountCodeRepo,
-            UserService userService,
+            CurrentUserFacade currentUserFacade,
             CartCheckoutFacade cartCheckoutFacade,
             OrderMapper mapper,
             PaymentService paymentService,
@@ -75,7 +78,7 @@ public class OrderServiceImpl implements OrderService {
         this.productCatalogFacade = productCatalogFacade;
         this.paymentRepo = paymentRepo;
         this.discountCodeRepo = discountCodeRepo;
-        this.userService = userService;
+        this.currentUserFacade = currentUserFacade;
         this.cartCheckoutFacade = cartCheckoutFacade;
         this.mapper = mapper;
         this.paymentService = paymentService;
@@ -112,9 +115,12 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private Order createPendingOrder(OrderCheckoutRequestDTO request) {
-        User user = userService.getCurrentUserEntity();
-        log.info("Checkout started for userId={}", user.getId());
-        CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(user.getId());
+        CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+        log.info("Checkout started for userId={}", currentUser.id());
+        CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(currentUser.id());
+
+        // TODO: Replace this compatibility bridge once Order no longer requires User entity.
+        User user = toUserReference(currentUser);
 
         if (cart.isEmpty()) {
             throw new EmptyCartCheckoutException();
@@ -158,17 +164,29 @@ public class OrderServiceImpl implements OrderService {
         return savedOrder;
     }
 
+
+    private User toUserReference(CurrentUserSnapshot currentUser) {
+        try {
+            User user = new User(currentUser.email(), "N/A", "", "");
+            Method setId = BaseEntity.class.getDeclaredMethod("setId", UUID.class);
+            setId.setAccessible(true);
+            setId.invoke(user, currentUser.id());
+            return user;
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("Failed to create user reference for order", ex);
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
     public OrderDetailedResponseDTO findById(UUID id) {
         Order order = orderRepo.findById(id)
                 .orElseThrow(() -> new OrderNotFoundException(id));
 
-        User currentUser = userService.getCurrentUserEntity();
-        boolean isAdmin = currentUser.getRoles().stream()
-                .anyMatch(r -> r.getName().equals(SecurityConstants.ROLE_ADMIN));
+        CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+        boolean isAdmin = currentUser.hasRole(SecurityConstants.ROLE_ADMIN);
 
-        if (!isAdmin && !order.getUser().getId().equals(currentUser.getId())) {
+        if (!isAdmin && !order.getUser().getId().equals(currentUser.id())) {
             throw new OrderAccessDeniedException();
         }
         return mapper.toDetailedDto(order);
@@ -183,7 +201,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public Page<OrderResponseDTO> findMyOrders(Pageable pageable) {
-        User currentUser = userService.getCurrentUserEntity();
-        return orderRepo.findByUser(currentUser, pageable).map(mapper::toDto);
+        CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+        return orderRepo.findByUserId(currentUser.id(), pageable).map(mapper::toDto);
     }
 }
