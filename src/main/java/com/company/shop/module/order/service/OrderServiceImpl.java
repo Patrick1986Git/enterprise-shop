@@ -8,7 +8,6 @@
 
 package com.company.shop.module.order.service;
 
-import java.lang.reflect.Method;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -18,7 +17,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import io.micrometer.core.instrument.MeterRegistry;
 
-import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.cart.api.internal.CartCheckoutSnapshot;
@@ -43,7 +41,6 @@ import com.company.shop.module.product.api.internal.CheckoutProduct;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.user.api.internal.CurrentUserFacade;
 import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
-import com.company.shop.module.user.entity.User;
 import com.company.shop.security.SecurityConstants;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -92,7 +89,7 @@ public class OrderServiceImpl implements OrderService {
         try {
             Order savedOrder = createPendingOrder(request);
             log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
-                    savedOrder.getId(), savedOrder.getUser().getId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
+                    savedOrder.getId(), savedOrder.getUserId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
                     savedOrder.getItems().size());
             PaymentIntentResponseDTO stripeInfo = paymentService.createPaymentIntent(savedOrder);
 
@@ -119,14 +116,11 @@ public class OrderServiceImpl implements OrderService {
         log.info("Checkout started for userId={}", currentUser.id());
         CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(currentUser.id());
 
-        // TODO: Replace this compatibility bridge once Order no longer requires User entity.
-        User user = toUserReference(currentUser);
-
         if (cart.isEmpty()) {
             throw new EmptyCartCheckoutException();
         }
 
-        Order order = new Order(user);
+        Order order = new Order(currentUser.id(), currentUser.email());
 
         for (CartCheckoutItem cartItem : cart.items()) {
             try {
@@ -164,19 +158,6 @@ public class OrderServiceImpl implements OrderService {
         return savedOrder;
     }
 
-
-    private User toUserReference(CurrentUserSnapshot currentUser) {
-        try {
-            User user = new User(currentUser.email(), "N/A", "", "");
-            Method setId = BaseEntity.class.getDeclaredMethod("setId", UUID.class);
-            setId.setAccessible(true);
-            setId.invoke(user, currentUser.id());
-            return user;
-        } catch (ReflectiveOperationException ex) {
-            throw new IllegalStateException("Failed to create user reference for order", ex);
-        }
-    }
-
     @Override
     @Transactional(readOnly = true)
     public OrderDetailedResponseDTO findById(UUID id) {
@@ -186,7 +167,7 @@ public class OrderServiceImpl implements OrderService {
         CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
         boolean isAdmin = currentUser.hasRole(SecurityConstants.ROLE_ADMIN);
 
-        if (!isAdmin && !order.getUser().getId().equals(currentUser.id())) {
+        if (!isAdmin && !order.getUserId().equals(currentUser.id())) {
             throw new OrderAccessDeniedException();
         }
         return mapper.toDetailedDto(order);

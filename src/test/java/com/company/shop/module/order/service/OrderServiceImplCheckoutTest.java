@@ -133,7 +133,8 @@ class OrderServiceImplCheckoutTest {
 						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());
 			Order savedOrder = orderCaptor.getValue();
-			assertThat(savedOrder.getUser()).isEqualTo(user);
+			assertThat(savedOrder.getUserId()).isEqualTo(user.getId());
+			assertThat(savedOrder.getUserEmail()).isEqualTo(user.getEmail());
 			assertThat(savedOrder.getItems()).hasSize(2);
 			assertThat(savedOrder.getItems().get(0).getProductId()).isEqualTo(firstProduct.getId());
 			assertThat(savedOrder.getItems().get(0).getProductName()).isEqualTo(firstProduct.getName());

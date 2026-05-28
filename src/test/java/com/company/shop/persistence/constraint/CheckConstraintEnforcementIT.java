@@ -94,8 +94,9 @@ class CheckConstraintEnforcementIT extends PostgresContainerSupport {
         UUID userId = insertUser();
 
         assertThatThrownBy(() -> jdbcTemplate.update(
-                "INSERT INTO orders(user_id, status, total_amount) VALUES (?, ?, ?)",
+                "INSERT INTO orders(user_id, user_email, status, total_amount) VALUES (?, ?, ?, ?)",
                 userId,
+                "check@example.com",
                 "PROCESSING",
                 BigDecimal.valueOf(120.00)))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -113,9 +114,10 @@ class CheckConstraintEnforcementIT extends PostgresContainerSupport {
 
     private UUID insertOrder(UUID userId) {
         return jdbcTemplate.queryForObject(
-                "INSERT INTO orders(user_id, status, total_amount) VALUES (?, ?, ?) RETURNING id",
+                "INSERT INTO orders(user_id, user_email, status, total_amount) VALUES (?, ?, ?, ?) RETURNING id",
                 UUID.class,
                 userId,
+                "check@example.com",
                 "NEW",
                 BigDecimal.valueOf(120.00));
     }

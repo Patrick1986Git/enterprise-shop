@@ -103,7 +103,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentIntentResponseDTO createPaymentIntent(Order order) {
         try {
             log.info("Payment intent initialization started for orderId={} userId={}", order.getId(),
-                    order.getUser().getId());
+                    order.getUserId());
             Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
                     .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
 
@@ -236,10 +236,10 @@ public class PaymentServiceImpl implements PaymentService {
         payment.markAsCompleted();
         paymentRepo.save(payment);
         log.info("Order marked as paid orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
-                order.getId(), payment.getId(), order.getUser().getId(), intent.getId(), order.getStatus(),
+                order.getId(), payment.getId(), order.getUserId(), intent.getId(), order.getStatus(),
                 payment.getStatus());
 
-        cartService.clearCartForUser(order.getUser().getId());
+        cartService.clearCartForUser(order.getUserId());
         return true;
     }
 
@@ -266,7 +266,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.markAsFailed();
         paymentRepo.save(payment);
         log.info("Payment marked as failed from webhook orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
-                order.getId(), payment.getId(), order.getUser().getId(), intent.getId(), order.getStatus(),
+                order.getId(), payment.getId(), order.getUserId(), intent.getId(), order.getStatus(),
                 payment.getStatus());
         return true;
     }
