@@ -98,7 +98,7 @@ class OrderServiceImplReadAccessTest {
 		@Test
 		void findById_shouldReturnDetailedDtoWhenCurrentUserOwnsOrder() {
 			User owner = user();
-			Order order = new Order(owner);
+			Order order = new Order(owner.getId(), owner.getEmail());
 			UUID orderId = UUID.randomUUID();
 			setEntityId(order, orderId);
 
@@ -124,7 +124,7 @@ class OrderServiceImplReadAccessTest {
 			admin.addRole(new Role(SecurityConstants.ROLE_ADMIN));
 
 			UUID orderId = UUID.randomUUID();
-			Order order = new Order(owner);
+			Order order = new Order(owner.getId(), owner.getEmail());
 			setEntityId(order, orderId);
 
 			OrderDetailedResponseDTO detailedDto = new OrderDetailedResponseDTO(orderId, OrderStatus.NEW,
@@ -150,7 +150,7 @@ class OrderServiceImplReadAccessTest {
 			setEntityId(differentUser, UUID.fromString("00000000-0000-0000-0000-000000000002"));
 
 			UUID orderId = UUID.randomUUID();
-			Order order = new Order(owner);
+			Order order = new Order(owner.getId(), owner.getEmail());
 			setEntityId(order, orderId);
 
 			when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
@@ -170,7 +170,7 @@ class OrderServiceImplReadAccessTest {
 		@Test
 		void findAll_shouldMapRepositoryPageToDtoPage() {
 			User user = user();
-			Order order = new Order(user);
+			Order order = new Order(user.getId(), user.getEmail());
 			OrderResponseDTO dto = new OrderResponseDTO(UUID.randomUUID(), OrderStatus.NEW, BigDecimal.ONE,
 					LocalDateTime.now(), null);
 			PageRequest pageable = PageRequest.of(0, 10);
@@ -190,7 +190,7 @@ class OrderServiceImplReadAccessTest {
 		@Test
 		void findMyOrders_shouldUseCurrentUserAndMapToDtoPage() {
 			User currentUser = user();
-			Order order = new Order(currentUser);
+			Order order = new Order(currentUser.getId(), currentUser.getEmail());
 			OrderResponseDTO dto = new OrderResponseDTO(UUID.randomUUID(), OrderStatus.NEW, BigDecimal.TEN,
 					LocalDateTime.now(), null);
 			PageRequest pageable = PageRequest.of(0, 5);

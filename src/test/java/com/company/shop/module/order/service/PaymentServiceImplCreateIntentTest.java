@@ -179,7 +179,7 @@ class PaymentServiceImplCreateIntentTest {
 		Product product = new Product("Cable", "cable", "SKU-1", "desc", unitPrice, 10, category);
 		setEntityId(product, UUID.randomUUID());
 
-		Order order = new Order(user);
+		Order order = new Order(user.getId(), user.getEmail());
 		setEntityId(order, UUID.randomUUID());
 		order.addItem(new OrderItem(product.getId(), product.getName(), product.getSku(), 1, unitPrice));
 		return order;

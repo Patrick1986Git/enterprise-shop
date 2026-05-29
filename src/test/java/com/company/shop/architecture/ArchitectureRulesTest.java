@@ -81,7 +81,6 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.product.repository..");
 
-
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnProductEntities =
             noClasses()
@@ -89,8 +88,12 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.product.entity..");
 
-
-
+    @ArchTest
+    static final ArchRule orderModuleMustNotDependOnUserEntities =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.order..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.user.entity..");
 
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnUserService =

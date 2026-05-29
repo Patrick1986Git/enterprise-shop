@@ -51,7 +51,7 @@ public interface OrderMapper {
      * @param order the source order aggregate.
      * @return detailed order response DTO.
      */
-    @Mapping(target = "userEmail", source = "user.email")
+    @Mapping(target = "userEmail", source = "userEmail")
     OrderDetailedResponseDTO toDetailedDto(Order order);
 
     /**

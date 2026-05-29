@@ -386,7 +386,7 @@ class PaymentServiceImplWebhookTest {
             verify(orderRepository, never()).save(order);
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             verify(paymentRepository, never()).save(any(Payment.class));
-            verify(cartService, never()).clearCartForUser(order.getUser().getId());
+            verify(cartService, never()).clearCartForUser(order.getUserId());
         }
     }
 
@@ -416,7 +416,7 @@ class PaymentServiceImplWebhookTest {
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
             verify(paymentRepository, never()).save(payment);
-            verify(cartService, never()).clearCartForUser(order.getUser().getId());
+            verify(cartService, never()).clearCartForUser(order.getUserId());
         }
     }
 
@@ -568,7 +568,7 @@ class PaymentServiceImplWebhookTest {
             assertWebhookMetricCount("failed", 1);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
-            verify(cartService, never()).clearCartForUser(order.getUser().getId());
+            verify(cartService, never()).clearCartForUser(order.getUserId());
         }
     }
 
@@ -598,7 +598,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
-            verify(cartService).clearCartForUser(order.getUser().getId());
+            verify(cartService).clearCartForUser(order.getUserId());
         }
     }
 
@@ -690,7 +690,7 @@ class PaymentServiceImplWebhookTest {
         Product product = new Product("Cable", "cable", "SKU-1", "desc", unitPrice, 10, category);
         setEntityId(product, UUID.randomUUID());
 
-        Order order = new Order(user);
+        Order order = new Order(user.getId(), user.getEmail());
         setEntityId(order, UUID.randomUUID());
         order.addItem(new OrderItem(product.getId(), product.getName(), product.getSku(), 1, unitPrice));
         return order;

@@ -13,20 +13,17 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 import org.hibernate.annotations.SQLRestriction;
 
 import com.company.shop.common.model.SoftDeleteEntity;
-import com.company.shop.module.user.entity.User;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
@@ -46,11 +43,16 @@ import jakarta.persistence.Table;
 public class Order extends SoftDeleteEntity {
 
     /**
-     * The customer who placed the order.
+     * Identifier of the customer who placed the order.
      */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id")
-    private User user;
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
+    /**
+     * Email snapshot of the customer who placed the order.
+     */
+    @Column(name = "user_email", nullable = false)
+    private String userEmail;
 
     /**
      * Current business status of the order.
@@ -81,10 +83,12 @@ public class Order extends SoftDeleteEntity {
     /**
      * Initializes a new order for a specific user with a default {@link OrderStatus#NEW} status.
      *
-     * @param user the owner of the order.
+     * @param userId the identifier of the user who placed the order.
+     * @param userEmail the email snapshot of the user who placed the order.
      */
-    public Order(User user) {
-        this.user = user;
+    public Order(UUID userId, String userEmail) {
+        this.userId = userId;
+        this.userEmail = userEmail;
         this.status = OrderStatus.NEW;
         this.totalAmount = BigDecimal.ZERO;
     }
@@ -155,8 +159,12 @@ public class Order extends SoftDeleteEntity {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    public User getUser() {
-        return user;
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public String getUserEmail() {
+        return userEmail;
     }
 
     public OrderStatus getStatus() {

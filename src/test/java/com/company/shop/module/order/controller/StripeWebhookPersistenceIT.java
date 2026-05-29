@@ -322,7 +322,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	private SeededOrder seedOrderWithPayment(BigDecimal orderAmount, String paymentIntentId) {
 		User user = userRepository.save(new User("stripe-webhook-" + paymentIntentId + "@example.com", "encoded-pass", "Test", "User"));
 
-		Order order = new Order(user);
+		Order order = new Order(user.getId(), user.getEmail());
 		setOrderTotal(order, orderAmount);
 		Order savedOrder = orderRepository.save(order);
 

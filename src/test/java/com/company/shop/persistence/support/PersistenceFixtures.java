@@ -80,7 +80,7 @@ public final class PersistenceFixtures {
     }
 
     public static Order persistOrder(TestEntityManager entityManager, User user) {
-        Order order = new Order(user);
+        Order order = new Order(user.getId(), user.getEmail());
         return persistAndFlush(entityManager, order);
     }
 
