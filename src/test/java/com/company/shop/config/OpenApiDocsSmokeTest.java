@@ -26,6 +26,8 @@ import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
+import com.company.shop.module.order.service.query.OrderQueryProcessor;
 import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
 import com.company.shop.module.product.service.ProductReviewService;
 import com.company.shop.module.product.service.ProductService;
@@ -98,6 +100,12 @@ class OpenApiDocsSmokeTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @MockitoBean
+    private OrderCheckoutProcessor orderCheckoutProcessor;
+
+    @MockitoBean
+    private OrderQueryProcessor orderQueryProcessor;
 
     @MockitoBean
     private PaymentService paymentService;
