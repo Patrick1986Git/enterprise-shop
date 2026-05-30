@@ -44,6 +44,8 @@ import com.company.shop.module.order.mapper.OrderMapper;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
+import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
+import com.company.shop.module.order.service.query.OrderQueryProcessor;
 import com.company.shop.module.product.api.internal.CheckoutProduct;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
@@ -87,8 +89,11 @@ class OrderServiceImplCheckoutTest {
 	@BeforeEach
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
-		service = new OrderServiceImpl(orderRepository, productCatalogFacade, paymentRepository, discountCodeRepository,
-				currentUserFacade, cartCheckoutFacade, orderMapper, paymentService, meterRegistry);
+		OrderCheckoutProcessor checkoutProcessor = new OrderCheckoutProcessor(orderRepository, productCatalogFacade,
+				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
+				paymentService, meterRegistry);
+		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
+		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}
 
 	@Nested
