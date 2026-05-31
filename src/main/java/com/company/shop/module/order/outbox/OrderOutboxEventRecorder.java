@@ -1,7 +1,6 @@
 package com.company.shop.module.order.outbox;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,7 +50,7 @@ public class OrderOutboxEventRecorder {
             String userEmail,
             OrderStatus status,
             BigDecimal totalAmount,
-            LocalDateTime createdAt,
+            String createdAt,
             List<OrderPlacedItemPayload> items) {
 
         private static OrderPlacedPayload from(Order order) {
@@ -61,7 +60,7 @@ public class OrderOutboxEventRecorder {
                     order.getUserEmail(),
                     order.getStatus(),
                     order.getTotalAmount(),
-                    order.getCreatedAt(),
+                    order.getCreatedAt() == null ? null : order.getCreatedAt().toString(),
                     order.getItems().stream()
                             .map(OrderPlacedItemPayload::from)
                             .toList());
