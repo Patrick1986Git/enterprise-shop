@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.PreparedStatement;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -80,6 +81,46 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findPendingBatchForUpdate_shouldReturnPendingEventsOrderedByCreatedAt() {
+        UUID earliestPendingId = UUID.randomUUID();
+        UUID processedId = UUID.randomUUID();
+        UUID latestPendingId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+        UUID middlePendingId = UUID.randomUUID();
+
+        insertOutboxEvent(earliestPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"));
+        insertOutboxEvent(processedId, OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:01:00Z"));
+        insertOutboxEvent(latestPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:04:00Z"));
+        insertOutboxEvent(failedId, OutboxEventStatus.FAILED, Instant.parse("2026-01-01T10:02:00Z"));
+        insertOutboxEvent(middlePendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:03:00Z"));
+
+        List<OutboxEvent> pendingEvents = outboxEventRepository.findPendingBatchForUpdate(10);
+
+        assertThat(pendingEvents)
+                .extracting(OutboxEvent::getId)
+                .containsExactly(earliestPendingId, middlePendingId, latestPendingId)
+                .doesNotContain(processedId, failedId);
+        assertThat(pendingEvents)
+                .extracting(OutboxEvent::getStatus)
+                .containsOnly(OutboxEventStatus.PENDING);
+    }
+
+    @Test
+    void findPendingBatchForUpdate_shouldRespectBatchSize() {
+        UUID firstPendingId = UUID.randomUUID();
+        UUID secondPendingId = UUID.randomUUID();
+
+        insertOutboxEvent(firstPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"));
+        insertOutboxEvent(secondPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:01:00Z"));
+
+        List<OutboxEvent> pendingEvents = outboxEventRepository.findPendingBatchForUpdate(1);
+
+        assertThat(pendingEvents)
+                .extracting(OutboxEvent::getId)
+                .containsExactly(firstPendingId);
+    }
+
+    @Test
     void insert_shouldRejectMissingRequiredFields() {
         for (String requiredColumn : List.of(
                 "id",
@@ -94,6 +135,29 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                     .as("Expected database to reject null %s", requiredColumn)
                     .hasMessageContaining(requiredColumn);
         }
+    }
+
+    private void insertOutboxEvent(UUID eventId, OutboxEventStatus status, Instant createdAt) {
+        UUID aggregateId = UUID.randomUUID();
+
+        jdbcTemplate.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO outbox_events (
+                        id, aggregate_type, aggregate_id, event_type, payload, status, created_at, attempts
+                    ) VALUES (
+                        ?, ?, ?, ?, CAST(? AS jsonb), ?, CAST(? AS timestamptz), ?
+                    )
+                    """);
+            statement.setObject(1, eventId);
+            statement.setString(2, "Order");
+            statement.setObject(3, aggregateId);
+            statement.setString(4, "TestEvent");
+            statement.setString(5, "{\"orderId\":\"" + aggregateId + "\"}");
+            statement.setString(6, status.name());
+            statement.setString(7, createdAt.toString());
+            statement.setInt(8, status == OutboxEventStatus.FAILED ? 1 : 0);
+            return statement;
+        });
     }
 
     private String insertSqlWithNullValueFor(String columnName) {
