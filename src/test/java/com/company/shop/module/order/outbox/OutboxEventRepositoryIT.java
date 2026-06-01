@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -29,6 +30,11 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void cleanOutboxEvents() {
+        jdbcTemplate.update("DELETE FROM outbox_events");
+    }
 
     @Test
     void save_shouldPersistPendingOutboxEvent() {
