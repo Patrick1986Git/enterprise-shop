@@ -33,6 +33,7 @@ import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.exception.OrderAccessDeniedException;
 import com.company.shop.module.order.exception.OrderNotFoundException;
 import com.company.shop.module.order.mapper.OrderMapper;
+import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
@@ -73,6 +74,9 @@ class OrderServiceImplReadAccessTest {
 	@Mock
 	private PaymentService paymentService;
 
+	@Mock
+	private OrderOutboxEventRecorder orderOutboxEventRecorder;
+
 	private OrderServiceImpl service;
 
 	@BeforeEach
@@ -80,7 +84,7 @@ class OrderServiceImplReadAccessTest {
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 		OrderCheckoutProcessor checkoutProcessor = new OrderCheckoutProcessor(orderRepository, productCatalogFacade,
 				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
-				paymentService, meterRegistry);
+				paymentService, orderOutboxEventRecorder, meterRegistry);
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}

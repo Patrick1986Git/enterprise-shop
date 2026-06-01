@@ -41,6 +41,7 @@ import com.company.shop.module.order.exception.DiscountCodeInvalidException;
 import com.company.shop.module.order.exception.EmptyCartCheckoutException;
 import com.company.shop.module.order.exception.OrderInsufficientStockException;
 import com.company.shop.module.order.mapper.OrderMapper;
+import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
@@ -83,6 +84,9 @@ class OrderServiceImplCheckoutTest {
 	@Mock
 	private PaymentService paymentService;
 
+	@Mock
+	private OrderOutboxEventRecorder orderOutboxEventRecorder;
+
 	private SimpleMeterRegistry meterRegistry;
 	private OrderServiceImpl service;
 
@@ -91,7 +95,7 @@ class OrderServiceImplCheckoutTest {
 		meterRegistry = new SimpleMeterRegistry();
 		OrderCheckoutProcessor checkoutProcessor = new OrderCheckoutProcessor(orderRepository, productCatalogFacade,
 				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
-				paymentService, meterRegistry);
+				paymentService, orderOutboxEventRecorder, meterRegistry);
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}
@@ -160,6 +164,7 @@ class OrderServiceImplCheckoutTest {
 			assertThat(savedPayment.getProvider()).isEqualTo("STRIPE");
 			assertThat(savedPayment.getAmount()).isEqualByComparingTo("35.00");
 
+			verify(orderOutboxEventRecorder).recordOrderPlaced(savedOrder);
 			verify(paymentService).createPaymentIntent(savedOrder);
 			verify(orderMapper).toDto(savedOrder);
 			verify(discountCodeRepository, never()).findByCodeIgnoreCase(any(String.class));
@@ -271,7 +276,7 @@ class OrderServiceImplCheckoutTest {
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verifyNoInteractions(productCatalogFacade, discountCodeRepository, orderRepository, paymentRepository,
-					paymentService, orderMapper);
+					paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 
 		@Test
@@ -292,7 +297,7 @@ class OrderServiceImplCheckoutTest {
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(missingProduct.getId(), 1);
 			verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
-					orderMapper);
+					orderMapper, orderOutboxEventRecorder);
 		}
 
 		@Test
@@ -313,7 +318,7 @@ class OrderServiceImplCheckoutTest {
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 						verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
-					orderMapper);
+					orderMapper, orderOutboxEventRecorder);
 		}
 
 		@Test
@@ -335,7 +340,7 @@ class OrderServiceImplCheckoutTest {
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 1);
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE20");
-			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
+			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 
 		@Test
@@ -360,7 +365,7 @@ class OrderServiceImplCheckoutTest {
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 			verify(discountCodeRepository).findByCodeIgnoreCase("EXPIRED10");
-			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper);
+			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 	}
 

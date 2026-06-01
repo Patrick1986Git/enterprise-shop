@@ -29,6 +29,7 @@ import com.company.shop.module.order.exception.DiscountCodeInvalidException;
 import com.company.shop.module.order.exception.EmptyCartCheckoutException;
 import com.company.shop.module.order.exception.OrderInsufficientStockException;
 import com.company.shop.module.order.mapper.OrderMapper;
+import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
@@ -53,6 +54,7 @@ public class OrderCheckoutProcessor {
     private final CartCheckoutFacade cartCheckoutFacade;
     private final OrderMapper mapper;
     private final PaymentService paymentService;
+    private final OrderOutboxEventRecorder orderOutboxEventRecorder;
     private final MeterRegistry meterRegistry;
 
     public OrderCheckoutProcessor(OrderRepository orderRepo,
@@ -63,6 +65,7 @@ public class OrderCheckoutProcessor {
             CartCheckoutFacade cartCheckoutFacade,
             OrderMapper mapper,
             PaymentService paymentService,
+            OrderOutboxEventRecorder orderOutboxEventRecorder,
             MeterRegistry meterRegistry) {
         this.orderRepo = orderRepo;
         this.productCatalogFacade = productCatalogFacade;
@@ -72,6 +75,7 @@ public class OrderCheckoutProcessor {
         this.cartCheckoutFacade = cartCheckoutFacade;
         this.mapper = mapper;
         this.paymentService = paymentService;
+        this.orderOutboxEventRecorder = orderOutboxEventRecorder;
         this.meterRegistry = meterRegistry;
     }
 
@@ -146,6 +150,7 @@ public class OrderCheckoutProcessor {
 
         Order savedOrder = orderRepo.save(order);
         paymentRepo.save(new Payment(savedOrder, "STRIPE", savedOrder.getTotalAmount()));
+        orderOutboxEventRecorder.recordOrderPlaced(savedOrder);
 
         return savedOrder;
     }
