@@ -26,6 +26,7 @@ import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
+import com.company.shop.module.order.outbox.OutboxEventProcessor;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
 import com.company.shop.module.order.service.query.OrderQueryProcessor;
@@ -110,6 +111,9 @@ class OpenApiDocsSmokeTest {
 
     @MockitoBean
     private OrderOutboxEventRecorder orderOutboxEventRecorder;
+
+    @MockitoBean
+    private OutboxEventProcessor outboxEventProcessor;
 
     @MockitoBean
     private PaymentService paymentService;
