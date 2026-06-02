@@ -64,6 +64,19 @@ public class OutboxEvent extends BaseEntity {
         return new OutboxEvent(aggregateType, aggregateId, eventType, payload);
     }
 
+    public void markProcessed() {
+        this.status = OutboxEventStatus.PROCESSED;
+        this.processedAt = Instant.now();
+        this.lastError = null;
+    }
+
+    public void markFailed(String errorMessage) {
+        this.status = OutboxEventStatus.FAILED;
+        this.attempts += 1;
+        this.lastError = errorMessage;
+        this.processedAt = null;
+    }
+
     public String getAggregateType() {
         return aggregateType;
     }
