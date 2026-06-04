@@ -27,7 +27,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import com.company.shop.common.i18n.MessageService;
-import tools.jackson.core.StreamReadException;
+import tools.jackson.core.exc.StreamReadException;
 import tools.jackson.databind.exc.InvalidFormatException;
 
 import jakarta.validation.ConstraintViolationException;
