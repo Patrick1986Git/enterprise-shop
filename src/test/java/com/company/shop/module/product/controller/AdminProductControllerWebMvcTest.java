@@ -49,7 +49,7 @@ import com.company.shop.module.product.service.ProductService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = AdminProductController.class)
 @Import(WebMvcSliceTestConfig.class)

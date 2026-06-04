@@ -43,8 +43,8 @@ import com.company.shop.security.AuthService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.UserRolesStartupValidator;
 import com.company.shop.security.jwt.JwtTokenProvider;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.MOCK,

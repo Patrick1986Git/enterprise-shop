@@ -47,7 +47,7 @@ import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = AdminCategoryController.class)
 @Import(WebMvcSliceTestConfig.class)

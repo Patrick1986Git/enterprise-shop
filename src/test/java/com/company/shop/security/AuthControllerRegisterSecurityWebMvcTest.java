@@ -25,7 +25,7 @@ import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.TestMeterRegistryConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = AuthController.class)
 @Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class, MessageService.class })

@@ -39,7 +39,7 @@ import com.company.shop.security.AuthService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.WebMvcSliceTestConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = {
 		AuthController.class,
