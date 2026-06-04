@@ -37,7 +37,7 @@ class OrderOutboxEventRecorderTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper().findAndRegisterModules();
+        objectMapper = new ObjectMapper();
         recorder = new OrderOutboxEventRecorder(outboxEventRepository, objectMapper);
     }
 
