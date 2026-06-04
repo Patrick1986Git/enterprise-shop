@@ -5,7 +5,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Component;
 
-import tools.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -51,7 +51,7 @@ public class OrderPlacedNotificationHandler implements OutboxEventHandler {
                     requiredUuid(root, "orderId"),
                     requiredText(root, "userEmail"),
                     requiredBigDecimal(root, "totalAmount"));
-        } catch (JsonProcessingException | IllegalArgumentException ex) {
+        } catch (JacksonException | IllegalArgumentException ex) {
             throw new IllegalArgumentException("Invalid OrderPlaced outbox payload: " + ex.getMessage(), ex);
         }
     }

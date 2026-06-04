@@ -6,7 +6,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Component;
 
-import tools.jackson.core.JsonProcessingException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.module.order.entity.Order;
@@ -39,7 +39,7 @@ public class OrderOutboxEventRecorder {
     private String serialize(OrderPlacedPayload payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException("Failed to serialize OrderPlaced outbox payload", ex);
         }
     }
