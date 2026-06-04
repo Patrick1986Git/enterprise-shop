@@ -24,5 +24,5 @@ import jakarta.validation.constraints.NotNull;
 public record UpdateCartItemRequestDTO(
         @NotNull(message = "{validation.cart.quantity.required}")
         @Min(value = 1, message = "{validation.cart.quantity.min}") 
-        int quantity
+        Integer quantity
 ) {}
