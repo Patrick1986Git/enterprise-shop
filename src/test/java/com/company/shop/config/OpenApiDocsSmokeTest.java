@@ -24,8 +24,10 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.category.service.CategoryService;
-import com.company.shop.module.order.service.OrderService;
+import com.company.shop.module.notification.outbox.OrderPlacedNotificationHandler;
+import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
+import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.outbox.OutboxEventProcessor;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
@@ -99,6 +101,12 @@ class OpenApiDocsSmokeTest {
 
     @MockitoBean
     private UserService userService;
+
+    @MockitoBean
+    private NotificationService notificationService;
+
+    @MockitoBean
+    private OrderPlacedNotificationHandler orderPlacedNotificationHandler;
 
     @MockitoBean
     private OrderService orderService;
