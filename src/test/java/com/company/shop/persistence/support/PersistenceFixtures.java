@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.UUID;
 
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 
 import com.company.shop.common.model.AuditableEntity;
 import com.company.shop.module.cart.entity.Cart;

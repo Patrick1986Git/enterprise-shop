@@ -17,8 +17,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.common.model.AuditableEntity;
 import com.company.shop.common.model.BaseEntity;
@@ -37,7 +37,7 @@ class OrderOutboxEventRecorderTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper().findAndRegisterModules();
+        objectMapper = new ObjectMapper();
         recorder = new OrderOutboxEventRecorder(outboxEventRepository, objectMapper);
     }
 

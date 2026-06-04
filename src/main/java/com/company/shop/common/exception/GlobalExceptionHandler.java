@@ -27,8 +27,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import com.company.shop.common.i18n.MessageService;
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import tools.jackson.core.exc.StreamReadException;
+import tools.jackson.databind.exc.InvalidFormatException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -151,9 +151,9 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ApiError> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
 
-		Throwable rootCause = findCause(ex, JsonParseException.class, InvalidFormatException.class);
+		Throwable rootCause = findCause(ex, StreamReadException.class, InvalidFormatException.class);
 		String message = messageService.getMessage("error.request.invalid.body.values");
-		if (rootCause instanceof JsonParseException) {
+		if (rootCause instanceof StreamReadException) {
 			message = messageService.getMessage("error.request.invalid.body.malformed");
 		}
 

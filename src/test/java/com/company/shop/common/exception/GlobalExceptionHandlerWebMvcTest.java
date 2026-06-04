@@ -17,8 +17,8 @@ import java.lang.annotation.Target;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
@@ -89,7 +89,15 @@ class GlobalExceptionHandlerWebMvcTest {
 
 	@Test
 	void validationException_shouldReturnApiErrorContract() throws Exception {
-		mockMvc.perform(post("/test-exceptions/validation").header("Accept-Language", "en").contentType(MediaType.APPLICATION_JSON).content("{}"))
+		mockMvc.perform(post("/test-exceptions/validation")
+						.header("Accept-Language", "en")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "",
+								  "termsAccepted": true
+								}
+								"""))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
 				.andExpect(jsonPath("$.message").value("Validation failed"))
 				.andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
@@ -100,7 +108,15 @@ class GlobalExceptionHandlerWebMvcTest {
 
 	@Test
 	void validationException_shouldResolvePolishMessageForAcceptLanguage() throws Exception {
-		mockMvc.perform(post("/test-exceptions/validation").header("Accept-Language", "pl").contentType(MediaType.APPLICATION_JSON).content("{}"))
+		mockMvc.perform(post("/test-exceptions/validation")
+						.header("Accept-Language", "pl")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name": "",
+								  "termsAccepted": true
+								}
+								"""))
 				.andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
 				.andExpect(jsonPath("$.message").value("Walidacja nie powiodła się"))
 				.andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));

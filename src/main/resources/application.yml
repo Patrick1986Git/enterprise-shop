@@ -29,8 +29,6 @@ spring:
   # JSON Processing (Jackson)
   # Standardized ISO-8601 date formatting for frontend compatibility.
   jackson:
-    serialization:
-      WRITE_DATES_AS_TIMESTAMPS: false
     time-zone: Europe/Warsaw
 
 # #############################################################################

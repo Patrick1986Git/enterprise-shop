@@ -12,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import org.springframework.context.annotation.Import;
@@ -25,7 +25,7 @@ import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.TestMeterRegistryConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(controllers = AuthController.class)
 @Import({ SecurityConfig.class, JwtAuthenticationFilter.class, TestMeterRegistryConfig.class, MessageService.class })
