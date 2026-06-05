@@ -23,7 +23,7 @@
 			<java.version>21</java.version>
 			<mapstruct.version>1.6.3</mapstruct.version>
 			<jjwt.version>0.13.0</jjwt.version>
-			<stripe.version>32.1.0</stripe.version>
+			<stripe.version>32.2.0</stripe.version>
 			<springdoc.version>3.0.3</springdoc.version>
 			<hibernate-processor.version>${hibernate.version}</hibernate-processor.version>
 			<argLine></argLine>
