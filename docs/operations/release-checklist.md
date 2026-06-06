@@ -1,21 +1,20 @@
-# Release checklist (lightweight, pre-merge)
+# Release checklist
 
-Use this checklist before merging a larger change into `master`.  
-Scope: current repository maturity only (no deployment/release automation assumptions).
+Use this lightweight checklist before merging larger changes into `master`.
 
-## 1) Branch and repository hygiene
+## 1) Repository hygiene
 
-- [ ] Branch is up to date with `master` (rebase or merge latest `master` intentionally).
-- [ ] `git status` is clean (no uncommitted or unintended files).
-- [ ] Commit history is reviewable (no accidental WIP/debug commits).
+- [ ] Branch is up to date with `master` or intentionally based on the expected target.
+- [ ] `git status` is clean except for intended changes before committing.
+- [ ] Commit history is reviewable and does not contain accidental debug/WIP commits.
 
-## 2) Build/runtime baseline (Wrapper + toolchain)
+## 2) Toolchain
 
-- [ ] Use Maven Wrapper (`./mvnw`), not a random local Maven binary.
 - [ ] Java 21 is used locally.
-- [ ] Enforcer rules pass (Java/Maven version constraints are validated in `validate` phase).
+- [ ] Maven Wrapper (`./mvnw`) is used for verification.
+- [ ] Enforcer/toolchain checks pass in the `validate` phase.
 
-## 3) Mandatory local verification
+## 3) Mandatory verification
 
 Run from repository root:
 
@@ -24,67 +23,43 @@ Run from repository root:
 ./mvnw clean verify
 ```
 
-Checklist:
-
 - [ ] `./mvnw -B validate` passes.
 - [ ] `./mvnw clean verify` passes.
-- [ ] No failing unit/integration tests introduced by the change.
+- [ ] GitHub Actions checks are green; CI uses `./mvnw -B clean verify`.
 
-## 4) CI and merge-readiness
+## 4) DB/Flyway safety when persistence changes
 
-- [ ] GitHub Actions checks are green for the branch/PR.
-- [ ] Required checks are completed before merge (do not merge on red/pending).
+- [ ] Schema changes are represented by a new migration under `src/main/resources/db/migration`.
+- [ ] Historical migrations were not edited.
+- [ ] Entity mappings and migrations remain aligned with Hibernate validation.
+- [ ] Relevant persistence/migration tests were added or updated.
 
-## 5) DB/Flyway safety (only when DB is touched)
+Mark this section N/A when persistence is not touched.
 
-If the change affects persistence (`entity`, repository logic, SQL assumptions, constraints):
+## 5) Security/configuration/secrets
 
-- [ ] New schema changes are in a new Flyway migration under `src/main/resources/db/migration`.
-- [ ] Existing historical migrations were not edited.
-- [ ] Entity mapping and migration changes are consistent (no schema drift).
-- [ ] `clean verify` covered migration startup path without errors.
+- [ ] No credentials, tokens, API keys, webhook secrets, or passwords were committed.
+- [ ] Authentication/authorization rules were not weakened unintentionally.
+- [ ] Production-required values remain externalized and explicit.
+- [ ] CSRF/CORS/webhook exposure changes, if any, were intentionally reviewed.
 
-If DB is not touched, mark as N/A.
+## 6) Docs consistency
 
-## 6) Security and secrets hygiene
+If API contracts, security behavior, database/migration behavior, observability, or local workflow changed:
 
-- [ ] No credentials, tokens, API keys, or secrets were committed.
-- [ ] No security configuration was weakened unintentionally.
-- [ ] Sensitive config values remain externalized (env/secret store), not hardcoded.
+- [ ] The corresponding `docs/` files were updated in the same PR.
+- [ ] Endpoint inventories, access rules, migration sequence, and metric names still match code/configuration.
 
-## 7) Profile/configuration safety
+## 7) Observability sanity check
 
-- [ ] `dev`, `test`, and `prod` profile behavior is still intentional.
-- [ ] No accidental production fallback defaults were introduced.
-- [ ] Production-required variables remain explicit (no silent insecure fallback).
-
-## 8) API / security / DB docs consistency
-
-If the change modifies API contracts, security behavior, or database/migration behavior:
-
-- [ ] Corresponding docs in `docs/` were updated in the same PR.
-- [ ] Error/validation semantics in docs are still accurate.
-
-If not applicable, mark as N/A.
-
-## 9) Observability regression sanity check
-
-- [ ] Request correlation is still present (`requestId` in MDC/log pattern).
-- [ ] No obvious logging/traceability regression was introduced by the change.
-
-## 10) Dependency update caution
-
-When PR is Dependabot-driven:
-
-- [ ] Review impact manually (security/runtime/test impact), do not auto-merge blindly.
-- [ ] Ensure full CI is green and relevant behavior is verified before merge.
-
----
+- [ ] `X-Request-Id` response behavior still works.
+- [ ] Logs still include `requestId=%X{requestId}`.
+- [ ] New metrics, if any, avoid high-cardinality tags and sensitive data.
 
 ## Suggested PR comment snippet
 
 ```text
-Release checklist: branch synced, workspace clean, validate+verify passed, CI green,
-DB/Flyway reviewed (or N/A), secrets check done, profile safety reviewed,
-docs updated where required, requestId/MDC check done.
+Release checklist: Java 21 + Maven Wrapper used, validate+verify passed,
+DB/Flyway reviewed (or N/A), security/secrets checked, docs updated where needed,
+request-id/observability sanity checked.
 ```
