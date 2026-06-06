@@ -60,6 +60,18 @@ public class Notification extends BaseEntity {
         return new Notification(type, recipient, subject, body, sourceEventId);
     }
 
+    public void markSent() {
+        this.status = NotificationStatus.SENT;
+        this.sentAt = Instant.now();
+        this.lastError = null;
+    }
+
+    public void markFailed(String errorMessage) {
+        this.status = NotificationStatus.FAILED;
+        this.lastError = errorMessage;
+        this.sentAt = null;
+    }
+
     public String getType() {
         return type;
     }
