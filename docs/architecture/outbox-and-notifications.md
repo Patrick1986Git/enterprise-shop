@@ -51,6 +51,17 @@ Failed outbox events are marked `FAILED`, increment attempts, and store `last_er
 
 Notification delivery is represented by a `NotificationSender` abstraction.
 
+- `NotificationDeliveryPoller` can periodically invoke `NotificationDeliveryProcessor` when `app.notification.delivery.enabled=true`.
 - `NotificationDeliveryProcessor` loads pending notifications in batches, calls `NotificationSender`, marks successful notifications `SENT`, and marks failed notifications `FAILED` with `last_error`.
-- `NoopNotificationSender` is the current sender implementation. It logs that delivery is skipped and does not call an external email/SMS provider.
-- There is currently no scheduled notification-delivery poller documented in production behavior; delivery is available as an internal processor component.
+- `NoopNotificationSender` is the default fallback sender. It logs that delivery is skipped and does not call an external email/SMS provider.
+- `SmtpNotificationSender` is an opt-in SMTP adapter. It is registered only when `app.notification.smtp.enabled=true`; SMTP connection details continue to use Spring Boot `spring.mail.*` properties.
+
+Example local SMTP notification configuration:
+
+```properties
+app.notification.delivery.enabled=true
+app.notification.smtp.enabled=true
+app.notification.smtp.from=no-reply@example.com
+spring.mail.host=localhost
+spring.mail.port=1025
+```
