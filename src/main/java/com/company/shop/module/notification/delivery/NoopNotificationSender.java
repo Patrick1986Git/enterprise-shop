@@ -2,11 +2,9 @@ package com.company.shop.module.notification.delivery;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import com.company.shop.module.notification.entity.Notification;
 
-@Component
 public class NoopNotificationSender implements NotificationSender {
 
     private static final Logger log = LoggerFactory.getLogger(NoopNotificationSender.class);
