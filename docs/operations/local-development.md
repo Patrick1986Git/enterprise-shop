@@ -1,66 +1,80 @@
 # Local development
 
 ## Prerequisites
-- Java 21
-- Maven
-- Docker + Docker Compose
 
-## 1) Start local PostgreSQL
-```bash
-docker compose up -d
-```
+- Java 21.
+- Maven Wrapper from this repository (`./mvnw` preferred).
+- Docker and Docker Compose for local PostgreSQL.
 
-This starts `enterprise-shop-db` on `localhost:5433` (mapped host port used by `application-dev.yml`).
+## Local PostgreSQL
 
-## 2) Prepare database user/permissions
-Run the SQL bootstrap script as a PostgreSQL superuser:
+Start the database from the repository root:
 
 ```bash
-psql -h localhost -U postgres -d postgres -f scripts/db-setup.sql
+docker compose up -d postgres
 ```
 
-For details about what the script creates and when to run it, see [database.md](./database.md#local-bootstrap-script).
+Docker Compose exposes PostgreSQL as:
 
-## 3) Run the application
+| Setting | Value |
+| --- | --- |
+| Host | `localhost` |
+| Port | `5433` |
+| Database | `enterprise_shop_dev` |
+| Username | `postgres` |
+| Password | `postgres` |
+
+The `dev` profile uses `jdbc:postgresql://localhost:5433/enterprise_shop_dev`, Flyway migrations, and Hibernate schema validation.
+
+## Configuration
+
+The default active profile is `dev` in `application.yml`.
+
+Required for real payment/webhook flows:
+
+| Variable | Purpose | Local fallback |
+| --- | --- | --- |
+| `JWT_SECRET` | JWT signing secret. | Development-only secret in `application-dev.yml`. |
+| `STRIPE_SECRET_KEY` | Stripe server API key. | `sk_test_placeholder`. |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature secret. | `whsec_placeholder`. |
+| `STRIPE_PUBLIC_KEY` | Stripe publishable key returned with payment intent data. | `pk_test_placeholder`. |
+
+Production profile database variables are explicit: `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and `JWT_SECRET`.
+
+## Build and run
+
+Validate the toolchain and compile/test baseline:
+
+```bash
+./mvnw -B validate
+./mvnw test
+```
+
+Run the application locally:
+
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Default active profile is `dev` (from `application.yml`).
+The app listens on `http://localhost:8080` by default.
 
-## 4) Validate startup
-- Root probe: `GET http://localhost:8080/api/v1`
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI JSON: `http://localhost:8080/api-docs`
+## Useful local URLs
 
-## Important environment variables
-- `JWT_SECRET` *(optional in local dev; if missing, app uses explicit dev-only fallback from `application-dev.yml`)*
-- `STRIPE_SECRET_KEY` *(optional in local dev; defaults to placeholder value from `application.yml`)*
-- `STRIPE_WEBHOOK_SECRET` *(optional in local dev; defaults to placeholder value from `application.yml`)*
-- `STRIPE_PUBLIC_KEY` *(optional in local dev; defaults to placeholder value from `application.yml`)*
+| URL | Access | Purpose |
+| --- | --- | --- |
+| `http://localhost:8080/api/v1` | Public | Root API probe. |
+| `http://localhost:8080/swagger-ui.html` | Authenticated unless covered by SpringDoc redirect/resource handling | Swagger UI configured path; `/swagger-ui/**` is the explicit public matcher. |
+| `http://localhost:8080/swagger-ui/index.html` | Public | Swagger UI runtime path shown on startup. |
+| `http://localhost:8080/api-docs` | Public | OpenAPI JSON. |
+| `http://localhost:8080/actuator/health` | Public | Health smoke check. |
+| `http://localhost:8080/actuator/prometheus` | Admin | Prometheus metrics endpoint. |
 
-For production profile (`prod`), `JWT_SECRET`, `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` are required and have no defaults.
+## Smoke checks
 
-## 5) Recommended local verification
 ```bash
-./mvnw clean verify
+curl -i http://localhost:8080/api/v1
+curl -i http://localhost:8080/actuator/health
+curl -i -H "X-Request-Id: local-smoke" http://localhost:8080/api/v1/products
 ```
 
-## Editor configuration baseline
-This repository uses a root [`.editorconfig`](../../.editorconfig) as a lightweight, non-invasive baseline for line endings, encoding, and indentation defaults across editors.
-
-## Observability (baseline)
-- Actuator endpoints exposed in this project:
-  - `GET /actuator/health` (public, no JWT)
-  - `GET /actuator/info` (requires `ROLE_ADMIN`)
-  - `GET /actuator/metrics` (requires `ROLE_ADMIN`)
-- Request correlation header:
-  - Send `X-Request-Id` to propagate your request identifier.
-  - If header is missing or invalid, server generates UUID and returns it in response header `X-Request-Id`.
-  - `X-Request-Id` is an exposed CORS response header for frontend clients.
-- Logs include correlation id in pattern as `requestId=%X{requestId}`.
-- Sensitive data policy:
-  - do not log JWT tokens
-  - do not log passwords
-  - do not log card data or secrets
-  - request/response body logging is intentionally disabled
+For admin actuator checks, authenticate as an admin user and pass `Authorization: Bearer <admin-token>`.
