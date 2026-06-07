@@ -13,12 +13,15 @@ public class NotificationDeliveryProcessor {
 
     private final NotificationRepository notificationRepository;
     private final NotificationSender notificationSender;
+    private final NotificationDeliveryProperties properties;
 
     public NotificationDeliveryProcessor(
             NotificationRepository notificationRepository,
-            NotificationSender notificationSender) {
+            NotificationSender notificationSender,
+            NotificationDeliveryProperties properties) {
         this.notificationRepository = notificationRepository;
         this.notificationSender = notificationSender;
+        this.properties = properties;
     }
 
     @Transactional
@@ -33,7 +36,7 @@ public class NotificationDeliveryProcessor {
                 notification.markSent();
                 sentCount++;
             } catch (Exception ex) {
-                notification.markFailed(errorMessage(ex));
+                notification.markDeliveryAttemptFailed(errorMessage(ex), properties.maxAttempts());
                 failedCount++;
             }
         }

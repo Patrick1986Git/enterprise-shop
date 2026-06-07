@@ -40,6 +40,9 @@ public class Notification extends BaseEntity {
     @Column(name = "sent_at")
     private Instant sentAt;
 
+    @Column(name = "attempts", nullable = false)
+    private int attempts;
+
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
@@ -54,6 +57,7 @@ public class Notification extends BaseEntity {
         this.status = NotificationStatus.PENDING;
         this.sourceEventId = sourceEventId;
         this.createdAt = Instant.now();
+        this.attempts = 0;
     }
 
     public static Notification pending(String type, String recipient, String subject, String body, UUID sourceEventId) {
@@ -70,6 +74,17 @@ public class Notification extends BaseEntity {
         this.status = NotificationStatus.FAILED;
         this.lastError = errorMessage;
         this.sentAt = null;
+    }
+
+    public void markDeliveryAttemptFailed(String errorMessage, int maxAttempts) {
+        this.attempts += 1;
+        this.lastError = errorMessage;
+        this.sentAt = null;
+        if (this.attempts >= maxAttempts) {
+            this.status = NotificationStatus.FAILED;
+        } else {
+            this.status = NotificationStatus.PENDING;
+        }
     }
 
     public String getType() {
@@ -102,6 +117,10 @@ public class Notification extends BaseEntity {
 
     public Instant getSentAt() {
         return sentAt;
+    }
+
+    public int getAttempts() {
+        return attempts;
     }
 
     public String getLastError() {

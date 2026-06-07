@@ -10,6 +10,7 @@ public class NotificationDeliveryProperties {
     private boolean enabled = false;
     private int batchSize = 25;
     private Duration fixedDelay = Duration.ofSeconds(10);
+    private int maxAttempts = 3;
 
     public boolean enabled() {
         return enabled;
@@ -23,6 +24,10 @@ public class NotificationDeliveryProperties {
         return fixedDelay;
     }
 
+    public int maxAttempts() {
+        return maxAttempts;
+    }
+
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
@@ -33,5 +38,9 @@ public class NotificationDeliveryProperties {
 
     public void setFixedDelay(Duration fixedDelay) {
         this.fixedDelay = fixedDelay;
+    }
+
+    public void setMaxAttempts(int maxAttempts) {
+        this.maxAttempts = maxAttempts;
     }
 }
