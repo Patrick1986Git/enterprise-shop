@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,6 +42,10 @@ class NotificationDeliveryProcessorTest {
     @Test
     void processPendingBatch_shouldSendPendingNotificationAndMarkItSent() {
         Notification notification = pendingNotification();
+        notification.markDeliveryAttemptFailed(
+                "temporary failure",
+                properties.maxAttempts(),
+                Instant.now().minusSeconds(60));
         when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
@@ -50,8 +55,9 @@ class NotificationDeliveryProcessorTest {
         assertThat(result.failedCount()).isZero();
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         assertThat(notification.getSentAt()).isNotNull();
-        assertThat(notification.getAttempts()).isZero();
+        assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isNull();
+        assertThat(notification.getNextAttemptAt()).isNull();
     }
 
     @Test
@@ -59,6 +65,7 @@ class NotificationDeliveryProcessorTest {
         Notification notification = pendingNotification();
         when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
         doThrow(new IllegalStateException("sender failed")).when(notificationSender).send(notification);
+        Instant beforeProcessing = Instant.now();
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
 
@@ -68,13 +75,17 @@ class NotificationDeliveryProcessorTest {
         assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isEqualTo("sender failed");
         assertThat(notification.getSentAt()).isNull();
+        assertThat(notification.getNextAttemptAt()).isAfter(beforeProcessing);
     }
 
     @Test
     void processPendingBatch_shouldMarkNotificationFailedWhenSenderThrowsAndAttemptsReachMaxAttempts() {
         properties.setMaxAttempts(2);
         Notification notification = pendingNotification();
-        notification.markDeliveryAttemptFailed("first temporary failure", properties.maxAttempts());
+        notification.markDeliveryAttemptFailed(
+                "first temporary failure",
+                properties.maxAttempts(),
+                Instant.now().plusSeconds(60));
         when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
         doThrow(new IllegalStateException("sender failed")).when(notificationSender).send(notification);
 
@@ -86,6 +97,7 @@ class NotificationDeliveryProcessorTest {
         assertThat(notification.getAttempts()).isEqualTo(2);
         assertThat(notification.getLastError()).isEqualTo("sender failed");
         assertThat(notification.getSentAt()).isNull();
+        assertThat(notification.getNextAttemptAt()).isNull();
     }
 
     @Test

@@ -11,6 +11,7 @@ public class NotificationDeliveryProperties {
     private int batchSize = 25;
     private Duration fixedDelay = Duration.ofSeconds(10);
     private int maxAttempts = 3;
+    private Duration retryDelay = Duration.ofMinutes(1);
 
     public boolean enabled() {
         return enabled;
@@ -28,6 +29,10 @@ public class NotificationDeliveryProperties {
         return maxAttempts;
     }
 
+    public Duration retryDelay() {
+        return retryDelay;
+    }
+
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
@@ -42,5 +47,9 @@ public class NotificationDeliveryProperties {
 
     public void setMaxAttempts(int maxAttempts) {
         this.maxAttempts = maxAttempts;
+    }
+
+    public void setRetryDelay(Duration retryDelay) {
+        this.retryDelay = retryDelay;
     }
 }

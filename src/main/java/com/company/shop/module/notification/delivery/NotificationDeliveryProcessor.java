@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.delivery;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.stereotype.Component;
@@ -36,7 +37,8 @@ public class NotificationDeliveryProcessor {
                 notification.markSent();
                 sentCount++;
             } catch (Exception ex) {
-                notification.markDeliveryAttemptFailed(errorMessage(ex), properties.maxAttempts());
+                Instant nextAttemptAt = Instant.now().plus(properties.retryDelay());
+                notification.markDeliveryAttemptFailed(errorMessage(ex), properties.maxAttempts(), nextAttemptAt);
                 failedCount++;
             }
         }

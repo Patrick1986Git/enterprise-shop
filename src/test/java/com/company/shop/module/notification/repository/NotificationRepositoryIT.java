@@ -60,28 +60,50 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(savedNotification.getSentAt()).isNull();
         assertThat(savedNotification.getAttempts()).isZero();
         assertThat(savedNotification.getLastError()).isNull();
+        assertThat(savedNotification.getNextAttemptAt()).isNull();
     }
 
     @Test
-    void findPendingBatchForUpdate_shouldReturnPendingNotificationsOrderedByCreatedAt() {
-        UUID earliestPendingId = UUID.randomUUID();
+    void findPendingBatchForUpdate_shouldReturnOnlyDuePendingNotificationsInDeterministicOrder() {
+        UUID pendingWithoutNextAttemptId = UUID.randomUUID();
         UUID sentId = UUID.randomUUID();
-        UUID latestPendingId = UUID.randomUUID();
+        UUID pendingFutureAttemptId = UUID.randomUUID();
         UUID failedId = UUID.randomUUID();
-        UUID middlePendingId = UUID.randomUUID();
+        UUID pendingPastAttemptId = UUID.randomUUID();
+        Instant now = Instant.now();
 
-        insertNotification(earliestPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"));
-        insertNotification(sentId, NotificationStatus.SENT, Instant.parse("2026-01-01T10:01:00Z"));
-        insertNotification(latestPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:04:00Z"));
-        insertNotification(failedId, NotificationStatus.FAILED, Instant.parse("2026-01-01T10:02:00Z"));
-        insertNotification(middlePendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:03:00Z"));
+        insertNotification(
+                pendingWithoutNextAttemptId,
+                NotificationStatus.PENDING,
+                Instant.parse("2026-01-01T10:00:00Z"),
+                null);
+        insertNotification(
+                sentId,
+                NotificationStatus.SENT,
+                Instant.parse("2026-01-01T10:01:00Z"),
+                null);
+        insertNotification(
+                pendingFutureAttemptId,
+                NotificationStatus.PENDING,
+                Instant.parse("2026-01-01T10:02:00Z"),
+                now.plusSeconds(3600));
+        insertNotification(
+                failedId,
+                NotificationStatus.FAILED,
+                Instant.parse("2026-01-01T10:03:00Z"),
+                null);
+        insertNotification(
+                pendingPastAttemptId,
+                NotificationStatus.PENDING,
+                Instant.parse("2026-01-01T10:04:00Z"),
+                now.minusSeconds(3600));
 
         List<Notification> pendingNotifications = notificationRepository.findPendingBatchForUpdate(10);
 
         assertThat(pendingNotifications)
                 .extracting(Notification::getId)
-                .containsExactly(earliestPendingId, middlePendingId, latestPendingId)
-                .doesNotContain(sentId, failedId);
+                .containsExactly(pendingWithoutNextAttemptId, pendingPastAttemptId)
+                .doesNotContain(sentId, failedId, pendingFutureAttemptId);
         assertThat(pendingNotifications)
                 .extracting(Notification::getStatus)
                 .containsOnly(NotificationStatus.PENDING);
@@ -92,8 +114,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         UUID firstPendingId = UUID.randomUUID();
         UUID secondPendingId = UUID.randomUUID();
 
-        insertNotification(firstPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"));
-        insertNotification(secondPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:01:00Z"));
+        insertNotification(firstPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"), null);
+        insertNotification(secondPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:01:00Z"), null);
 
         List<Notification> pendingNotifications = notificationRepository.findPendingBatchForUpdate(1);
 
@@ -103,7 +125,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void insert_shouldUseDatabaseDefaultsForStatusAndCreatedAt() {
+    void insert_shouldUseDatabaseDefaultsForStatusCreatedAtAttemptsAndNextAttemptAt() {
         UUID notificationId = UUID.randomUUID();
 
         jdbcTemplate.update("""
@@ -117,24 +139,29 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.");
 
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
-                "SELECT status, created_at, sent_at, attempts, last_error FROM notifications WHERE id = ?",
+                "SELECT status, created_at, sent_at, attempts, last_error, next_attempt_at FROM notifications WHERE id = ?",
                 notificationId);
 
         assertThat(defaults)
                 .containsEntry("status", NotificationStatus.PENDING.name())
                 .containsEntry("sent_at", null)
                 .containsEntry("attempts", 0)
-                .containsEntry("last_error", null);
+                .containsEntry("last_error", null)
+                .containsEntry("next_attempt_at", null);
         assertThat(defaults.get("created_at")).isNotNull();
     }
 
-    private void insertNotification(UUID notificationId, NotificationStatus status, Instant createdAt) {
+    private void insertNotification(
+            UUID notificationId,
+            NotificationStatus status,
+            Instant createdAt,
+            Instant nextAttemptAt) {
         jdbcTemplate.update(connection -> {
             PreparedStatement statement = connection.prepareStatement("""
                     INSERT INTO notifications (
-                        id, type, recipient, subject, body, status, created_at, sent_at, last_error
+                        id, type, recipient, subject, body, status, created_at, sent_at, last_error, next_attempt_at
                     ) VALUES (
-                        ?, ?, ?, ?, ?, ?, CAST(? AS timestamptz), CAST(? AS timestamptz), ?
+                        ?, ?, ?, ?, ?, ?, CAST(? AS timestamptz), CAST(? AS timestamptz), ?, CAST(? AS timestamptz)
                     )
                     """);
             statement.setObject(1, notificationId);
@@ -146,6 +173,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             statement.setString(7, createdAt.toString());
             statement.setString(8, status == NotificationStatus.SENT ? createdAt.plusSeconds(60).toString() : null);
             statement.setString(9, status == NotificationStatus.FAILED ? "delivery failed" : null);
+            statement.setString(10, nextAttemptAt == null ? null : nextAttemptAt.toString());
             return statement;
         });
     }
