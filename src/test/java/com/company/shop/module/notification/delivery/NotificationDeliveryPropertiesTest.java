@@ -22,6 +22,7 @@ class NotificationDeliveryPropertiesTest {
             assertThat(properties.enabled()).isFalse();
             assertThat(properties.batchSize()).isEqualTo(25);
             assertThat(properties.fixedDelay()).isEqualTo(Duration.ofSeconds(10));
+            assertThat(properties.maxAttempts()).isEqualTo(3);
         });
     }
 
@@ -31,13 +32,15 @@ class NotificationDeliveryPropertiesTest {
                 .withPropertyValues(
                         "app.notification.delivery.enabled=true",
                         "app.notification.delivery.batch-size=9",
-                        "app.notification.delivery.fixed-delay=PT5S")
+                        "app.notification.delivery.fixed-delay=PT5S",
+                        "app.notification.delivery.max-attempts=5")
                 .run(context -> {
                     NotificationDeliveryProperties properties = context.getBean(NotificationDeliveryProperties.class);
 
                     assertThat(properties.enabled()).isTrue();
                     assertThat(properties.batchSize()).isEqualTo(9);
                     assertThat(properties.fixedDelay()).isEqualTo(Duration.ofSeconds(5));
+                    assertThat(properties.maxAttempts()).isEqualTo(5);
                 });
     }
 

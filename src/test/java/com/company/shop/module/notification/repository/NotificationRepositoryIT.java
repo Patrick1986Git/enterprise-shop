@@ -58,6 +58,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(savedNotification.getSourceEventId()).isEqualTo(sourceEventId);
         assertThat(savedNotification.getCreatedAt()).isNotNull();
         assertThat(savedNotification.getSentAt()).isNull();
+        assertThat(savedNotification.getAttempts()).isZero();
         assertThat(savedNotification.getLastError()).isNull();
     }
 
@@ -116,12 +117,13 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.");
 
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
-                "SELECT status, created_at, sent_at, last_error FROM notifications WHERE id = ?",
+                "SELECT status, created_at, sent_at, attempts, last_error FROM notifications WHERE id = ?",
                 notificationId);
 
         assertThat(defaults)
                 .containsEntry("status", NotificationStatus.PENDING.name())
                 .containsEntry("sent_at", null)
+                .containsEntry("attempts", 0)
                 .containsEntry("last_error", null);
         assertThat(defaults.get("created_at")).isNotNull();
     }
