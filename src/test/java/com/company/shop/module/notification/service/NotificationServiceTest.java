@@ -2,10 +2,12 @@ package com.company.shop.module.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ class NotificationServiceTest {
         UUID orderId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
         ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
+        when(notificationRepository.findBySourceEventId(sourceEventId)).thenReturn(Optional.empty());
         when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Notification notification = service.createOrderPlacedNotification(
@@ -48,5 +51,28 @@ class NotificationServiceTest {
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getSourceEventId()).isEqualTo(sourceEventId);
         assertThat(notification.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void createOrderPlacedNotification_shouldReturnExistingNotificationWhenSourceEventIdAlreadyExists() {
+        NotificationService service = new NotificationService(notificationRepository);
+        UUID orderId = UUID.randomUUID();
+        UUID sourceEventId = UUID.randomUUID();
+        Notification existingNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed: " + orderId,
+                "Your order has been placed.",
+                sourceEventId);
+        when(notificationRepository.findBySourceEventId(sourceEventId)).thenReturn(Optional.of(existingNotification));
+
+        Notification notification = service.createOrderPlacedNotification(
+                orderId,
+                "customer@example.com",
+                new BigDecimal("42.50"),
+                sourceEventId);
+
+        assertThat(notification).isSameAs(existingNotification);
+        verify(notificationRepository, never()).save(any(Notification.class));
     }
 }

@@ -26,6 +26,23 @@ public class NotificationService {
             String userEmail,
             BigDecimal totalAmount,
             UUID sourceEventId) {
+        if (sourceEventId != null) {
+            return notificationRepository.findBySourceEventId(sourceEventId)
+                    .orElseGet(() -> createAndSaveOrderPlacedNotification(
+                            orderId,
+                            userEmail,
+                            totalAmount,
+                            sourceEventId));
+        }
+
+        return createAndSaveOrderPlacedNotification(orderId, userEmail, totalAmount, null);
+    }
+
+    private Notification createAndSaveOrderPlacedNotification(
+            UUID orderId,
+            String userEmail,
+            BigDecimal totalAmount,
+            UUID sourceEventId) {
         String subject = "Order placed: " + orderId;
         String body = "Your order " + orderId + " has been placed. Total amount: " + totalAmount + ".";
 
