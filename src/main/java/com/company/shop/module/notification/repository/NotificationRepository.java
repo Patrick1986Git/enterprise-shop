@@ -15,7 +15,10 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             SELECT *
             FROM notifications
             WHERE status = 'PENDING'
-            ORDER BY created_at ASC
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
+            ORDER BY
+              COALESCE(next_attempt_at, created_at) ASC,
+              created_at ASC
             LIMIT :batchSize
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
