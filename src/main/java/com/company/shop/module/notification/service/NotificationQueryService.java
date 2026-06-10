@@ -12,6 +12,7 @@ import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
+import com.company.shop.module.notification.repository.NotificationSpecifications;
 
 @Service
 public class NotificationQueryService {
@@ -37,10 +38,8 @@ public class NotificationQueryService {
             String type,
             String recipient,
             Pageable pageable) {
-        return notificationRepository.findAllForAdmin(
-                status,
-                normalize(type),
-                normalize(recipient),
+        return notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(status, normalize(type), normalize(recipient)),
                 pageable)
                 .map(notificationMapper::toDto);
     }

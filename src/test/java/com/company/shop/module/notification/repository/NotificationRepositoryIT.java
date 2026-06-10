@@ -188,7 +188,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void findAllForAdmin_shouldFilterByStatus() {
+    void findAllWithAdminFilters_shouldFilterByStatusWhenRecipientIsNull() {
         Notification pendingNotification = notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "pending@example.com",
@@ -204,10 +204,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         sentNotification.markSent();
         notificationRepository.saveAndFlush(sentNotification);
 
-        List<Notification> notifications = notificationRepository.findAllForAdmin(
-                NotificationStatus.PENDING,
-                null,
-                null,
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationStatus.PENDING, null, null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -216,7 +214,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void findAllForAdmin_shouldFilterByType() {
+    void findAllWithAdminFilters_shouldFilterByTypeWhenRecipientIsNull() {
         Notification orderNotification = notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "customer@example.com",
@@ -230,10 +228,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Reset your password.",
                 UUID.randomUUID()));
 
-        List<Notification> notifications = notificationRepository.findAllForAdmin(
-                null,
-                "ORDER_PLACED_EMAIL",
-                null,
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, "ORDER_PLACED_EMAIL", null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -242,7 +238,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void findAllForAdmin_shouldFilterByRecipientContainsIgnoreCase() {
+    void findAllWithAdminFilters_shouldFilterByRecipientContainsIgnoreCase() {
         Notification customerNotification = notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "Important.Customer@example.com",
@@ -256,10 +252,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.",
                 UUID.randomUUID()));
 
-        List<Notification> notifications = notificationRepository.findAllForAdmin(
-                null,
-                null,
-                "CUSTOMER",
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, "CUSTOMER"),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)

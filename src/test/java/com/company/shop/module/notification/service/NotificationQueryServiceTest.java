@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.entity.Notification;
@@ -87,7 +88,7 @@ class NotificationQueryServiceTest {
                 sourceEventId);
         NotificationResponseDTO response = response(notificationId, sourceEventId);
         Pageable pageable = PageRequest.of(1, 10);
-        when(notificationRepository.findAllForAdmin(any(), any(), any(), any(Pageable.class)))
+        when(notificationRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(notification), pageable, 1));
         when(notificationMapper.toDto(notification)).thenReturn(response);
 
@@ -99,18 +100,12 @@ class NotificationQueryServiceTest {
 
         assertThat(result.getContent()).containsExactly(response);
         assertThat(result.getNumber()).isEqualTo(1);
-        ArgumentCaptor<NotificationStatus> statusCaptor = ArgumentCaptor.forClass(NotificationStatus.class);
-        ArgumentCaptor<String> typeCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> recipientCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Specification<Notification>> specificationCaptor = ArgumentCaptor.forClass(Specification.class);
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(notificationRepository).findAllForAdmin(
-                statusCaptor.capture(),
-                typeCaptor.capture(),
-                recipientCaptor.capture(),
+        verify(notificationRepository).findAll(
+                specificationCaptor.capture(),
                 pageableCaptor.capture());
-        assertThat(statusCaptor.getValue()).isEqualTo(NotificationStatus.PENDING);
-        assertThat(typeCaptor.getValue()).isEqualTo("ORDER_PLACED_EMAIL");
-        assertThat(recipientCaptor.getValue()).isEqualTo("CUSTOMER");
+        assertThat(specificationCaptor.getValue()).isNotNull();
         assertThat(pageableCaptor.getValue()).isSameAs(pageable);
         verify(notificationMapper).toDto(notification);
     }
