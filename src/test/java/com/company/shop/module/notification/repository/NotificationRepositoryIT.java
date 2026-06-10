@@ -1,6 +1,7 @@
 package com.company.shop.module.notification.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.PreparedStatement;
 import java.time.Instant;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -61,6 +63,66 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(savedNotification.getAttempts()).isZero();
         assertThat(savedNotification.getLastError()).isNull();
         assertThat(savedNotification.getNextAttemptAt()).isNull();
+    }
+
+    @Test
+    void findBySourceEventId_shouldReturnNotificationWhenExists() {
+        UUID sourceEventId = UUID.randomUUID();
+        Notification notification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed: " + sourceEventId,
+                "Your order has been placed.",
+                sourceEventId);
+        Notification savedNotification = notificationRepository.saveAndFlush(notification);
+
+        assertThat(notificationRepository.findBySourceEventId(sourceEventId))
+                .contains(savedNotification);
+    }
+
+    @Test
+    void saveAndFlush_shouldRejectDuplicateNonNullSourceEventId() {
+        UUID sourceEventId = UUID.randomUUID();
+        Notification firstNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                sourceEventId);
+        Notification duplicateNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed again",
+                "Your order has been placed again.",
+                sourceEventId);
+        notificationRepository.saveAndFlush(firstNotification);
+
+        assertThatThrownBy(() -> notificationRepository.saveAndFlush(duplicateNotification))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void saveAndFlush_shouldAllowMultipleNullSourceEventIds() {
+        Notification firstNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer-one@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                null);
+        Notification secondNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer-two@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                null);
+
+        Notification firstSavedNotification = notificationRepository.saveAndFlush(firstNotification);
+        Notification secondSavedNotification = notificationRepository.saveAndFlush(secondNotification);
+
+        assertThat(firstSavedNotification.getId()).isNotNull();
+        assertThat(secondSavedNotification.getId()).isNotNull();
+        assertThat(firstSavedNotification.getSourceEventId()).isNull();
+        assertThat(secondSavedNotification.getSourceEventId()).isNull();
     }
 
     @Test
