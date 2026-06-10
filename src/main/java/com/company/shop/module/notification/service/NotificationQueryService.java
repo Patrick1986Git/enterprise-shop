@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.service;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
+import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
@@ -30,6 +32,17 @@ public class NotificationQueryService {
         return notificationRepository.findById(id)
                 .map(notificationMapper::toDto)
                 .orElseThrow(() -> new NotificationNotFoundException(id));
+    }
+
+    @Transactional(readOnly = true)
+    public NotificationSummaryDTO getSummary() {
+        Instant now = Instant.now();
+        return new NotificationSummaryDTO(
+                notificationRepository.countByStatus(NotificationStatus.PENDING),
+                notificationRepository.countByStatus(NotificationStatus.SENT),
+                notificationRepository.countByStatus(NotificationStatus.FAILED),
+                notificationRepository.countDuePending(now),
+                notificationRepository.countScheduledPending(now));
     }
 
     @Transactional(readOnly = true)

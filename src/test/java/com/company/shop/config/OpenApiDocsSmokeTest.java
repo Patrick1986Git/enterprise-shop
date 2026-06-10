@@ -172,7 +172,8 @@ class OpenApiDocsSmokeTest {
                         "/api/v1/products",
                         "/api/v1/me",
                         "/api/v1/webhooks/stripe",
-                        "/api/v1/admin/notifications");
+                        "/api/v1/admin/notifications",
+                        "/api/v1/admin/notifications/summary");
 
         assertThat(pathKeys)
                 .as("Generated OpenAPI path keys: %s", pathKeys)

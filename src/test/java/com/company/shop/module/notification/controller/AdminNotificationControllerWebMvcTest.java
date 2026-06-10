@@ -33,6 +33,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
+import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.service.NotificationQueryService;
@@ -139,6 +140,42 @@ class AdminNotificationControllerWebMvcTest {
         assertThat(pageable.getPageSize()).isEqualTo(5);
         assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
         assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getSummary_shouldReturnForbiddenForAnonymous() throws Exception {
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/summary"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationQueryService);
+    }
+
+    @Test
+    void getSummary_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/summary")
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationQueryService);
+    }
+
+    @Test
+    void getSummary_shouldReturnSummaryForAdmin() throws Exception {
+        when(notificationQueryService.getSummary())
+                .thenReturn(new NotificationSummaryDTO(3, 5, 7, 2, 1));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/summary")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.pendingCount").value(3))
+                .andExpect(jsonPath("$.sentCount").value(5))
+                .andExpect(jsonPath("$.failedCount").value(7))
+                .andExpect(jsonPath("$.duePendingCount").value(2))
+                .andExpect(jsonPath("$.scheduledPendingCount").value(1));
+
+        verify(notificationQueryService).getSummary();
+        verifyNoMoreInteractions(notificationQueryService);
     }
 
     @Test

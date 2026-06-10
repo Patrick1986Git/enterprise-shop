@@ -173,6 +173,62 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void countDuePending_shouldCountOnlyPendingNotificationsDueNow() {
+        Instant now = Instant.now();
+        UUID pendingWithoutNextAttemptId = UUID.randomUUID();
+        UUID pendingPastAttemptId = UUID.randomUUID();
+        UUID pendingFutureAttemptId = UUID.randomUUID();
+        UUID sentId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+
+        insertNotification(pendingWithoutNextAttemptId, NotificationStatus.PENDING, now.minusSeconds(300), null);
+        insertNotification(
+                pendingPastAttemptId,
+                NotificationStatus.PENDING,
+                now.minusSeconds(240),
+                now.minusSeconds(60));
+        insertNotification(
+                pendingFutureAttemptId,
+                NotificationStatus.PENDING,
+                now.minusSeconds(180),
+                now.plusSeconds(60));
+        insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), null);
+        insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), null);
+
+        long duePendingCount = notificationRepository.countDuePending(now);
+
+        assertThat(duePendingCount).isEqualTo(2L);
+    }
+
+    @Test
+    void countScheduledPending_shouldCountOnlyPendingNotificationsScheduledForFutureRetry() {
+        Instant now = Instant.now();
+        UUID pendingFutureAttemptId = UUID.randomUUID();
+        UUID pendingWithoutNextAttemptId = UUID.randomUUID();
+        UUID pendingPastAttemptId = UUID.randomUUID();
+        UUID sentId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+
+        insertNotification(
+                pendingFutureAttemptId,
+                NotificationStatus.PENDING,
+                now.minusSeconds(300),
+                now.plusSeconds(60));
+        insertNotification(pendingWithoutNextAttemptId, NotificationStatus.PENDING, now.minusSeconds(240), null);
+        insertNotification(
+                pendingPastAttemptId,
+                NotificationStatus.PENDING,
+                now.minusSeconds(180),
+                now.minusSeconds(60));
+        insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), now.plusSeconds(60));
+        insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), now.plusSeconds(60));
+
+        long scheduledPendingCount = notificationRepository.countScheduledPending(now);
+
+        assertThat(scheduledPendingCount).isEqualTo(1L);
+    }
+
+    @Test
     void findPendingBatchForUpdate_shouldRespectBatchSize() {
         UUID firstPendingId = UUID.randomUUID();
         UUID secondPendingId = UUID.randomUUID();
