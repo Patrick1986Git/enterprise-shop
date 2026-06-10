@@ -26,6 +26,7 @@ import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.module.notification.delivery.NotificationDeliveryProcessor;
 import com.company.shop.module.notification.outbox.OrderPlacedNotificationHandler;
+import com.company.shop.module.notification.service.NotificationQueryService;
 import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.service.OrderService;
@@ -107,6 +108,9 @@ class OpenApiDocsSmokeTest {
     private NotificationService notificationService;
 
     @MockitoBean
+    private NotificationQueryService notificationQueryService;
+
+    @MockitoBean
     private OrderPlacedNotificationHandler orderPlacedNotificationHandler;
 
     @MockitoBean
@@ -167,7 +171,8 @@ class OpenApiDocsSmokeTest {
                         "/api/v1/auth/login",
                         "/api/v1/products",
                         "/api/v1/me",
-                        "/api/v1/webhooks/stripe");
+                        "/api/v1/webhooks/stripe",
+                        "/api/v1/admin/notifications");
 
         assertThat(pathKeys)
                 .as("Generated OpenAPI path keys: %s", pathKeys)
