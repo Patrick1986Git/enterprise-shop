@@ -16,6 +16,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -184,6 +185,86 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(pendingNotifications)
                 .extracting(Notification::getId)
                 .containsExactly(firstPendingId);
+    }
+
+    @Test
+    void findAllForAdmin_shouldFilterByStatus() {
+        Notification pendingNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "pending@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+        Notification sentNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "sent@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        sentNotification.markSent();
+        notificationRepository.saveAndFlush(sentNotification);
+
+        List<Notification> notifications = notificationRepository.findAllForAdmin(
+                NotificationStatus.PENDING,
+                null,
+                null,
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(pendingNotification.getId());
+    }
+
+    @Test
+    void findAllForAdmin_shouldFilterByType() {
+        Notification orderNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "PASSWORD_RESET_EMAIL",
+                "customer@example.com",
+                "Password reset",
+                "Reset your password.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAllForAdmin(
+                null,
+                "ORDER_PLACED_EMAIL",
+                null,
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(orderNotification.getId());
+    }
+
+    @Test
+    void findAllForAdmin_shouldFilterByRecipientContainsIgnoreCase() {
+        Notification customerNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "other@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAllForAdmin(
+                null,
+                null,
+                "CUSTOMER",
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(customerNotification.getId());
     }
 
     @Test
