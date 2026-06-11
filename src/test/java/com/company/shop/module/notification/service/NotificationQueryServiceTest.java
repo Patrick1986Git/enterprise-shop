@@ -150,6 +150,8 @@ class NotificationQueryServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 0,
+                0,
+                null,
                 null,
                 null,
                 null);

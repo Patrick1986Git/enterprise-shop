@@ -52,6 +52,7 @@ class AdminNotificationControllerWebMvcTest {
 
     private static final String ADMIN_NOTIFICATIONS_URL = "/api/v1/admin/notifications";
     private static final Instant LAST_ATTEMPT_AT = Instant.parse("2026-01-01T10:05:00Z");
+    private static final Instant LAST_REQUEUED_AT = Instant.parse("2026-01-01T10:10:00Z");
 
     @Autowired
     private MockMvc mockMvc;
@@ -112,6 +113,8 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].status").value("PENDING"))
                 .andExpect(jsonPath("$.content[0].sourceEventId").value("22222222-2222-2222-2222-222222222222"))
                 .andExpect(jsonPath("$.content[0].attempts").value(0))
+                .andExpect(jsonPath("$.content[0].requeueCount").value(1))
+                .andExpect(jsonPath("$.content[0].lastRequeuedAt").value("2026-01-01T10:10:00Z"))
                 .andExpect(jsonPath("$.content[0].lastAttemptAt").value("2026-01-01T10:05:00Z"))
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
@@ -216,7 +219,10 @@ class AdminNotificationControllerWebMvcTest {
         NotificationResponseDTO response = response(
                 notificationId,
                 UUID.fromString("22222222-2222-2222-2222-222222222222"),
-                NotificationStatus.PENDING);
+                NotificationStatus.PENDING,
+                null,
+                1,
+                LAST_REQUEUED_AT);
         when(notificationAdminCommandService.requeueFailedNotification(notificationId)).thenReturn(response);
 
         mockMvc.perform(post(ADMIN_NOTIFICATIONS_URL + "/{id}/requeue", notificationId)
@@ -227,6 +233,8 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.id").value("11111111-1111-1111-1111-111111111111"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.attempts").value(0))
+                .andExpect(jsonPath("$.requeueCount").value(1))
+                .andExpect(jsonPath("$.lastRequeuedAt").value("2026-01-01T10:10:00Z"))
                 .andExpect(jsonPath("$.lastError").doesNotExist())
                 .andExpect(jsonPath("$.sentAt").doesNotExist())
                 .andExpect(jsonPath("$.nextAttemptAt").doesNotExist())
@@ -316,18 +324,20 @@ class AdminNotificationControllerWebMvcTest {
     }
 
     private NotificationResponseDTO responseWithLastAttemptAt(UUID notificationId, UUID sourceEventId) {
-        return response(notificationId, sourceEventId, NotificationStatus.PENDING, LAST_ATTEMPT_AT);
+        return response(notificationId, sourceEventId, NotificationStatus.PENDING, LAST_ATTEMPT_AT, 1, LAST_REQUEUED_AT);
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId, NotificationStatus status) {
-        return response(notificationId, sourceEventId, status, null);
+        return response(notificationId, sourceEventId, status, null, 0, null);
     }
 
     private NotificationResponseDTO response(
             UUID notificationId,
             UUID sourceEventId,
             NotificationStatus status,
-            Instant lastAttemptAt) {
+            Instant lastAttemptAt,
+            int requeueCount,
+            Instant lastRequeuedAt) {
         return new NotificationResponseDTO(
                 notificationId,
                 "ORDER_PLACED_EMAIL",
@@ -339,6 +349,8 @@ class AdminNotificationControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 0,
+                requeueCount,
+                lastRequeuedAt,
                 null,
                 lastAttemptAt,
                 null);
