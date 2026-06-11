@@ -80,6 +80,21 @@ class NotificationTest {
         assertThat(notification.getNextAttemptAt()).isNull();
     }
 
+    @Test
+    void requeueForDelivery_shouldResetFailedNotificationForImmediateDelivery() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60));
+
+        notification.requeueForDelivery();
+
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
+        assertThat(notification.getAttempts()).isZero();
+        assertThat(notification.getLastError()).isNull();
+        assertThat(notification.getSentAt()).isNull();
+        assertThat(notification.getNextAttemptAt()).isNull();
+    }
+
     private Notification pendingNotification(UUID sourceEventId) {
         return Notification.pending(
                 "ORDER_PLACED_EMAIL",

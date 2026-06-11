@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +38,8 @@ import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
+import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
+import com.company.shop.module.notification.service.NotificationAdminCommandService;
 import com.company.shop.module.notification.service.NotificationQueryService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
@@ -53,6 +57,9 @@ class AdminNotificationControllerWebMvcTest {
 
     @MockitoBean
     private NotificationQueryService notificationQueryService;
+
+    @MockitoBean
+    private NotificationAdminCommandService notificationAdminCommandService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -179,6 +186,92 @@ class AdminNotificationControllerWebMvcTest {
     }
 
     @Test
+    void requeueNotification_shouldReturnForbiddenForAnonymous() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+        mockMvc.perform(post(ADMIN_NOTIFICATIONS_URL + "/{id}/requeue", notificationId)
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationAdminCommandService);
+    }
+
+    @Test
+    void requeueNotification_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+        mockMvc.perform(post(ADMIN_NOTIFICATIONS_URL + "/{id}/requeue", notificationId)
+                        .with(user("user").roles("USER"))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationAdminCommandService);
+    }
+
+    @Test
+    void requeueNotification_shouldRequeueNotificationForAdmin() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        NotificationResponseDTO response = response(
+                notificationId,
+                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                NotificationStatus.PENDING);
+        when(notificationAdminCommandService.requeueFailedNotification(notificationId)).thenReturn(response);
+
+        mockMvc.perform(post(ADMIN_NOTIFICATIONS_URL + "/{id}/requeue", notificationId)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.attempts").value(0))
+                .andExpect(jsonPath("$.lastError").doesNotExist())
+                .andExpect(jsonPath("$.sentAt").doesNotExist())
+                .andExpect(jsonPath("$.nextAttemptAt").doesNotExist());
+
+        verify(notificationAdminCommandService).requeueFailedNotification(notificationId);
+        verifyNoMoreInteractions(notificationAdminCommandService);
+    }
+
+    @Test
+    void requeueNotification_shouldReturnNotFoundWhenMissing() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        when(notificationAdminCommandService.requeueFailedNotification(notificationId))
+                .thenThrow(new NotificationNotFoundException(notificationId));
+
+        mockMvc.perform(post(ADMIN_NOTIFICATIONS_URL + "/{id}/requeue", notificationId)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(notificationAdminCommandService).requeueFailedNotification(notificationId);
+    }
+
+    @Test
+    void requeueNotification_shouldReturnConflictWhenStatusInvalid() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        when(notificationAdminCommandService.requeueFailedNotification(notificationId))
+                .thenThrow(new NotificationRequeueNotAllowedException());
+
+        mockMvc.perform(post(ADMIN_NOTIFICATIONS_URL + "/{id}/requeue", notificationId)
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_REQUEUE_NOT_ALLOWED"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(notificationAdminCommandService).requeueFailedNotification(notificationId);
+    }
+
+    @Test
     void getNotification_shouldReturnNotificationForAdmin() throws Exception {
         UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
         NotificationResponseDTO response = response(notificationId, UUID.fromString("22222222-2222-2222-2222-222222222222"));
@@ -213,13 +306,17 @@ class AdminNotificationControllerWebMvcTest {
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {
+        return response(notificationId, sourceEventId, NotificationStatus.PENDING);
+    }
+
+    private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId, NotificationStatus status) {
         return new NotificationResponseDTO(
                 notificationId,
                 "ORDER_PLACED_EMAIL",
                 "customer@example.com",
                 "Order placed",
                 "Your order has been placed.",
-                NotificationStatus.PENDING,
+                status,
                 sourceEventId,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,

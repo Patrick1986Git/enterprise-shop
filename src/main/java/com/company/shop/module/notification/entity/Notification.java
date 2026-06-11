@@ -94,6 +94,14 @@ public class Notification extends BaseEntity {
         }
     }
 
+    public void requeueForDelivery() {
+        this.status = NotificationStatus.PENDING;
+        this.attempts = 0;
+        this.lastError = null;
+        this.sentAt = null;
+        this.nextAttemptAt = null;
+    }
+
     public String getType() {
         return type;
     }
