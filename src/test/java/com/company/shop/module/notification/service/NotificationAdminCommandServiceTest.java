@@ -113,8 +113,12 @@ class NotificationAdminCommandServiceTest {
     @Test
     void requeueFailedNotification_shouldNotDependOnSenderOrDeliveryProcessor() {
         assertThat(Arrays.stream(NotificationAdminCommandService.class.getDeclaredFields())
-                .map(Field::getType))
-                .doesNotContain(NotificationSender.class, NotificationDeliveryProcessor.class);
+                .map(Field::getType)
+                .map(Class::getName)
+                .toList())
+                .doesNotContain(
+                        NotificationSender.class.getName(),
+                        NotificationDeliveryProcessor.class.getName());
     }
 
     private Notification failedNotification(UUID sourceEventId) {
@@ -145,6 +149,7 @@ class NotificationAdminCommandServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 0,
+                null,
                 null,
                 null);
     }

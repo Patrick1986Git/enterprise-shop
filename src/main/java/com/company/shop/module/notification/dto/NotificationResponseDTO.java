@@ -17,6 +17,7 @@ public record NotificationResponseDTO(
         Instant sentAt,
         int attempts,
         String lastError,
+        Instant lastAttemptAt,
         Instant nextAttemptAt
 ) {
 }

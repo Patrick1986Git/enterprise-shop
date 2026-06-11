@@ -21,6 +21,7 @@ class NotificationTest {
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getAttempts()).isZero();
         assertThat(notification.getLastError()).isNull();
+        assertThat(notification.getLastAttemptAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
     }
 
@@ -33,6 +34,8 @@ class NotificationTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         assertThat(notification.getSentAt()).isNotNull();
+        assertThat(notification.getLastAttemptAt()).isNotNull();
+        assertThat(notification.getLastAttemptAt()).isEqualTo(notification.getSentAt());
         assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
@@ -48,6 +51,7 @@ class NotificationTest {
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isEqualTo("temporary failure");
+        assertThat(notification.getLastAttemptAt()).isNotNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isEqualTo(nextAttemptAt);
     }
@@ -62,6 +66,7 @@ class NotificationTest {
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getAttempts()).isEqualTo(2);
         assertThat(notification.getLastError()).isEqualTo("delivery failed");
+        assertThat(notification.getLastAttemptAt()).isNotNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
     }
@@ -76,6 +81,7 @@ class NotificationTest {
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isEqualTo("delivery failed");
+        assertThat(notification.getLastAttemptAt()).isNotNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
     }
@@ -92,6 +98,7 @@ class NotificationTest {
         assertThat(notification.getAttempts()).isZero();
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getSentAt()).isNull();
+        assertThat(notification.getLastAttemptAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
     }
 
