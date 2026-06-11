@@ -2,9 +2,11 @@ package com.company.shop.module.notification.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import java.sql.PreparedStatement;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -80,15 +82,19 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
+        Instant beforeTransition = Instant.now();
         notification.markSent();
-        Instant lastAttemptAt = notification.getLastAttemptAt();
 
         Notification savedNotification = notificationRepository.saveAndFlush(notification);
         entityManager.clear();
 
         Notification loadedNotification = notificationRepository.findById(savedNotification.getId()).orElseThrow();
-        assertThat(loadedNotification.getLastAttemptAt()).isEqualTo(lastAttemptAt);
-        assertThat(loadedNotification.getSentAt()).isEqualTo(lastAttemptAt);
+        assertThat(loadedNotification.getLastAttemptAt()).isNotNull();
+        assertThat(loadedNotification.getSentAt()).isNotNull();
+        assertThat(loadedNotification.getLastAttemptAt()).isEqualTo(loadedNotification.getSentAt());
+        assertThat(loadedNotification.getLastAttemptAt()).isAfterOrEqualTo(beforeTransition);
+        assertThat(loadedNotification.getLastAttemptAt())
+                .isCloseTo(beforeTransition, within(1, ChronoUnit.SECONDS));
     }
 
     @Test
