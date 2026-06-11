@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
+import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.service.NotificationQueryService;
 
@@ -46,6 +47,17 @@ public class AdminNotificationController {
             @RequestParam(required = false) String recipient,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(notificationQueryService.getNotifications(status, type, recipient, pageable));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "Get notification summary (admin-only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Notification summary returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+    })
+    public NotificationSummaryDTO getSummary() {
+        return notificationQueryService.getSummary();
     }
 
     @GetMapping("/{id}")

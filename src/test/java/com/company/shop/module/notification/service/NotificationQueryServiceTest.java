@@ -24,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
+import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
@@ -73,6 +74,33 @@ class NotificationQueryServiceTest {
 
         verify(notificationRepository).findById(notificationId);
         verifyNoMoreInteractions(notificationMapper);
+    }
+
+    @Test
+    void getSummary_shouldReturnCountsFromRepository() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        when(notificationRepository.countByStatus(NotificationStatus.PENDING)).thenReturn(3L);
+        when(notificationRepository.countByStatus(NotificationStatus.SENT)).thenReturn(5L);
+        when(notificationRepository.countByStatus(NotificationStatus.FAILED)).thenReturn(7L);
+        when(notificationRepository.countDuePending(any(Instant.class))).thenReturn(2L);
+        when(notificationRepository.countScheduledPending(any(Instant.class))).thenReturn(1L);
+
+        NotificationSummaryDTO result = service.getSummary();
+
+        assertThat(result.pendingCount()).isEqualTo(3L);
+        assertThat(result.sentCount()).isEqualTo(5L);
+        assertThat(result.failedCount()).isEqualTo(7L);
+        assertThat(result.duePendingCount()).isEqualTo(2L);
+        assertThat(result.scheduledPendingCount()).isEqualTo(1L);
+        verify(notificationRepository).countByStatus(NotificationStatus.PENDING);
+        verify(notificationRepository).countByStatus(NotificationStatus.SENT);
+        verify(notificationRepository).countByStatus(NotificationStatus.FAILED);
+        ArgumentCaptor<Instant> dueNowCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> scheduledNowCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(notificationRepository).countDuePending(dueNowCaptor.capture());
+        verify(notificationRepository).countScheduledPending(scheduledNowCaptor.capture());
+        assertThat(dueNowCaptor.getValue()).isNotNull();
+        assertThat(scheduledNowCaptor.getValue()).isNotNull();
     }
 
     @Test
