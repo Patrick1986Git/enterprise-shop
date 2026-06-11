@@ -24,6 +24,8 @@ import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
+import jakarta.persistence.EntityManager;
+
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
@@ -34,6 +36,9 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @BeforeEach
     void cleanNotifications() {
@@ -63,7 +68,27 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(savedNotification.getSentAt()).isNull();
         assertThat(savedNotification.getAttempts()).isZero();
         assertThat(savedNotification.getLastError()).isNull();
+        assertThat(savedNotification.getLastAttemptAt()).isNull();
         assertThat(savedNotification.getNextAttemptAt()).isNull();
+    }
+
+    @Test
+    void saveAndLoad_shouldPreserveLastAttemptAtAfterLifecycleTransition() {
+        Notification notification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        notification.markSent();
+        Instant lastAttemptAt = notification.getLastAttemptAt();
+
+        Notification savedNotification = notificationRepository.saveAndFlush(notification);
+        entityManager.clear();
+
+        Notification loadedNotification = notificationRepository.findById(savedNotification.getId()).orElseThrow();
+        assertThat(loadedNotification.getLastAttemptAt()).isEqualTo(lastAttemptAt);
+        assertThat(loadedNotification.getSentAt()).isEqualTo(lastAttemptAt);
     }
 
     @Test
@@ -318,7 +343,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void insert_shouldUseDatabaseDefaultsForStatusCreatedAtAttemptsAndNextAttemptAt() {
+    void insert_shouldUseDatabaseDefaultsForStatusCreatedAtAttemptsAndLastAttemptAtAndNextAttemptAt() {
         UUID notificationId = UUID.randomUUID();
 
         jdbcTemplate.update("""
@@ -332,7 +357,11 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.");
 
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
-                "SELECT status, created_at, sent_at, attempts, last_error, next_attempt_at FROM notifications WHERE id = ?",
+                """
+                        SELECT status, created_at, sent_at, attempts, last_error, last_attempt_at, next_attempt_at
+                        FROM notifications
+                        WHERE id = ?
+                        """,
                 notificationId);
 
         assertThat(defaults)
@@ -340,6 +369,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .containsEntry("sent_at", null)
                 .containsEntry("attempts", 0)
                 .containsEntry("last_error", null)
+                .containsEntry("last_attempt_at", null)
                 .containsEntry("next_attempt_at", null);
         assertThat(defaults.get("created_at")).isNotNull();
     }

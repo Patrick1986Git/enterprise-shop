@@ -46,6 +46,9 @@ public class Notification extends BaseEntity {
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
+    @Column(name = "last_attempt_at")
+    private Instant lastAttemptAt;
+
     @Column(name = "next_attempt_at")
     private Instant nextAttemptAt;
 
@@ -68,8 +71,10 @@ public class Notification extends BaseEntity {
     }
 
     public void markSent() {
+        Instant now = Instant.now();
         this.status = NotificationStatus.SENT;
-        this.sentAt = Instant.now();
+        this.sentAt = now;
+        this.lastAttemptAt = now;
         this.lastError = null;
         this.nextAttemptAt = null;
     }
@@ -79,10 +84,12 @@ public class Notification extends BaseEntity {
         this.lastError = errorMessage;
         this.sentAt = null;
         this.nextAttemptAt = null;
+        this.lastAttemptAt = Instant.now();
     }
 
     public void markDeliveryAttemptFailed(String errorMessage, int maxAttempts, Instant nextAttemptAt) {
         this.attempts += 1;
+        this.lastAttemptAt = Instant.now();
         this.lastError = errorMessage;
         this.sentAt = null;
         if (this.attempts >= maxAttempts) {
@@ -100,6 +107,7 @@ public class Notification extends BaseEntity {
         this.lastError = null;
         this.sentAt = null;
         this.nextAttemptAt = null;
+        this.lastAttemptAt = null;
     }
 
     public String getType() {
@@ -140,6 +148,10 @@ public class Notification extends BaseEntity {
 
     public String getLastError() {
         return lastError;
+    }
+
+    public Instant getLastAttemptAt() {
+        return lastAttemptAt;
     }
 
     public Instant getNextAttemptAt() {

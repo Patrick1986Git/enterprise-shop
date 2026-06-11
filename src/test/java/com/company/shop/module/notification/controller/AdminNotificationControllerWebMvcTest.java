@@ -51,6 +51,7 @@ import com.company.shop.support.WebMvcSliceTestConfig;
 class AdminNotificationControllerWebMvcTest {
 
     private static final String ADMIN_NOTIFICATIONS_URL = "/api/v1/admin/notifications";
+    private static final Instant LAST_ATTEMPT_AT = Instant.parse("2026-01-01T10:05:00Z");
 
     @Autowired
     private MockMvc mockMvc;
@@ -91,7 +92,7 @@ class AdminNotificationControllerWebMvcTest {
 
     @Test
     void getNotifications_shouldReturnPagedNotificationsForAdmin() throws Exception {
-        NotificationResponseDTO notification = response(
+        NotificationResponseDTO notification = responseWithLastAttemptAt(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 UUID.fromString("22222222-2222-2222-2222-222222222222"));
         when(notificationQueryService.getNotifications(any(), any(), any(), any(Pageable.class)))
@@ -111,6 +112,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].status").value("PENDING"))
                 .andExpect(jsonPath("$.content[0].sourceEventId").value("22222222-2222-2222-2222-222222222222"))
                 .andExpect(jsonPath("$.content[0].attempts").value(0))
+                .andExpect(jsonPath("$.content[0].lastAttemptAt").value("2026-01-01T10:05:00Z"))
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
@@ -227,7 +229,8 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.attempts").value(0))
                 .andExpect(jsonPath("$.lastError").doesNotExist())
                 .andExpect(jsonPath("$.sentAt").doesNotExist())
-                .andExpect(jsonPath("$.nextAttemptAt").doesNotExist());
+                .andExpect(jsonPath("$.nextAttemptAt").doesNotExist())
+                .andExpect(jsonPath("$.lastAttemptAt").doesNotExist());
 
         verify(notificationAdminCommandService).requeueFailedNotification(notificationId);
         verifyNoMoreInteractions(notificationAdminCommandService);
@@ -274,7 +277,9 @@ class AdminNotificationControllerWebMvcTest {
     @Test
     void getNotification_shouldReturnNotificationForAdmin() throws Exception {
         UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        NotificationResponseDTO response = response(notificationId, UUID.fromString("22222222-2222-2222-2222-222222222222"));
+        NotificationResponseDTO response = responseWithLastAttemptAt(
+                notificationId,
+                UUID.fromString("22222222-2222-2222-2222-222222222222"));
         when(notificationQueryService.getNotification(notificationId)).thenReturn(response);
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/{id}", notificationId)
@@ -282,7 +287,8 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value("11111111-1111-1111-1111-111111111111"))
-                .andExpect(jsonPath("$.status").value("PENDING"));
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.lastAttemptAt").value("2026-01-01T10:05:00Z"));
 
         verify(notificationQueryService).getNotification(notificationId);
         verifyNoMoreInteractions(notificationQueryService);
@@ -309,7 +315,19 @@ class AdminNotificationControllerWebMvcTest {
         return response(notificationId, sourceEventId, NotificationStatus.PENDING);
     }
 
+    private NotificationResponseDTO responseWithLastAttemptAt(UUID notificationId, UUID sourceEventId) {
+        return response(notificationId, sourceEventId, NotificationStatus.PENDING, LAST_ATTEMPT_AT);
+    }
+
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId, NotificationStatus status) {
+        return response(notificationId, sourceEventId, status, null);
+    }
+
+    private NotificationResponseDTO response(
+            UUID notificationId,
+            UUID sourceEventId,
+            NotificationStatus status,
+            Instant lastAttemptAt) {
         return new NotificationResponseDTO(
                 notificationId,
                 "ORDER_PLACED_EMAIL",
@@ -322,6 +340,7 @@ class AdminNotificationControllerWebMvcTest {
                 null,
                 0,
                 null,
+                lastAttemptAt,
                 null);
     }
 }

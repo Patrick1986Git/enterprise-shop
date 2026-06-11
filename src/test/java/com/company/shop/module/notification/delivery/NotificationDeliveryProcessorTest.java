@@ -55,6 +55,7 @@ class NotificationDeliveryProcessorTest {
         assertThat(result.failedCount()).isZero();
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         assertThat(notification.getSentAt()).isNotNull();
+        assertThat(notification.getLastAttemptAt()).isNotNull();
         assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
@@ -74,6 +75,7 @@ class NotificationDeliveryProcessorTest {
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isEqualTo(1);
         assertThat(notification.getLastError()).isEqualTo("sender failed");
+        assertThat(notification.getLastAttemptAt()).isNotNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isAfter(beforeProcessing);
     }
@@ -96,6 +98,7 @@ class NotificationDeliveryProcessorTest {
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getAttempts()).isEqualTo(2);
         assertThat(notification.getLastError()).isEqualTo("sender failed");
+        assertThat(notification.getLastAttemptAt()).isNotNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
     }
