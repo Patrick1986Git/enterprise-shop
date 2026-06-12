@@ -174,7 +174,7 @@ class AdminNotificationControllerWebMvcTest {
     @Test
     void getSummary_shouldReturnSummaryForAdmin() throws Exception {
         when(notificationQueryService.getSummary())
-                .thenReturn(new NotificationSummaryDTO(3, 5, 7, 2, 1));
+                .thenReturn(new NotificationSummaryDTO(3, 5, 7, 2, 1, 4, 6));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/summary")
                         .with(user("admin").roles("ADMIN")))
@@ -184,7 +184,9 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.sentCount").value(5))
                 .andExpect(jsonPath("$.failedCount").value(7))
                 .andExpect(jsonPath("$.duePendingCount").value(2))
-                .andExpect(jsonPath("$.scheduledPendingCount").value(1));
+                .andExpect(jsonPath("$.scheduledPendingCount").value(1))
+                .andExpect(jsonPath("$.requeuedNotificationCount").value(4))
+                .andExpect(jsonPath("$.totalRequeueCount").value(6));
 
         verify(notificationQueryService).getSummary();
         verifyNoMoreInteractions(notificationQueryService);

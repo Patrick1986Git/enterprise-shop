@@ -373,6 +373,95 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .containsExactly(customerNotification.getId());
     }
 
+
+    @Test
+    void countByRequeueCountGreaterThan_shouldCountNotificationsWithRequeueCountGreaterThanZero() {
+        Notification neverRequeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        Notification requeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedNotification.requeueForDelivery();
+        Notification requeuedTwiceNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued-twice@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedTwiceNotification.requeueForDelivery();
+        requeuedTwiceNotification.requeueForDelivery();
+        notificationRepository.saveAllAndFlush(List.of(
+                neverRequeuedNotification,
+                requeuedNotification,
+                requeuedTwiceNotification));
+
+        long requeuedNotificationCount = notificationRepository.countByRequeueCountGreaterThan(0);
+
+        assertThat(requeuedNotificationCount).isEqualTo(2L);
+    }
+
+    @Test
+    void countByRequeueCountGreaterThan_shouldIgnoreNotificationsWithRequeueCountEqualToZero() {
+        Notification neverRequeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        notificationRepository.saveAndFlush(neverRequeuedNotification);
+
+        long requeuedNotificationCount = notificationRepository.countByRequeueCountGreaterThan(0);
+
+        assertThat(requeuedNotificationCount).isZero();
+    }
+
+    @Test
+    void sumRequeueCount_shouldReturnSumAcrossAllNotifications() {
+        Notification neverRequeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        Notification requeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedNotification.requeueForDelivery();
+        Notification requeuedTwiceNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued-twice@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedTwiceNotification.requeueForDelivery();
+        requeuedTwiceNotification.requeueForDelivery();
+        notificationRepository.saveAllAndFlush(List.of(
+                neverRequeuedNotification,
+                requeuedNotification,
+                requeuedTwiceNotification));
+
+        long totalRequeueCount = notificationRepository.sumRequeueCount();
+
+        assertThat(totalRequeueCount).isEqualTo(3L);
+    }
+
+    @Test
+    void sumRequeueCount_shouldReturnZeroWhenThereAreNoNotifications() {
+        long totalRequeueCount = notificationRepository.sumRequeueCount();
+
+        assertThat(totalRequeueCount).isZero();
+    }
+
     @Test
     void insert_shouldUseDatabaseDefaultsForStatusCreatedAtAttemptsLastAttemptAtNextAttemptAtAndRequeueMetadata() {
         UUID notificationId = UUID.randomUUID();
