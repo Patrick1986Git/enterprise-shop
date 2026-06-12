@@ -69,6 +69,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(savedNotification.getCreatedAt()).isNotNull();
         assertThat(savedNotification.getSentAt()).isNull();
         assertThat(savedNotification.getAttempts()).isZero();
+        assertThat(savedNotification.getRequeueCount()).isZero();
+        assertThat(savedNotification.getLastRequeuedAt()).isNull();
         assertThat(savedNotification.getLastError()).isNull();
         assertThat(savedNotification.getLastAttemptAt()).isNull();
         assertThat(savedNotification.getNextAttemptAt()).isNull();
@@ -95,6 +97,29 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(loadedNotification.getLastAttemptAt()).isAfterOrEqualTo(beforeTransition);
         assertThat(loadedNotification.getLastAttemptAt())
                 .isCloseTo(beforeTransition, within(1, ChronoUnit.SECONDS));
+    }
+
+    @Test
+    void saveAndLoad_shouldPreserveRequeueMetadataAfterRequeueTransition() {
+        Notification notification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        notification.markFailed("delivery failed");
+        Instant beforeRequeue = Instant.now();
+        notification.requeueForDelivery();
+
+        Notification savedNotification = notificationRepository.saveAndFlush(notification);
+        entityManager.clear();
+
+        Notification loadedNotification = notificationRepository.findById(savedNotification.getId()).orElseThrow();
+        assertThat(loadedNotification.getRequeueCount()).isEqualTo(1);
+        assertThat(loadedNotification.getLastRequeuedAt()).isNotNull();
+        assertThat(loadedNotification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeue);
+        assertThat(loadedNotification.getLastRequeuedAt())
+                .isCloseTo(beforeRequeue, within(1, ChronoUnit.SECONDS));
     }
 
     @Test
@@ -349,7 +374,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void insert_shouldUseDatabaseDefaultsForStatusCreatedAtAttemptsAndLastAttemptAtAndNextAttemptAt() {
+    void insert_shouldUseDatabaseDefaultsForStatusCreatedAtAttemptsLastAttemptAtNextAttemptAtAndRequeueMetadata() {
         UUID notificationId = UUID.randomUUID();
 
         jdbcTemplate.update("""
@@ -364,7 +389,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
 
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
                 """
-                        SELECT status, created_at, sent_at, attempts, last_error, last_attempt_at, next_attempt_at
+                        SELECT status, created_at, sent_at, attempts, requeue_count, last_requeued_at,
+                               last_error, last_attempt_at, next_attempt_at
                         FROM notifications
                         WHERE id = ?
                         """,
@@ -374,6 +400,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .containsEntry("status", NotificationStatus.PENDING.name())
                 .containsEntry("sent_at", null)
                 .containsEntry("attempts", 0)
+                .containsEntry("requeue_count", 0)
+                .containsEntry("last_requeued_at", null)
                 .containsEntry("last_error", null)
                 .containsEntry("last_attempt_at", null)
                 .containsEntry("next_attempt_at", null);

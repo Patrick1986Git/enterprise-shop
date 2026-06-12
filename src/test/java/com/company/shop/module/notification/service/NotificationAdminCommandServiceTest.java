@@ -52,6 +52,8 @@ class NotificationAdminCommandServiceTest {
         assertThat(result).isEqualTo(response);
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isZero();
+        assertThat(notification.getRequeueCount()).isEqualTo(1);
+        assertThat(notification.getLastRequeuedAt()).isNotNull();
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
@@ -149,6 +151,8 @@ class NotificationAdminCommandServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 0,
+                0,
+                null,
                 null,
                 null,
                 null);

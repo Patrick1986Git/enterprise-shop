@@ -20,6 +20,8 @@ class NotificationTest {
         assertThat(notification.getCreatedAt()).isNotNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getAttempts()).isZero();
+        assertThat(notification.getRequeueCount()).isZero();
+        assertThat(notification.getLastRequeuedAt()).isNull();
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getLastAttemptAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
@@ -92,14 +94,34 @@ class NotificationTest {
         notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60));
         notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60));
 
+        Instant beforeRequeue = Instant.now();
+
         notification.requeueForDelivery();
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isZero();
+        assertThat(notification.getRequeueCount()).isEqualTo(1);
+        assertThat(notification.getLastRequeuedAt()).isNotNull();
+        assertThat(notification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeue);
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getLastAttemptAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
+    }
+
+    @Test
+    void requeueForDelivery_shouldIncrementRequeueCountAcrossMultipleRequeues() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        notification.markFailed("delivery failed");
+
+        notification.requeueForDelivery();
+        Instant firstRequeuedAt = notification.getLastRequeuedAt();
+        notification.markFailed("delivery failed again");
+        notification.requeueForDelivery();
+
+        assertThat(notification.getRequeueCount()).isEqualTo(2);
+        assertThat(notification.getLastRequeuedAt()).isNotNull();
+        assertThat(notification.getLastRequeuedAt()).isAfterOrEqualTo(firstRequeuedAt);
     }
 
     private Notification pendingNotification(UUID sourceEventId) {

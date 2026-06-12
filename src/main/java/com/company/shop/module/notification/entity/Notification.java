@@ -43,6 +43,12 @@ public class Notification extends BaseEntity {
     @Column(name = "attempts", nullable = false)
     private int attempts;
 
+    @Column(name = "requeue_count", nullable = false)
+    private int requeueCount;
+
+    @Column(name = "last_requeued_at")
+    private Instant lastRequeuedAt;
+
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
@@ -108,6 +114,8 @@ public class Notification extends BaseEntity {
         this.sentAt = null;
         this.nextAttemptAt = null;
         this.lastAttemptAt = null;
+        this.requeueCount += 1;
+        this.lastRequeuedAt = Instant.now();
     }
 
     public String getType() {
@@ -144,6 +152,14 @@ public class Notification extends BaseEntity {
 
     public int getAttempts() {
         return attempts;
+    }
+
+    public int getRequeueCount() {
+        return requeueCount;
+    }
+
+    public Instant getLastRequeuedAt() {
+        return lastRequeuedAt;
     }
 
     public String getLastError() {
