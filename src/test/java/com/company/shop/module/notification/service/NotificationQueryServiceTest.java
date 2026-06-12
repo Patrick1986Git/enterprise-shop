@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -30,6 +31,7 @@ import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
+import com.company.shop.module.notification.repository.NotificationSpecifications;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationQueryServiceTest {
@@ -123,25 +125,38 @@ class NotificationQueryServiceTest {
                 sourceEventId);
         NotificationResponseDTO response = response(notificationId, sourceEventId);
         Pageable pageable = PageRequest.of(1, 10);
-        when(notificationRepository.findAll(any(Specification.class), any(Pageable.class)))
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
                 .thenReturn(new PageImpl<>(List.of(notification), pageable, 1));
         when(notificationMapper.toDto(notification)).thenReturn(response);
 
-        Page<NotificationResponseDTO> result = service.getNotifications(
-                NotificationStatus.PENDING,
-                " ORDER_PLACED_EMAIL ",
-                " CUSTOMER ",
-                pageable);
+        Page<NotificationResponseDTO> result;
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    NotificationStatus.PENDING,
+                    "ORDER_PLACED_EMAIL",
+                    "CUSTOMER",
+                    Boolean.TRUE))
+                    .thenReturn(specification);
+
+            result = service.getNotifications(
+                    NotificationStatus.PENDING,
+                    " ORDER_PLACED_EMAIL ",
+                    " CUSTOMER ",
+                    Boolean.TRUE,
+                    pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    NotificationStatus.PENDING,
+                    "ORDER_PLACED_EMAIL",
+                    "CUSTOMER",
+                    Boolean.TRUE));
+        }
 
         assertThat(result.getContent()).containsExactly(response);
         assertThat(result.getNumber()).isEqualTo(1);
-        ArgumentCaptor<Specification<Notification>> specificationCaptor = ArgumentCaptor.forClass(Specification.class);
-        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(notificationRepository).findAll(
-                specificationCaptor.capture(),
-                pageableCaptor.capture());
-        assertThat(specificationCaptor.getValue()).isNotNull();
-        assertThat(pageableCaptor.getValue()).isSameAs(pageable);
+        verify(notificationRepository).findAll(specification, pageable);
         verify(notificationMapper).toDto(notification);
     }
 

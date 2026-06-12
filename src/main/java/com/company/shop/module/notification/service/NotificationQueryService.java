@@ -52,9 +52,10 @@ public class NotificationQueryService {
             NotificationStatus status,
             String type,
             String recipient,
+            Boolean requeuedOnly,
             Pageable pageable) {
         return notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(status, normalize(type), normalize(recipient)),
+                NotificationSpecifications.adminFilters(status, normalize(type), normalize(recipient), requeuedOnly),
                 pageable)
                 .map(notificationMapper::toDto);
     }

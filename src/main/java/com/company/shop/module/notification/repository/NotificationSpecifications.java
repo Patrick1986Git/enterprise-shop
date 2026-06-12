@@ -19,7 +19,8 @@ public final class NotificationSpecifications {
     public static Specification<Notification> adminFilters(
             NotificationStatus status,
             String type,
-            String recipient) {
+            String recipient,
+            Boolean requeuedOnly) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -34,6 +35,10 @@ public final class NotificationSpecifications {
             if (recipient != null && !recipient.isBlank()) {
                 String pattern = "%" + recipient.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("recipient")), pattern));
+            }
+
+            if (Boolean.TRUE.equals(requeuedOnly)) {
+                predicates.add(cb.greaterThan(root.get("requeueCount"), 0));
             }
 
             return cb.and(predicates.toArray(Predicate[]::new));

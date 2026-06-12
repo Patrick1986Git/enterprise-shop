@@ -96,7 +96,7 @@ class AdminNotificationControllerWebMvcTest {
         NotificationResponseDTO notification = responseWithLastAttemptAt(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(notification), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -119,12 +119,12 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(notificationQueryService).getNotifications(eq(null), eq(null), eq(null), any(Pageable.class));
+        verify(notificationQueryService).getNotifications(eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 
     @Test
     void getNotifications_shouldPassFiltersAndPageableToService() throws Exception {
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5), 0));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -146,12 +146,33 @@ class AdminNotificationControllerWebMvcTest {
                 eq(NotificationStatus.FAILED),
                 eq("ORDER_PLACED_EMAIL"),
                 eq("customer"),
+                eq(null),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
         assertThat(pageable.getPageSize()).isEqualTo(5);
         assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
         assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getNotifications_shouldPassRequeuedOnlyToService() throws Exception {
+        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("requeuedOnly", "true"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.content").isArray());
+
+        verify(notificationQueryService).getNotifications(
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(Boolean.TRUE),
+                any(Pageable.class));
     }
 
     @Test
