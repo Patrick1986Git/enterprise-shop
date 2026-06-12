@@ -5,6 +5,8 @@ public record NotificationSummaryDTO(
         long sentCount,
         long failedCount,
         long duePendingCount,
-        long scheduledPendingCount
+        long scheduledPendingCount,
+        long requeuedNotificationCount,
+        long totalRequeueCount
 ) {
 }

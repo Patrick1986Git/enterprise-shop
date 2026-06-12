@@ -19,6 +19,11 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     long countByStatus(NotificationStatus status);
 
+    long countByRequeueCountGreaterThan(int requeueCount);
+
+    @Query("select coalesce(sum(n.requeueCount), 0) from Notification n")
+    long sumRequeueCount();
+
     @Query(value = """
             SELECT COUNT(*)
             FROM notifications

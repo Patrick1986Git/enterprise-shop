@@ -42,7 +42,9 @@ public class NotificationQueryService {
                 notificationRepository.countByStatus(NotificationStatus.SENT),
                 notificationRepository.countByStatus(NotificationStatus.FAILED),
                 notificationRepository.countDuePending(now),
-                notificationRepository.countScheduledPending(now));
+                notificationRepository.countScheduledPending(now),
+                notificationRepository.countByRequeueCountGreaterThan(0),
+                notificationRepository.sumRequeueCount());
     }
 
     @Transactional(readOnly = true)

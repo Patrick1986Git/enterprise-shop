@@ -84,6 +84,8 @@ class NotificationQueryServiceTest {
         when(notificationRepository.countByStatus(NotificationStatus.FAILED)).thenReturn(7L);
         when(notificationRepository.countDuePending(any(Instant.class))).thenReturn(2L);
         when(notificationRepository.countScheduledPending(any(Instant.class))).thenReturn(1L);
+        when(notificationRepository.countByRequeueCountGreaterThan(0)).thenReturn(4L);
+        when(notificationRepository.sumRequeueCount()).thenReturn(6L);
 
         NotificationSummaryDTO result = service.getSummary();
 
@@ -92,6 +94,8 @@ class NotificationQueryServiceTest {
         assertThat(result.failedCount()).isEqualTo(7L);
         assertThat(result.duePendingCount()).isEqualTo(2L);
         assertThat(result.scheduledPendingCount()).isEqualTo(1L);
+        assertThat(result.requeuedNotificationCount()).isEqualTo(4L);
+        assertThat(result.totalRequeueCount()).isEqualTo(6L);
         verify(notificationRepository).countByStatus(NotificationStatus.PENDING);
         verify(notificationRepository).countByStatus(NotificationStatus.SENT);
         verify(notificationRepository).countByStatus(NotificationStatus.FAILED);
@@ -99,8 +103,11 @@ class NotificationQueryServiceTest {
         ArgumentCaptor<Instant> scheduledNowCaptor = ArgumentCaptor.forClass(Instant.class);
         verify(notificationRepository).countDuePending(dueNowCaptor.capture());
         verify(notificationRepository).countScheduledPending(scheduledNowCaptor.capture());
+        verify(notificationRepository).countByRequeueCountGreaterThan(0);
+        verify(notificationRepository).sumRequeueCount();
         assertThat(dueNowCaptor.getValue()).isNotNull();
         assertThat(scheduledNowCaptor.getValue()).isNotNull();
+        assertThat(scheduledNowCaptor.getValue()).isEqualTo(dueNowCaptor.getValue());
     }
 
     @Test
