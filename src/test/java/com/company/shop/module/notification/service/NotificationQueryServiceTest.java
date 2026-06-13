@@ -176,6 +176,7 @@ class NotificationQueryServiceTest {
                 null,
                 null,
                 null,
+                null,
                 null);
     }
 }

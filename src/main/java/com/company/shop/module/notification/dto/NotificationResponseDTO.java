@@ -18,6 +18,7 @@ public record NotificationResponseDTO(
         int attempts,
         int requeueCount,
         Instant lastRequeuedAt,
+        String lastRequeuedBy,
         String lastError,
         Instant lastAttemptAt,
         Instant nextAttemptAt

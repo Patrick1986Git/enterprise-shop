@@ -49,6 +49,9 @@ public class Notification extends BaseEntity {
     @Column(name = "last_requeued_at")
     private Instant lastRequeuedAt;
 
+    @Column(name = "last_requeued_by", length = 255)
+    private String lastRequeuedBy;
+
     @Column(name = "last_error", columnDefinition = "TEXT")
     private String lastError;
 
@@ -107,7 +110,7 @@ public class Notification extends BaseEntity {
         }
     }
 
-    public void requeueForDelivery() {
+    public void requeueForDelivery(String requeuedBy) {
         this.status = NotificationStatus.PENDING;
         this.attempts = 0;
         this.lastError = null;
@@ -116,6 +119,7 @@ public class Notification extends BaseEntity {
         this.lastAttemptAt = null;
         this.requeueCount += 1;
         this.lastRequeuedAt = Instant.now();
+        this.lastRequeuedBy = requireText(requeuedBy, "Notification requeue actor is required").trim();
     }
 
     public String getType() {
@@ -160,6 +164,10 @@ public class Notification extends BaseEntity {
 
     public Instant getLastRequeuedAt() {
         return lastRequeuedAt;
+    }
+
+    public String getLastRequeuedBy() {
+        return lastRequeuedBy;
     }
 
     public String getLastError() {

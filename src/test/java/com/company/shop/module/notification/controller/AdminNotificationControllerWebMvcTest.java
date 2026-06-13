@@ -115,6 +115,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].attempts").value(0))
                 .andExpect(jsonPath("$.content[0].requeueCount").value(1))
                 .andExpect(jsonPath("$.content[0].lastRequeuedAt").value("2026-01-01T10:10:00Z"))
+                .andExpect(jsonPath("$.content[0].lastRequeuedBy").value("admin@example.com"))
                 .andExpect(jsonPath("$.content[0].lastAttemptAt").value("2026-01-01T10:05:00Z"))
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
@@ -258,6 +259,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.attempts").value(0))
                 .andExpect(jsonPath("$.requeueCount").value(1))
                 .andExpect(jsonPath("$.lastRequeuedAt").value("2026-01-01T10:10:00Z"))
+                .andExpect(jsonPath("$.lastRequeuedBy").value("admin@example.com"))
                 .andExpect(jsonPath("$.lastError").doesNotExist())
                 .andExpect(jsonPath("$.sentAt").doesNotExist())
                 .andExpect(jsonPath("$.nextAttemptAt").doesNotExist())
@@ -319,6 +321,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value("11111111-1111-1111-1111-111111111111"))
                 .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.lastRequeuedBy").value("admin@example.com"))
                 .andExpect(jsonPath("$.lastAttemptAt").value("2026-01-01T10:05:00Z"));
 
         verify(notificationQueryService).getNotification(notificationId);
@@ -374,6 +377,7 @@ class AdminNotificationControllerWebMvcTest {
                 0,
                 requeueCount,
                 lastRequeuedAt,
+                lastRequeuedAt == null ? null : "admin@example.com",
                 null,
                 lastAttemptAt,
                 null);

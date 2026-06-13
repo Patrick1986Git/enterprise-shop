@@ -71,6 +71,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(savedNotification.getAttempts()).isZero();
         assertThat(savedNotification.getRequeueCount()).isZero();
         assertThat(savedNotification.getLastRequeuedAt()).isNull();
+        assertThat(savedNotification.getLastRequeuedBy()).isNull();
         assertThat(savedNotification.getLastError()).isNull();
         assertThat(savedNotification.getLastAttemptAt()).isNull();
         assertThat(savedNotification.getNextAttemptAt()).isNull();
@@ -109,7 +110,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID());
         notification.markFailed("delivery failed");
         Instant beforeRequeue = Instant.now();
-        notification.requeueForDelivery();
+        notification.requeueForDelivery("admin@example.com");
 
         Notification savedNotification = notificationRepository.saveAndFlush(notification);
         entityManager.clear();
@@ -120,6 +121,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(loadedNotification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeue);
         assertThat(loadedNotification.getLastRequeuedAt())
                 .isCloseTo(beforeRequeue, within(1, ChronoUnit.SECONDS));
+        assertThat(loadedNotification.getLastRequeuedBy()).isEqualTo("admin@example.com");
     }
 
     @Test
@@ -387,7 +389,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedNotification.requeueForDelivery();
+        requeuedNotification.requeueForDelivery("admin@example.com");
         notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
@@ -413,7 +415,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedNotification.requeueForDelivery();
+        requeuedNotification.requeueForDelivery("admin@example.com");
         notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
@@ -433,14 +435,14 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedPendingNotification.requeueForDelivery();
+        requeuedPendingNotification.requeueForDelivery("admin@example.com");
         Notification requeuedFailedNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "requeued-failed@example.com",
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedFailedNotification.requeueForDelivery();
+        requeuedFailedNotification.requeueForDelivery("admin@example.com");
         requeuedFailedNotification.markFailed("delivery failed");
         Notification neverRequeuedFailedNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
@@ -477,15 +479,15 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedNotification.requeueForDelivery();
+        requeuedNotification.requeueForDelivery("admin@example.com");
         Notification requeuedTwiceNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "requeued-twice@example.com",
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedTwiceNotification.requeueForDelivery();
-        requeuedTwiceNotification.requeueForDelivery();
+        requeuedTwiceNotification.requeueForDelivery("admin@example.com");
+        requeuedTwiceNotification.requeueForDelivery("admin@example.com");
         notificationRepository.saveAllAndFlush(List.of(
                 neverRequeuedNotification,
                 requeuedNotification,
@@ -525,15 +527,15 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedNotification.requeueForDelivery();
+        requeuedNotification.requeueForDelivery("admin@example.com");
         Notification requeuedTwiceNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "requeued-twice@example.com",
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        requeuedTwiceNotification.requeueForDelivery();
-        requeuedTwiceNotification.requeueForDelivery();
+        requeuedTwiceNotification.requeueForDelivery("admin@example.com");
+        requeuedTwiceNotification.requeueForDelivery("admin@example.com");
         notificationRepository.saveAllAndFlush(List.of(
                 neverRequeuedNotification,
                 requeuedNotification,
@@ -568,7 +570,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
                 """
                         SELECT status, created_at, sent_at, attempts, requeue_count, last_requeued_at,
-                               last_error, last_attempt_at, next_attempt_at
+                               last_requeued_by, last_error, last_attempt_at, next_attempt_at
                         FROM notifications
                         WHERE id = ?
                         """,
@@ -580,6 +582,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .containsEntry("attempts", 0)
                 .containsEntry("requeue_count", 0)
                 .containsEntry("last_requeued_at", null)
+                .containsEntry("last_requeued_by", null)
                 .containsEntry("last_error", null)
                 .containsEntry("last_attempt_at", null)
                 .containsEntry("next_attempt_at", null);
