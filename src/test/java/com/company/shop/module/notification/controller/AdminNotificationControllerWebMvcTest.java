@@ -362,7 +362,15 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].actionType").value("REQUEUE"))
                 .andExpect(jsonPath("$.content[0].actorEmail").value("admin@example.com"))
                 .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
-                .andExpect(jsonPath("$.content[0].details").value("Requeued notification"));
+                .andExpect(jsonPath("$.content[0].details").value("Requeued notification"))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.size").value(5))
+                .andExpect(jsonPath("$.numberOfElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(true))
+                .andExpect(jsonPath("$.empty").value(false));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationAdminActionLogQueryService).getNotificationActionLogs(eq(notificationId), pageableCaptor.capture());

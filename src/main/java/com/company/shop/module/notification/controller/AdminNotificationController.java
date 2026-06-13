@@ -2,7 +2,6 @@ package com.company.shop.module.notification.controller;
 
 import java.util.UUID;
 
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -95,10 +94,11 @@ public class AdminNotificationController {
             @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
             @ApiResponse(responseCode = "404", description = "Notification not found.")
     })
-    public Page<NotificationAdminActionLogResponseDTO> getNotificationActionLogs(
+    public PageResponseDTO<NotificationAdminActionLogResponseDTO> getNotificationActionLogs(
             @PathVariable UUID id,
             Pageable pageable) {
-        return notificationAdminActionLogQueryService.getNotificationActionLogs(id, pageable);
+        return PageResponseDTO.from(
+                notificationAdminActionLogQueryService.getNotificationActionLogs(id, pageable));
     }
 
     @GetMapping("/{id}")
