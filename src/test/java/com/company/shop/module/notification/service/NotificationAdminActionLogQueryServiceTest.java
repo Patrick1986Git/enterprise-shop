@@ -22,6 +22,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.entity.NotificationAdminActionLog;
@@ -107,6 +108,67 @@ class NotificationAdminActionLogQueryServiceTest {
         service.getNotificationActionLogs(notificationId, pageable);
 
         verify(notificationAdminActionLogRepository).findByNotificationId(notificationId, pageable);
+    }
+
+    @Test
+    void searchActionLogs_shouldReturnMappedPage() {
+        NotificationAdminActionLogQueryService service = service();
+        UUID notificationId = UUID.randomUUID();
+        NotificationAdminActionLog log = NotificationAdminActionLog.requeue(notificationId, "admin@example.com");
+        NotificationAdminActionLogResponseDTO response = response(notificationId);
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(log), pageable, 1));
+        when(notificationAdminActionLogMapper.toDto(log)).thenReturn(response);
+
+        Page<NotificationAdminActionLogResponseDTO> result = service.searchActionLogs(
+                notificationId, NotificationAdminActionType.REQUEUE, "admin", pageable);
+
+        assertThat(result.getContent()).containsExactly(response);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(notificationAdminActionLogMapper).toDto(log);
+    }
+
+    @Test
+    void searchActionLogs_shouldApplyDefaultSortWhenPageableIsUnsorted() {
+        NotificationAdminActionLogQueryService service = service();
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.searchActionLogs(null, null, null, PageRequest.of(2, 5));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getPageSize()).isEqualTo(5);
+        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.DESC);
+    }
+
+    @Test
+    void searchActionLogs_shouldPreserveExplicitPageableSort() {
+        NotificationAdminActionLogQueryService service = service();
+        Pageable pageable = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "actorEmail"));
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), eq(pageable)))
+                .thenReturn(Page.empty(pageable));
+
+        service.searchActionLogs(null, null, null, pageable);
+
+        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), eq(pageable));
+    }
+
+    @Test
+    void searchActionLogs_shouldNotRequireNotificationExistence() {
+        NotificationAdminActionLogQueryService service = service();
+        UUID notificationId = UUID.randomUUID();
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        Page<NotificationAdminActionLogResponseDTO> result = service.searchActionLogs(
+                notificationId, null, null, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).isEmpty();
+        verifyNoInteractions(notificationRepository);
     }
 
     private NotificationAdminActionLogQueryService service() {

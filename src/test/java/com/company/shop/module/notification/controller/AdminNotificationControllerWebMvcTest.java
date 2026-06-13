@@ -48,12 +48,13 @@ import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.WebMvcSliceTestConfig;
 
-@WebMvcTest(controllers = AdminNotificationController.class)
+@WebMvcTest(controllers = {AdminNotificationController.class, AdminNotificationActionLogController.class})
 @ActiveProfiles("test")
 @Import(WebMvcSliceTestConfig.class)
 class AdminNotificationControllerWebMvcTest {
 
     private static final String ADMIN_NOTIFICATIONS_URL = "/api/v1/admin/notifications";
+    private static final String ADMIN_NOTIFICATION_ACTIONS_URL = "/api/v1/admin/notification-actions";
     private static final Instant LAST_ATTEMPT_AT = Instant.parse("2026-01-01T10:05:00Z");
     private static final Instant LAST_REQUEUED_AT = Instant.parse("2026-01-01T10:10:00Z");
 
@@ -396,6 +397,91 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.timestamp").exists());
 
         verify(notificationAdminActionLogQueryService).getNotificationActionLogs(eq(notificationId), any(Pageable.class));
+    }
+
+
+    @Test
+    void searchActionLogs_shouldReturnForbiddenForAnonymous() throws Exception {
+        mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationAdminActionLogQueryService);
+    }
+
+    @Test
+    void searchActionLogs_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL)
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationAdminActionLogQueryService);
+    }
+
+    @Test
+    void searchActionLogs_shouldReturnActionLogsForAdmin() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        UUID actionLogId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        NotificationAdminActionLogResponseDTO response = new NotificationAdminActionLogResponseDTO(
+                actionLogId,
+                notificationId,
+                NotificationAdminActionType.REQUEUE,
+                "admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z"),
+                "Requeued notification");
+        when(notificationAdminActionLogQueryService.searchActionLogs(eq(null), eq(null), eq(null), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value("33333333-3333-3333-3333-333333333333"))
+                .andExpect(jsonPath("$.content[0].notificationId").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$.content[0].actionType").value("REQUEUE"))
+                .andExpect(jsonPath("$.content[0].actorEmail").value("admin@example.com"))
+                .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
+                .andExpect(jsonPath("$.content[0].details").value("Requeued notification"))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.numberOfElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true))
+                .andExpect(jsonPath("$.empty").value(false));
+    }
+
+    @Test
+    void searchActionLogs_shouldPassFiltersAndPageableToService() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        when(notificationAdminActionLogQueryService.searchActionLogs(any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("notificationId", notificationId.toString())
+                        .param("actionType", "REQUEUE")
+                        .param("actorEmail", "admin")
+                        .param("page", "2")
+                        .param("size", "5")
+                        .param("sort", "actorEmail,asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.number").value(2))
+                .andExpect(jsonPath("$.size").value(5));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationAdminActionLogQueryService).searchActionLogs(
+                eq(notificationId),
+                eq(NotificationAdminActionType.REQUEUE),
+                eq("admin"),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getPageSize()).isEqualTo(5);
+        assertThat(pageable.getSort().getOrderFor("actorEmail").getDirection().name()).isEqualTo("ASC");
     }
 
     @Test

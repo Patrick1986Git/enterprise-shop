@@ -118,6 +118,91 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
                 .containsExactly("third-admin@example.com", "second-admin@example.com");
     }
 
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByNotificationId() {
+        UUID selectedNotificationId = UUID.randomUUID();
+        seedSearchLogs(selectedNotificationId, UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(selectedNotificationId, null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getNotificationId)
+                .containsOnly(selectedNotificationId);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByActionType() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(null, NotificationAdminActionType.REQUEUE, null),
+                PageRequest.of(0, 10));
+
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActionType)
+                .containsOnly(NotificationAdminActionType.REQUEUE);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByActorEmailContainsIgnoreCase() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(null, null, "  ALPHA  "),
+                PageRequest.of(0, 10));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("Alpha.Admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineNotificationIdAndActorEmail() {
+        UUID selectedNotificationId = UUID.randomUUID();
+        UUID otherNotificationId = UUID.randomUUID();
+        seedSearchLogs(selectedNotificationId, otherNotificationId);
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(selectedNotificationId, null, "admin"),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "actorEmail")));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("Alpha.Admin@example.com", "beta-admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldReturnAllLogsPagedWhenFiltersMissing() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(null, null, "   "),
+                PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getContent()).hasSize(2);
+    }
+
+    private void seedSearchLogs(UUID selectedNotificationId, UUID otherNotificationId) {
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                selectedNotificationId,
+                "Alpha.Admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                selectedNotificationId,
+                "beta-admin@example.com",
+                Instant.parse("2026-01-01T11:00:00Z")));
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                otherNotificationId,
+                "gamma-user@example.com",
+                Instant.parse("2026-01-01T12:00:00Z")));
+        entityManager.clear();
+    }
+
     private NotificationAdminActionLog logAt(UUID notificationId, String actorEmail, Instant createdAt) {
         NotificationAdminActionLog log = NotificationAdminActionLog.requeue(notificationId, actorEmail);
         setCreatedAt(log, createdAt);
