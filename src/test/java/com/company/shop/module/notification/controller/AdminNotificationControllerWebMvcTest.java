@@ -346,7 +346,7 @@ class AdminNotificationControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 "Requeued notification");
         when(notificationAdminActionLogQueryService.getNotificationActionLogs(eq(notificationId), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(1, 5), 1));
+                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(1, 5), 6));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/{id}/actions", notificationId)
                         .with(user("admin").roles("ADMIN"))
@@ -366,8 +366,8 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.number").value(1))
                 .andExpect(jsonPath("$.size").value(5))
                 .andExpect(jsonPath("$.numberOfElements").value(1))
-                .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.totalElements").value(6))
+                .andExpect(jsonPath("$.totalPages").value(2))
                 .andExpect(jsonPath("$.first").value(false))
                 .andExpect(jsonPath("$.last").value(true))
                 .andExpect(jsonPath("$.empty").value(false));
