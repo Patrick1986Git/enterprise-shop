@@ -13,9 +13,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.common.dto.PageResponseDTO;
+import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
+import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
 import com.company.shop.module.notification.service.NotificationAdminCommandService;
 import com.company.shop.module.notification.service.NotificationQueryService;
 
@@ -32,12 +34,15 @@ public class AdminNotificationController {
 
     private final NotificationQueryService notificationQueryService;
     private final NotificationAdminCommandService notificationAdminCommandService;
+    private final NotificationAdminActionLogQueryService notificationAdminActionLogQueryService;
 
     public AdminNotificationController(
             NotificationQueryService notificationQueryService,
-            NotificationAdminCommandService notificationAdminCommandService) {
+            NotificationAdminCommandService notificationAdminCommandService,
+            NotificationAdminActionLogQueryService notificationAdminActionLogQueryService) {
         this.notificationQueryService = notificationQueryService;
         this.notificationAdminCommandService = notificationAdminCommandService;
+        this.notificationAdminActionLogQueryService = notificationAdminActionLogQueryService;
     }
 
     @GetMapping
@@ -79,6 +84,21 @@ public class AdminNotificationController {
     })
     public NotificationResponseDTO requeueNotification(@PathVariable UUID id) {
         return notificationAdminCommandService.requeueFailedNotification(id);
+    }
+
+    @GetMapping("/{id}/actions")
+    @Operation(summary = "Get notification admin action logs")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Notification admin action logs returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+            @ApiResponse(responseCode = "404", description = "Notification not found.")
+    })
+    public PageResponseDTO<NotificationAdminActionLogResponseDTO> getNotificationActionLogs(
+            @PathVariable UUID id,
+            Pageable pageable) {
+        return PageResponseDTO.from(
+                notificationAdminActionLogQueryService.getNotificationActionLogs(id, pageable));
     }
 
     @GetMapping("/{id}")

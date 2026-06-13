@@ -9,9 +9,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -81,6 +84,38 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
                 .findByNotificationIdOrderByCreatedAtDesc(selectedNotificationId))
                 .extracting(NotificationAdminActionLog::getActorEmail)
                 .containsExactly("second-admin@example.com", "first-admin@example.com");
+    }
+
+    @Test
+    void findByNotificationId_shouldReturnPagedSelectedNotificationLogsWithRequestedSortAndPage() {
+        UUID selectedNotificationId = UUID.randomUUID();
+        UUID otherNotificationId = UUID.randomUUID();
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                selectedNotificationId,
+                "first-admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                selectedNotificationId,
+                "second-admin@example.com",
+                Instant.parse("2026-01-01T11:00:00Z")));
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                selectedNotificationId,
+                "third-admin@example.com",
+                Instant.parse("2026-01-01T12:00:00Z")));
+        notificationAdminActionLogRepository.saveAndFlush(logAt(
+                otherNotificationId,
+                "other-admin@example.com",
+                Instant.parse("2026-01-01T13:00:00Z")));
+        entityManager.clear();
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findByNotificationId(
+                selectedNotificationId,
+                PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("third-admin@example.com", "second-admin@example.com");
     }
 
     private NotificationAdminActionLog logAt(UUID notificationId, String actorEmail, Instant createdAt) {

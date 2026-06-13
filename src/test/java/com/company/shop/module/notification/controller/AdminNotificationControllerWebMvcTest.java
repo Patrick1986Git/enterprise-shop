@@ -34,11 +34,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
+import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
+import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
 import com.company.shop.module.notification.service.NotificationAdminCommandService;
 import com.company.shop.module.notification.service.NotificationQueryService;
 import com.company.shop.security.UserDetailsServiceImpl;
@@ -62,6 +65,9 @@ class AdminNotificationControllerWebMvcTest {
 
     @MockitoBean
     private NotificationAdminCommandService notificationAdminCommandService;
+
+    @MockitoBean
+    private NotificationAdminActionLogQueryService notificationAdminActionLogQueryService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -305,6 +311,91 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.timestamp").exists());
 
         verify(notificationAdminCommandService).requeueFailedNotification(notificationId);
+    }
+
+    @Test
+    void getNotificationActionLogs_shouldReturnForbiddenForAnonymous() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/{id}/actions", notificationId))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationAdminActionLogQueryService);
+    }
+
+    @Test
+    void getNotificationActionLogs_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/{id}/actions", notificationId)
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(notificationAdminActionLogQueryService);
+    }
+
+    @Test
+    void getNotificationActionLogs_shouldReturnActionLogsForAdminAndPassPageable() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        UUID actionLogId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        NotificationAdminActionLogResponseDTO response = new NotificationAdminActionLogResponseDTO(
+                actionLogId,
+                notificationId,
+                NotificationAdminActionType.REQUEUE,
+                "admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z"),
+                "Requeued notification");
+        when(notificationAdminActionLogQueryService.getNotificationActionLogs(eq(notificationId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(1, 5), 6));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/{id}/actions", notificationId)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("page", "1")
+                        .param("size", "5")
+                        .param("sort", "createdAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].id").value("33333333-3333-3333-3333-333333333333"))
+                .andExpect(jsonPath("$.content[0].notificationId").value("11111111-1111-1111-1111-111111111111"))
+                .andExpect(jsonPath("$.content[0].actionType").value("REQUEUE"))
+                .andExpect(jsonPath("$.content[0].actorEmail").value("admin@example.com"))
+                .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
+                .andExpect(jsonPath("$.content[0].details").value("Requeued notification"))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.size").value(5))
+                .andExpect(jsonPath("$.numberOfElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(6))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(true))
+                .andExpect(jsonPath("$.empty").value(false));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationAdminActionLogQueryService).getNotificationActionLogs(eq(notificationId), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(5);
+        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getNotificationActionLogs_shouldReturnNotFoundWhenMissing() throws Exception {
+        UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+        when(notificationAdminActionLogQueryService.getNotificationActionLogs(eq(notificationId), any(Pageable.class)))
+                .thenThrow(new NotificationNotFoundException(notificationId));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL + "/{id}/actions", notificationId)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").exists())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(notificationAdminActionLogQueryService).getNotificationActionLogs(eq(notificationId), any(Pageable.class));
     }
 
     @Test
