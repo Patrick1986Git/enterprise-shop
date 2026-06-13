@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -22,10 +23,13 @@ import com.company.shop.module.notification.delivery.NotificationDeliveryProcess
 import com.company.shop.module.notification.delivery.NotificationSender;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.entity.Notification;
+import com.company.shop.module.notification.entity.NotificationAdminActionLog;
+import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
+import com.company.shop.module.notification.repository.NotificationAdminActionLogRepository;
 import com.company.shop.module.notification.repository.NotificationRepository;
 import com.company.shop.security.CurrentUserProvider;
 
@@ -34,6 +38,9 @@ class NotificationAdminCommandServiceTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private NotificationAdminActionLogRepository notificationAdminActionLogRepository;
 
     @Mock
     private NotificationMapper notificationMapper;
@@ -47,6 +54,7 @@ class NotificationAdminCommandServiceTest {
         UUID notificationId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
         Notification notification = failedNotification(sourceEventId);
+        setId(notification, notificationId);
         NotificationResponseDTO response = response(notificationId, sourceEventId, NotificationStatus.PENDING);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
         when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
@@ -64,10 +72,22 @@ class NotificationAdminCommandServiceTest {
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
+        ArgumentCaptor<NotificationAdminActionLog> logCaptor = ArgumentCaptor.forClass(NotificationAdminActionLog.class);
         verify(notificationRepository).findById(notificationId);
         verify(currentUserProvider).getCurrentUserEmail();
+        verify(notificationAdminActionLogRepository).save(logCaptor.capture());
         verify(notificationMapper).toDto(notification);
-        verifyNoMoreInteractions(notificationRepository, notificationMapper, currentUserProvider);
+        NotificationAdminActionLog savedLog = logCaptor.getValue();
+        assertThat(savedLog.getNotificationId()).isEqualTo(notificationId);
+        assertThat(savedLog.getActionType()).isEqualTo(NotificationAdminActionType.REQUEUE);
+        assertThat(savedLog.getActorEmail()).isEqualTo("admin@example.com");
+        assertThat(savedLog.getCreatedAt()).isNotNull();
+        assertThat(savedLog.getDetails()).isNull();
+        verifyNoMoreInteractions(
+                notificationRepository,
+                notificationAdminActionLogRepository,
+                notificationMapper,
+                currentUserProvider);
     }
 
     @Test
@@ -82,7 +102,7 @@ class NotificationAdminCommandServiceTest {
                 .isEqualTo("NOTIFICATION_NOT_FOUND");
 
         verify(notificationRepository).findById(notificationId);
-        verifyNoInteractions(notificationMapper, currentUserProvider);
+        verifyNoInteractions(notificationAdminActionLogRepository, notificationMapper, currentUserProvider);
     }
 
     @Test
@@ -99,7 +119,7 @@ class NotificationAdminCommandServiceTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         verify(notificationRepository).findById(notificationId);
-        verifyNoInteractions(notificationMapper, currentUserProvider);
+        verifyNoInteractions(notificationAdminActionLogRepository, notificationMapper, currentUserProvider);
     }
 
     @Test
@@ -117,7 +137,7 @@ class NotificationAdminCommandServiceTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         verify(notificationRepository).findById(notificationId);
-        verifyNoInteractions(notificationMapper, currentUserProvider);
+        verifyNoInteractions(notificationAdminActionLogRepository, notificationMapper, currentUserProvider);
     }
 
     @Test
@@ -132,7 +152,21 @@ class NotificationAdminCommandServiceTest {
     }
 
     private NotificationAdminCommandService service() {
-        return new NotificationAdminCommandService(notificationRepository, notificationMapper, currentUserProvider);
+        return new NotificationAdminCommandService(
+                notificationRepository,
+                notificationAdminActionLogRepository,
+                notificationMapper,
+                currentUserProvider);
+    }
+
+    private void setId(Notification notification, UUID id) {
+        try {
+            Field idField = notification.getClass().getSuperclass().getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(notification, id);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("Failed to set notification id", ex);
+        }
     }
 
     private Notification failedNotification(UUID sourceEventId) {
