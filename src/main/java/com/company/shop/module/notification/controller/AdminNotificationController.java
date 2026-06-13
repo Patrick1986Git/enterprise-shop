@@ -51,8 +51,10 @@ public class AdminNotificationController {
             @RequestParam(required = false) NotificationStatus status,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String recipient,
+            @RequestParam(required = false) Boolean requeuedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
-        return PageResponseDTO.from(notificationQueryService.getNotifications(status, type, recipient, pageable));
+        return PageResponseDTO.from(notificationQueryService.getNotifications(
+                status, type, recipient, requeuedOnly, pageable));
     }
 
     @GetMapping("/summary")

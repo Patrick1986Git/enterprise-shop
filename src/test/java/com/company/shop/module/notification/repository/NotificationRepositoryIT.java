@@ -317,7 +317,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAndFlush(sentNotification);
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.PENDING, null, null),
+                NotificationSpecifications.adminFilters(NotificationStatus.PENDING, null, null, null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -341,7 +341,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, "ORDER_PLACED_EMAIL", null),
+                NotificationSpecifications.adminFilters(null, "ORDER_PLACED_EMAIL", null, null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -365,7 +365,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, "CUSTOMER"),
+                NotificationSpecifications.adminFilters(null, null, "CUSTOMER", null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -373,6 +373,95 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .containsExactly(customerNotification.getId());
     }
 
+    @Test
+    void findAllWithAdminFilters_shouldFilterRequeuedOnlyWhenTrue() {
+        Notification neverRequeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        Notification requeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedNotification.requeueForDelivery();
+        notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, Boolean.TRUE),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(requeuedNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldNotFilterRequeuedOnlyWhenFalse() {
+        Notification neverRequeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        Notification requeuedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedNotification.requeueForDelivery();
+        notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, Boolean.FALSE),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(neverRequeuedNotification.getId(), requeuedNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineRequeuedOnlyWithStatus() {
+        Notification requeuedPendingNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued-pending@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedPendingNotification.requeueForDelivery();
+        Notification requeuedFailedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued-failed@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedFailedNotification.requeueForDelivery();
+        requeuedFailedNotification.markFailed("delivery failed");
+        Notification neverRequeuedFailedNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "failed@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        neverRequeuedFailedNotification.markFailed("delivery failed");
+        notificationRepository.saveAllAndFlush(List.of(
+                requeuedPendingNotification,
+                requeuedFailedNotification,
+                neverRequeuedFailedNotification));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, Boolean.TRUE),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(requeuedFailedNotification.getId());
+    }
 
     @Test
     void countByRequeueCountGreaterThan_shouldCountNotificationsWithRequeueCountGreaterThanZero() {
