@@ -12,18 +12,22 @@ import com.company.shop.module.notification.exception.NotificationNotFoundExcept
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
+import com.company.shop.security.CurrentUserProvider;
 
 @Service
 public class NotificationAdminCommandService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationMapper notificationMapper;
+    private final CurrentUserProvider currentUserProvider;
 
     public NotificationAdminCommandService(
             NotificationRepository notificationRepository,
-            NotificationMapper notificationMapper) {
+            NotificationMapper notificationMapper,
+            CurrentUserProvider currentUserProvider) {
         this.notificationRepository = notificationRepository;
         this.notificationMapper = notificationMapper;
+        this.currentUserProvider = currentUserProvider;
     }
 
     @Transactional
@@ -35,7 +39,17 @@ public class NotificationAdminCommandService {
             throw new NotificationRequeueNotAllowedException();
         }
 
-        notification.requeueForDelivery();
+        String currentAdminEmail = requireText(
+                currentUserProvider.getCurrentUserEmail(),
+                "Current admin email is required to requeue notification");
+        notification.requeueForDelivery(currentAdminEmail);
         return notificationMapper.toDto(notification);
+    }
+
+    private static String requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
     }
 }

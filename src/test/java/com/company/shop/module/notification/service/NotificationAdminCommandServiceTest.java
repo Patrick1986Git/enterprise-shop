@@ -27,6 +27,7 @@ import com.company.shop.module.notification.exception.NotificationNotFoundExcept
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
+import com.company.shop.security.CurrentUserProvider;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationAdminCommandServiceTest {
@@ -37,14 +38,18 @@ class NotificationAdminCommandServiceTest {
     @Mock
     private NotificationMapper notificationMapper;
 
+    @Mock
+    private CurrentUserProvider currentUserProvider;
+
     @Test
     void requeueFailedNotification_shouldRequeueFailedNotificationAndReturnMappedDto() {
-        NotificationAdminCommandService service = new NotificationAdminCommandService(notificationRepository, notificationMapper);
+        NotificationAdminCommandService service = service();
         UUID notificationId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
         Notification notification = failedNotification(sourceEventId);
         NotificationResponseDTO response = response(notificationId, sourceEventId, NotificationStatus.PENDING);
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
         when(notificationMapper.toDto(notification)).thenReturn(response);
 
         NotificationResponseDTO result = service.requeueFailedNotification(notificationId);
@@ -54,17 +59,20 @@ class NotificationAdminCommandServiceTest {
         assertThat(notification.getAttempts()).isZero();
         assertThat(notification.getRequeueCount()).isEqualTo(1);
         assertThat(notification.getLastRequeuedAt()).isNotNull();
+        assertThat(notification.getLastRequeuedBy()).isEqualTo("admin@example.com");
+        assertThat(result.lastRequeuedBy()).isEqualTo("admin@example.com");
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
         verify(notificationRepository).findById(notificationId);
+        verify(currentUserProvider).getCurrentUserEmail();
         verify(notificationMapper).toDto(notification);
-        verifyNoMoreInteractions(notificationRepository, notificationMapper);
+        verifyNoMoreInteractions(notificationRepository, notificationMapper, currentUserProvider);
     }
 
     @Test
     void requeueFailedNotification_shouldThrowWhenNotificationMissing() {
-        NotificationAdminCommandService service = new NotificationAdminCommandService(notificationRepository, notificationMapper);
+        NotificationAdminCommandService service = service();
         UUID notificationId = UUID.randomUUID();
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
 
@@ -74,12 +82,12 @@ class NotificationAdminCommandServiceTest {
                 .isEqualTo("NOTIFICATION_NOT_FOUND");
 
         verify(notificationRepository).findById(notificationId);
-        verifyNoInteractions(notificationMapper);
+        verifyNoInteractions(notificationMapper, currentUserProvider);
     }
 
     @Test
     void requeueFailedNotification_shouldThrowWhenNotificationPending() {
-        NotificationAdminCommandService service = new NotificationAdminCommandService(notificationRepository, notificationMapper);
+        NotificationAdminCommandService service = service();
         UUID notificationId = UUID.randomUUID();
         Notification notification = pendingNotification(UUID.randomUUID());
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
@@ -91,12 +99,12 @@ class NotificationAdminCommandServiceTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         verify(notificationRepository).findById(notificationId);
-        verifyNoInteractions(notificationMapper);
+        verifyNoInteractions(notificationMapper, currentUserProvider);
     }
 
     @Test
     void requeueFailedNotification_shouldThrowWhenNotificationSent() {
-        NotificationAdminCommandService service = new NotificationAdminCommandService(notificationRepository, notificationMapper);
+        NotificationAdminCommandService service = service();
         UUID notificationId = UUID.randomUUID();
         Notification notification = pendingNotification(UUID.randomUUID());
         notification.markSent();
@@ -109,7 +117,7 @@ class NotificationAdminCommandServiceTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         verify(notificationRepository).findById(notificationId);
-        verifyNoInteractions(notificationMapper);
+        verifyNoInteractions(notificationMapper, currentUserProvider);
     }
 
     @Test
@@ -121,6 +129,10 @@ class NotificationAdminCommandServiceTest {
                 .doesNotContain(
                         NotificationSender.class.getName(),
                         NotificationDeliveryProcessor.class.getName());
+    }
+
+    private NotificationAdminCommandService service() {
+        return new NotificationAdminCommandService(notificationRepository, notificationMapper, currentUserProvider);
     }
 
     private Notification failedNotification(UUID sourceEventId) {
@@ -153,6 +165,7 @@ class NotificationAdminCommandServiceTest {
                 0,
                 0,
                 null,
+                "admin@example.com",
                 null,
                 null,
                 null);

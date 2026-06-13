@@ -22,6 +22,7 @@ class NotificationTest {
         assertThat(notification.getAttempts()).isZero();
         assertThat(notification.getRequeueCount()).isZero();
         assertThat(notification.getLastRequeuedAt()).isNull();
+        assertThat(notification.getLastRequeuedBy()).isNull();
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getLastAttemptAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
@@ -96,13 +97,14 @@ class NotificationTest {
 
         Instant beforeRequeue = Instant.now();
 
-        notification.requeueForDelivery();
+        notification.requeueForDelivery("admin@example.com");
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isZero();
         assertThat(notification.getRequeueCount()).isEqualTo(1);
         assertThat(notification.getLastRequeuedAt()).isNotNull();
         assertThat(notification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeue);
+        assertThat(notification.getLastRequeuedBy()).isEqualTo("admin@example.com");
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getLastAttemptAt()).isNull();
@@ -114,14 +116,15 @@ class NotificationTest {
         Notification notification = pendingNotification(UUID.randomUUID());
         notification.markFailed("delivery failed");
 
-        notification.requeueForDelivery();
+        notification.requeueForDelivery("first-admin@example.com");
         Instant firstRequeuedAt = notification.getLastRequeuedAt();
         notification.markFailed("delivery failed again");
-        notification.requeueForDelivery();
+        notification.requeueForDelivery("second-admin@example.com");
 
         assertThat(notification.getRequeueCount()).isEqualTo(2);
         assertThat(notification.getLastRequeuedAt()).isNotNull();
         assertThat(notification.getLastRequeuedAt()).isAfterOrEqualTo(firstRequeuedAt);
+        assertThat(notification.getLastRequeuedBy()).isEqualTo("second-admin@example.com");
     }
 
     private Notification pendingNotification(UUID sourceEventId) {
