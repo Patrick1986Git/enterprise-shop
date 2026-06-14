@@ -28,6 +28,7 @@ import org.springframework.data.jpa.domain.Specification;
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.entity.NotificationAdminActionLog;
 import com.company.shop.module.notification.entity.NotificationAdminActionType;
+import com.company.shop.module.notification.exception.NotificationActionLogDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationAdminActionLogMapper;
 import com.company.shop.module.notification.repository.NotificationAdminActionLogRepository;
@@ -152,6 +153,58 @@ class NotificationAdminActionLogQueryServiceTest {
         assertThat(result.getTotalElements()).isEqualTo(1);
         verify(notificationAdminActionLogRepository).findAll(specification, pageable);
         verify(notificationAdminActionLogMapper).toDto(log);
+    }
+
+    @Test
+    void searchActionLogs_shouldThrowWhenCreatedFromIsAfterCreatedTo() {
+        NotificationAdminActionLogQueryService service = service();
+        Instant createdFrom = Instant.parse("2026-02-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-01-01T00:00:00Z");
+
+        assertThatThrownBy(() -> service.searchActionLogs(
+                        null, null, null, createdFrom, createdTo, PageRequest.of(0, 20)))
+                .isInstanceOf(NotificationActionLogDateRangeInvalidException.class)
+                .hasMessage("createdFrom must be before or equal to createdTo.")
+                .extracting("errorCode")
+                .isEqualTo("NOTIFICATION_ACTION_LOG_DATE_RANGE_INVALID");
+
+        verifyNoInteractions(notificationAdminActionLogRepository, notificationAdminActionLogMapper);
+    }
+
+    @Test
+    void searchActionLogs_shouldAllowEqualCreatedFromAndCreatedTo() {
+        NotificationAdminActionLogQueryService service = service();
+        Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.searchActionLogs(null, null, null, createdAt, createdAt, PageRequest.of(0, 20));
+
+        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void searchActionLogs_shouldAllowOnlyCreatedFrom() {
+        NotificationAdminActionLogQueryService service = service();
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.searchActionLogs(
+                null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, PageRequest.of(0, 20));
+
+        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void searchActionLogs_shouldAllowOnlyCreatedTo() {
+        NotificationAdminActionLogQueryService service = service();
+        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.searchActionLogs(
+                null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 20));
+
+        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), any(Pageable.class));
     }
 
     @Test

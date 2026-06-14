@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.entity.NotificationAdminActionType;
+import com.company.shop.module.notification.exception.NotificationActionLogDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationAdminActionLogMapper;
 import com.company.shop.module.notification.repository.NotificationAdminActionLogRepository;
@@ -54,6 +55,10 @@ public class NotificationAdminActionLogQueryService {
             Instant createdFrom,
             Instant createdTo,
             Pageable pageable) {
+        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
+            throw new NotificationActionLogDateRangeInvalidException();
+        }
+
         return notificationAdminActionLogRepository.findAll(
                         NotificationAdminActionLogSpecifications.adminFilters(
                                 notificationId, actionType, actorEmail, createdFrom, createdTo),
