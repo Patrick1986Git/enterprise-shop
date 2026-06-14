@@ -39,6 +39,7 @@ import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.entity.NotificationStatus;
+import com.company.shop.module.notification.exception.NotificationActionLogDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
 import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
@@ -452,6 +453,37 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.first").value(true))
                 .andExpect(jsonPath("$.last").value(true))
                 .andExpect(jsonPath("$.empty").value(false));
+    }
+
+    @Test
+    void searchActionLogs_shouldReturnBadRequestWhenCreatedFromIsAfterCreatedTo() throws Exception {
+        when(notificationAdminActionLogQueryService.searchActionLogs(
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(Instant.parse("2026-02-01T00:00:00Z")),
+                eq(Instant.parse("2026-01-01T00:00:00Z")),
+                any(Pageable.class)))
+                .thenThrow(new NotificationActionLogDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("createdFrom", "2026-02-01T00:00:00Z")
+                        .param("createdTo", "2026-01-01T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_ACTION_LOG_DATE_RANGE_INVALID"))
+                .andExpect(jsonPath("$.message").value("createdFrom must be before or equal to createdTo."))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(notificationAdminActionLogQueryService).searchActionLogs(
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(Instant.parse("2026-02-01T00:00:00Z")),
+                eq(Instant.parse("2026-01-01T00:00:00Z")),
+                any(Pageable.class));
     }
 
     @Test
