@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.controller;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -44,8 +45,10 @@ public class AdminNotificationActionLogController {
             @RequestParam(required = false) UUID notificationId,
             @RequestParam(required = false) NotificationAdminActionType actionType,
             @RequestParam(required = false) String actorEmail,
+            @RequestParam(required = false) Instant createdFrom,
+            @RequestParam(required = false) Instant createdTo,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(notificationAdminActionLogQueryService.searchActionLogs(
-                notificationId, actionType, actorEmail, pageable));
+                notificationId, actionType, actorEmail, createdFrom, createdTo, pageable));
     }
 }

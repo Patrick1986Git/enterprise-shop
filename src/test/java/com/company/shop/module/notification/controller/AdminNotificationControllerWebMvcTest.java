@@ -428,7 +428,8 @@ class AdminNotificationControllerWebMvcTest {
                 "admin@example.com",
                 Instant.parse("2026-01-01T10:00:00Z"),
                 "Requeued notification");
-        when(notificationAdminActionLogQueryService.searchActionLogs(eq(null), eq(null), eq(null), any(Pageable.class)))
+        when(notificationAdminActionLogQueryService.searchActionLogs(
+                eq(null), eq(null), eq(null), eq(null), eq(null), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL)
@@ -456,7 +457,8 @@ class AdminNotificationControllerWebMvcTest {
     @Test
     void searchActionLogs_shouldPassFiltersAndPageableToService() throws Exception {
         UUID notificationId = UUID.fromString("11111111-1111-1111-1111-111111111111");
-        when(notificationAdminActionLogQueryService.searchActionLogs(any(), any(), any(), any(Pageable.class)))
+        when(notificationAdminActionLogQueryService.searchActionLogs(
+                any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5), 0));
 
         mockMvc.perform(get(ADMIN_NOTIFICATION_ACTIONS_URL)
@@ -464,6 +466,8 @@ class AdminNotificationControllerWebMvcTest {
                         .param("notificationId", notificationId.toString())
                         .param("actionType", "REQUEUE")
                         .param("actorEmail", "admin")
+                        .param("createdFrom", "2026-01-01T00:00:00Z")
+                        .param("createdTo", "2026-01-31T23:59:59Z")
                         .param("page", "2")
                         .param("size", "5")
                         .param("sort", "actorEmail,asc"))
@@ -477,6 +481,8 @@ class AdminNotificationControllerWebMvcTest {
                 eq(notificationId),
                 eq(NotificationAdminActionType.REQUEUE),
                 eq("admin"),
+                eq(Instant.parse("2026-01-01T00:00:00Z")),
+                eq(Instant.parse("2026-01-31T23:59:59Z")),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
