@@ -33,6 +33,7 @@ import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.outbox.OutboxEventProcessor;
+import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
 import com.company.shop.module.order.service.query.OrderQueryProcessor;
@@ -140,6 +141,9 @@ class OpenApiDocsSmokeTest {
     private OutboxEventProcessor outboxEventProcessor;
 
     @MockitoBean
+    private OutboxEventQueryService outboxEventQueryService;
+
+    @MockitoBean
     private PaymentService paymentService;
 
     @MockitoBean
@@ -182,6 +186,7 @@ class OpenApiDocsSmokeTest {
                         "/api/v1/webhooks/stripe",
                         "/api/v1/admin/notifications",
                         "/api/v1/admin/notifications/summary",
+                        "/api/v1/admin/outbox-events/summary",
                         "/api/v1/admin/notifications/{id}/requeue",
                         "/api/v1/admin/notifications/{id}/actions",
                         "/api/v1/admin/notification-actions");
