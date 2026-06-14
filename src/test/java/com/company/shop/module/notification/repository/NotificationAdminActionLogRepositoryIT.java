@@ -125,7 +125,7 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
         seedSearchLogs(selectedNotificationId, UUID.randomUUID());
 
         Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
-                NotificationAdminActionLogSpecifications.adminFilters(selectedNotificationId, null, null),
+                NotificationAdminActionLogSpecifications.adminFilters(selectedNotificationId, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(page.getContent())
@@ -138,7 +138,8 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
         seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
 
         Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
-                NotificationAdminActionLogSpecifications.adminFilters(null, NotificationAdminActionType.REQUEUE, null),
+                NotificationAdminActionLogSpecifications.adminFilters(
+                        null, NotificationAdminActionType.REQUEUE, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(page.getTotalElements()).isEqualTo(3);
@@ -152,7 +153,7 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
         seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
 
         Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
-                NotificationAdminActionLogSpecifications.adminFilters(null, null, "  ALPHA  "),
+                NotificationAdminActionLogSpecifications.adminFilters(null, null, "  ALPHA  ", null, null),
                 PageRequest.of(0, 10));
 
         assertThat(page.getContent())
@@ -167,7 +168,7 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
         seedSearchLogs(selectedNotificationId, otherNotificationId);
 
         Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
-                NotificationAdminActionLogSpecifications.adminFilters(selectedNotificationId, null, "admin"),
+                NotificationAdminActionLogSpecifications.adminFilters(selectedNotificationId, null, "admin", null, null),
                 PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "actorEmail")));
 
         assertThat(page.getContent())
@@ -180,11 +181,93 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
         seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
 
         Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
-                NotificationAdminActionLogSpecifications.adminFilters(null, null, "   "),
+                NotificationAdminActionLogSpecifications.adminFilters(null, null, "   ", null, null),
                 PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt")));
 
         assertThat(page.getTotalElements()).isEqualTo(3);
         assertThat(page.getContent()).hasSize(2);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedFromInclusive() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(
+                        null, null, null, Instant.parse("2026-01-01T11:00:00Z"), null),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("beta-admin@example.com", "gamma-user@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedToInclusive() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(
+                        null, null, null, null, Instant.parse("2026-01-01T11:00:00Z")),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("Alpha.Admin@example.com", "beta-admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedFromAndCreatedToInclusive() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(
+                        null,
+                        null,
+                        null,
+                        Instant.parse("2026-01-01T10:30:00Z"),
+                        Instant.parse("2026-01-01T11:30:00Z")),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("beta-admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineCreatedRangeWithActorEmail() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(
+                        null,
+                        null,
+                        "admin",
+                        Instant.parse("2026-01-01T10:30:00Z"),
+                        Instant.parse("2026-01-01T12:30:00Z")),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("beta-admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineCreatedRangeWithActionType() {
+        seedSearchLogs(UUID.randomUUID(), UUID.randomUUID());
+
+        Page<NotificationAdminActionLog> page = notificationAdminActionLogRepository.findAll(
+                NotificationAdminActionLogSpecifications.adminFilters(
+                        null,
+                        NotificationAdminActionType.REQUEUE,
+                        null,
+                        Instant.parse("2026-01-01T11:00:00Z"),
+                        Instant.parse("2026-01-01T12:00:00Z")),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(NotificationAdminActionLog::getActorEmail)
+                .containsExactly("beta-admin@example.com", "gamma-user@example.com");
     }
 
     private void seedSearchLogs(UUID selectedNotificationId, UUID otherNotificationId) {

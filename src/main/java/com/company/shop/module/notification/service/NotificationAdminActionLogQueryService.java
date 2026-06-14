@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.service;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -50,9 +51,12 @@ public class NotificationAdminActionLogQueryService {
             UUID notificationId,
             NotificationAdminActionType actionType,
             String actorEmail,
+            Instant createdFrom,
+            Instant createdTo,
             Pageable pageable) {
         return notificationAdminActionLogRepository.findAll(
-                        NotificationAdminActionLogSpecifications.adminFilters(notificationId, actionType, actorEmail),
+                        NotificationAdminActionLogSpecifications.adminFilters(
+                                notificationId, actionType, actorEmail, createdFrom, createdTo),
                         withDefaultSort(pageable))
                 .map(notificationAdminActionLogMapper::toDto);
     }

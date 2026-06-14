@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -30,6 +31,7 @@ import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationAdminActionLogMapper;
 import com.company.shop.module.notification.repository.NotificationAdminActionLogRepository;
+import com.company.shop.module.notification.repository.NotificationAdminActionLogSpecifications;
 import com.company.shop.module.notification.repository.NotificationRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -116,16 +118,39 @@ class NotificationAdminActionLogQueryServiceTest {
         UUID notificationId = UUID.randomUUID();
         NotificationAdminActionLog log = NotificationAdminActionLog.requeue(notificationId, "admin@example.com");
         NotificationAdminActionLogResponseDTO response = response(notificationId);
+        Instant createdFrom = Instant.parse("2026-01-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-01-31T23:59:59Z");
         Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), eq(pageable)))
+        Specification<NotificationAdminActionLog> specification = (root, query, cb) -> null;
+        when(notificationAdminActionLogRepository.findAll(specification, pageable))
                 .thenReturn(new PageImpl<>(List.of(log), pageable, 1));
         when(notificationAdminActionLogMapper.toDto(log)).thenReturn(response);
 
-        Page<NotificationAdminActionLogResponseDTO> result = service.searchActionLogs(
-                notificationId, NotificationAdminActionType.REQUEUE, "admin", pageable);
+        Page<NotificationAdminActionLogResponseDTO> result;
+        try (MockedStatic<NotificationAdminActionLogSpecifications> notificationAdminActionLogSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationAdminActionLogSpecifications.class)) {
+            notificationAdminActionLogSpecifications.when(() -> NotificationAdminActionLogSpecifications.adminFilters(
+                    notificationId,
+                    NotificationAdminActionType.REQUEUE,
+                    "admin",
+                    createdFrom,
+                    createdTo))
+                    .thenReturn(specification);
+
+            result = service.searchActionLogs(
+                    notificationId, NotificationAdminActionType.REQUEUE, "admin", createdFrom, createdTo, pageable);
+
+            notificationAdminActionLogSpecifications.verify(() -> NotificationAdminActionLogSpecifications.adminFilters(
+                    notificationId,
+                    NotificationAdminActionType.REQUEUE,
+                    "admin",
+                    createdFrom,
+                    createdTo));
+        }
 
         assertThat(result.getContent()).containsExactly(response);
         assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(notificationAdminActionLogRepository).findAll(specification, pageable);
         verify(notificationAdminActionLogMapper).toDto(log);
     }
 
@@ -135,7 +160,7 @@ class NotificationAdminActionLogQueryServiceTest {
         when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
-        service.searchActionLogs(null, null, null, PageRequest.of(2, 5));
+        service.searchActionLogs(null, null, null, null, null, PageRequest.of(2, 5));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationAdminActionLogRepository).findAll(any(Specification.class), pageableCaptor.capture());
@@ -152,7 +177,7 @@ class NotificationAdminActionLogQueryServiceTest {
         when(notificationAdminActionLogRepository.findAll(any(Specification.class), eq(pageable)))
                 .thenReturn(Page.empty(pageable));
 
-        service.searchActionLogs(null, null, null, pageable);
+        service.searchActionLogs(null, null, null, null, null, pageable);
 
         verify(notificationAdminActionLogRepository).findAll(any(Specification.class), eq(pageable));
     }
@@ -165,7 +190,7 @@ class NotificationAdminActionLogQueryServiceTest {
                 .thenReturn(Page.empty());
 
         Page<NotificationAdminActionLogResponseDTO> result = service.searchActionLogs(
-                notificationId, null, null, PageRequest.of(0, 20));
+                notificationId, null, null, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).isEmpty();
         verifyNoInteractions(notificationRepository);
