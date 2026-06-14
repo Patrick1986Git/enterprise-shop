@@ -10,9 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
+import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationAdminActionLogMapper;
 import com.company.shop.module.notification.repository.NotificationAdminActionLogRepository;
+import com.company.shop.module.notification.repository.NotificationAdminActionLogSpecifications;
 import com.company.shop.module.notification.repository.NotificationRepository;
 
 @Service
@@ -40,6 +42,18 @@ public class NotificationAdminActionLogQueryService {
         }
 
         return notificationAdminActionLogRepository.findByNotificationId(notificationId, withDefaultSort(pageable))
+                .map(notificationAdminActionLogMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<NotificationAdminActionLogResponseDTO> searchActionLogs(
+            UUID notificationId,
+            NotificationAdminActionType actionType,
+            String actorEmail,
+            Pageable pageable) {
+        return notificationAdminActionLogRepository.findAll(
+                        NotificationAdminActionLogSpecifications.adminFilters(notificationId, actionType, actorEmail),
+                        withDefaultSort(pageable))
                 .map(notificationAdminActionLogMapper::toDto);
     }
 
