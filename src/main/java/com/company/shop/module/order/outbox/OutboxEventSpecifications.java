@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -18,7 +19,9 @@ public final class OutboxEventSpecifications {
             OutboxEventStatus status,
             String aggregateType,
             UUID aggregateId,
-            String eventType) {
+            String eventType,
+            Instant createdFrom,
+            Instant createdTo) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -38,6 +41,14 @@ public final class OutboxEventSpecifications {
             if (eventType != null && !eventType.isBlank()) {
                 String pattern = "%" + eventType.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("eventType")), pattern));
+            }
+
+            if (createdFrom != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), createdFrom));
+            }
+
+            if (createdTo != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), createdTo));
             }
 
             return cb.and(predicates.toArray(Predicate[]::new));

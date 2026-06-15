@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox.controller;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -45,9 +46,11 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) String aggregateType,
             @RequestParam(required = false) UUID aggregateId,
             @RequestParam(required = false) String eventType,
+            @RequestParam(required = false) Instant createdFrom,
+            @RequestParam(required = false) Instant createdTo,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(outboxEventQueryService.getEvents(
-                status, aggregateType, aggregateId, eventType, pageable));
+                status, aggregateType, aggregateId, eventType, createdFrom, createdTo, pageable));
     }
 
     @GetMapping("/summary")

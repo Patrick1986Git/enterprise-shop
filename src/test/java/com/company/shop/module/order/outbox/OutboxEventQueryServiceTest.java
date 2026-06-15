@@ -119,12 +119,12 @@ class OutboxEventQueryServiceTest {
         Page<OutboxEventResponseDTO> result;
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null))
                     .thenReturn(specification);
 
-            result = outboxEventQueryService.getEvents(null, null, null, null, requestedPageable);
+            result = outboxEventQueryService.getEvents(null, null, null, null, null, null, requestedPageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -137,6 +137,8 @@ class OutboxEventQueryServiceTest {
     @Test
     void getEvents_shouldPreserveExplicitSortAndPassFiltersToSpecification() {
         UUID aggregateId = UUID.randomUUID();
+        Instant createdFrom = Instant.parse("2026-06-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-06-30T23:59:59Z");
         Pageable pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "eventType"));
         Specification<OutboxEvent> specification = (root, query, cb) -> null;
         when(outboxEventRepository.findAll(specification, pageable)).thenReturn(Page.empty(pageable));
@@ -145,14 +147,14 @@ class OutboxEventQueryServiceTest {
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
             specifications.when(() -> OutboxEventSpecifications.adminFilters(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed "))
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo))
                     .thenReturn(specification);
 
             result = outboxEventQueryService.getEvents(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", pageable);
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, pageable);
 
             specifications.verify(() -> OutboxEventSpecifications.adminFilters(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed "));
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo));
         }
 
         assertThat(result.getSort()).containsExactly(Sort.Order.asc("eventType"));
