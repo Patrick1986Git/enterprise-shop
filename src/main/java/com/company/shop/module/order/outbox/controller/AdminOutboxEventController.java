@@ -1,11 +1,19 @@
 package com.company.shop.module.order.outbox.controller;
 
+import java.util.UUID;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
+import com.company.shop.module.order.outbox.OutboxEventStatus;
+import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +31,23 @@ public class AdminOutboxEventController {
 
     public AdminOutboxEventController(OutboxEventQueryService outboxEventQueryService) {
         this.outboxEventQueryService = outboxEventQueryService;
+    }
+
+    @GetMapping
+    @Operation(summary = "List outbox events (admin-only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Outbox events returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+    })
+    public PageResponseDTO<OutboxEventResponseDTO> getEvents(
+            @RequestParam(required = false) OutboxEventStatus status,
+            @RequestParam(required = false) String aggregateType,
+            @RequestParam(required = false) UUID aggregateId,
+            @RequestParam(required = false) String eventType,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponseDTO.from(outboxEventQueryService.getEvents(
+                status, aggregateType, aggregateId, eventType, pageable));
     }
 
     @GetMapping("/summary")

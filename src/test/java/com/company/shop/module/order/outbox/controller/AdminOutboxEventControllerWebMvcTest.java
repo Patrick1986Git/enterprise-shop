@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,17 +14,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
+import com.company.shop.module.order.outbox.OutboxEventStatus;
+import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
@@ -34,6 +44,7 @@ import com.company.shop.support.WebMvcSliceTestConfig;
 @Import(WebMvcSliceTestConfig.class)
 class AdminOutboxEventControllerWebMvcTest {
 
+    private static final String ADMIN_OUTBOX_EVENTS_URL = "/api/v1/admin/outbox-events";
     private static final String ADMIN_OUTBOX_EVENTS_SUMMARY_URL = "/api/v1/admin/outbox-events/summary";
 
     @Autowired
@@ -51,6 +62,102 @@ class AdminOutboxEventControllerWebMvcTest {
     @BeforeEach
     void setUp() {
         when(jwtTokenProvider.validate(anyString())).thenReturn(false);
+    }
+
+    @Test
+    void getEvents_shouldReturnForbiddenForAnonymous() throws Exception {
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvents_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvents_shouldReturnPagedEventsForAdminWithoutPayload() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        UUID aggregateId = UUID.randomUUID();
+        OutboxEventResponseDTO response = new OutboxEventResponseDTO(
+                eventId,
+                "Order",
+                aggregateId,
+                "OrderPlaced",
+                OutboxEventStatus.FAILED,
+                Instant.parse("2026-01-01T10:00:00Z"),
+                Instant.parse("2026-01-01T10:01:00Z"),
+                2,
+                "boom");
+        Pageable pageable = PageRequest.of(0, 20);
+        when(outboxEventQueryService.getEvents(null, null, null, null, pageable))
+                .thenReturn(new PageImpl<>(List.of(response), pageable, 1));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.content[0].id").value(eventId.toString()))
+                .andExpect(jsonPath("$.content[0].aggregateType").value("Order"))
+                .andExpect(jsonPath("$.content[0].aggregateId").value(aggregateId.toString()))
+                .andExpect(jsonPath("$.content[0].eventType").value("OrderPlaced"))
+                .andExpect(jsonPath("$.content[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
+                .andExpect(jsonPath("$.content[0].processedAt").value("2026-01-01T10:01:00Z"))
+                .andExpect(jsonPath("$.content[0].attempts").value(2))
+                .andExpect(jsonPath("$.content[0].lastError").value("boom"))
+                .andExpect(jsonPath("$.content[0].payload").doesNotExist())
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.numberOfElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.first").value(true))
+                .andExpect(jsonPath("$.last").value(true))
+                .andExpect(jsonPath("$.empty").value(false));
+
+        verify(outboxEventQueryService).getEvents(null, null, null, null, pageable);
+        verifyNoMoreInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvents_shouldPassFiltersPageableAndSortToService() throws Exception {
+        UUID aggregateId = UUID.randomUUID();
+        when(outboxEventQueryService.getEvents(
+                org.mockito.Mockito.eq(OutboxEventStatus.PENDING),
+                org.mockito.Mockito.eq("Order"),
+                org.mockito.Mockito.eq(aggregateId),
+                org.mockito.Mockito.eq("Placed"),
+                org.mockito.Mockito.any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "eventType")), 0));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("status", "PENDING")
+                        .param("aggregateType", "Order")
+                        .param("aggregateId", aggregateId.toString())
+                        .param("eventType", "Placed")
+                        .param("page", "2")
+                        .param("size", "5")
+                        .param("sort", "eventType,asc")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(outboxEventQueryService).getEvents(
+                org.mockito.Mockito.eq(OutboxEventStatus.PENDING),
+                org.mockito.Mockito.eq("Order"),
+                org.mockito.Mockito.eq(aggregateId),
+                org.mockito.Mockito.eq("Placed"),
+                pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+        assertThat(pageableCaptor.getValue().getSort()).containsExactly(Sort.Order.asc("eventType"));
     }
 
     @Test
