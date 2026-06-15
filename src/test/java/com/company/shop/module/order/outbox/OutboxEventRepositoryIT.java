@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -148,6 +150,94 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 .hasValueSatisfying(actual -> assertThat(actual).isEqualTo(newestFailedCreatedAt));
     }
 
+
+    @Test
+    void findAll_shouldFilterByStatus() {
+        UUID pendingId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+        insertOutboxEvent(pendingId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(failedId, OutboxEventStatus.FAILED, "Order", UUID.randomUUID(), "OrderFailed");
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(failedId);
+    }
+
+    @Test
+    void findAll_shouldFilterByAggregateTypeContainsIgnoreCase() {
+        UUID orderId = UUID.randomUUID();
+        UUID cartId = UUID.randomUUID();
+        insertOutboxEvent(orderId, OutboxEventStatus.PENDING, "SalesOrder", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(cartId, OutboxEventStatus.PENDING, "Cart", UUID.randomUUID(), "CartCheckedOut");
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, " order ", null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(orderId);
+    }
+
+    @Test
+    void findAll_shouldFilterByEventTypeContainsIgnoreCase() {
+        UUID placedId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+        insertOutboxEvent(placedId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(failedId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "PaymentFailed");
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, null, " placed "),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(placedId);
+    }
+
+    @Test
+    void findAll_shouldFilterByAggregateId() {
+        UUID matchingAggregateId = UUID.randomUUID();
+        UUID matchingEventId = UUID.randomUUID();
+        UUID otherEventId = UUID.randomUUID();
+        insertOutboxEvent(matchingEventId, OutboxEventStatus.PENDING, "Order", matchingAggregateId, "OrderPlaced");
+        insertOutboxEvent(otherEventId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, matchingAggregateId, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingEventId);
+    }
+
+    @Test
+    void findAll_shouldCombineStatusAndAggregateTypeFilters() {
+        UUID matchingId = UUID.randomUUID();
+        UUID processedOrderId = UUID.randomUUID();
+        UUID pendingCartId = UUID.randomUUID();
+        insertOutboxEvent(matchingId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(processedOrderId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(pendingCartId, OutboxEventStatus.PENDING, "Cart", UUID.randomUUID(), "CartCheckedOut");
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, "ord", null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
+    }
+
+    @Test
+    void findAll_shouldReturnAllEventsPagedWhenFiltersAreMissingOrBlank() {
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.FAILED, "Cart", UUID.randomUUID(), "CartCheckedOut");
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PROCESSED, "Payment", UUID.randomUUID(), "PaymentCaptured");
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, " ", null, " "),
+                PageRequest.of(0, 2));
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(3);
+    }
+
     @Test
     void insert_shouldRejectMissingRequiredFields() {
         for (String requiredColumn : List.of(
@@ -184,6 +274,32 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             statement.setString(6, status.name());
             statement.setString(7, createdAt.toString());
             statement.setInt(8, status == OutboxEventStatus.FAILED ? 1 : 0);
+            return statement;
+        });
+    }
+
+
+    private void insertOutboxEvent(
+            UUID eventId,
+            OutboxEventStatus status,
+            String aggregateType,
+            UUID aggregateId,
+            String eventType) {
+        jdbcTemplate.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO outbox_events (
+                        id, aggregate_type, aggregate_id, event_type, payload, status, created_at, attempts
+                    ) VALUES (
+                        ?, ?, ?, ?, CAST(? AS jsonb), ?, CURRENT_TIMESTAMP, ?
+                    )
+                    """);
+            statement.setObject(1, eventId);
+            statement.setString(2, aggregateType);
+            statement.setObject(3, aggregateId);
+            statement.setString(4, eventType);
+            statement.setString(5, "{\"aggregateId\":\"" + aggregateId + "\"}");
+            statement.setString(6, status.name());
+            statement.setInt(7, status == OutboxEventStatus.FAILED ? 1 : 0);
             return statement;
         });
     }
