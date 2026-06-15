@@ -127,6 +127,28 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void summaryQueries_shouldReturnCountsAndOperationalTimestamps() {
+        Instant oldestPendingCreatedAt = Instant.parse("2026-01-01T10:00:00Z");
+        Instant newestFailedCreatedAt = Instant.parse("2026-01-01T10:04:00Z");
+
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PENDING, oldestPendingCreatedAt);
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:03:00Z"));
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:01:00Z"));
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:02:00Z"));
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.FAILED, Instant.parse("2026-01-01T09:59:00Z"));
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.FAILED, newestFailedCreatedAt);
+
+        assertThat(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).isEqualTo(2L);
+        assertThat(outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED)).isEqualTo(2L);
+        assertThat(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED)).isEqualTo(2L);
+        assertThat(outboxEventRepository.count()).isEqualTo(6L);
+        assertThat(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING))
+                .hasValueSatisfying(actual -> assertThat(actual).isEqualTo(oldestPendingCreatedAt));
+        assertThat(outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED))
+                .hasValueSatisfying(actual -> assertThat(actual).isEqualTo(newestFailedCreatedAt));
+    }
+
+    @Test
     void insert_shouldRejectMissingRequiredFields() {
         for (String requiredColumn : List.of(
                 "id",
