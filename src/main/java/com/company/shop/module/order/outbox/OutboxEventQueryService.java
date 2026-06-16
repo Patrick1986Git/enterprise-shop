@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -41,9 +42,11 @@ public class OutboxEventQueryService {
             String aggregateType,
             UUID aggregateId,
             String eventType,
+            Instant createdFrom,
+            Instant createdTo,
             Pageable pageable) {
         Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
-                status, aggregateType, aggregateId, eventType);
+                status, aggregateType, aggregateId, eventType, createdFrom, createdTo);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)

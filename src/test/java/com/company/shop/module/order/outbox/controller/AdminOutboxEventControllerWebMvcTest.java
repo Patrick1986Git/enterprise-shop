@@ -96,7 +96,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 2,
                 "boom");
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventQueryService.getEvents(null, null, null, null, pageable))
+        when(outboxEventQueryService.getEvents(null, null, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(response), pageable, 1));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
@@ -122,18 +122,22 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.last").value(true))
                 .andExpect(jsonPath("$.empty").value(false));
 
-        verify(outboxEventQueryService).getEvents(null, null, null, null, pageable);
+        verify(outboxEventQueryService).getEvents(null, null, null, null, null, null, pageable);
         verifyNoMoreInteractions(outboxEventQueryService);
     }
 
     @Test
     void getEvents_shouldPassFiltersPageableAndSortToService() throws Exception {
         UUID aggregateId = UUID.randomUUID();
+        Instant createdFrom = Instant.parse("2026-06-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-06-30T23:59:59Z");
         when(outboxEventQueryService.getEvents(
                 org.mockito.Mockito.eq(OutboxEventStatus.PENDING),
                 org.mockito.Mockito.eq("Order"),
                 org.mockito.Mockito.eq(aggregateId),
                 org.mockito.Mockito.eq("Placed"),
+                org.mockito.Mockito.eq(createdFrom),
+                org.mockito.Mockito.eq(createdTo),
                 org.mockito.Mockito.any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "eventType")), 0));
 
@@ -142,6 +146,8 @@ class AdminOutboxEventControllerWebMvcTest {
                         .param("aggregateType", "Order")
                         .param("aggregateId", aggregateId.toString())
                         .param("eventType", "Placed")
+                        .param("createdFrom", createdFrom.toString())
+                        .param("createdTo", createdTo.toString())
                         .param("page", "2")
                         .param("size", "5")
                         .param("sort", "eventType,asc")
@@ -154,6 +160,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 org.mockito.Mockito.eq("Order"),
                 org.mockito.Mockito.eq(aggregateId),
                 org.mockito.Mockito.eq("Placed"),
+                org.mockito.Mockito.eq(createdFrom),
+                org.mockito.Mockito.eq(createdTo),
                 pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
