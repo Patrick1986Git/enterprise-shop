@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -303,7 +304,8 @@ class AdminOutboxEventControllerWebMvcTest {
         when(outboxEventAdminCommandService.requeueFailedEvent(eventId)).thenReturn(response);
 
         mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", eventId)
-                        .with(user("admin").roles("ADMIN")))
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").value(eventId.toString()))
@@ -325,7 +327,8 @@ class AdminOutboxEventControllerWebMvcTest {
     @Test
     void requeueEvent_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
         mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", UUID.randomUUID())
-                        .with(user("user").roles("USER")))
+                        .with(user("user").roles("USER"))
+                        .with(csrf()))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
@@ -333,7 +336,8 @@ class AdminOutboxEventControllerWebMvcTest {
 
     @Test
     void requeueEvent_shouldReturnForbiddenForAnonymous() throws Exception {
-        mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", UUID.randomUUID()))
+        mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", UUID.randomUUID())
+                        .with(csrf()))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
@@ -345,7 +349,8 @@ class AdminOutboxEventControllerWebMvcTest {
         when(outboxEventAdminCommandService.requeueFailedEvent(eventId)).thenThrow(new OutboxEventNotFoundException(eventId));
 
         mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", eventId)
-                        .with(user("admin").roles("ADMIN")))
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value(404))
@@ -363,7 +368,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenThrow(new OutboxEventRequeueNotAllowedException());
 
         mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", eventId)
-                        .with(user("admin").roles("ADMIN")))
+                        .with(user("admin").roles("ADMIN"))
+                        .with(csrf()))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value(409))
