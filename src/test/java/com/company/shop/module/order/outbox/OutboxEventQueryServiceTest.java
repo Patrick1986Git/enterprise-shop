@@ -1,6 +1,8 @@
 package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -26,6 +28,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
+import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventQueryServiceTest {
@@ -160,6 +163,60 @@ class OutboxEventQueryServiceTest {
         assertThat(result.getSort()).containsExactly(Sort.Order.asc("eventType"));
         verify(outboxEventRepository).findAll(specification, pageable);
         verifyNoMoreInteractions(outboxEventMapper);
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldThrowWhenCreatedFromIsAfterCreatedTo() {
+        Instant createdFrom = Instant.parse("2026-02-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-01-01T00:00:00Z");
+
+        assertThatThrownBy(() -> outboxEventQueryService.getEvents(
+                        null, null, null, null, createdFrom, createdTo, PageRequest.of(0, 20)))
+                .isInstanceOf(OutboxEventDateRangeInvalidException.class)
+                .hasMessage("createdFrom must be before or equal to createdTo.")
+                .extracting("errorCode")
+                .isEqualTo("OUTBOX_EVENT_DATE_RANGE_INVALID");
+
+        verifyNoInteractions(outboxEventRepository, outboxEventMapper, outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldAllowEqualCreatedFromAndCreatedTo() {
+        Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
+        Pageable pageable = PageRequest.of(0, 20);
+        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty(pageable));
+
+        outboxEventQueryService.getEvents(null, null, null, null, createdAt, createdAt, pageable);
+
+        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldAllowOnlyCreatedFrom() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty(pageable));
+
+        outboxEventQueryService.getEvents(
+                null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, pageable);
+
+        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldAllowOnlyCreatedTo() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty(pageable));
+
+        outboxEventQueryService.getEvents(
+                null, null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), pageable);
+
+        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
