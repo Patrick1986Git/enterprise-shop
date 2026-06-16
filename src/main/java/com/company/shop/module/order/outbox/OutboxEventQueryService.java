@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
+import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 
 @Service
@@ -45,6 +46,10 @@ public class OutboxEventQueryService {
             Instant createdFrom,
             Instant createdTo,
             Pageable pageable) {
+        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
+            throw new OutboxEventDateRangeInvalidException();
+        }
+
         Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
                 status, aggregateType, aggregateId, eventType, createdFrom, createdTo);
         Pageable effectivePageable = withDefaultSort(pageable);

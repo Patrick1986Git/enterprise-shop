@@ -1,7 +1,9 @@
 package com.company.shop.module.order.outbox.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -35,6 +37,7 @@ import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
+import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.WebMvcSliceTestConfig;
@@ -124,6 +127,41 @@ class AdminOutboxEventControllerWebMvcTest {
 
         verify(outboxEventQueryService).getEvents(null, null, null, null, null, null, pageable);
         verifyNoMoreInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvents_shouldReturnBadRequestWhenCreatedFromIsAfterCreatedTo() throws Exception {
+        Instant createdFrom = Instant.parse("2026-02-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-01-01T00:00:00Z");
+        when(outboxEventQueryService.getEvents(
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(createdFrom),
+                eq(createdTo),
+                any(Pageable.class)))
+                .thenThrow(new OutboxEventDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("createdFrom", createdFrom.toString())
+                        .param("createdTo", createdTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_DATE_RANGE_INVALID"))
+                .andExpect(jsonPath("$.message").value("createdFrom must be before or equal to createdTo."))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventQueryService).getEvents(
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(createdFrom),
+                eq(createdTo),
+                any(Pageable.class));
     }
 
     @Test
