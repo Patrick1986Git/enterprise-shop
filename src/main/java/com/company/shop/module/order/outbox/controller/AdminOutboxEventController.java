@@ -7,12 +7,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.common.dto.PageResponseDTO;
+import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
 import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
@@ -31,9 +33,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class AdminOutboxEventController {
 
     private final OutboxEventQueryService outboxEventQueryService;
+    private final OutboxEventAdminCommandService outboxEventAdminCommandService;
 
-    public AdminOutboxEventController(OutboxEventQueryService outboxEventQueryService) {
+    public AdminOutboxEventController(
+            OutboxEventQueryService outboxEventQueryService,
+            OutboxEventAdminCommandService outboxEventAdminCommandService) {
         this.outboxEventQueryService = outboxEventQueryService;
+        this.outboxEventAdminCommandService = outboxEventAdminCommandService;
     }
 
     @GetMapping
@@ -65,6 +71,19 @@ public class AdminOutboxEventController {
     })
     public OutboxEventDetailResponseDTO getEvent(@PathVariable UUID id) {
         return outboxEventQueryService.getEvent(id);
+    }
+
+    @PostMapping("/{id}/requeue")
+    @Operation(summary = "Requeue failed outbox event for processing")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Outbox event requeued successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+            @ApiResponse(responseCode = "404", description = "Outbox event not found."),
+            @ApiResponse(responseCode = "409", description = "Outbox event cannot be requeued from its current status.")
+    })
+    public OutboxEventResponseDTO requeueEvent(@PathVariable UUID id) {
+        return outboxEventAdminCommandService.requeueFailedEvent(id);
     }
 
     @GetMapping("/summary")

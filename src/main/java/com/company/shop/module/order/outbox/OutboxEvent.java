@@ -77,6 +77,12 @@ public class OutboxEvent extends BaseEntity {
         this.processedAt = null;
     }
 
+    public void requeueForProcessing() {
+        this.status = OutboxEventStatus.PENDING;
+        this.processedAt = null;
+        this.lastError = null;
+    }
+
     public String getAggregateType() {
         return aggregateType;
     }
