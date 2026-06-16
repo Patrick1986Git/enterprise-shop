@@ -26,9 +26,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
+import com.company.shop.common.model.BaseEntity;
+import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventQueryServiceTest {
@@ -106,6 +109,40 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).findNewestCreatedAtByStatus(OutboxEventStatus.FAILED);
         verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
         verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvent_shouldReturnMappedDetailDtoWhenEventExists() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":1}");
+        setId(event, eventId);
+        OutboxEventDetailResponseDTO detail = detailResponse(eventId);
+        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventMapper.toDetailDto(event)).thenReturn(detail);
+
+        OutboxEventDetailResponseDTO result = outboxEventQueryService.getEvent(eventId);
+
+        assertThat(result).isEqualTo(detail);
+        verify(outboxEventRepository).findById(eventId);
+        verify(outboxEventMapper).toDetailDto(event);
+        verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvent_shouldThrowWhenEventIsMissing() {
+        UUID eventId = UUID.randomUUID();
+        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> outboxEventQueryService.getEvent(eventId))
+                .isInstanceOf(OutboxEventNotFoundException.class)
+                .hasMessage("Outbox event not found: " + eventId)
+                .extracting("errorCode")
+                .isEqualTo("OUTBOX_EVENT_NOT_FOUND");
+
+        verify(outboxEventRepository).findById(eventId);
+        verifyNoMoreInteractions(outboxEventRepository);
+        verifyNoInteractions(outboxEventMapper, outboxEventProcessor);
     }
 
     @Test
@@ -218,6 +255,26 @@ class OutboxEventQueryServiceTest {
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
+    }
+
+    private OutboxEventDetailResponseDTO detailResponse(UUID id) {
+        return new OutboxEventDetailResponseDTO(
+                id,
+                "Order",
+                UUID.randomUUID(),
+                "OrderPlaced",
+                "{\"id\":1}",
+                OutboxEventStatus.PENDING,
+                Instant.parse("2026-01-01T10:00:00Z"),
+                null,
+                0,
+                null);
+    }
+
+    private void setId(Object entity, UUID id) throws Exception {
+        var field = BaseEntity.class.getDeclaredField("id");
+        field.setAccessible(true);
+        field.set(entity, id);
     }
 
     private OutboxEventResponseDTO response(UUID id) {

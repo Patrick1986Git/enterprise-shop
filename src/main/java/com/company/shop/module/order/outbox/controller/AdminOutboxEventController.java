@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
+import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 
@@ -51,6 +53,18 @@ public class AdminOutboxEventController {
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(outboxEventQueryService.getEvents(
                 status, aggregateType, aggregateId, eventType, createdFrom, createdTo, pageable));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get outbox event details")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Outbox event details returned successfully."),
+            @ApiResponse(responseCode = "401", description = "Unauthorized."),
+            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
+            @ApiResponse(responseCode = "404", description = "Outbox event not found.")
+    })
+    public OutboxEventDetailResponseDTO getEvent(@PathVariable UUID id) {
+        return outboxEventQueryService.getEvent(id);
     }
 
     @GetMapping("/summary")

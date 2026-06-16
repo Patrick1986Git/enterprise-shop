@@ -35,9 +35,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
+import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.WebMvcSliceTestConfig;
@@ -204,6 +206,76 @@ class AdminOutboxEventControllerWebMvcTest {
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
         assertThat(pageableCaptor.getValue().getSort()).containsExactly(Sort.Order.asc("eventType"));
+    }
+
+    @Test
+    void getEvent_shouldReturnDetailForAdmin() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        UUID aggregateId = UUID.randomUUID();
+        OutboxEventDetailResponseDTO response = new OutboxEventDetailResponseDTO(
+                eventId,
+                "Order",
+                aggregateId,
+                "OrderPlaced",
+                "{\"orderId\":\"" + aggregateId + "\"}",
+                OutboxEventStatus.FAILED,
+                Instant.parse("2026-01-01T10:00:00Z"),
+                Instant.parse("2026-01-01T10:01:00Z"),
+                2,
+                "boom");
+        when(outboxEventQueryService.getEvent(eventId)).thenReturn(response);
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}", eventId)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(eventId.toString()))
+                .andExpect(jsonPath("$.aggregateType").value("Order"))
+                .andExpect(jsonPath("$.aggregateId").value(aggregateId.toString()))
+                .andExpect(jsonPath("$.eventType").value("OrderPlaced"))
+                .andExpect(jsonPath("$.payload").value("{\"orderId\":\"" + aggregateId + "\"}"))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.createdAt").value("2026-01-01T10:00:00Z"))
+                .andExpect(jsonPath("$.processedAt").value("2026-01-01T10:01:00Z"))
+                .andExpect(jsonPath("$.attempts").value(2))
+                .andExpect(jsonPath("$.lastError").value("boom"));
+
+        verify(outboxEventQueryService).getEvent(eventId);
+        verifyNoMoreInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvent_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}", UUID.randomUUID())
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvent_shouldReturnForbiddenForAnonymous() throws Exception {
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(outboxEventQueryService);
+    }
+
+    @Test
+    void getEvent_shouldReturnNotFoundWhenEventIsMissing() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        when(outboxEventQueryService.getEvent(eventId)).thenThrow(new OutboxEventNotFoundException(eventId));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}", eventId)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Outbox event not found: " + eventId))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventQueryService).getEvent(eventId);
     }
 
     @Test

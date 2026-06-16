@@ -11,9 +11,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
-import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
+import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 
 @Service
 public class OutboxEventQueryService {
@@ -35,6 +37,13 @@ public class OutboxEventQueryService {
                 outboxEventRepository.count(),
                 outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING).orElse(null),
                 outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null));
+    }
+
+    @Transactional(readOnly = true)
+    public OutboxEventDetailResponseDTO getEvent(UUID id) {
+        return outboxEventRepository.findById(id)
+                .map(outboxEventMapper::toDetailDto)
+                .orElseThrow(() -> new OutboxEventNotFoundException(id));
     }
 
     @Transactional(readOnly = true)
