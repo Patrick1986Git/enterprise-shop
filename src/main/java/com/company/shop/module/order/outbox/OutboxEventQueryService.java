@@ -35,6 +35,8 @@ public class OutboxEventQueryService {
                 outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED),
                 outboxEventRepository.countByStatus(OutboxEventStatus.FAILED),
                 outboxEventRepository.count(),
+                outboxEventRepository.countByRequeueCountGreaterThan(0),
+                outboxEventRepository.sumRequeueCount(),
                 outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING).orElse(null),
                 outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null));
     }

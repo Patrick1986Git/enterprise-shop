@@ -14,6 +14,11 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
 
     long countByStatus(OutboxEventStatus status);
 
+    long countByRequeueCountGreaterThan(int requeueCount);
+
+    @Query("select coalesce(sum(e.requeueCount), 0) from OutboxEvent e")
+    long sumRequeueCount();
+
     @Query("select min(e.createdAt) from OutboxEvent e where e.status = :status")
     Optional<Instant> findOldestCreatedAtByStatus(@Param("status") OutboxEventStatus status);
 

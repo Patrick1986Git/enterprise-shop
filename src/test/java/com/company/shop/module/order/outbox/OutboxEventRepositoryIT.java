@@ -180,6 +180,31 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 .hasValueSatisfying(actual -> assertThat(actual).isEqualTo(newestFailedCreatedAt));
     }
 
+    @Test
+    void countByRequeueCountGreaterThan_shouldCountOnlyRequeuedEvents() {
+        OutboxEvent requeuedOnce = requeuedEvent(1);
+        OutboxEvent requeuedTwice = requeuedEvent(2);
+        OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(requeuedOnce, requeuedTwice, neverRequeued));
+
+        assertThat(outboxEventRepository.countByRequeueCountGreaterThan(0)).isEqualTo(2L);
+    }
+
+    @Test
+    void sumRequeueCount_shouldReturnSumAcrossAllEvents() {
+        OutboxEvent requeuedOnce = requeuedEvent(1);
+        OutboxEvent requeuedTwice = requeuedEvent(2);
+        OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(requeuedOnce, requeuedTwice, neverRequeued));
+
+        assertThat(outboxEventRepository.sumRequeueCount()).isEqualTo(3L);
+    }
+
+    @Test
+    void sumRequeueCount_shouldReturnZeroWhenNoEventsExist() {
+        assertThat(outboxEventRepository.sumRequeueCount()).isZero();
+    }
+
 
     @Test
     void findAll_shouldFilterByStatus() {
@@ -475,6 +500,15 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 valueOrNull(columnName, "created_at", "CURRENT_TIMESTAMP"),
                 valueOrNull(columnName, "attempts", "0"),
                 valueOrNull(columnName, "requeue_count", "0"));
+    }
+
+    private OutboxEvent requeuedEvent(int requeueCount) {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        for (int i = 0; i < requeueCount; i++) {
+            event.markFailed("boom");
+            event.requeueForProcessing("admin@example.com");
+        }
+        return event;
     }
 
     private String valueOrNull(String nullableColumnName, String currentColumnName, String value) {
