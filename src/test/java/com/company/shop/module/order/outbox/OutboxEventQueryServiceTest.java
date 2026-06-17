@@ -61,6 +61,8 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED)).thenReturn(3L);
         when(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED)).thenReturn(1L);
         when(outboxEventRepository.count()).thenReturn(6L);
+        when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(2L);
+        when(outboxEventRepository.sumRequeueCount()).thenReturn(5L);
         when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING))
                 .thenReturn(Optional.of(oldestPendingCreatedAt));
         when(outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED))
@@ -72,12 +74,16 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.processedCount()).isEqualTo(3L);
         assertThat(summary.failedCount()).isEqualTo(1L);
         assertThat(summary.totalCount()).isEqualTo(6L);
+        assertThat(summary.requeuedEventCount()).isEqualTo(2L);
+        assertThat(summary.totalRequeueCount()).isEqualTo(5L);
         assertThat(summary.oldestPendingCreatedAt()).isEqualTo(oldestPendingCreatedAt);
         assertThat(summary.newestFailedCreatedAt()).isEqualTo(newestFailedCreatedAt);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.FAILED);
         verify(outboxEventRepository).count();
+        verify(outboxEventRepository).countByRequeueCountGreaterThan(0);
+        verify(outboxEventRepository).sumRequeueCount();
         verify(outboxEventRepository).findOldestCreatedAtByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).findNewestCreatedAtByStatus(OutboxEventStatus.FAILED);
         verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
@@ -90,6 +96,8 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED)).thenReturn(4L);
         when(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED)).thenReturn(0L);
         when(outboxEventRepository.count()).thenReturn(4L);
+        when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(0L);
+        when(outboxEventRepository.sumRequeueCount()).thenReturn(0L);
         when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING)).thenReturn(Optional.empty());
         when(outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED)).thenReturn(Optional.empty());
 
@@ -99,12 +107,16 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.processedCount()).isEqualTo(4L);
         assertThat(summary.failedCount()).isZero();
         assertThat(summary.totalCount()).isEqualTo(4L);
+        assertThat(summary.requeuedEventCount()).isZero();
+        assertThat(summary.totalRequeueCount()).isZero();
         assertThat(summary.oldestPendingCreatedAt()).isNull();
         assertThat(summary.newestFailedCreatedAt()).isNull();
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.FAILED);
         verify(outboxEventRepository).count();
+        verify(outboxEventRepository).countByRequeueCountGreaterThan(0);
+        verify(outboxEventRepository).sumRequeueCount();
         verify(outboxEventRepository).findOldestCreatedAtByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).findNewestCreatedAtByStatus(OutboxEventStatus.FAILED);
         verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);

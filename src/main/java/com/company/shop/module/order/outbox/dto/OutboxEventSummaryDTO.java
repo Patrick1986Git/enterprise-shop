@@ -7,6 +7,8 @@ public record OutboxEventSummaryDTO(
         long processedCount,
         long failedCount,
         long totalCount,
+        long requeuedEventCount,
+        long totalRequeueCount,
         Instant oldestPendingCreatedAt,
         Instant newestFailedCreatedAt) {
 }
