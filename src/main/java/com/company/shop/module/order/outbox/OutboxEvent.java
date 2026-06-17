@@ -47,6 +47,15 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "last_error")
     private String lastError;
 
+    @Column(name = "requeue_count", nullable = false)
+    private int requeueCount;
+
+    @Column(name = "last_requeued_at")
+    private Instant lastRequeuedAt;
+
+    @Column(name = "last_requeued_by", length = 255)
+    private String lastRequeuedBy;
+
     protected OutboxEvent() {
     }
 
@@ -77,10 +86,18 @@ public class OutboxEvent extends BaseEntity {
         this.processedAt = null;
     }
 
-    public void requeueForProcessing() {
+    public void requeueForProcessing(String requeuedBy) {
+        String normalizedRequeuedBy = requeuedBy == null ? null : requeuedBy.trim();
+        if (normalizedRequeuedBy == null || normalizedRequeuedBy.isBlank()) {
+            throw new IllegalArgumentException("requeuedBy must not be blank");
+        }
+
         this.status = OutboxEventStatus.PENDING;
         this.processedAt = null;
         this.lastError = null;
+        this.requeueCount += 1;
+        this.lastRequeuedAt = Instant.now();
+        this.lastRequeuedBy = normalizedRequeuedBy;
     }
 
     public String getAggregateType() {
@@ -117,5 +134,17 @@ public class OutboxEvent extends BaseEntity {
 
     public String getLastError() {
         return lastError;
+    }
+
+    public int getRequeueCount() {
+        return requeueCount;
+    }
+
+    public Instant getLastRequeuedAt() {
+        return lastRequeuedAt;
+    }
+
+    public String getLastRequeuedBy() {
+        return lastRequeuedBy;
     }
 }
