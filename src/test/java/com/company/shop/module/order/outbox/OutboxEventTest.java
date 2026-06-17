@@ -23,6 +23,9 @@ class OutboxEventTest {
         assertThat(event.getCreatedAt()).isNotNull();
         assertThat(event.getProcessedAt()).isNull();
         assertThat(event.getLastError()).isNull();
+        assertThat(event.getRequeueCount()).isZero();
+        assertThat(event.getLastRequeuedAt()).isNull();
+        assertThat(event.getLastRequeuedBy()).isNull();
     }
 
     @Test
@@ -46,12 +49,30 @@ class OutboxEventTest {
         event.markFailed("third failure");
         int attempts = event.getAttempts();
 
-        event.requeueForProcessing();
+        event.requeueForProcessing("admin@example.com");
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getLastError()).isNull();
         assertThat(event.getProcessedAt()).isNull();
         assertThat(event.getAttempts()).isEqualTo(attempts);
+        assertThat(event.getRequeueCount()).isEqualTo(1);
+        assertThat(event.getLastRequeuedAt()).isNotNull();
+        assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
+    }
+
+    @Test
+    void requeueForProcessing_shouldIncrementCountAndUpdateActorForMultipleRequeues() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        event.markFailed("first failure");
+        event.requeueForProcessing("first-admin@example.com");
+        event.markFailed("second failure");
+
+        event.requeueForProcessing(" second-admin@example.com ");
+
+        assertThat(event.getRequeueCount()).isEqualTo(2);
+        assertThat(event.getLastRequeuedAt()).isNotNull();
+        assertThat(event.getLastRequeuedBy()).isEqualTo("second-admin@example.com");
+        assertThat(event.getAttempts()).isEqualTo(2);
     }
 
     @Test

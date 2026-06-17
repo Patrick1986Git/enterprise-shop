@@ -33,6 +33,9 @@ class OutboxEventMapperTest {
         assertThat(result.processedAt()).isNull();
         assertThat(result.attempts()).isZero();
         assertThat(result.lastError()).isNull();
+        assertThat(result.requeueCount()).isZero();
+        assertThat(result.lastRequeuedAt()).isNull();
+        assertThat(result.lastRequeuedBy()).isNull();
     }
 
     @Test
@@ -55,6 +58,9 @@ class OutboxEventMapperTest {
         assertThat(result.processedAt()).isNull();
         assertThat(result.attempts()).isZero();
         assertThat(result.lastError()).isNull();
+        assertThat(result.requeueCount()).isZero();
+        assertThat(result.lastRequeuedAt()).isNull();
+        assertThat(result.lastRequeuedBy()).isNull();
     }
 
     private void setId(Object entity, UUID id) throws Exception {

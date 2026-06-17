@@ -2,9 +2,11 @@ package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import java.sql.PreparedStatement;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +24,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
+import jakarta.persistence.EntityManager;
+
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
@@ -32,6 +36,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @BeforeEach
     void cleanOutboxEvents() {
@@ -59,6 +66,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         assertThat(savedEvent.getProcessedAt()).isNull();
         assertThat(savedEvent.getAttempts()).isZero();
         assertThat(savedEvent.getLastError()).isNull();
+        assertThat(savedEvent.getRequeueCount()).isZero();
+        assertThat(savedEvent.getLastRequeuedAt()).isNull();
+        assertThat(savedEvent.getLastRequeuedBy()).isNull();
     }
 
     @Test
@@ -80,12 +90,32 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         });
 
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
-                "SELECT status, attempts FROM outbox_events WHERE id = ?",
+                "SELECT status, attempts, requeue_count, last_requeued_at, last_requeued_by FROM outbox_events WHERE id = ?",
                 eventId);
 
         assertThat(defaults)
                 .containsEntry("status", OutboxEventStatus.PENDING.name())
-                .containsEntry("attempts", 0);
+                .containsEntry("attempts", 0)
+                .containsEntry("requeue_count", 0)
+                .containsEntry("last_requeued_at", null)
+                .containsEntry("last_requeued_by", null);
+    }
+
+    @Test
+    void saveAndLoad_shouldPreserveRequeueMetadataAfterRequeueTransition() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        event.markFailed("boom");
+        event.requeueForProcessing("admin@example.com");
+        Instant requeuedAt = event.getLastRequeuedAt();
+
+        UUID savedId = outboxEventRepository.saveAndFlush(event).getId();
+        entityManager.clear();
+
+        OutboxEvent loadedEvent = outboxEventRepository.findById(savedId).orElseThrow();
+
+        assertThat(loadedEvent.getRequeueCount()).isEqualTo(1);
+        assertThat(loadedEvent.getLastRequeuedAt()).isCloseTo(requeuedAt, within(1, ChronoUnit.MILLIS));
+        assertThat(loadedEvent.getLastRequeuedBy()).isEqualTo("admin@example.com");
     }
 
     @Test
@@ -357,7 +387,8 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 "payload",
                 "status",
                 "created_at",
-                "attempts")) {
+                "attempts",
+                "requeue_count")) {
             assertThatThrownBy(() -> jdbcTemplate.update(insertSqlWithNullValueFor(requiredColumn)))
                     .as("Expected database to reject null %s", requiredColumn)
                     .hasMessageContaining(requiredColumn);
@@ -430,9 +461,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
 
         return """
                 INSERT INTO outbox_events (
-                    id, aggregate_type, aggregate_id, event_type, payload, status, created_at, attempts
+                    id, aggregate_type, aggregate_id, event_type, payload, status, created_at, attempts, requeue_count
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 """.formatted(
                 valueOrNull(columnName, "id", "'" + eventId + "'"),
@@ -442,7 +473,8 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 valueOrNull(columnName, "payload", "'{\"orderId\":\"" + aggregateId + "\"}'::jsonb"),
                 valueOrNull(columnName, "status", "'" + OutboxEventStatus.PENDING.name() + "'"),
                 valueOrNull(columnName, "created_at", "CURRENT_TIMESTAMP"),
-                valueOrNull(columnName, "attempts", "0"));
+                valueOrNull(columnName, "attempts", "0"),
+                valueOrNull(columnName, "requeue_count", "0"));
     }
 
     private String valueOrNull(String nullableColumnName, String currentColumnName, String value) {

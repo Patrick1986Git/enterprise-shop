@@ -107,7 +107,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
                 2,
-                "boom");
+                "boom",
+                1,
+                Instant.parse("2026-01-01T10:02:00Z"),
+                "admin@example.com");
         Pageable pageable = PageRequest.of(0, 20);
         when(outboxEventQueryService.getEvents(null, null, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(response), pageable, 1));
@@ -125,6 +128,9 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].processedAt").value("2026-01-01T10:01:00Z"))
                 .andExpect(jsonPath("$.content[0].attempts").value(2))
                 .andExpect(jsonPath("$.content[0].lastError").value("boom"))
+                .andExpect(jsonPath("$.content[0].requeueCount").value(1))
+                .andExpect(jsonPath("$.content[0].lastRequeuedAt").value("2026-01-01T10:02:00Z"))
+                .andExpect(jsonPath("$.content[0].lastRequeuedBy").value("admin@example.com"))
                 .andExpect(jsonPath("$.content[0].payload").doesNotExist())
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20))
@@ -230,7 +236,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
                 2,
-                "boom");
+                "boom",
+                1,
+                Instant.parse("2026-01-01T10:02:00Z"),
+                "admin@example.com");
         when(outboxEventQueryService.getEvent(eventId)).thenReturn(response);
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}", eventId)
@@ -246,7 +255,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.processedAt").value("2026-01-01T10:01:00Z"))
                 .andExpect(jsonPath("$.attempts").value(2))
-                .andExpect(jsonPath("$.lastError").value("boom"));
+                .andExpect(jsonPath("$.lastError").value("boom"))
+                .andExpect(jsonPath("$.requeueCount").value(1))
+                .andExpect(jsonPath("$.lastRequeuedAt").value("2026-01-01T10:02:00Z"))
+                .andExpect(jsonPath("$.lastRequeuedBy").value("admin@example.com"));
 
         verify(outboxEventQueryService).getEvent(eventId);
         verifyNoMoreInteractions(outboxEventQueryService);
@@ -300,7 +312,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 3,
-                null);
+                null,
+                2,
+                Instant.parse("2026-01-01T10:03:00Z"),
+                "admin@example.com");
         when(outboxEventAdminCommandService.requeueFailedEvent(eventId)).thenReturn(response);
 
         mockMvc.perform(post(ADMIN_OUTBOX_EVENTS_URL + "/{id}/requeue", eventId)
@@ -317,6 +332,9 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.processedAt").value(nullValue()))
                 .andExpect(jsonPath("$.attempts").value(3))
                 .andExpect(jsonPath("$.lastError").value(nullValue()))
+                .andExpect(jsonPath("$.requeueCount").value(2))
+                .andExpect(jsonPath("$.lastRequeuedAt").value("2026-01-01T10:03:00Z"))
+                .andExpect(jsonPath("$.lastRequeuedBy").value("admin@example.com"))
                 .andExpect(jsonPath("$.payload").doesNotExist());
 
         verify(outboxEventAdminCommandService).requeueFailedEvent(eventId);

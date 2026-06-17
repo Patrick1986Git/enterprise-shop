@@ -46,7 +46,10 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                             'created_at',
                             'processed_at',
                             'attempts',
-                            'last_error'
+                            'last_error',
+                            'requeue_count',
+                            'last_requeued_at',
+                            'last_requeued_by'
                         )
                         """,
                 rs -> {
@@ -67,7 +70,10 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                 .containsEntry("created_at", "timestamp with time zone")
                 .containsEntry("processed_at", "timestamp with time zone")
                 .containsEntry("attempts", "integer")
-                .containsEntry("last_error", "text");
+                .containsEntry("last_error", "text")
+                .containsEntry("requeue_count", "integer")
+                .containsEntry("last_requeued_at", "timestamp with time zone")
+                .containsEntry("last_requeued_by", "character varying");
     }
 
     @Test

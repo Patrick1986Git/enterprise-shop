@@ -268,6 +268,9 @@ class OutboxEventQueryServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 0,
+                null,
+                0,
+                null,
                 null);
     }
 
@@ -287,6 +290,9 @@ class OutboxEventQueryServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 0,
+                null,
+                0,
+                null,
                 null);
     }
 }

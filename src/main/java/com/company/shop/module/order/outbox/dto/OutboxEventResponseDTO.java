@@ -14,5 +14,8 @@ public record OutboxEventResponseDTO(
         Instant createdAt,
         Instant processedAt,
         int attempts,
-        String lastError) {
+        String lastError,
+        int requeueCount,
+        Instant lastRequeuedAt,
+        String lastRequeuedBy) {
 }

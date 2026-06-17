@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventRequeueNotAllowedException;
+import com.company.shop.security.CurrentUserProvider;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventAdminCommandServiceTest {
@@ -33,11 +34,15 @@ class OutboxEventAdminCommandServiceTest {
     @Mock
     private OutboxEventProcessor outboxEventProcessor;
 
+    @Mock
+    private CurrentUserProvider currentUserProvider;
+
     private OutboxEventAdminCommandService outboxEventAdminCommandService;
 
     @BeforeEach
     void setUp() {
-        outboxEventAdminCommandService = new OutboxEventAdminCommandService(outboxEventRepository, outboxEventMapper);
+        outboxEventAdminCommandService = new OutboxEventAdminCommandService(
+                outboxEventRepository, outboxEventMapper, currentUserProvider);
     }
 
     @Test
@@ -47,6 +52,7 @@ class OutboxEventAdminCommandServiceTest {
         event.markFailed("boom");
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
         when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
         when(outboxEventMapper.toDto(event)).thenReturn(response);
 
         OutboxEventResponseDTO result = outboxEventAdminCommandService.requeueFailedEvent(eventId);
@@ -56,10 +62,14 @@ class OutboxEventAdminCommandServiceTest {
         assertThat(event.getLastError()).isNull();
         assertThat(event.getProcessedAt()).isNull();
         assertThat(event.getAttempts()).isEqualTo(1);
+        assertThat(event.getRequeueCount()).isEqualTo(1);
+        assertThat(event.getLastRequeuedAt()).isNotNull();
+        assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
         verify(outboxEventRepository).findById(eventId);
+        verify(currentUserProvider).getCurrentUserEmail();
         verify(outboxEventMapper).toDto(event);
         verifyNoInteractions(outboxEventProcessor);
-        verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
+        verifyNoMoreInteractions(outboxEventRepository, currentUserProvider, outboxEventMapper);
     }
 
     @Test
@@ -73,7 +83,7 @@ class OutboxEventAdminCommandServiceTest {
                 .isEqualTo("OUTBOX_EVENT_NOT_FOUND");
 
         verify(outboxEventRepository).findById(eventId);
-        verifyNoInteractions(outboxEventMapper, outboxEventProcessor);
+        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor);
         verifyNoMoreInteractions(outboxEventRepository);
     }
 
@@ -89,7 +99,7 @@ class OutboxEventAdminCommandServiceTest {
                 .isEqualTo("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED");
 
         verify(outboxEventRepository).findById(eventId);
-        verifyNoInteractions(outboxEventMapper, outboxEventProcessor);
+        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor);
     }
 
     @Test
@@ -105,7 +115,7 @@ class OutboxEventAdminCommandServiceTest {
                 .isEqualTo("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED");
 
         verify(outboxEventRepository).findById(eventId);
-        verifyNoInteractions(outboxEventMapper, outboxEventProcessor);
+        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor);
     }
 
     private OutboxEventResponseDTO response(UUID id, OutboxEventStatus status) {
@@ -118,6 +128,9 @@ class OutboxEventAdminCommandServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 1,
-                null);
+                null,
+                1,
+                Instant.parse("2026-01-01T10:02:00Z"),
+                "admin@example.com");
     }
 }
