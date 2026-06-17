@@ -214,7 +214,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(failedId, OutboxEventStatus.FAILED, "Order", UUID.randomUUID(), "OrderFailed");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(failedId);
@@ -228,7 +228,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(cartId, OutboxEventStatus.PENDING, "Cart", UUID.randomUUID(), "CartCheckedOut");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, " order ", null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, " order ", null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(orderId);
@@ -242,7 +242,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(failedId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "PaymentFailed");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, " placed ", null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, " placed ", null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(placedId);
@@ -257,7 +257,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(otherEventId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, matchingAggregateId, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, matchingAggregateId, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingEventId);
@@ -273,7 +273,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(pendingCartId, OutboxEventStatus.PENDING, "Cart", UUID.randomUUID(), "CartCheckedOut");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, "ord", null, null, null, null),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, "ord", null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
@@ -286,7 +286,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PROCESSED, "Payment", UUID.randomUUID(), "PaymentCaptured");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, " ", null, " ", null, null),
+                OutboxEventSpecifications.adminFilters(null, " ", null, " ", null, null, null),
                 PageRequest.of(0, 2));
 
         assertThat(result.getContent()).hasSize(2);
@@ -307,7 +307,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-06-01T00:00:01Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -328,7 +328,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, upperBound),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, upperBound, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -351,7 +351,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, upperBound),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, upperBound, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(insideId);
@@ -372,7 +372,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, lowerBound, upperBound),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, lowerBound, upperBound, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
@@ -396,10 +396,92 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, " order ", null, " placed ", lowerBound, upperBound),
+                OutboxEventSpecifications.adminFilters(null, " order ", null, " placed ", lowerBound, upperBound, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
+    }
+
+
+    @Test
+    void findAll_shouldFilterByRequeuedOnlyTrue() {
+        OutboxEvent requeued = requeuedEvent(1);
+        OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        outboxEventRepository.saveAllAndFlush(List.of(requeued, neverRequeued));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, Boolean.TRUE),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactly(requeued.getId())
+                .doesNotContain(neverRequeued.getId());
+    }
+
+    @Test
+    void findAll_shouldNotFilterByRequeuedOnlyFalse() {
+        OutboxEvent requeued = requeuedEvent(1);
+        OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        outboxEventRepository.saveAllAndFlush(List.of(requeued, neverRequeued));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, Boolean.FALSE),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactlyInAnyOrder(requeued.getId(), neverRequeued.getId());
+    }
+
+    @Test
+    void findAll_shouldNotFilterByRequeuedOnlyMissing() {
+        OutboxEvent requeued = requeuedEvent(1);
+        OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        outboxEventRepository.saveAllAndFlush(List.of(requeued, neverRequeued));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactlyInAnyOrder(requeued.getId(), neverRequeued.getId());
+    }
+
+    @Test
+    void findAll_shouldCombineRequeuedOnlyWithStatus() {
+        OutboxEvent matching = requeuedEvent(1);
+        OutboxEvent wrongStatus = requeuedEvent(1);
+        wrongStatus.markProcessed();
+        OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(matching, wrongStatus, neverRequeued));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, null, null, null, null, null, Boolean.TRUE),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matching.getId());
+    }
+
+    @Test
+    void findAll_shouldCombineRequeuedOnlyWithCreatedRange() {
+        OutboxEvent before = requeuedEvent(1);
+        OutboxEvent inside = requeuedEvent(1);
+        OutboxEvent neverRequeuedInside = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(before, inside, neverRequeuedInside));
+        Instant lowerBound = Instant.parse("2026-06-01T00:00:00Z");
+        Instant upperBound = Instant.parse("2026-06-30T23:59:59Z");
+        updateCreatedAt(before.getId(), Instant.parse("2026-05-31T23:59:59Z"));
+        updateCreatedAt(inside.getId(), Instant.parse("2026-06-15T12:00:00Z"));
+        updateCreatedAt(neverRequeuedInside.getId(), Instant.parse("2026-06-15T12:00:00Z"));
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, upperBound, Boolean.TRUE),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(inside.getId());
     }
 
     @Test
@@ -478,6 +560,13 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             statement.setInt(8, status == OutboxEventStatus.FAILED ? 1 : 0);
             return statement;
         });
+    }
+
+    private void updateCreatedAt(UUID eventId, Instant createdAt) {
+        jdbcTemplate.update(
+                "UPDATE outbox_events SET created_at = CAST(? AS timestamptz) WHERE id = ?",
+                createdAt.toString(),
+                eventId);
     }
 
     private String insertSqlWithNullValueFor(String columnName) {

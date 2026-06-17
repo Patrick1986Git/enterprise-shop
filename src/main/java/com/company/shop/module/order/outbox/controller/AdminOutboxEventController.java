@@ -56,9 +56,10 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) String eventType,
             @RequestParam(required = false) Instant createdFrom,
             @RequestParam(required = false) Instant createdTo,
+            @RequestParam(required = false) Boolean requeuedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(outboxEventQueryService.getEvents(
-                status, aggregateType, aggregateId, eventType, createdFrom, createdTo, pageable));
+                status, aggregateType, aggregateId, eventType, createdFrom, createdTo, requeuedOnly, pageable));
     }
 
     @GetMapping("/{id}")
