@@ -38,6 +38,23 @@ class OutboxEventTest {
     }
 
     @Test
+    void requeueForProcessing_shouldChangeFailedEventToPendingClearFailureStateAndPreserveAttempts() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        event.markFailed("first failure");
+        event.markFailed("second failure");
+        event.markProcessed();
+        event.markFailed("third failure");
+        int attempts = event.getAttempts();
+
+        event.requeueForProcessing();
+
+        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(event.getLastError()).isNull();
+        assertThat(event.getProcessedAt()).isNull();
+        assertThat(event.getAttempts()).isEqualTo(attempts);
+    }
+
+    @Test
     void markFailed_shouldSetFailedStatusIncrementAttemptsStoreLastErrorAndKeepProcessedAtNull() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
 
