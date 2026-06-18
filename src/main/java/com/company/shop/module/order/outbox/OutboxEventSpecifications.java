@@ -21,7 +21,8 @@ public final class OutboxEventSpecifications {
             UUID aggregateId,
             String eventType,
             Instant createdFrom,
-            Instant createdTo) {
+            Instant createdTo,
+            Boolean requeuedOnly) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -49,6 +50,10 @@ public final class OutboxEventSpecifications {
 
             if (createdTo != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), createdTo));
+            }
+
+            if (Boolean.TRUE.equals(requeuedOnly)) {
+                predicates.add(cb.greaterThan(root.get("requeueCount"), 0));
             }
 
             return cb.and(predicates.toArray(Predicate[]::new));

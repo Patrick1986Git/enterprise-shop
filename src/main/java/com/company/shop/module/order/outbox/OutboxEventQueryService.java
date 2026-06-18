@@ -56,13 +56,14 @@ public class OutboxEventQueryService {
             String eventType,
             Instant createdFrom,
             Instant createdTo,
+            Boolean requeuedOnly,
             Pageable pageable) {
         if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
             throw new OutboxEventDateRangeInvalidException();
         }
 
         Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
-                status, aggregateType, aggregateId, eventType, createdFrom, createdTo);
+                status, aggregateType, aggregateId, eventType, createdFrom, createdTo, requeuedOnly);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)

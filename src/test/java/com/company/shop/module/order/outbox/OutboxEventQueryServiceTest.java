@@ -171,12 +171,12 @@ class OutboxEventQueryServiceTest {
         Page<OutboxEventResponseDTO> result;
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null))
                     .thenReturn(specification);
 
-            result = outboxEventQueryService.getEvents(null, null, null, null, null, null, requestedPageable);
+            result = outboxEventQueryService.getEvents(null, null, null, null, null, null, null, requestedPageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -199,19 +199,41 @@ class OutboxEventQueryServiceTest {
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
             specifications.when(() -> OutboxEventSpecifications.adminFilters(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo))
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, Boolean.TRUE))
                     .thenReturn(specification);
 
             result = outboxEventQueryService.getEvents(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, pageable);
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, Boolean.TRUE, pageable);
 
             specifications.verify(() -> OutboxEventSpecifications.adminFilters(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo));
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, Boolean.TRUE));
         }
 
         assertThat(result.getSort()).containsExactly(Sort.Order.asc("eventType"));
         verify(outboxEventRepository).findAll(specification, pageable);
         verifyNoMoreInteractions(outboxEventMapper);
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+
+    @Test
+    void getEvents_shouldForwardFalseRequeuedOnlyToSpecification() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Specification<OutboxEvent> specification = (root, query, cb) -> null;
+        when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
+                .thenReturn(Page.empty(pageable));
+
+        try (MockedStatic<OutboxEventSpecifications> specifications =
+                org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, Boolean.FALSE))
+                    .thenReturn(specification);
+
+            outboxEventQueryService.getEvents(null, null, null, null, null, null, Boolean.FALSE, pageable);
+
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, Boolean.FALSE));
+        }
+
+        verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -221,7 +243,7 @@ class OutboxEventQueryServiceTest {
         Instant createdTo = Instant.parse("2026-01-01T00:00:00Z");
 
         assertThatThrownBy(() -> outboxEventQueryService.getEvents(
-                        null, null, null, null, createdFrom, createdTo, PageRequest.of(0, 20)))
+                        null, null, null, null, createdFrom, createdTo, Boolean.TRUE, PageRequest.of(0, 20)))
                 .isInstanceOf(OutboxEventDateRangeInvalidException.class)
                 .hasMessage("createdFrom must be before or equal to createdTo.")
                 .extracting("errorCode")
@@ -237,7 +259,7 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
-        outboxEventQueryService.getEvents(null, null, null, null, createdAt, createdAt, pageable);
+        outboxEventQueryService.getEvents(null, null, null, null, createdAt, createdAt, null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -250,7 +272,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, pageable);
+                null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, Boolean.FALSE, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -263,7 +285,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), pageable);
+                null, null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
