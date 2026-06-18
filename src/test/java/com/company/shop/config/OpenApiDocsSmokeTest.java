@@ -15,10 +15,10 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -31,17 +31,18 @@ import com.company.shop.module.notification.service.NotificationAdminCommandServ
 import com.company.shop.module.notification.service.NotificationQueryService;
 import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
-import com.company.shop.module.order.service.OrderService;
+import com.company.shop.module.order.outbox.OutboxEventAdminActionLogQueryService;
 import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
 import com.company.shop.module.order.outbox.OutboxEventProcessor;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
+import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
-import com.company.shop.module.order.service.query.OrderQueryProcessor;
 import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
+import com.company.shop.module.order.service.query.OrderQueryProcessor;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.service.ProductReviewService;
 import com.company.shop.module.product.service.ProductService;
-import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.system.service.ApplicationStatusService;
 import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.module.user.service.UserService;
@@ -148,6 +149,9 @@ class OpenApiDocsSmokeTest {
     private OutboxEventAdminCommandService outboxEventAdminCommandService;
 
     @MockitoBean
+    private OutboxEventAdminActionLogQueryService outboxEventAdminActionLogQueryService;
+
+    @MockitoBean
     private PaymentService paymentService;
 
     @MockitoBean
@@ -193,6 +197,7 @@ class OpenApiDocsSmokeTest {
                         "/api/v1/admin/outbox-events",
                         "/api/v1/admin/outbox-events/{id}",
                         "/api/v1/admin/outbox-events/{id}/requeue",
+                        "/api/v1/admin/outbox-events/{id}/actions",
                         "/api/v1/admin/outbox-events/summary",
                         "/api/v1/admin/notifications/{id}/requeue",
                         "/api/v1/admin/notifications/{id}/actions",

@@ -10,6 +10,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -79,6 +82,58 @@ class OutboxEventAdminActionLogRepositoryIT extends PostgresContainerSupport {
                 .findByOutboxEventIdOrderByCreatedAtDesc(selectedOutboxEventId))
                 .extracting(OutboxEventAdminActionLog::getActorEmail)
                 .containsExactly("second-admin@example.com", "first-admin@example.com");
+    }
+
+    @Test
+    void findByOutboxEventId_shouldReturnSelectedOutboxEventLogsWithPageableSort() {
+        UUID selectedOutboxEventId = UUID.randomUUID();
+        UUID otherOutboxEventId = UUID.randomUUID();
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                selectedOutboxEventId,
+                "first-admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                selectedOutboxEventId,
+                "second-admin@example.com",
+                Instant.parse("2026-01-01T11:00:00Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                otherOutboxEventId,
+                "other-admin@example.com",
+                Instant.parse("2026-01-01T12:00:00Z")));
+        entityManager.clear();
+
+        Page<OutboxEventAdminActionLog> page = outboxEventAdminActionLogRepository.findByOutboxEventId(
+                selectedOutboxEventId,
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(OutboxEventAdminActionLog::getActorEmail)
+                .containsExactly("second-admin@example.com", "first-admin@example.com");
+        assertThat(page.getTotalElements()).isEqualTo(2);
+    }
+
+    @Test
+    void findByOutboxEventId_shouldPageSelectedOutboxEventLogs() {
+        UUID selectedOutboxEventId = UUID.randomUUID();
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                selectedOutboxEventId,
+                "first-admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                selectedOutboxEventId,
+                "second-admin@example.com",
+                Instant.parse("2026-01-01T11:00:00Z")));
+        entityManager.clear();
+
+        Page<OutboxEventAdminActionLog> page = outboxEventAdminActionLogRepository.findByOutboxEventId(
+                selectedOutboxEventId,
+                PageRequest.of(1, 1, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(OutboxEventAdminActionLog::getActorEmail)
+                .containsExactly("first-admin@example.com");
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(page.getTotalPages()).isEqualTo(2);
     }
 
     private OutboxEventAdminActionLog logAt(UUID outboxEventId, String actorEmail, Instant createdAt) {

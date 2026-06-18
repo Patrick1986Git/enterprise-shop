@@ -36,9 +36,12 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.company.shop.module.order.outbox.OutboxEventAdminActionLogQueryService;
+import com.company.shop.module.order.outbox.OutboxEventAdminActionType;
 import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
+import com.company.shop.module.order.outbox.dto.OutboxEventAdminActionLogResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
@@ -67,6 +70,9 @@ class AdminOutboxEventControllerWebMvcTest {
     private OutboxEventAdminCommandService outboxEventAdminCommandService;
 
     @MockitoBean
+    private OutboxEventAdminActionLogQueryService outboxEventAdminActionLogQueryService;
+
+    @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
@@ -82,7 +88,7 @@ class AdminOutboxEventControllerWebMvcTest {
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -91,7 +97,7 @@ class AdminOutboxEventControllerWebMvcTest {
                         .with(user("user").roles("USER")))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -291,7 +297,7 @@ class AdminOutboxEventControllerWebMvcTest {
                         .with(user("user").roles("USER")))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -299,7 +305,7 @@ class AdminOutboxEventControllerWebMvcTest {
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}", UUID.randomUUID()))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -319,6 +325,92 @@ class AdminOutboxEventControllerWebMvcTest {
         verify(outboxEventQueryService).getEvent(eventId);
     }
 
+
+
+    @Test
+    void getEventActionLogs_shouldReturnForbiddenForAnonymous() throws Exception {
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
+    }
+
+    @Test
+    void getEventActionLogs_shouldReturnForbiddenForUserWithoutAdminRole() throws Exception {
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", UUID.randomUUID())
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
+    }
+
+    @Test
+    void getEventActionLogs_shouldReturnActionLogsForAdminAndPassPageable() throws Exception {
+        UUID outboxEventId = UUID.randomUUID();
+        UUID logId = UUID.randomUUID();
+        OutboxEventAdminActionLogResponseDTO response = new OutboxEventAdminActionLogResponseDTO(
+                logId,
+                outboxEventId,
+                OutboxEventAdminActionType.REQUEUE,
+                "admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z"),
+                "Requeued after failure");
+        when(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(eq(outboxEventId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(
+                        List.of(response),
+                        PageRequest.of(1, 5, Sort.by(Sort.Direction.ASC, "actorEmail")),
+                        11));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", outboxEventId)
+                        .param("page", "1")
+                        .param("size", "5")
+                        .param("sort", "actorEmail,asc")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.content[0].id").value(logId.toString()))
+                .andExpect(jsonPath("$.content[0].outboxEventId").value(outboxEventId.toString()))
+                .andExpect(jsonPath("$.content[0].actionType").value("REQUEUE"))
+                .andExpect(jsonPath("$.content[0].actorEmail").value("admin@example.com"))
+                .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
+                .andExpect(jsonPath("$.content[0].details").value("Requeued after failure"))
+                .andExpect(jsonPath("$.number").value(1))
+                .andExpect(jsonPath("$.size").value(5))
+                .andExpect(jsonPath("$.numberOfElements").value(1))
+                .andExpect(jsonPath("$.totalElements").value(11))
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andExpect(jsonPath("$.first").value(false))
+                .andExpect(jsonPath("$.last").value(false))
+                .andExpect(jsonPath("$.empty").value(false));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(outboxEventAdminActionLogQueryService).getOutboxEventActionLogs(eq(outboxEventId), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+        assertThat(pageableCaptor.getValue().getSort()).containsExactly(Sort.Order.asc("actorEmail"));
+        verifyNoMoreInteractions(outboxEventAdminActionLogQueryService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+    }
+
+    @Test
+    void getEventActionLogs_shouldReturnNotFoundWhenEventIsMissing() throws Exception {
+        UUID outboxEventId = UUID.randomUUID();
+        when(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(eq(outboxEventId), any(Pageable.class)))
+                .thenThrow(new OutboxEventNotFoundException(outboxEventId));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", outboxEventId)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Outbox event not found: " + outboxEventId))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventAdminActionLogQueryService).getOutboxEventActionLogs(eq(outboxEventId), any(Pageable.class));
+        verifyNoMoreInteractions(outboxEventAdminActionLogQueryService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+    }
 
     @Test
     void requeueEvent_shouldReturnRequeuedEventForAdminWithoutPayload() throws Exception {
@@ -370,7 +462,7 @@ class AdminOutboxEventControllerWebMvcTest {
                         .with(csrf()))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -379,7 +471,7 @@ class AdminOutboxEventControllerWebMvcTest {
                         .with(csrf()))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -424,7 +516,7 @@ class AdminOutboxEventControllerWebMvcTest {
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_SUMMARY_URL))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
@@ -433,7 +525,7 @@ class AdminOutboxEventControllerWebMvcTest {
                         .with(user("user").roles("USER")))
                 .andExpect(status().isForbidden());
 
-        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
+        verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService, outboxEventAdminActionLogQueryService);
     }
 
     @Test
