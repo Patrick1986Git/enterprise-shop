@@ -15,14 +15,17 @@ public class OutboxEventAdminCommandService {
 
     private final OutboxEventRepository outboxEventRepository;
     private final OutboxEventMapper outboxEventMapper;
+    private final OutboxEventAdminActionLogRepository outboxEventAdminActionLogRepository;
     private final CurrentUserProvider currentUserProvider;
 
     public OutboxEventAdminCommandService(
             OutboxEventRepository outboxEventRepository,
             OutboxEventMapper outboxEventMapper,
+            OutboxEventAdminActionLogRepository outboxEventAdminActionLogRepository,
             CurrentUserProvider currentUserProvider) {
         this.outboxEventRepository = outboxEventRepository;
         this.outboxEventMapper = outboxEventMapper;
+        this.outboxEventAdminActionLogRepository = outboxEventAdminActionLogRepository;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -37,6 +40,8 @@ public class OutboxEventAdminCommandService {
 
         String currentAdminEmail = normalizeCurrentAdminEmail(currentUserProvider.getCurrentUserEmail());
         event.requeueForProcessing(currentAdminEmail);
+        outboxEventAdminActionLogRepository.save(
+                OutboxEventAdminActionLog.requeue(event.getId(), currentAdminEmail));
         return outboxEventMapper.toDto(event);
     }
 
