@@ -359,7 +359,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(
                         List.of(response),
                         PageRequest.of(1, 5, Sort.by(Sort.Direction.ASC, "actorEmail")),
-                        6));
+                        11));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", outboxEventId)
                         .param("page", "1")
@@ -377,8 +377,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.number").value(1))
                 .andExpect(jsonPath("$.size").value(5))
                 .andExpect(jsonPath("$.numberOfElements").value(1))
-                .andExpect(jsonPath("$.totalElements").value(6))
-                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.totalElements").value(11))
+                .andExpect(jsonPath("$.totalPages").value(3))
                 .andExpect(jsonPath("$.first").value(false))
                 .andExpect(jsonPath("$.last").value(false))
                 .andExpect(jsonPath("$.empty").value(false));
