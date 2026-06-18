@@ -2,11 +2,14 @@ package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +38,9 @@ class OutboxEventAdminCommandServiceTest {
     private OutboxEventProcessor outboxEventProcessor;
 
     @Mock
+    private OutboxEventAdminActionLogRepository outboxEventAdminActionLogRepository;
+
+    @Mock
     private CurrentUserProvider currentUserProvider;
 
     private OutboxEventAdminCommandService outboxEventAdminCommandService;
@@ -42,13 +48,14 @@ class OutboxEventAdminCommandServiceTest {
     @BeforeEach
     void setUp() {
         outboxEventAdminCommandService = new OutboxEventAdminCommandService(
-                outboxEventRepository, outboxEventMapper, currentUserProvider);
+                outboxEventRepository, outboxEventMapper, outboxEventAdminActionLogRepository, currentUserProvider);
     }
 
     @Test
     void requeueFailedEvent_shouldRequeueFailedEventAndReturnMappedDto() {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        setId(event, eventId);
         event.markFailed("boom");
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
         when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
@@ -67,9 +74,11 @@ class OutboxEventAdminCommandServiceTest {
         assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
         verify(outboxEventRepository).findById(eventId);
         verify(currentUserProvider).getCurrentUserEmail();
+        verify(outboxEventAdminActionLogRepository).save(any(OutboxEventAdminActionLog.class));
         verify(outboxEventMapper).toDto(event);
         verifyNoInteractions(outboxEventProcessor);
-        verifyNoMoreInteractions(outboxEventRepository, currentUserProvider, outboxEventMapper);
+        verifyNoMoreInteractions(outboxEventRepository, currentUserProvider, outboxEventMapper,
+                outboxEventAdminActionLogRepository);
     }
 
     @Test
@@ -83,7 +92,8 @@ class OutboxEventAdminCommandServiceTest {
                 .isEqualTo("OUTBOX_EVENT_NOT_FOUND");
 
         verify(outboxEventRepository).findById(eventId);
-        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor);
+        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor,
+                outboxEventAdminActionLogRepository);
         verifyNoMoreInteractions(outboxEventRepository);
     }
 
@@ -99,7 +109,8 @@ class OutboxEventAdminCommandServiceTest {
                 .isEqualTo("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED");
 
         verify(outboxEventRepository).findById(eventId);
-        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor);
+        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor,
+                outboxEventAdminActionLogRepository);
     }
 
     @Test
@@ -115,7 +126,27 @@ class OutboxEventAdminCommandServiceTest {
                 .isEqualTo("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED");
 
         verify(outboxEventRepository).findById(eventId);
-        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor);
+        verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor,
+                outboxEventAdminActionLogRepository);
+    }
+
+    @Test
+    void requeueFailedEvent_shouldSaveRequeueAuditLogWithOutboxEventIdAndActorEmail() {
+        UUID eventId = UUID.randomUUID();
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        setId(event, eventId);
+        event.markFailed("boom");
+        OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
+        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
+        when(outboxEventMapper.toDto(event)).thenReturn(response);
+
+        outboxEventAdminCommandService.requeueFailedEvent(eventId);
+
+        verify(outboxEventAdminActionLogRepository).save(argThat(log ->
+                eventId.equals(log.getOutboxEventId())
+                        && log.getActionType() == OutboxEventAdminActionType.REQUEUE
+                        && "admin@example.com".equals(log.getActorEmail())));
     }
 
     private OutboxEventResponseDTO response(UUID id, OutboxEventStatus status) {
@@ -132,5 +163,15 @@ class OutboxEventAdminCommandServiceTest {
                 1,
                 Instant.parse("2026-01-01T10:02:00Z"),
                 "admin@example.com");
+    }
+
+    private void setId(OutboxEvent event, UUID id) {
+        try {
+            Field idField = com.company.shop.common.model.BaseEntity.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(event, id);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException(ex);
+        }
     }
 }
