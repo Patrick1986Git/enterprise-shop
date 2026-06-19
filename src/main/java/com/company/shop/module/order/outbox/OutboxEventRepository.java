@@ -25,6 +25,12 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
     @Query("select max(e.createdAt) from OutboxEvent e where e.status = :status")
     Optional<Instant> findNewestCreatedAtByStatus(@Param("status") OutboxEventStatus status);
 
+    @Query("select max(e.lastAttemptAt) from OutboxEvent e")
+    Optional<Instant> findNewestAttemptAt();
+
+    @Query("select max(e.lastAttemptAt) from OutboxEvent e where e.status = :status")
+    Optional<Instant> findNewestAttemptAtByStatus(@Param("status") OutboxEventStatus status);
+
     @Query(value = """
             SELECT *
             FROM outbox_events
