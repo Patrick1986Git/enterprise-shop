@@ -14,6 +14,7 @@ public record OutboxEventDetailResponseDTO(
         OutboxEventStatus status,
         Instant createdAt,
         Instant processedAt,
+        Instant lastAttemptAt,
         int attempts,
         String lastError,
         int requeueCount,

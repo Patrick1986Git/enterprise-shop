@@ -55,6 +55,7 @@ class OutboxEventProcessorTest {
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PROCESSED);
         assertThat(event.getProcessedAt()).isNotNull();
+        assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getLastError()).isNull();
     }
 
@@ -70,6 +71,7 @@ class OutboxEventProcessorTest {
         assertThat(result.failedCount()).isEqualTo(1);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.FAILED);
         assertThat(event.getLastError()).isEqualTo("handler failed");
+        assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getAttempts()).isEqualTo(1);
     }
 
@@ -85,6 +87,7 @@ class OutboxEventProcessorTest {
         assertThat(result.failedCount()).isEqualTo(1);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.FAILED);
         assertThat(event.getLastError()).isEqualTo("No outbox handler registered for event type: OrderPaid");
+        assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getAttempts()).isEqualTo(1);
     }
 

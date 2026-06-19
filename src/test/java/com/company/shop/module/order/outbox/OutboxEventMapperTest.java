@@ -20,6 +20,7 @@ class OutboxEventMapperTest {
         UUID eventId = UUID.randomUUID();
         UUID aggregateId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", aggregateId, "OrderPlaced", "{\"orderId\":1}");
+        event.markFailed("boom");
         setId(event, eventId);
 
         OutboxEventResponseDTO result = outboxEventMapper.toDto(event);
@@ -28,11 +29,12 @@ class OutboxEventMapperTest {
         assertThat(result.aggregateType()).isEqualTo("Order");
         assertThat(result.aggregateId()).isEqualTo(aggregateId);
         assertThat(result.eventType()).isEqualTo("OrderPlaced");
-        assertThat(result.status()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(result.status()).isEqualTo(OutboxEventStatus.FAILED);
         assertThat(result.createdAt()).isEqualTo(event.getCreatedAt());
         assertThat(result.processedAt()).isNull();
-        assertThat(result.attempts()).isZero();
-        assertThat(result.lastError()).isNull();
+        assertThat(result.lastAttemptAt()).isEqualTo(event.getLastAttemptAt());
+        assertThat(result.attempts()).isEqualTo(1);
+        assertThat(result.lastError()).isEqualTo("boom");
         assertThat(result.requeueCount()).isZero();
         assertThat(result.lastRequeuedAt()).isNull();
         assertThat(result.lastRequeuedBy()).isNull();
@@ -44,6 +46,7 @@ class OutboxEventMapperTest {
         UUID aggregateId = UUID.randomUUID();
         String payload = "{\"orderId\":1}";
         OutboxEvent event = OutboxEvent.pending("Order", aggregateId, "OrderPlaced", payload);
+        event.markFailed("boom");
         setId(event, eventId);
 
         OutboxEventDetailResponseDTO result = outboxEventMapper.toDetailDto(event);
@@ -53,11 +56,12 @@ class OutboxEventMapperTest {
         assertThat(result.aggregateId()).isEqualTo(aggregateId);
         assertThat(result.eventType()).isEqualTo("OrderPlaced");
         assertThat(result.payload()).isEqualTo(payload);
-        assertThat(result.status()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(result.status()).isEqualTo(OutboxEventStatus.FAILED);
         assertThat(result.createdAt()).isEqualTo(event.getCreatedAt());
         assertThat(result.processedAt()).isNull();
-        assertThat(result.attempts()).isZero();
-        assertThat(result.lastError()).isNull();
+        assertThat(result.lastAttemptAt()).isEqualTo(event.getLastAttemptAt());
+        assertThat(result.attempts()).isEqualTo(1);
+        assertThat(result.lastError()).isEqualTo("boom");
         assertThat(result.requeueCount()).isZero();
         assertThat(result.lastRequeuedAt()).isNull();
         assertThat(result.lastRequeuedBy()).isNull();

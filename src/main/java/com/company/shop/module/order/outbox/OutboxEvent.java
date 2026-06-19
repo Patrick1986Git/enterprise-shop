@@ -41,6 +41,9 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "processed_at")
     private Instant processedAt;
 
+    @Column(name = "last_attempt_at")
+    private Instant lastAttemptAt;
+
     @Column(name = "attempts", nullable = false)
     private int attempts;
 
@@ -74,14 +77,18 @@ public class OutboxEvent extends BaseEntity {
     }
 
     public void markProcessed() {
+        Instant now = Instant.now();
         this.status = OutboxEventStatus.PROCESSED;
-        this.processedAt = Instant.now();
+        this.processedAt = now;
+        this.lastAttemptAt = now;
         this.lastError = null;
     }
 
     public void markFailed(String errorMessage) {
+        Instant now = Instant.now();
         this.status = OutboxEventStatus.FAILED;
         this.attempts += 1;
+        this.lastAttemptAt = now;
         this.lastError = errorMessage;
         this.processedAt = null;
     }
@@ -126,6 +133,10 @@ public class OutboxEvent extends BaseEntity {
 
     public Instant getProcessedAt() {
         return processedAt;
+    }
+
+    public Instant getLastAttemptAt() {
+        return lastAttemptAt;
     }
 
     public int getAttempts() {
