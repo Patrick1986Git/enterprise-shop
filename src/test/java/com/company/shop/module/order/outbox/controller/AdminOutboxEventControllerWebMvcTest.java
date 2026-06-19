@@ -544,7 +544,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 2L,
                 5L,
                 Instant.parse("2026-01-01T10:00:00Z"),
-                Instant.parse("2026-01-01T11:00:00Z")));
+                Instant.parse("2026-01-01T11:00:00Z"),
+                Instant.parse("2026-01-01T12:00:00Z"),
+                Instant.parse("2026-01-01T11:30:00Z"),
+                Instant.parse("2026-01-01T12:00:00Z")));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_SUMMARY_URL)
                         .with(user("admin").roles("ADMIN")))
@@ -557,7 +560,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.requeuedEventCount").value(2))
                 .andExpect(jsonPath("$.totalRequeueCount").value(5))
                 .andExpect(jsonPath("$.oldestPendingCreatedAt").value("2026-01-01T10:00:00Z"))
-                .andExpect(jsonPath("$.newestFailedCreatedAt").value("2026-01-01T11:00:00Z"));
+                .andExpect(jsonPath("$.newestFailedCreatedAt").value("2026-01-01T11:00:00Z"))
+                .andExpect(jsonPath("$.newestAttemptAt").value("2026-01-01T12:00:00Z"))
+                .andExpect(jsonPath("$.newestProcessedAttemptAt").value("2026-01-01T11:30:00Z"))
+                .andExpect(jsonPath("$.newestFailedAttemptAt").value("2026-01-01T12:00:00Z"));
 
         verify(outboxEventQueryService).getSummary();
         verifyNoMoreInteractions(outboxEventQueryService);

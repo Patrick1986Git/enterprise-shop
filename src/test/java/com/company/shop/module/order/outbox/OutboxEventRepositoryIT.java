@@ -213,6 +213,72 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 .hasValueSatisfying(actual -> assertThat(actual).isEqualTo(newestFailedCreatedAt));
     }
 
+
+    @Test
+    void findNewestAttemptAt_shouldReturnNewestLastAttemptAtAcrossAllEvents() {
+        OutboxEvent processedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        processedEvent.markProcessed();
+
+        OutboxEvent failedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        failedEvent.markFailed("boom");
+        Instant newerAttemptAt = failedEvent.getLastAttemptAt();
+
+        outboxEventRepository.saveAllAndFlush(List.of(processedEvent, failedEvent));
+
+        assertThat(outboxEventRepository.findNewestAttemptAt())
+                .hasValueSatisfying(actual -> assertThat(actual).isCloseTo(newerAttemptAt, within(1, ChronoUnit.MILLIS)));
+    }
+
+    @Test
+    void findNewestAttemptAt_shouldReturnEmptyWhenNoEventsHaveLastAttemptAt() {
+        outboxEventRepository.saveAndFlush(OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}"));
+
+        assertThat(outboxEventRepository.findNewestAttemptAt()).isEmpty();
+    }
+
+    @Test
+    void findNewestAttemptAtByStatus_shouldReturnNewestProcessedAttemptTimestamp() {
+        OutboxEvent olderProcessedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        olderProcessedEvent.markProcessed();
+        OutboxEvent newestProcessedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        newestProcessedEvent.markProcessed();
+        Instant newestProcessedAttemptAt = newestProcessedEvent.getLastAttemptAt();
+
+        outboxEventRepository.saveAllAndFlush(List.of(olderProcessedEvent, newestProcessedEvent));
+
+        assertThat(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED))
+                .hasValueSatisfying(actual -> assertThat(actual).isCloseTo(newestProcessedAttemptAt, within(1, ChronoUnit.MILLIS)));
+    }
+
+    @Test
+    void findNewestAttemptAtByStatus_shouldReturnNewestFailedAttemptTimestamp() {
+        OutboxEvent olderFailedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        olderFailedEvent.markFailed("older");
+        OutboxEvent newestFailedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        newestFailedEvent.markFailed("newer");
+        Instant newestFailedAttemptAt = newestFailedEvent.getLastAttemptAt();
+
+        outboxEventRepository.saveAllAndFlush(List.of(olderFailedEvent, newestFailedEvent));
+
+        assertThat(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.FAILED))
+                .hasValueSatisfying(actual -> assertThat(actual).isCloseTo(newestFailedAttemptAt, within(1, ChronoUnit.MILLIS)));
+    }
+
+    @Test
+    void findNewestAttemptAtByStatus_shouldIgnoreEventsOfOtherStatuses() {
+        OutboxEvent processedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        processedEvent.markProcessed();
+        Instant processedAttemptAt = processedEvent.getLastAttemptAt();
+
+        OutboxEvent failedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
+        failedEvent.markFailed("boom");
+
+        outboxEventRepository.saveAllAndFlush(List.of(processedEvent, failedEvent));
+
+        assertThat(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED))
+                .hasValueSatisfying(actual -> assertThat(actual).isCloseTo(processedAttemptAt, within(1, ChronoUnit.MILLIS)));
+    }
+
     @Test
     void countByRequeueCountGreaterThan_shouldCountOnlyRequeuedEvents() {
         OutboxEvent requeuedOnce = requeuedEvent(1);

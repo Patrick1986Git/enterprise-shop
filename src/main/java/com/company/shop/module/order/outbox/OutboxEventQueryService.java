@@ -38,7 +38,10 @@ public class OutboxEventQueryService {
                 outboxEventRepository.countByRequeueCountGreaterThan(0),
                 outboxEventRepository.sumRequeueCount(),
                 outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING).orElse(null),
-                outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null));
+                outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null),
+                outboxEventRepository.findNewestAttemptAt().orElse(null),
+                outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED).orElse(null),
+                outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.FAILED).orElse(null));
     }
 
     @Transactional(readOnly = true)
