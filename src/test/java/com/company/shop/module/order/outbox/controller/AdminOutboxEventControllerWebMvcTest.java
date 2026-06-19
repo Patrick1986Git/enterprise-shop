@@ -112,6 +112,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 OutboxEventStatus.FAILED,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
+                Instant.parse("2026-01-01T10:01:30Z"),
                 2,
                 "boom",
                 1,
@@ -132,6 +133,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].status").value("FAILED"))
                 .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.content[0].processedAt").value("2026-01-01T10:01:00Z"))
+                .andExpect(jsonPath("$.content[0].lastAttemptAt").value("2026-01-01T10:01:30Z"))
                 .andExpect(jsonPath("$.content[0].attempts").value(2))
                 .andExpect(jsonPath("$.content[0].lastError").value("boom"))
                 .andExpect(jsonPath("$.content[0].requeueCount").value(1))
@@ -262,6 +264,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 OutboxEventStatus.FAILED,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
+                Instant.parse("2026-01-01T10:01:30Z"),
                 2,
                 "boom",
                 1,
@@ -281,6 +284,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.processedAt").value("2026-01-01T10:01:00Z"))
+                .andExpect(jsonPath("$.lastAttemptAt").value("2026-01-01T10:01:30Z"))
                 .andExpect(jsonPath("$.attempts").value(2))
                 .andExpect(jsonPath("$.lastError").value("boom"))
                 .andExpect(jsonPath("$.requeueCount").value(1))
@@ -424,6 +428,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
+                Instant.parse("2026-01-01T10:01:30Z"),
                 3,
                 null,
                 2,
@@ -443,6 +448,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.processedAt").value(nullValue()))
+                .andExpect(jsonPath("$.lastAttemptAt").value("2026-01-01T10:01:30Z"))
                 .andExpect(jsonPath("$.attempts").value(3))
                 .andExpect(jsonPath("$.lastError").value(nullValue()))
                 .andExpect(jsonPath("$.requeueCount").value(2))

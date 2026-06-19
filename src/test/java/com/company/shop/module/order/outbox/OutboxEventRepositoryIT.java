@@ -64,6 +64,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         assertThat(savedEvent.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(savedEvent.getCreatedAt()).isNotNull();
         assertThat(savedEvent.getProcessedAt()).isNull();
+        assertThat(savedEvent.getLastAttemptAt()).isNull();
         assertThat(savedEvent.getAttempts()).isZero();
         assertThat(savedEvent.getLastError()).isNull();
         assertThat(savedEvent.getRequeueCount()).isZero();
@@ -90,13 +91,14 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         });
 
         Map<String, Object> defaults = jdbcTemplate.queryForMap(
-                "SELECT status, attempts, requeue_count, last_requeued_at, last_requeued_by FROM outbox_events WHERE id = ?",
+                "SELECT status, attempts, requeue_count, last_attempt_at, last_requeued_at, last_requeued_by FROM outbox_events WHERE id = ?",
                 eventId);
 
         assertThat(defaults)
                 .containsEntry("status", OutboxEventStatus.PENDING.name())
                 .containsEntry("attempts", 0)
                 .containsEntry("requeue_count", 0)
+                .containsEntry("last_attempt_at", null)
                 .containsEntry("last_requeued_at", null)
                 .containsEntry("last_requeued_by", null);
     }
@@ -116,6 +118,37 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         assertThat(loadedEvent.getRequeueCount()).isEqualTo(1);
         assertThat(loadedEvent.getLastRequeuedAt()).isCloseTo(requeuedAt, within(1, ChronoUnit.MILLIS));
         assertThat(loadedEvent.getLastRequeuedBy()).isEqualTo("admin@example.com");
+    }
+
+
+    @Test
+    void saveAndLoad_shouldPreserveLastAttemptAtAfterFailedTransition() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        event.markFailed("boom");
+        Instant lastAttemptAt = event.getLastAttemptAt();
+
+        UUID savedId = outboxEventRepository.saveAndFlush(event).getId();
+        entityManager.clear();
+
+        OutboxEvent loadedEvent = outboxEventRepository.findById(savedId).orElseThrow();
+
+        assertThat(loadedEvent.getLastAttemptAt()).isCloseTo(lastAttemptAt, within(1, ChronoUnit.MILLIS));
+        assertThat(loadedEvent.getProcessedAt()).isNull();
+    }
+
+    @Test
+    void saveAndLoad_shouldPreserveLastAttemptAtAfterProcessedTransition() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
+        event.markProcessed();
+        Instant lastAttemptAt = event.getLastAttemptAt();
+
+        UUID savedId = outboxEventRepository.saveAndFlush(event).getId();
+        entityManager.clear();
+
+        OutboxEvent loadedEvent = outboxEventRepository.findById(savedId).orElseThrow();
+
+        assertThat(loadedEvent.getLastAttemptAt()).isCloseTo(lastAttemptAt, within(1, ChronoUnit.MILLIS));
+        assertThat(loadedEvent.getProcessedAt()).isCloseTo(lastAttemptAt, within(1, ChronoUnit.MILLIS));
     }
 
     @Test

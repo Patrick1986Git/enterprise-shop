@@ -22,6 +22,7 @@ class OutboxEventTest {
         assertThat(event.getAttempts()).isZero();
         assertThat(event.getCreatedAt()).isNotNull();
         assertThat(event.getProcessedAt()).isNull();
+        assertThat(event.getLastAttemptAt()).isNull();
         assertThat(event.getLastError()).isNull();
         assertThat(event.getRequeueCount()).isZero();
         assertThat(event.getLastRequeuedAt()).isNull();
@@ -37,6 +38,8 @@ class OutboxEventTest {
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PROCESSED);
         assertThat(event.getProcessedAt()).isNotNull();
+        assertThat(event.getLastAttemptAt()).isNotNull();
+        assertThat(event.getProcessedAt()).isEqualTo(event.getLastAttemptAt());
         assertThat(event.getLastError()).isNull();
     }
 
@@ -48,6 +51,7 @@ class OutboxEventTest {
         event.markProcessed();
         event.markFailed("third failure");
         int attempts = event.getAttempts();
+        var lastAttemptAt = event.getLastAttemptAt();
 
         event.requeueForProcessing("admin@example.com");
 
@@ -55,6 +59,7 @@ class OutboxEventTest {
         assertThat(event.getLastError()).isNull();
         assertThat(event.getProcessedAt()).isNull();
         assertThat(event.getAttempts()).isEqualTo(attempts);
+        assertThat(event.getLastAttemptAt()).isEqualTo(lastAttemptAt);
         assertThat(event.getRequeueCount()).isEqualTo(1);
         assertThat(event.getLastRequeuedAt()).isNotNull();
         assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
@@ -84,6 +89,7 @@ class OutboxEventTest {
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.FAILED);
         assertThat(event.getAttempts()).isEqualTo(1);
         assertThat(event.getLastError()).isEqualTo("publisher unavailable");
+        assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getProcessedAt()).isNull();
     }
 }
