@@ -15,6 +15,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 
 @Service
@@ -59,14 +60,20 @@ public class OutboxEventQueryService {
             String eventType,
             Instant createdFrom,
             Instant createdTo,
+            Instant lastAttemptFrom,
+            Instant lastAttemptTo,
             Boolean requeuedOnly,
             Pageable pageable) {
         if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
             throw new OutboxEventDateRangeInvalidException();
         }
+        if (lastAttemptFrom != null && lastAttemptTo != null && lastAttemptFrom.isAfter(lastAttemptTo)) {
+            throw new OutboxEventLastAttemptDateRangeInvalidException();
+        }
 
         Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
-                status, aggregateType, aggregateId, eventType, createdFrom, createdTo, requeuedOnly);
+                status, aggregateType, aggregateId, eventType, createdFrom, createdTo,
+                lastAttemptFrom, lastAttemptTo, requeuedOnly);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)
