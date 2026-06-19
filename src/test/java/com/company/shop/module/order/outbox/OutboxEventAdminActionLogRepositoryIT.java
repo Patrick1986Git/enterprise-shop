@@ -136,6 +136,101 @@ class OutboxEventAdminActionLogRepositoryIT extends PostgresContainerSupport {
         assertThat(page.getTotalPages()).isEqualTo(2);
     }
 
+
+    @Test
+    void findAllWithAdminFilters_shouldReturnAllLogsPaged() {
+        UUID firstOutboxEventId = UUID.randomUUID();
+        UUID secondOutboxEventId = UUID.randomUUID();
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                firstOutboxEventId,
+                "alpha-admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                secondOutboxEventId,
+                "beta-admin@example.com",
+                Instant.parse("2026-01-01T11:00:00Z")));
+        entityManager.clear();
+
+        Page<OutboxEventAdminActionLog> page = outboxEventAdminActionLogRepository.findAll(
+                OutboxEventAdminActionLogSpecifications.adminFilters(null, null, null, null, null),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(OutboxEventAdminActionLog::getActorEmail)
+                .containsExactly("beta-admin@example.com", "alpha-admin@example.com");
+        assertThat(page.getTotalElements()).isEqualTo(2);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByOutboxEventIdActionTypeAndActorEmailIgnoringCase() {
+        UUID selectedOutboxEventId = UUID.randomUUID();
+        UUID otherOutboxEventId = UUID.randomUUID();
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                selectedOutboxEventId,
+                "Alpha.Admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                otherOutboxEventId,
+                "alpha-admin@example.com",
+                Instant.parse("2026-01-01T11:00:00Z")));
+        entityManager.clear();
+
+        Page<OutboxEventAdminActionLog> page = outboxEventAdminActionLogRepository.findAll(
+                OutboxEventAdminActionLogSpecifications.adminFilters(
+                        selectedOutboxEventId, OutboxEventAdminActionType.REQUEUE, "  ALPHA.ADMIN  ", null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(page.getContent())
+                .extracting(OutboxEventAdminActionLog::getActorEmail)
+                .containsExactly("Alpha.Admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedFromInclusive() {
+        UUID outboxEventId = UUID.randomUUID();
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                outboxEventId,
+                "before-admin@example.com",
+                Instant.parse("2026-01-01T09:59:59Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                outboxEventId,
+                "boundary-admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        entityManager.clear();
+
+        Page<OutboxEventAdminActionLog> page = outboxEventAdminActionLogRepository.findAll(
+                OutboxEventAdminActionLogSpecifications.adminFilters(
+                        null, null, null, Instant.parse("2026-01-01T10:00:00Z"), null),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(OutboxEventAdminActionLog::getActorEmail)
+                .containsExactly("boundary-admin@example.com");
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedToInclusive() {
+        UUID outboxEventId = UUID.randomUUID();
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                outboxEventId,
+                "boundary-admin@example.com",
+                Instant.parse("2026-01-01T10:00:00Z")));
+        outboxEventAdminActionLogRepository.saveAndFlush(logAt(
+                outboxEventId,
+                "after-admin@example.com",
+                Instant.parse("2026-01-01T10:00:01Z")));
+        entityManager.clear();
+
+        Page<OutboxEventAdminActionLog> page = outboxEventAdminActionLogRepository.findAll(
+                OutboxEventAdminActionLogSpecifications.adminFilters(
+                        null, null, null, null, Instant.parse("2026-01-01T10:00:00Z")),
+                PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "createdAt")));
+
+        assertThat(page.getContent())
+                .extracting(OutboxEventAdminActionLog::getActorEmail)
+                .containsExactly("boundary-admin@example.com");
+    }
+
     private OutboxEventAdminActionLog logAt(UUID outboxEventId, String actorEmail, Instant createdAt) {
         OutboxEventAdminActionLog log = OutboxEventAdminActionLog.requeue(outboxEventId, actorEmail);
         setCreatedAt(log, createdAt);

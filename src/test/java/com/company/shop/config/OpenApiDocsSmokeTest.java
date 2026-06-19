@@ -198,6 +198,7 @@ class OpenApiDocsSmokeTest {
                         "/api/v1/admin/outbox-events/{id}",
                         "/api/v1/admin/outbox-events/{id}/requeue",
                         "/api/v1/admin/outbox-events/{id}/actions",
+                        "/api/v1/admin/outbox-event-actions",
                         "/api/v1/admin/outbox-events/summary",
                         "/api/v1/admin/notifications/{id}/requeue",
                         "/api/v1/admin/notifications/{id}/actions",
