@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.module.order.outbox.dto.OutboxEventAdminActionLogResponseDTO;
+import com.company.shop.module.order.outbox.exception.OutboxEventActionLogDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 
 @Service
@@ -37,6 +39,25 @@ public class OutboxEventAdminActionLogQueryService {
         }
 
         return outboxEventAdminActionLogRepository.findByOutboxEventId(outboxEventId, withDefaultSort(pageable))
+                .map(outboxEventAdminActionLogMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OutboxEventAdminActionLogResponseDTO> searchActionLogs(
+            UUID outboxEventId,
+            OutboxEventAdminActionType actionType,
+            String actorEmail,
+            Instant createdFrom,
+            Instant createdTo,
+            Pageable pageable) {
+        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
+            throw new OutboxEventActionLogDateRangeInvalidException();
+        }
+
+        return outboxEventAdminActionLogRepository.findAll(
+                        OutboxEventAdminActionLogSpecifications.adminFilters(
+                                outboxEventId, actionType, actorEmail, createdFrom, createdTo),
+                        withDefaultSort(pageable))
                 .map(outboxEventAdminActionLogMapper::toDto);
     }
 
