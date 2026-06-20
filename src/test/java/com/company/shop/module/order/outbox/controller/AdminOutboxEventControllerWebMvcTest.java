@@ -616,6 +616,9 @@ class AdminOutboxEventControllerWebMvcTest {
                 6L,
                 2L,
                 5L,
+                4L,
+                5L,
+                6L,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T11:00:00Z"),
                 Instant.parse("2026-01-01T12:00:00Z"),
@@ -632,6 +635,9 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.totalCount").value(6))
                 .andExpect(jsonPath("$.requeuedEventCount").value(2))
                 .andExpect(jsonPath("$.totalRequeueCount").value(5))
+                .andExpect(jsonPath("$.stalePendingCount").value(4))
+                .andExpect(jsonPath("$.staleFailedCount").value(5))
+                .andExpect(jsonPath("$.highAttemptFailedCount").value(6))
                 .andExpect(jsonPath("$.oldestPendingCreatedAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.newestFailedCreatedAt").value("2026-01-01T11:00:00Z"))
                 .andExpect(jsonPath("$.newestAttemptAt").value("2026-01-01T12:00:00Z"))

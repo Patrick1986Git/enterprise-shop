@@ -1,5 +1,7 @@
 package com.company.shop.module.order.outbox;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -31,6 +33,8 @@ public class OutboxEventQueryService {
 
     @Transactional(readOnly = true)
     public OutboxEventSummaryDTO getSummary() {
+        Instant staleThreshold = Instant.now().minus(Duration.ofMinutes(15));
+
         return new OutboxEventSummaryDTO(
                 outboxEventRepository.countByStatus(OutboxEventStatus.PENDING),
                 outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED),
@@ -38,6 +42,9 @@ public class OutboxEventQueryService {
                 outboxEventRepository.count(),
                 outboxEventRepository.countByRequeueCountGreaterThan(0),
                 outboxEventRepository.sumRequeueCount(),
+                outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(OutboxEventStatus.PENDING, staleThreshold),
+                outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(OutboxEventStatus.FAILED, staleThreshold),
+                outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3),
                 outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING).orElse(null),
                 outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null),
                 outboxEventRepository.findNewestAttemptAt().orElse(null),

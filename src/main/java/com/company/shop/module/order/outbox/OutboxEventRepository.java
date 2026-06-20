@@ -16,6 +16,12 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
 
     long countByRequeueCountGreaterThan(int requeueCount);
 
+    long countByStatusAndCreatedAtLessThanEqual(OutboxEventStatus status, Instant threshold);
+
+    long countByStatusAndLastAttemptAtLessThanEqual(OutboxEventStatus status, Instant threshold);
+
+    long countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus status, int attempts);
+
     @Query("select coalesce(sum(e.requeueCount), 0) from OutboxEvent e")
     long sumRequeueCount();
 

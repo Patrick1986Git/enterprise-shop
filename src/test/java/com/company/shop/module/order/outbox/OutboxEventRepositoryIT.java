@@ -215,6 +215,33 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
 
 
     @Test
+    void operationalProblemIndicatorCounts_shouldCountMatchingEventsOnly() {
+        Instant threshold = Instant.parse("2026-01-01T10:15:00Z");
+
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:15:00Z"));
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:15:01Z"));
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:00:00Z"));
+        insertOutboxEventWithAttemptMetadata(
+                UUID.randomUUID(), OutboxEventStatus.FAILED, Instant.parse("2026-01-01T10:00:00Z"),
+                Instant.parse("2026-01-01T10:15:00Z"), 3);
+        insertOutboxEventWithAttemptMetadata(
+                UUID.randomUUID(), OutboxEventStatus.FAILED, Instant.parse("2026-01-01T10:00:00Z"),
+                Instant.parse("2026-01-01T10:15:01Z"), 2);
+        insertOutboxEventWithAttemptMetadata(
+                UUID.randomUUID(), OutboxEventStatus.FAILED, Instant.parse("2026-01-01T10:00:00Z"), null, 4);
+        insertOutboxEventWithAttemptMetadata(
+                UUID.randomUUID(), OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:00:00Z"),
+                Instant.parse("2026-01-01T10:15:00Z"), 3);
+
+        assertThat(outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(OutboxEventStatus.PENDING, threshold))
+                .isEqualTo(1L);
+        assertThat(outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(OutboxEventStatus.FAILED, threshold))
+                .isEqualTo(1L);
+        assertThat(outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3))
+                .isEqualTo(2L);
+    }
+
+    @Test
     void findNewestAttemptAt_shouldReturnNewestLastAttemptAtAcrossAllEvents() {
         OutboxEvent processedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
         processedEvent.markProcessed();
@@ -934,6 +961,35 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             statement.setString(6, status.name());
             statement.setString(7, createdAt.toString());
             statement.setInt(8, status == OutboxEventStatus.FAILED ? 1 : 0);
+            return statement;
+        });
+    }
+
+    private void insertOutboxEventWithAttemptMetadata(
+            UUID eventId,
+            OutboxEventStatus status,
+            Instant createdAt,
+            Instant lastAttemptAt,
+            int attempts) {
+        UUID aggregateId = UUID.randomUUID();
+
+        jdbcTemplate.update(connection -> {
+            PreparedStatement statement = connection.prepareStatement("""
+                    INSERT INTO outbox_events (
+                        id, aggregate_type, aggregate_id, event_type, payload, status, created_at, last_attempt_at, attempts
+                    ) VALUES (
+                        ?, ?, ?, ?, CAST(? AS jsonb), ?, CAST(? AS timestamptz), CAST(? AS timestamptz), ?
+                    )
+                    """);
+            statement.setObject(1, eventId);
+            statement.setString(2, "Order");
+            statement.setObject(3, aggregateId);
+            statement.setString(4, "TestEvent");
+            statement.setString(5, "{\"orderId\":\"" + aggregateId + "\"}");
+            statement.setString(6, status.name());
+            statement.setString(7, createdAt.toString());
+            statement.setString(8, lastAttemptAt == null ? null : lastAttemptAt.toString());
+            statement.setInt(9, attempts);
             return statement;
         });
     }
