@@ -1,10 +1,8 @@
 package com.company.shop.module.order.outbox;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
 import org.springframework.data.jpa.domain.Specification;
 
@@ -15,70 +13,58 @@ public final class OutboxEventSpecifications {
     private OutboxEventSpecifications() {
     }
 
-    public static Specification<OutboxEvent> adminFilters(
-            OutboxEventStatus status,
-            String aggregateType,
-            UUID aggregateId,
-            String eventType,
-            String lastErrorContains,
-            Instant createdFrom,
-            Instant createdTo,
-            Instant lastAttemptFrom,
-            Instant lastAttemptTo,
-            Integer attemptsMin,
-            Integer attemptsMax,
-            Boolean requeuedOnly) {
+    public static Specification<OutboxEvent> adminFilters(OutboxEventAdminSearchCriteria criteria) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
+            if (criteria.status() != null) {
+                predicates.add(cb.equal(root.get("status"), criteria.status()));
             }
 
-            if (aggregateType != null && !aggregateType.isBlank()) {
-                String pattern = "%" + aggregateType.trim().toLowerCase(Locale.ROOT) + "%";
+            if (criteria.aggregateType() != null && !criteria.aggregateType().isBlank()) {
+                String pattern = "%" + criteria.aggregateType().trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("aggregateType")), pattern));
             }
 
-            if (aggregateId != null) {
-                predicates.add(cb.equal(root.get("aggregateId"), aggregateId));
+            if (criteria.aggregateId() != null) {
+                predicates.add(cb.equal(root.get("aggregateId"), criteria.aggregateId()));
             }
 
-            if (eventType != null && !eventType.isBlank()) {
-                String pattern = "%" + eventType.trim().toLowerCase(Locale.ROOT) + "%";
+            if (criteria.eventType() != null && !criteria.eventType().isBlank()) {
+                String pattern = "%" + criteria.eventType().trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("eventType")), pattern));
             }
 
-            if (lastErrorContains != null && !lastErrorContains.isBlank()) {
-                String pattern = "%" + lastErrorContains.trim().toLowerCase(Locale.ROOT) + "%";
+            if (criteria.lastErrorContains() != null && !criteria.lastErrorContains().isBlank()) {
+                String pattern = "%" + criteria.lastErrorContains().trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("lastError")), pattern));
             }
 
-            if (createdFrom != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), createdFrom));
+            if (criteria.createdFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), criteria.createdFrom()));
             }
 
-            if (createdTo != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), createdTo));
+            if (criteria.createdTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), criteria.createdTo()));
             }
 
-            if (lastAttemptFrom != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("lastAttemptAt"), lastAttemptFrom));
+            if (criteria.lastAttemptFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptFrom()));
             }
 
-            if (lastAttemptTo != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), lastAttemptTo));
+            if (criteria.lastAttemptTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptTo()));
             }
 
-            if (attemptsMin != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), attemptsMin));
+            if (criteria.attemptsMin() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), criteria.attemptsMin()));
             }
 
-            if (attemptsMax != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("attempts"), attemptsMax));
+            if (criteria.attemptsMax() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("attempts"), criteria.attemptsMax()));
             }
 
-            if (Boolean.TRUE.equals(requeuedOnly)) {
+            if (Boolean.TRUE.equals(criteria.requeuedOnly())) {
                 predicates.add(cb.greaterThan(root.get("requeueCount"), 0));
             }
 
