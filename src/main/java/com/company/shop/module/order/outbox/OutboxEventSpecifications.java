@@ -24,6 +24,8 @@ public final class OutboxEventSpecifications {
             Instant createdTo,
             Instant lastAttemptFrom,
             Instant lastAttemptTo,
+            Integer attemptsMin,
+            Integer attemptsMax,
             Boolean requeuedOnly) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -60,6 +62,14 @@ public final class OutboxEventSpecifications {
 
             if (lastAttemptTo != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), lastAttemptTo));
+            }
+
+            if (attemptsMin != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), attemptsMin));
+            }
+
+            if (attemptsMax != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("attempts"), attemptsMax));
             }
 
             if (Boolean.TRUE.equals(requeuedOnly)) {
