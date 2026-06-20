@@ -46,6 +46,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventRequeueNotAllowedException;
 import com.company.shop.security.UserDetailsServiceImpl;
@@ -119,7 +120,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:02:00Z"),
                 "admin@example.com");
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventQueryService.getEvents(null, null, null, null, null, null, null, pageable))
+        when(outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, pageable))
                 .thenReturn(new PageImpl<>(List.of(response), pageable, 1));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
@@ -149,7 +150,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.last").value(true))
                 .andExpect(jsonPath("$.empty").value(false));
 
-        verify(outboxEventQueryService).getEvents(null, null, null, null, null, null, null, pageable);
+        verify(outboxEventQueryService).getEvents(null, null, null, null, null, null, null, null, null, pageable);
         verifyNoMoreInteractions(outboxEventQueryService);
     }
 
@@ -157,7 +158,7 @@ class AdminOutboxEventControllerWebMvcTest {
     @Test
     void getEvents_shouldPassRequeuedOnlyFalseToService() throws Exception {
         when(outboxEventQueryService.getEvents(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class)))
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
@@ -166,7 +167,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(status().isOk());
 
         verify(outboxEventQueryService).getEvents(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class));
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class));
     }
 
     @Test
@@ -180,6 +181,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 eq(null),
                 eq(createdFrom),
                 eq(createdTo),
+                eq(null),
+                eq(null),
                 eq(null),
                 any(Pageable.class)))
                 .thenThrow(new OutboxEventDateRangeInvalidException());
@@ -203,7 +206,54 @@ class AdminOutboxEventControllerWebMvcTest {
                 eq(createdFrom),
                 eq(createdTo),
                 eq(null),
+                eq(null),
+                eq(null),
                 any(Pageable.class));
+    }
+
+    @Test
+    void getEvents_shouldPassLastAttemptFiltersToService() throws Exception {
+        Instant lastAttemptFrom = Instant.parse("2026-06-01T00:00:00Z");
+        Instant lastAttemptTo = Instant.parse("2026-06-30T23:59:59Z");
+        when(outboxEventQueryService.getEvents(
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("lastAttemptFrom", lastAttemptFrom.toString())
+                        .param("lastAttemptTo", lastAttemptTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(outboxEventQueryService).getEvents(
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), any(Pageable.class));
+    }
+
+    @Test
+    void getEvents_shouldReturnBadRequestWhenLastAttemptFromIsAfterLastAttemptTo() throws Exception {
+        Instant lastAttemptFrom = Instant.parse("2026-07-01T00:00:00Z");
+        Instant lastAttemptTo = Instant.parse("2026-06-01T00:00:00Z");
+        when(outboxEventQueryService.getEvents(
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), any(Pageable.class)))
+                .thenThrow(new OutboxEventLastAttemptDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("lastAttemptFrom", lastAttemptFrom.toString())
+                        .param("lastAttemptTo", lastAttemptTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_LAST_ATTEMPT_DATE_RANGE_INVALID"))
+                .andExpect(jsonPath("$.message").value("lastAttemptFrom must be before or equal to lastAttemptTo."))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventQueryService).getEvents(
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), any(Pageable.class));
     }
 
     @Test
@@ -218,6 +268,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 org.mockito.Mockito.eq("Placed"),
                 org.mockito.Mockito.eq(createdFrom),
                 org.mockito.Mockito.eq(createdTo),
+                org.mockito.Mockito.eq(null),
+                org.mockito.Mockito.eq(null),
                 org.mockito.Mockito.eq(Boolean.TRUE),
                 org.mockito.Mockito.any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "eventType")), 0));
@@ -244,6 +296,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 org.mockito.Mockito.eq("Placed"),
                 org.mockito.Mockito.eq(createdFrom),
                 org.mockito.Mockito.eq(createdTo),
+                org.mockito.Mockito.eq(null),
+                org.mockito.Mockito.eq(null),
                 org.mockito.Mockito.eq(Boolean.TRUE),
                 pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);

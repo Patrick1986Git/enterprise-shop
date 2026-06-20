@@ -87,6 +87,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID());
         Instant beforeTransition = Instant.now();
         notification.markSent();
+        Instant lastAttemptAt = notification.getLastAttemptAt();
 
         Notification savedNotification = notificationRepository.saveAndFlush(notification);
         entityManager.clear();
@@ -95,7 +96,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(loadedNotification.getLastAttemptAt()).isNotNull();
         assertThat(loadedNotification.getSentAt()).isNotNull();
         assertThat(loadedNotification.getLastAttemptAt()).isEqualTo(loadedNotification.getSentAt());
-        assertThat(loadedNotification.getLastAttemptAt()).isAfterOrEqualTo(beforeTransition);
+        assertThat(loadedNotification.getLastAttemptAt()).isCloseTo(lastAttemptAt, within(1, ChronoUnit.MILLIS));
+        assertThat(loadedNotification.getSentAt()).isCloseTo(lastAttemptAt, within(1, ChronoUnit.MILLIS));
         assertThat(loadedNotification.getLastAttemptAt())
                 .isCloseTo(beforeTransition, within(1, ChronoUnit.SECONDS));
     }
