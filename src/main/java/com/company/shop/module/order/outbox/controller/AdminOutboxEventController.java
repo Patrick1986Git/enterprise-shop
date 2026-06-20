@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.order.outbox.OutboxEventAdminActionLogQueryService;
 import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
+import com.company.shop.module.order.outbox.OutboxEventAdminSearchCriteria;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
 import com.company.shop.module.order.outbox.dto.OutboxEventAdminActionLogResponseDTO;
@@ -68,9 +69,10 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) Integer attemptsMax,
             @RequestParam(required = false) Boolean requeuedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
-        return PageResponseDTO.from(outboxEventQueryService.getEvents(
+        OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
                 status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
-                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, pageable));
+                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly);
+        return PageResponseDTO.from(outboxEventQueryService.getEvents(criteria, pageable));
     }
 
     @GetMapping("/{id}")

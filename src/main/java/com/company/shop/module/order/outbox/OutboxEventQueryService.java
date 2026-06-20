@@ -1,6 +1,5 @@
 package com.company.shop.module.order.outbox;
 
-import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -54,35 +53,26 @@ public class OutboxEventQueryService {
     }
 
     @Transactional(readOnly = true)
-    public Page<OutboxEventResponseDTO> getEvents(
-            OutboxEventStatus status,
-            String aggregateType,
-            UUID aggregateId,
-            String eventType,
-            String lastErrorContains,
-            Instant createdFrom,
-            Instant createdTo,
-            Instant lastAttemptFrom,
-            Instant lastAttemptTo,
-            Integer attemptsMin,
-            Integer attemptsMax,
-            Boolean requeuedOnly,
-            Pageable pageable) {
-        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
+    public Page<OutboxEventResponseDTO> getEvents(OutboxEventAdminSearchCriteria criteria, Pageable pageable) {
+        if (criteria.createdFrom() != null
+                && criteria.createdTo() != null
+                && criteria.createdFrom().isAfter(criteria.createdTo())) {
             throw new OutboxEventDateRangeInvalidException();
         }
-        if (lastAttemptFrom != null && lastAttemptTo != null && lastAttemptFrom.isAfter(lastAttemptTo)) {
+        if (criteria.lastAttemptFrom() != null
+                && criteria.lastAttemptTo() != null
+                && criteria.lastAttemptFrom().isAfter(criteria.lastAttemptTo())) {
             throw new OutboxEventLastAttemptDateRangeInvalidException();
         }
-        if ((attemptsMin != null && attemptsMin < 0)
-                || (attemptsMax != null && attemptsMax < 0)
-                || (attemptsMin != null && attemptsMax != null && attemptsMin > attemptsMax)) {
+        if ((criteria.attemptsMin() != null && criteria.attemptsMin() < 0)
+                || (criteria.attemptsMax() != null && criteria.attemptsMax() < 0)
+                || (criteria.attemptsMin() != null
+                        && criteria.attemptsMax() != null
+                        && criteria.attemptsMin() > criteria.attemptsMax())) {
             throw new OutboxEventAttemptsRangeInvalidException();
         }
 
-        Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
-                status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
-                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly);
+        Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(criteria);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)
