@@ -3,6 +3,7 @@ package com.company.shop.module.order.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -16,6 +17,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -68,6 +70,12 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.count()).thenReturn(6L);
         when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(2L);
         when(outboxEventRepository.sumRequeueCount()).thenReturn(5L);
+        when(outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(eq(OutboxEventStatus.PENDING), any(Instant.class)))
+                .thenReturn(4L);
+        when(outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(eq(OutboxEventStatus.FAILED), any(Instant.class)))
+                .thenReturn(5L);
+        when(outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3))
+                .thenReturn(6L);
         when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING))
                 .thenReturn(Optional.of(oldestPendingCreatedAt));
         when(outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED))
@@ -86,6 +94,9 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.totalCount()).isEqualTo(6L);
         assertThat(summary.requeuedEventCount()).isEqualTo(2L);
         assertThat(summary.totalRequeueCount()).isEqualTo(5L);
+        assertThat(summary.stalePendingCount()).isEqualTo(4L);
+        assertThat(summary.staleFailedCount()).isEqualTo(5L);
+        assertThat(summary.highAttemptFailedCount()).isEqualTo(6L);
         assertThat(summary.oldestPendingCreatedAt()).isEqualTo(oldestPendingCreatedAt);
         assertThat(summary.newestFailedCreatedAt()).isEqualTo(newestFailedCreatedAt);
         assertThat(summary.newestAttemptAt()).isEqualTo(newestAttemptAt);
@@ -97,6 +108,9 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).count();
         verify(outboxEventRepository).countByRequeueCountGreaterThan(0);
         verify(outboxEventRepository).sumRequeueCount();
+        verify(outboxEventRepository).countByStatusAndCreatedAtLessThanEqual(eq(OutboxEventStatus.PENDING), any(Instant.class));
+        verify(outboxEventRepository).countByStatusAndLastAttemptAtLessThanEqual(eq(OutboxEventStatus.FAILED), any(Instant.class));
+        verify(outboxEventRepository).countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3);
         verify(outboxEventRepository).findOldestCreatedAtByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).findNewestCreatedAtByStatus(OutboxEventStatus.FAILED);
         verify(outboxEventRepository).findNewestAttemptAt();
@@ -114,6 +128,12 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.count()).thenReturn(4L);
         when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(0L);
         when(outboxEventRepository.sumRequeueCount()).thenReturn(0L);
+        when(outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(eq(OutboxEventStatus.PENDING), any(Instant.class)))
+                .thenReturn(0L);
+        when(outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(eq(OutboxEventStatus.FAILED), any(Instant.class)))
+                .thenReturn(0L);
+        when(outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3))
+                .thenReturn(0L);
         when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING)).thenReturn(Optional.empty());
         when(outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED)).thenReturn(Optional.empty());
         when(outboxEventRepository.findNewestAttemptAt()).thenReturn(Optional.empty());
@@ -128,6 +148,9 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.totalCount()).isEqualTo(4L);
         assertThat(summary.requeuedEventCount()).isZero();
         assertThat(summary.totalRequeueCount()).isZero();
+        assertThat(summary.stalePendingCount()).isZero();
+        assertThat(summary.staleFailedCount()).isZero();
+        assertThat(summary.highAttemptFailedCount()).isZero();
         assertThat(summary.oldestPendingCreatedAt()).isNull();
         assertThat(summary.newestFailedCreatedAt()).isNull();
         assertThat(summary.newestAttemptAt()).isNull();
@@ -139,6 +162,9 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).count();
         verify(outboxEventRepository).countByRequeueCountGreaterThan(0);
         verify(outboxEventRepository).sumRequeueCount();
+        verify(outboxEventRepository).countByStatusAndCreatedAtLessThanEqual(eq(OutboxEventStatus.PENDING), any(Instant.class));
+        verify(outboxEventRepository).countByStatusAndLastAttemptAtLessThanEqual(eq(OutboxEventStatus.FAILED), any(Instant.class));
+        verify(outboxEventRepository).countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3);
         verify(outboxEventRepository).findOldestCreatedAtByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).findNewestCreatedAtByStatus(OutboxEventStatus.FAILED);
         verify(outboxEventRepository).findNewestAttemptAt();
@@ -146,6 +172,42 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.FAILED);
         verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
         verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getSummary_shouldIncludeOperationalProblemIndicators() {
+        when(outboxEventRepository.countByStatus(any())).thenReturn(0L);
+        when(outboxEventRepository.count()).thenReturn(0L);
+        when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(0L);
+        when(outboxEventRepository.sumRequeueCount()).thenReturn(0L);
+        when(outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(eq(OutboxEventStatus.PENDING), any(Instant.class)))
+                .thenReturn(7L);
+        when(outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(eq(OutboxEventStatus.FAILED), any(Instant.class)))
+                .thenReturn(8L);
+        when(outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3))
+                .thenReturn(9L);
+        when(outboxEventRepository.findOldestCreatedAtByStatus(any())).thenReturn(Optional.empty());
+        when(outboxEventRepository.findNewestCreatedAtByStatus(any())).thenReturn(Optional.empty());
+        when(outboxEventRepository.findNewestAttemptAt()).thenReturn(Optional.empty());
+        when(outboxEventRepository.findNewestAttemptAtByStatus(any())).thenReturn(Optional.empty());
+
+        Instant beforeCall = Instant.now().minusSeconds(901);
+        OutboxEventSummaryDTO summary = outboxEventQueryService.getSummary();
+        Instant afterCall = Instant.now().minusSeconds(899);
+
+        assertThat(summary.stalePendingCount()).isEqualTo(7L);
+        assertThat(summary.staleFailedCount()).isEqualTo(8L);
+        assertThat(summary.highAttemptFailedCount()).isEqualTo(9L);
+
+        ArgumentCaptor<Instant> stalePendingThresholdCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> staleFailedThresholdCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(outboxEventRepository).countByStatusAndCreatedAtLessThanEqual(
+                eq(OutboxEventStatus.PENDING), stalePendingThresholdCaptor.capture());
+        verify(outboxEventRepository).countByStatusAndLastAttemptAtLessThanEqual(
+                eq(OutboxEventStatus.FAILED), staleFailedThresholdCaptor.capture());
+        verify(outboxEventRepository).countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3);
+        assertThat(stalePendingThresholdCaptor.getValue()).isBetween(beforeCall, afterCall);
+        assertThat(staleFailedThresholdCaptor.getValue()).isBetween(beforeCall, afterCall);
     }
 
     @Test
