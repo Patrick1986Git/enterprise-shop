@@ -23,6 +23,9 @@ import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundExcepti
 @Service
 public class OutboxEventQueryService {
 
+    static final Duration STALE_THRESHOLD_DURATION = Duration.ofMinutes(15);
+    static final int HIGH_FAILED_ATTEMPTS_THRESHOLD = 3;
+
     private final OutboxEventRepository outboxEventRepository;
     private final OutboxEventMapper outboxEventMapper;
 
@@ -33,7 +36,7 @@ public class OutboxEventQueryService {
 
     @Transactional(readOnly = true)
     public OutboxEventSummaryDTO getSummary() {
-        Instant staleThreshold = Instant.now().minus(Duration.ofMinutes(15));
+        Instant staleThreshold = Instant.now().minus(STALE_THRESHOLD_DURATION);
 
         return new OutboxEventSummaryDTO(
                 outboxEventRepository.countByStatus(OutboxEventStatus.PENDING),
@@ -44,7 +47,8 @@ public class OutboxEventQueryService {
                 outboxEventRepository.sumRequeueCount(),
                 outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(OutboxEventStatus.PENDING, staleThreshold),
                 outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(OutboxEventStatus.FAILED, staleThreshold),
-                outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3),
+                outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(
+                        OutboxEventStatus.FAILED, HIGH_FAILED_ATTEMPTS_THRESHOLD),
                 outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING).orElse(null),
                 outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null),
                 outboxEventRepository.findNewestAttemptAt().orElse(null),
@@ -79,7 +83,10 @@ public class OutboxEventQueryService {
             throw new OutboxEventAttemptsRangeInvalidException();
         }
 
-        Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(criteria);
+        Specification<OutboxEvent> specification = criteria.problemType() == null
+                ? OutboxEventSpecifications.adminFilters(criteria)
+                : OutboxEventSpecifications.adminFilters(
+                        criteria, Instant.now().minus(STALE_THRESHOLD_DURATION), HIGH_FAILED_ATTEMPTS_THRESHOLD);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -305,6 +306,37 @@ class OutboxEventQueryServiceTest {
         verifyNoInteractions(outboxEventProcessor);
     }
 
+
+
+    @Test
+    void getEvents_shouldPassProblemTypeCriteriaAndStaleThresholdToSpecification() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Pageable expectedPageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Specification<OutboxEvent> specification = (root, query, cb) -> null;
+        OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, null, null, null, null, null,
+                OutboxEventProblemType.STALE_FAILED);
+        when(outboxEventRepository.findAll(specification, expectedPageable)).thenReturn(Page.empty(expectedPageable));
+
+        Instant beforeExpectedThreshold = Instant.now().minus(Duration.ofMinutes(15));
+        try (MockedStatic<OutboxEventSpecifications> specifications =
+                org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(
+                    eq(criteria), any(Instant.class), eq(3)))
+                    .thenReturn(specification);
+
+            outboxEventQueryService.getEvents(criteria, pageable);
+
+            ArgumentCaptor<Instant> thresholdCaptor = ArgumentCaptor.forClass(Instant.class);
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(
+                    eq(criteria), thresholdCaptor.capture(), eq(3)));
+            Instant afterExpectedThreshold = Instant.now().minus(Duration.ofMinutes(15));
+            assertThat(thresholdCaptor.getValue()).isBetween(beforeExpectedThreshold, afterExpectedThreshold);
+        }
+
+        verify(outboxEventRepository).findAll(specification, expectedPageable);
+        verifyNoInteractions(outboxEventMapper, outboxEventProcessor);
+    }
 
     @Test
     void getEvents_shouldForwardFalseRequeuedOnlyToSpecification() {

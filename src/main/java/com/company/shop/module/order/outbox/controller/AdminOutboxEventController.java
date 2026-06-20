@@ -17,6 +17,7 @@ import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.order.outbox.OutboxEventAdminActionLogQueryService;
 import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
 import com.company.shop.module.order.outbox.OutboxEventAdminSearchCriteria;
+import com.company.shop.module.order.outbox.OutboxEventProblemType;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
 import com.company.shop.module.order.outbox.dto.OutboxEventAdminActionLogResponseDTO;
@@ -68,10 +69,11 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) Integer attemptsMin,
             @RequestParam(required = false) Integer attemptsMax,
             @RequestParam(required = false) Boolean requeuedOnly,
+            @RequestParam(required = false) OutboxEventProblemType problemType,
             @PageableDefault(size = 20) Pageable pageable) {
         OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
                 status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
-                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly);
+                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, problemType);
         return PageResponseDTO.from(outboxEventQueryService.getEvents(criteria, pageable));
     }
 

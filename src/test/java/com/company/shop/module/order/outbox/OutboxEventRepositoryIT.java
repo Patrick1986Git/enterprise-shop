@@ -887,6 +887,82 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matching.getId());
     }
 
+
+    @Test
+    void findAll_shouldFilterByStalePendingProblemType() {
+        Instant threshold = Instant.parse("2026-01-01T10:15:00Z");
+        UUID oldPendingId = UUID.randomUUID();
+        UUID freshPendingId = UUID.randomUUID();
+        UUID processedId = UUID.randomUUID();
+        insertOutboxEvent(oldPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:15:00Z"));
+        insertOutboxEvent(freshPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:15:01Z"));
+        insertOutboxEvent(processedId, OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:00:00Z"));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                        null, null, null, null, null, null, null, null, null, null, null, null,
+                        OutboxEventProblemType.STALE_PENDING), threshold, 3),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactly(oldPendingId)
+                .doesNotContain(freshPendingId, processedId);
+    }
+
+    @Test
+    void findAll_shouldFilterByStaleFailedProblemType() {
+        Instant threshold = Instant.parse("2026-01-01T10:15:00Z");
+        UUID oldFailedId = UUID.randomUUID();
+        UUID freshFailedId = UUID.randomUUID();
+        UUID nullLastAttemptFailedId = UUID.randomUUID();
+        UUID processedId = UUID.randomUUID();
+        insertOutboxEventWithAttemptMetadata(oldFailedId, OutboxEventStatus.FAILED,
+                Instant.parse("2026-01-01T10:00:00Z"), threshold, 1);
+        insertOutboxEventWithAttemptMetadata(freshFailedId, OutboxEventStatus.FAILED,
+                Instant.parse("2026-01-01T10:00:00Z"), Instant.parse("2026-01-01T10:15:01Z"), 1);
+        insertOutboxEventWithAttemptMetadata(nullLastAttemptFailedId, OutboxEventStatus.FAILED,
+                Instant.parse("2026-01-01T10:00:00Z"), null, 1);
+        insertOutboxEventWithAttemptMetadata(processedId, OutboxEventStatus.PROCESSED,
+                Instant.parse("2026-01-01T10:00:00Z"), threshold, 1);
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                        null, null, null, null, null, null, null, null, null, null, null, null,
+                        OutboxEventProblemType.STALE_FAILED), threshold, 3),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactly(oldFailedId)
+                .doesNotContain(freshFailedId, nullLastAttemptFailedId, processedId);
+    }
+
+    @Test
+    void findAll_shouldFilterByHighAttemptFailedProblemTypeAndCombineWithAttemptsMax() {
+        Instant createdAt = Instant.parse("2026-01-01T10:00:00Z");
+        UUID highFailedId = UUID.randomUUID();
+        UUID lowFailedId = UUID.randomUUID();
+        UUID processedHighAttemptsId = UUID.randomUUID();
+        insertOutboxEventWithAttemptMetadata(highFailedId, OutboxEventStatus.FAILED, createdAt, createdAt, 3);
+        insertOutboxEventWithAttemptMetadata(lowFailedId, OutboxEventStatus.FAILED, createdAt, createdAt, 2);
+        insertOutboxEventWithAttemptMetadata(processedHighAttemptsId, OutboxEventStatus.PROCESSED, createdAt, createdAt, 3);
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                        null, null, null, null, null, null, null, null, null, null, null, null,
+                        OutboxEventProblemType.HIGH_ATTEMPT_FAILED), createdAt, 3),
+                PageRequest.of(0, 10));
+        Page<OutboxEvent> contradictoryResult = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                        null, null, null, null, null, null, null, null, null, null, 2, null,
+                        OutboxEventProblemType.HIGH_ATTEMPT_FAILED), createdAt, 3),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactly(highFailedId)
+                .doesNotContain(lowFailedId, processedHighAttemptsId);
+        assertThat(contradictoryResult.getContent()).isEmpty();
+    }
+
     @Test
     void insert_shouldRejectMissingRequiredFields() {
         for (String requiredColumn : List.of(
