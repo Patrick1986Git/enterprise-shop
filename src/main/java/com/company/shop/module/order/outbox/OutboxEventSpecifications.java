@@ -20,6 +20,7 @@ public final class OutboxEventSpecifications {
             String aggregateType,
             UUID aggregateId,
             String eventType,
+            String lastErrorContains,
             Instant createdFrom,
             Instant createdTo,
             Instant lastAttemptFrom,
@@ -46,6 +47,11 @@ public final class OutboxEventSpecifications {
             if (eventType != null && !eventType.isBlank()) {
                 String pattern = "%" + eventType.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("eventType")), pattern));
+            }
+
+            if (lastErrorContains != null && !lastErrorContains.isBlank()) {
+                String pattern = "%" + lastErrorContains.trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.like(cb.lower(root.get("lastError")), pattern));
             }
 
             if (createdFrom != null) {

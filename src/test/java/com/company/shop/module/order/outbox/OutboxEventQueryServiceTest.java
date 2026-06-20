@@ -196,12 +196,12 @@ class OutboxEventQueryServiceTest {
         Page<OutboxEventResponseDTO> result;
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, null))
                     .thenReturn(specification);
 
-            result = outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, null, null, requestedPageable);
+            result = outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, null, null, null, requestedPageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, null));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -224,14 +224,14 @@ class OutboxEventQueryServiceTest {
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
             specifications.when(() -> OutboxEventSpecifications.adminFilters(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, null, null, null, null, Boolean.TRUE))
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", " timeout ", createdFrom, createdTo, null, null, null, null, Boolean.TRUE))
                     .thenReturn(specification);
 
             result = outboxEventQueryService.getEvents(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, null, null, null, null, Boolean.TRUE, pageable);
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", " timeout ", createdFrom, createdTo, null, null, null, null, Boolean.TRUE, pageable);
 
             specifications.verify(() -> OutboxEventSpecifications.adminFilters(
-                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", createdFrom, createdTo, null, null, null, null, Boolean.TRUE));
+                    OutboxEventStatus.FAILED, " Order ", aggregateId, " Placed ", " timeout ", createdFrom, createdTo, null, null, null, null, Boolean.TRUE));
         }
 
         assertThat(result.getSort()).containsExactly(Sort.Order.asc("eventType"));
@@ -250,12 +250,12 @@ class OutboxEventQueryServiceTest {
 
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, Boolean.FALSE))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, Boolean.FALSE))
                     .thenReturn(specification);
 
-            outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, null, Boolean.FALSE, pageable);
+            outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, null, null, Boolean.FALSE, pageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, Boolean.FALSE));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, Boolean.FALSE));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -274,14 +274,14 @@ class OutboxEventQueryServiceTest {
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
             specifications.when(() -> OutboxEventSpecifications.adminFilters(
-                    null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null))
+                    null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null))
                     .thenReturn(specification);
 
             outboxEventQueryService.getEvents(
-                    null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null, pageable);
+                    null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null, pageable);
 
             specifications.verify(() -> OutboxEventSpecifications.adminFilters(
-                    null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null));
+                    null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -298,17 +298,54 @@ class OutboxEventQueryServiceTest {
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
             specifications.when(() -> OutboxEventSpecifications.adminFilters(
-                    null, null, null, null, null, null, null, null, 2, 5, null))
+                    null, null, null, null, null, null, null, null, null, 2, 5, null))
                     .thenReturn(specification);
 
             outboxEventQueryService.getEvents(
-                    null, null, null, null, null, null, null, null, 2, 5, null, pageable);
+                    null, null, null, null, null, null, null, null, null, 2, 5, null, pageable);
 
             specifications.verify(() -> OutboxEventSpecifications.adminFilters(
-                    null, null, null, null, null, null, null, null, 2, 5, null));
+                    null, null, null, null, null, null, null, null, null, 2, 5, null));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldPassLastErrorContainsToSpecification() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Specification<OutboxEvent> specification = (root, query, cb) -> null;
+        when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
+                .thenReturn(Page.empty(pageable));
+
+        try (MockedStatic<OutboxEventSpecifications> specifications =
+                org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(
+                    null, null, null, null, " timeout ", null, null, null, null, null, null, null))
+                    .thenReturn(specification);
+
+            outboxEventQueryService.getEvents(
+                    null, null, null, null, " timeout ", null, null, null, null, null, null, null, pageable);
+
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(
+                    null, null, null, null, " timeout ", null, null, null, null, null, null, null));
+        }
+
+        verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldAllowNullAndBlankLastErrorContains() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty(pageable));
+
+        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, null, null, null, pageable);
+        outboxEventQueryService.getEvents(null, null, null, null, "   ", null, null, null, null, null, null, null, pageable);
+
+        verify(outboxEventRepository, org.mockito.Mockito.times(2)).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -318,9 +355,9 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
-        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, 1, null, null, pageable);
-        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, 3, null, pageable);
-        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, 2, 2, null, pageable);
+        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, 1, null, null, pageable);
+        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, null, 3, null, pageable);
+        outboxEventQueryService.getEvents(null, null, null, null, null, null, null, null, null, 2, 2, null, pageable);
 
         verify(outboxEventRepository, org.mockito.Mockito.times(3)).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -331,15 +368,15 @@ class OutboxEventQueryServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         assertThatThrownBy(() -> outboxEventQueryService.getEvents(
-                        null, null, null, null, null, null, null, null, -1, null, null, pageable))
+                        null, null, null, null, null, null, null, null, null, -1, null, null, pageable))
                 .isInstanceOf(OutboxEventAttemptsRangeInvalidException.class)
                 .extracting("errorCode")
                 .isEqualTo("OUTBOX_EVENT_ATTEMPTS_RANGE_INVALID");
         assertThatThrownBy(() -> outboxEventQueryService.getEvents(
-                        null, null, null, null, null, null, null, null, null, -1, null, pageable))
+                        null, null, null, null, null, null, null, null, null, null, -1, null, pageable))
                 .isInstanceOf(OutboxEventAttemptsRangeInvalidException.class);
         assertThatThrownBy(() -> outboxEventQueryService.getEvents(
-                        null, null, null, null, null, null, null, null, 4, 3, null, pageable))
+                        null, null, null, null, null, null, null, null, null, 4, 3, null, pageable))
                 .isInstanceOf(OutboxEventAttemptsRangeInvalidException.class);
 
         verifyNoInteractions(outboxEventRepository, outboxEventMapper, outboxEventProcessor);
@@ -352,7 +389,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, null, null, Instant.parse("2026-06-01T00:00:00Z"), null, null, null, null, pageable);
+                null, null, null, null, null, null, null, Instant.parse("2026-06-01T00:00:00Z"), null, null, null, null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -365,7 +402,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, null, null, null, Instant.parse("2026-06-30T23:59:59Z"), null, null, null, pageable);
+                null, null, null, null, null, null, null, null, Instant.parse("2026-06-30T23:59:59Z"), null, null, null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -379,7 +416,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, null, null, lastAttemptAt, lastAttemptAt, null, null, null, pageable);
+                null, null, null, null, null, null, null, lastAttemptAt, lastAttemptAt, null, null, null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -391,7 +428,7 @@ class OutboxEventQueryServiceTest {
         Instant lastAttemptTo = Instant.parse("2026-06-01T00:00:00Z");
 
         assertThatThrownBy(() -> outboxEventQueryService.getEvents(
-                        null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null, PageRequest.of(0, 20)))
+                        null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(OutboxEventLastAttemptDateRangeInvalidException.class)
                 .hasMessage("lastAttemptFrom must be before or equal to lastAttemptTo.")
                 .extracting("errorCode")
@@ -406,7 +443,7 @@ class OutboxEventQueryServiceTest {
         Instant createdTo = Instant.parse("2026-01-01T00:00:00Z");
 
         assertThatThrownBy(() -> outboxEventQueryService.getEvents(
-                        null, null, null, null, createdFrom, createdTo, null, null, null, null, Boolean.TRUE, PageRequest.of(0, 20)))
+                        null, null, null, null, null, createdFrom, createdTo, null, null, null, null, Boolean.TRUE, PageRequest.of(0, 20)))
                 .isInstanceOf(OutboxEventDateRangeInvalidException.class)
                 .hasMessage("createdFrom must be before or equal to createdTo.")
                 .extracting("errorCode")
@@ -422,7 +459,7 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
-        outboxEventQueryService.getEvents(null, null, null, null, createdAt, createdAt, null, null, null, null, null, pageable);
+        outboxEventQueryService.getEvents(null, null, null, null, null, createdAt, createdAt, null, null, null, null, null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -435,7 +472,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, null, null, null, null, Boolean.FALSE, pageable);
+                null, null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, null, null, null, null, Boolean.FALSE, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
@@ -448,7 +485,7 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(
-                null, null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, null, null, null, null, pageable);
+                null, null, null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, null, null, null, null, pageable);
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
