@@ -432,7 +432,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 "admin@example.com",
                 Instant.parse("2026-01-01T10:00:00Z"),
                 "Requeued after failure");
-        when(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(eq(outboxEventId)), any(Pageable.class)))
+        when(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(eq(outboxEventId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(
                         List.of(response),
                         PageRequest.of(1, 5, Sort.by(Sort.Direction.ASC, "actorEmail")),
@@ -461,7 +461,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.empty").value(false));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(outboxEventAdminActionLogQueryService).getOutboxEventActionLogs(eq(outboxEventId)), pageableCaptor.capture());
+        verify(outboxEventAdminActionLogQueryService).getOutboxEventActionLogs(eq(outboxEventId), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
         assertThat(pageableCaptor.getValue().getSort()).containsExactly(Sort.Order.asc("actorEmail"));
@@ -472,7 +472,7 @@ class AdminOutboxEventControllerWebMvcTest {
     @Test
     void getEventActionLogs_shouldReturnNotFoundWhenEventIsMissing() throws Exception {
         UUID outboxEventId = UUID.randomUUID();
-        when(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(eq(outboxEventId)), any(Pageable.class)))
+        when(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(eq(outboxEventId), any(Pageable.class)))
                 .thenThrow(new OutboxEventNotFoundException(outboxEventId));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", outboxEventId)
@@ -484,7 +484,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.message").value("Outbox event not found: " + outboxEventId))
                 .andExpect(jsonPath("$.timestamp").exists());
 
-        verify(outboxEventAdminActionLogQueryService).getOutboxEventActionLogs(eq(outboxEventId)), any(Pageable.class));
+        verify(outboxEventAdminActionLogQueryService).getOutboxEventActionLogs(eq(outboxEventId), any(Pageable.class));
         verifyNoMoreInteractions(outboxEventAdminActionLogQueryService);
         verifyNoInteractions(outboxEventQueryService, outboxEventAdminCommandService);
     }
