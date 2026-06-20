@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.company.shop.module.order.outbox.dto.OutboxEventDetailResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
+import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
@@ -62,6 +63,8 @@ public class OutboxEventQueryService {
             Instant createdTo,
             Instant lastAttemptFrom,
             Instant lastAttemptTo,
+            Integer attemptsMin,
+            Integer attemptsMax,
             Boolean requeuedOnly,
             Pageable pageable) {
         if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
@@ -70,10 +73,15 @@ public class OutboxEventQueryService {
         if (lastAttemptFrom != null && lastAttemptTo != null && lastAttemptFrom.isAfter(lastAttemptTo)) {
             throw new OutboxEventLastAttemptDateRangeInvalidException();
         }
+        if ((attemptsMin != null && attemptsMin < 0)
+                || (attemptsMax != null && attemptsMax < 0)
+                || (attemptsMin != null && attemptsMax != null && attemptsMin > attemptsMax)) {
+            throw new OutboxEventAttemptsRangeInvalidException();
+        }
 
         Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
                 status, aggregateType, aggregateId, eventType, createdFrom, createdTo,
-                lastAttemptFrom, lastAttemptTo, requeuedOnly);
+                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)

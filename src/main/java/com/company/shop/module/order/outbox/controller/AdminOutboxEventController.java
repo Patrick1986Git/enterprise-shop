@@ -63,11 +63,13 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) Instant createdTo,
             @RequestParam(required = false) Instant lastAttemptFrom,
             @RequestParam(required = false) Instant lastAttemptTo,
+            @RequestParam(required = false) Integer attemptsMin,
+            @RequestParam(required = false) Integer attemptsMax,
             @RequestParam(required = false) Boolean requeuedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(outboxEventQueryService.getEvents(
                 status, aggregateType, aggregateId, eventType, createdFrom, createdTo,
-                lastAttemptFrom, lastAttemptTo, requeuedOnly, pageable));
+                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, pageable));
     }
 
     @GetMapping("/{id}")
