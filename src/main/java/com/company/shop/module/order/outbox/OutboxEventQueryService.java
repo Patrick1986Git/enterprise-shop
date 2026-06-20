@@ -59,6 +59,7 @@ public class OutboxEventQueryService {
             String aggregateType,
             UUID aggregateId,
             String eventType,
+            String lastErrorContains,
             Instant createdFrom,
             Instant createdTo,
             Instant lastAttemptFrom,
@@ -80,7 +81,7 @@ public class OutboxEventQueryService {
         }
 
         Specification<OutboxEvent> specification = OutboxEventSpecifications.adminFilters(
-                status, aggregateType, aggregateId, eventType, createdFrom, createdTo,
+                status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
                 lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly);
         Pageable effectivePageable = withDefaultSort(pageable);
 

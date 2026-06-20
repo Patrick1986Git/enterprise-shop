@@ -313,7 +313,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(failedId, OutboxEventStatus.FAILED, "Order", UUID.randomUUID(), "OrderFailed");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(failedId);
@@ -327,7 +327,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(cartId, OutboxEventStatus.PENDING, "Cart", UUID.randomUUID(), "CartCheckedOut");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, " order ", null, null, null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, " order ", null, null, null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(orderId);
@@ -341,10 +341,51 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(failedId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "PaymentFailed");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, " placed ", null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, " placed ", null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(placedId);
+    }
+
+    @Test
+    void findAll_shouldFilterByLastErrorContainsIgnoreCaseAndTrimInput() {
+        OutboxEvent timeout = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":1}");
+        timeout.markFailed("SMTP TIMEOUT while sending email");
+        OutboxEvent serialization = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":2}");
+        serialization.markFailed("Serialization failed");
+        OutboxEvent withoutError = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(timeout, serialization, withoutError));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(null, null, null, null, " timeout ", null, null, null, null, null, null, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactly(timeout.getId())
+                .doesNotContain(serialization.getId(), withoutError.getId());
+    }
+
+    @Test
+    void findAll_shouldCombineLastErrorContainsWithStatusAndAttemptsFilters() {
+        OutboxEvent matching = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":1}");
+        matching.markFailed("Connection timeout");
+        matching.markFailed("Connection timeout");
+        OutboxEvent wrongStatus = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":2}");
+        wrongStatus.markFailed("Connection timeout");
+        wrongStatus.markProcessed();
+        OutboxEvent wrongAttempts = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":3}");
+        wrongAttempts.markFailed("Connection timeout");
+        OutboxEvent wrongError = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":4}");
+        wrongError.markFailed("Serialization failed");
+        wrongError.markFailed("Serialization failed");
+        outboxEventRepository.saveAllAndFlush(List.of(matching, wrongStatus, wrongAttempts, wrongError));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, "TIMEOUT", null, null, null, null, 2, 3, null),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matching.getId());
     }
 
     @Test
@@ -356,7 +397,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(otherEventId, OutboxEventStatus.PENDING, "Order", UUID.randomUUID(), "OrderPlaced");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, matchingAggregateId, null, null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, matchingAggregateId, null, null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingEventId);
@@ -372,7 +413,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(pendingCartId, OutboxEventStatus.PENDING, "Cart", UUID.randomUUID(), "CartCheckedOut");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, "ord", null, null, null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, "ord", null, null, null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
@@ -385,7 +426,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PROCESSED, "Payment", UUID.randomUUID(), "PaymentCaptured");
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, " ", null, " ", null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, " ", null, " ", null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 2));
 
         assertThat(result.getContent()).hasSize(2);
@@ -406,7 +447,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-06-01T00:00:01Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, lowerBound, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -427,7 +468,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, upperBound, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, upperBound, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -450,7 +491,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, upperBound, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, lowerBound, upperBound, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(insideId);
@@ -471,7 +512,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, lowerBound, upperBound, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, lowerBound, upperBound, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
@@ -495,7 +536,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, " order ", null, " placed ", lowerBound, upperBound, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, " order ", null, " placed ", null, lowerBound, upperBound, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
@@ -509,7 +550,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(requeued, neverRequeued));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, Boolean.TRUE),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, Boolean.TRUE),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent())
@@ -525,7 +566,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(requeued, neverRequeued));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, Boolean.FALSE),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, Boolean.FALSE),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent())
@@ -540,7 +581,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(requeued, neverRequeued));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent())
@@ -557,7 +598,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(matching, wrongStatus, neverRequeued));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, null, null, null, null, null, null, null, null, null, Boolean.TRUE),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.PENDING, null, null, null, null, null, null, null, null, null, null, Boolean.TRUE),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matching.getId());
@@ -577,7 +618,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, lowerBound, upperBound, null, null, null, null, Boolean.TRUE),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, lowerBound, upperBound, null, null, null, null, Boolean.TRUE),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(inside.getId());
@@ -598,7 +639,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, lowerBound, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, lowerBound, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -621,7 +662,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, upperBound, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, upperBound, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -645,7 +686,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, lowerBound, upperBound, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, lowerBound, upperBound, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(insideId);
@@ -662,7 +703,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, lowerBound, null, null, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, lowerBound, null, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -686,7 +727,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null, lowerBound, upperBound, null, null, null),
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null, null, lowerBound, upperBound, null, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
@@ -705,7 +746,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, lowerBound, upperBound, null, null, Boolean.TRUE),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, lowerBound, upperBound, null, null, Boolean.TRUE),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matching.getId());
@@ -719,7 +760,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(below, atLowerBound, above));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, 2, null, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, 2, null, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -735,7 +776,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(below, atUpperBound, above));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, 2, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, null, 2, null),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -751,10 +792,10 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(below, exact, above));
 
         Page<OutboxEvent> rangeResult = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, 2, 3, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, 2, 3, null),
                 PageRequest.of(0, 10));
         Page<OutboxEvent> exactResult = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, 2, 2, null),
+                OutboxEventSpecifications.adminFilters(null, null, null, null, null, null, null, null, null, 2, 2, null),
                 PageRequest.of(0, 10));
 
         assertThat(rangeResult.getContent()).extracting(OutboxEvent::getId)
@@ -784,7 +825,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null,
+                OutboxEventSpecifications.adminFilters(OutboxEventStatus.FAILED, null, null, null, null, null, null,
                         lowerBound, upperBound, 2, 4, Boolean.TRUE),
                 PageRequest.of(0, 10));
 
