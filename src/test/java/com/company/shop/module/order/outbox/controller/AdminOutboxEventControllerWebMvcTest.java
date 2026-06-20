@@ -151,7 +151,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.last").value(true))
                 .andExpect(jsonPath("$.empty").value(false));
 
-        verify(outboxEventQueryService).getEvents(null, null, null, null, null, null, null, null, null, null, null, pageable);
+        verify(outboxEventQueryService).getEvents(null, null, null, null, null, null, null, null, null, null, null, null, pageable);
         verifyNoMoreInteractions(outboxEventQueryService);
     }
 
@@ -159,7 +159,8 @@ class AdminOutboxEventControllerWebMvcTest {
     @Test
     void getEvents_shouldPassRequeuedOnlyFalseToService() throws Exception {
         when(outboxEventQueryService.getEvents(
-                eq(null), eq(null), eq(null), eq(null), null, eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class)))
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
@@ -168,7 +169,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(status().isOk());
 
         verify(outboxEventQueryService).getEvents(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class));
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(Boolean.FALSE), any(Pageable.class));
     }
 
     @Test
@@ -179,7 +181,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 eq(null),
                 eq(null),
                 eq(null),
-                eq(null), null,
+                eq(null),
+                eq(null),
                 eq(createdFrom),
                 eq(createdTo),
                 eq(null),
@@ -206,6 +209,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 eq(null),
                 eq(null),
                 eq(null),
+                eq(null),
                 eq(createdFrom),
                 eq(createdTo),
                 eq(null),
@@ -221,7 +225,7 @@ class AdminOutboxEventControllerWebMvcTest {
         Instant lastAttemptFrom = Instant.parse("2026-06-01T00:00:00Z");
         Instant lastAttemptTo = Instant.parse("2026-06-30T23:59:59Z");
         when(outboxEventQueryService.getEvents(
-                eq(null), eq(null), eq(null), eq(null), null, eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
                 eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), eq(null), eq(null), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
@@ -232,7 +236,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(status().isOk());
 
         verify(outboxEventQueryService).getEvents(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
                 eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 
@@ -241,7 +245,7 @@ class AdminOutboxEventControllerWebMvcTest {
         Instant lastAttemptFrom = Instant.parse("2026-07-01T00:00:00Z");
         Instant lastAttemptTo = Instant.parse("2026-06-01T00:00:00Z");
         when(outboxEventQueryService.getEvents(
-                eq(null), eq(null), eq(null), eq(null), null, eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
                 eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), eq(null), eq(null), any(Pageable.class)))
                 .thenThrow(new OutboxEventLastAttemptDateRangeInvalidException());
 
@@ -257,7 +261,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.timestamp").exists());
 
         verify(outboxEventQueryService).getEvents(
-                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
                 eq(lastAttemptFrom), eq(lastAttemptTo), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 
