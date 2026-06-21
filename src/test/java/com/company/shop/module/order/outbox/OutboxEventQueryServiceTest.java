@@ -263,15 +263,17 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(new PageImpl<>(List.of(event), expectedPageable, 1));
         when(outboxEventMapper.toDto(event)).thenReturn(response);
 
+        OutboxEventAdminSearchCriteria criteria = emptyCriteria();
+
         Page<OutboxEventResponseDTO> result;
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(emptyCriteria()))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
                     .thenReturn(specification);
 
-            result = outboxEventQueryService.getEvents(emptyCriteria(), requestedPageable);
+            result = outboxEventQueryService.getEvents(criteria, requestedPageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(emptyCriteria()));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -317,8 +319,6 @@ class OutboxEventQueryServiceTest {
         verifyNoInteractions(outboxEventProcessor);
     }
 
-
-
     @Test
     void getEvents_shouldPassProblemTypeCriteriaAndStaleThresholdToSpecification() {
         Pageable pageable = PageRequest.of(0, 20);
@@ -354,14 +354,16 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
                 .thenReturn(Page.empty(pageable));
 
+        OutboxEventAdminSearchCriteria criteria = criteriaWithRequeuedOnly(Boolean.FALSE);
+
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteriaWithRequeuedOnly(Boolean.FALSE)))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
                     .thenReturn(specification);
 
-            outboxEventQueryService.getEvents(criteriaWithRequeuedOnly(Boolean.FALSE), pageable);
+            outboxEventQueryService.getEvents(criteria, pageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteriaWithRequeuedOnly(Boolean.FALSE)));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -401,14 +403,16 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
                 .thenReturn(Page.empty(pageable));
 
+        OutboxEventAdminSearchCriteria criteria = criteriaWithLastAttemptRange(lastAttemptFrom, lastAttemptTo);
+
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteriaWithLastAttemptRange(lastAttemptFrom, lastAttemptTo)))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
                     .thenReturn(specification);
 
-            outboxEventQueryService.getEvents(criteriaWithLastAttemptRange(lastAttemptFrom, lastAttemptTo), pageable);
+            outboxEventQueryService.getEvents(criteria, pageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteriaWithLastAttemptRange(lastAttemptFrom, lastAttemptTo)));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -422,14 +426,16 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
                 .thenReturn(Page.empty(pageable));
 
+        OutboxEventAdminSearchCriteria criteria = criteriaWithAttempts(2, 5);
+
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteriaWithAttempts(2, 5)))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
                     .thenReturn(specification);
 
-            outboxEventQueryService.getEvents(criteriaWithAttempts(2, 5), pageable);
+            outboxEventQueryService.getEvents(criteria, pageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteriaWithAttempts(2, 5)));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -443,14 +449,16 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
                 .thenReturn(Page.empty(pageable));
 
+        OutboxEventAdminSearchCriteria criteria = criteriaWithLastErrorContains(" timeout ");
+
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
-            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteriaWithLastErrorContains(" timeout ")))
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
                     .thenReturn(specification);
 
-            outboxEventQueryService.getEvents(criteriaWithLastErrorContains(" timeout "), pageable);
+            outboxEventQueryService.getEvents(criteria, pageable);
 
-            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteriaWithLastErrorContains(" timeout ")));
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
         }
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
