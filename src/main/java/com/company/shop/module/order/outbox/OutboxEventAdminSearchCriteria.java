@@ -11,6 +11,8 @@ public record OutboxEventAdminSearchCriteria(
         String lastErrorContains,
         Instant createdFrom,
         Instant createdTo,
+        Instant processedFrom,
+        Instant processedTo,
         Instant lastAttemptFrom,
         Instant lastAttemptTo,
         Integer attemptsMin,
@@ -30,8 +32,26 @@ public record OutboxEventAdminSearchCriteria(
             Instant lastAttemptTo,
             Integer attemptsMin,
             Integer attemptsMax,
+            Boolean requeuedOnly,
+            OutboxEventProblemType problemType) {
+        this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo, null, null,
+                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, problemType);
+    }
+
+    public OutboxEventAdminSearchCriteria(
+            OutboxEventStatus status,
+            String aggregateType,
+            UUID aggregateId,
+            String eventType,
+            String lastErrorContains,
+            Instant createdFrom,
+            Instant createdTo,
+            Instant lastAttemptFrom,
+            Instant lastAttemptTo,
+            Integer attemptsMin,
+            Integer attemptsMax,
             Boolean requeuedOnly) {
-        this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
+        this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo, null, null,
                 lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, null);
     }
 }

@@ -54,6 +54,14 @@ public final class OutboxEventSpecifications {
                 predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), criteria.createdTo()));
             }
 
+            if (criteria.processedFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("processedAt"), criteria.processedFrom()));
+            }
+
+            if (criteria.processedTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("processedAt"), criteria.processedTo()));
+            }
+
             if (criteria.lastAttemptFrom() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptFrom()));
             }

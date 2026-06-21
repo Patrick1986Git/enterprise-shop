@@ -37,6 +37,7 @@ import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeIn
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
+import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventQueryServiceTest {
@@ -369,6 +370,32 @@ class OutboxEventQueryServiceTest {
     }
 
     @Test
+    void getEvents_shouldPassProcessedFiltersToSpecification() {
+        Instant processedFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant processedTo = Instant.parse("2026-06-21T23:59:59Z");
+        Pageable pageable = PageRequest.of(0, 20);
+        Specification<OutboxEvent> specification = (root, query, cb) -> null;
+        when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
+                .thenReturn(Page.empty(pageable));
+
+        OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, processedFrom, processedTo,
+                null, null, null, null, null, null);
+        try (MockedStatic<OutboxEventSpecifications> specifications =
+                org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
+                    .thenReturn(specification);
+
+            outboxEventQueryService.getEvents(criteria, pageable);
+
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
+        }
+
+        verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
     void getEvents_shouldPassLastAttemptFiltersToSpecification() {
         Instant lastAttemptFrom = Instant.parse("2026-06-01T00:00:00Z");
         Instant lastAttemptTo = Instant.parse("2026-06-30T23:59:59Z");
@@ -531,6 +558,22 @@ class OutboxEventQueryServiceTest {
 
         verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldThrowWhenProcessedFromIsAfterProcessedTo() {
+        Instant processedFrom = Instant.parse("2026-06-22T00:00:00Z");
+        Instant processedTo = Instant.parse("2026-06-21T00:00:00Z");
+
+        assertThatThrownBy(() -> outboxEventQueryService.getEvents(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, processedFrom, processedTo,
+                    null, null, null, null, null, null), PageRequest.of(0, 20)))
+                .isInstanceOf(OutboxEventProcessedDateRangeInvalidException.class)
+                .hasMessage("processedFrom must be before or equal to processedTo.")
+                .extracting("errorCode")
+                .isEqualTo("OUTBOX_EVENT_PROCESSED_DATE_RANGE_INVALID");
+
+        verifyNoInteractions(outboxEventRepository, outboxEventMapper, outboxEventProcessor);
     }
 
     @Test

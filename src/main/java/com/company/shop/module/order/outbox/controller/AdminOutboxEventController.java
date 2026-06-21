@@ -73,6 +73,10 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) Instant createdFrom,
             @Parameter(description = "Filter events created at or before this timestamp.")
             @RequestParam(required = false) Instant createdTo,
+            @Parameter(description = "Filter events processed at or after this timestamp.")
+            @RequestParam(required = false) Instant processedFrom,
+            @Parameter(description = "Filter events processed at or before this timestamp.")
+            @RequestParam(required = false) Instant processedTo,
             @Parameter(description = "Filter events whose last processing attempt occurred at or after this timestamp.")
             @RequestParam(required = false) Instant lastAttemptFrom,
             @Parameter(description = "Filter events whose last processing attempt occurred at or before "
@@ -92,7 +96,8 @@ public class AdminOutboxEventController {
             @PageableDefault(size = 20) Pageable pageable) {
         OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
                 status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
-                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, problemType);
+                processedFrom, processedTo, lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly,
+                problemType);
         return PageResponseDTO.from(outboxEventQueryService.getEvents(criteria, pageable));
     }
 

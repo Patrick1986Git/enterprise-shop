@@ -93,7 +93,8 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                         "idx_outbox_events_status_created_at",
                         "idx_outbox_events_aggregate",
                         "idx_outbox_events_status_last_attempt_at",
-                        "idx_outbox_events_status_attempts");
+                        "idx_outbox_events_status_attempts",
+                        "idx_outbox_events_status_processed_at");
     }
 
     @Configuration(proxyBeanMethods = false)

@@ -19,6 +19,7 @@ import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeIn
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
+import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 
 @Service
 public class OutboxEventQueryService {
@@ -71,6 +72,11 @@ public class OutboxEventQueryService {
                 && criteria.createdTo() != null
                 && criteria.createdFrom().isAfter(criteria.createdTo())) {
             throw new OutboxEventDateRangeInvalidException();
+        }
+        if (criteria.processedFrom() != null
+                && criteria.processedTo() != null
+                && criteria.processedFrom().isAfter(criteria.processedTo())) {
+            throw new OutboxEventProcessedDateRangeInvalidException();
         }
         if (criteria.lastAttemptFrom() != null
                 && criteria.lastAttemptTo() != null
