@@ -387,8 +387,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(timeout, serialization, withoutError));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, " timeout ", null, null, null, null, null, null, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithLastErrorContains(" timeout ")),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent())
@@ -528,8 +527,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-07-01T00:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, null, lowerBound, upperBound, null, null, null, null, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithCreatedRange(lowerBound, upperBound)),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(insideId);
@@ -832,8 +830,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, null, null, null, lowerBound, upperBound, null, null, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithLastAttemptRange(lowerBound, upperBound)),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(insideId);
@@ -910,8 +907,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(below, atLowerBound, above));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, null, null, null, null, null, 2, null, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithAttempts(2, null)),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -927,8 +923,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(below, atUpperBound, above));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, null, null, null, null, null, null, 2, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithAttempts(null, 2)),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -944,12 +939,10 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         outboxEventRepository.saveAllAndFlush(List.of(below, exact, above));
 
         Page<OutboxEvent> rangeResult = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, null, null, null, null, null, 2, 3, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithAttempts(2, 3)),
                 PageRequest.of(0, 10));
         Page<OutboxEvent> exactResult = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                    null, null, null, null, null, null, null, null, null, 2, 2, null)),
+                OutboxEventSpecifications.adminFilters(criteriaWithAttempts(2, 2)),
                 PageRequest.of(0, 10));
 
         assertThat(rangeResult.getContent()).extracting(OutboxEvent::getId)
@@ -998,9 +991,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(processedId, OutboxEventStatus.PROCESSED, Instant.parse("2026-01-01T10:00:00Z"));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                        null, null, null, null, null, null, null, null, null, null, null, null,
-                        OutboxEventProblemType.STALE_PENDING), threshold, 3),
+                OutboxEventSpecifications.adminFilters(criteriaWithProblemType(OutboxEventProblemType.STALE_PENDING), threshold, 3),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -1025,9 +1016,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-01-01T10:00:00Z"), threshold, 1);
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                        null, null, null, null, null, null, null, null, null, null, null, null,
-                        OutboxEventProblemType.STALE_FAILED), threshold, 3),
+                OutboxEventSpecifications.adminFilters(criteriaWithProblemType(OutboxEventProblemType.STALE_FAILED), threshold, 3),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -1046,14 +1035,10 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEventWithAttemptMetadata(processedHighAttemptsId, OutboxEventStatus.PROCESSED, createdAt, createdAt, 3);
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                        null, null, null, null, null, null, null, null, null, null, null, null,
-                        OutboxEventProblemType.HIGH_ATTEMPT_FAILED), createdAt, 3),
+                OutboxEventSpecifications.adminFilters(criteriaWithProblemType(OutboxEventProblemType.HIGH_ATTEMPT_FAILED), createdAt, 3),
                 PageRequest.of(0, 10));
         Page<OutboxEvent> contradictoryResult = outboxEventRepository.findAll(
-                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
-                        null, null, null, null, null, null, null, null, null, null, 2, null,
-                        OutboxEventProblemType.HIGH_ATTEMPT_FAILED), createdAt, 3),
+                OutboxEventSpecifications.adminFilters(criteriaWithAttemptsMaxAndProblemType(2, OutboxEventProblemType.HIGH_ATTEMPT_FAILED), createdAt, 3),
                 PageRequest.of(0, 10));
 
         assertThat(result.getContent()).extracting(OutboxEvent::getId)
@@ -1227,6 +1212,46 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             event.markFailed("boom");
         }
         return event;
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithCreatedRange(Instant createdFrom, Instant createdTo) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, createdFrom, createdTo, null, null, null, null, null);
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithProcessedRange(Instant processedFrom, Instant processedTo) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, processedFrom, processedTo,
+                null, null, null, null, null, null);
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithLastAttemptRange(
+            Instant lastAttemptFrom,
+            Instant lastAttemptTo) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null);
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithAttempts(Integer attemptsMin, Integer attemptsMax) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, null, null, attemptsMin, attemptsMax, null);
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithLastErrorContains(String lastErrorContains) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, lastErrorContains, null, null, null, null, null, null, null);
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithProblemType(OutboxEventProblemType problemType) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, null, null, null, null, null, problemType);
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithAttemptsMaxAndProblemType(
+            Integer attemptsMax,
+            OutboxEventProblemType problemType) {
+        return new OutboxEventAdminSearchCriteria(
+                null, null, null, null, null, null, null, null, null, null, attemptsMax, null, problemType);
     }
 
     private String valueOrNull(String nullableColumnName, String currentColumnName, String value) {
