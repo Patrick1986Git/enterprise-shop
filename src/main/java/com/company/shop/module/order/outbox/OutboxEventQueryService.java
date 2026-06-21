@@ -49,6 +49,8 @@ public class OutboxEventQueryService {
                 outboxEventRepository.countByStatusAndLastAttemptAtLessThanEqual(OutboxEventStatus.FAILED, staleThreshold),
                 outboxEventRepository.countByStatusAndAttemptsGreaterThanEqual(
                         OutboxEventStatus.FAILED, HIGH_FAILED_ATTEMPTS_THRESHOLD),
+                STALE_THRESHOLD_DURATION.toMinutes(),
+                HIGH_FAILED_ATTEMPTS_THRESHOLD,
                 outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING).orElse(null),
                 outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null),
                 outboxEventRepository.findNewestAttemptAt().orElse(null),

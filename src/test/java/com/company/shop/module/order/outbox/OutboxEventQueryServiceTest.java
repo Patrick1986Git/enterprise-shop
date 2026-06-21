@@ -98,6 +98,8 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.stalePendingCount()).isEqualTo(4L);
         assertThat(summary.staleFailedCount()).isEqualTo(5L);
         assertThat(summary.highAttemptFailedCount()).isEqualTo(6L);
+        assertThat(summary.staleThresholdMinutes()).isEqualTo(15L);
+        assertThat(summary.highFailedAttemptsThreshold()).isEqualTo(3);
         assertThat(summary.oldestPendingCreatedAt()).isEqualTo(oldestPendingCreatedAt);
         assertThat(summary.newestFailedCreatedAt()).isEqualTo(newestFailedCreatedAt);
         assertThat(summary.newestAttemptAt()).isEqualTo(newestAttemptAt);
@@ -152,6 +154,8 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.stalePendingCount()).isZero();
         assertThat(summary.staleFailedCount()).isZero();
         assertThat(summary.highAttemptFailedCount()).isZero();
+        assertThat(summary.staleThresholdMinutes()).isEqualTo(15L);
+        assertThat(summary.highFailedAttemptsThreshold()).isEqualTo(3);
         assertThat(summary.oldestPendingCreatedAt()).isNull();
         assertThat(summary.newestFailedCreatedAt()).isNull();
         assertThat(summary.newestAttemptAt()).isNull();
@@ -199,6 +203,8 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.stalePendingCount()).isEqualTo(7L);
         assertThat(summary.staleFailedCount()).isEqualTo(8L);
         assertThat(summary.highAttemptFailedCount()).isEqualTo(9L);
+        assertThat(summary.staleThresholdMinutes()).isEqualTo(15L);
+        assertThat(summary.highFailedAttemptsThreshold()).isEqualTo(3);
 
         ArgumentCaptor<Instant> stalePendingThresholdCaptor = ArgumentCaptor.forClass(Instant.class);
         ArgumentCaptor<Instant> staleFailedThresholdCaptor = ArgumentCaptor.forClass(Instant.class);
