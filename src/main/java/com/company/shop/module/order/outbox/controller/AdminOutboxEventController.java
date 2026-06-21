@@ -26,6 +26,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventResponseDTO;
 import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,18 +58,36 @@ public class AdminOutboxEventController {
             @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
     })
     public PageResponseDTO<OutboxEventResponseDTO> getEvents(
+            @Parameter(description = "Filter by outbox processing status.")
             @RequestParam(required = false) OutboxEventStatus status,
+            @Parameter(description = "Filter by aggregate type, such as the domain object category "
+                    + "that produced the event.")
             @RequestParam(required = false) String aggregateType,
+            @Parameter(description = "Filter by the aggregate identifier associated with the outbox event.")
             @RequestParam(required = false) UUID aggregateId,
+            @Parameter(description = "Filter by event type, such as the logical name of the domain event.")
             @RequestParam(required = false) String eventType,
+            @Parameter(description = "Filter events whose last processing error contains the provided text.")
             @RequestParam(required = false) String lastErrorContains,
+            @Parameter(description = "Filter events created at or after this timestamp.")
             @RequestParam(required = false) Instant createdFrom,
+            @Parameter(description = "Filter events created at or before this timestamp.")
             @RequestParam(required = false) Instant createdTo,
+            @Parameter(description = "Filter events whose last processing attempt occurred at or after this timestamp.")
             @RequestParam(required = false) Instant lastAttemptFrom,
+            @Parameter(description = "Filter events whose last processing attempt occurred at or before "
+                    + "this timestamp.")
             @RequestParam(required = false) Instant lastAttemptTo,
+            @Parameter(description = "Filter events with attempts greater than or equal to this value.")
             @RequestParam(required = false) Integer attemptsMin,
+            @Parameter(description = "Filter events with attempts less than or equal to this value.")
             @RequestParam(required = false) Integer attemptsMax,
+            @Parameter(description = "When true, return only events that have been manually requeued at least once.")
             @RequestParam(required = false) Boolean requeuedOnly,
+            @Parameter(description = "Filter operational problem categories. STALE_PENDING returns PENDING events "
+                    + "older than the stale threshold by createdAt. STALE_FAILED returns FAILED events whose "
+                    + "lastAttemptAt is older than the stale threshold. HIGH_ATTEMPT_FAILED returns FAILED events "
+                    + "with attempts greater than or equal to the high failed attempts threshold.")
             @RequestParam(required = false) OutboxEventProblemType problemType,
             @PageableDefault(size = 20) Pageable pageable) {
         OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
