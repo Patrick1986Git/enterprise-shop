@@ -670,6 +670,105 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findAll_shouldFilterByProcessedFromInclusive() {
+        UUID beforeId = UUID.randomUUID();
+        UUID atLowerBoundId = UUID.randomUUID();
+        UUID afterId = UUID.randomUUID();
+        Instant lowerBound = Instant.parse("2026-06-21T00:00:00Z");
+        insertOutboxEvent(beforeId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(atLowerBoundId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(afterId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        updateProcessedAt(beforeId, Instant.parse("2026-06-20T23:59:59Z"));
+        updateProcessedAt(atLowerBoundId, lowerBound);
+        updateProcessedAt(afterId, Instant.parse("2026-06-21T00:00:01Z"));
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, lowerBound, null, null, null, null, null, null, null)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactlyInAnyOrder(atLowerBoundId, afterId)
+                .doesNotContain(beforeId);
+    }
+
+    @Test
+    void findAll_shouldFilterByProcessedToInclusive() {
+        UUID beforeId = UUID.randomUUID();
+        UUID atUpperBoundId = UUID.randomUUID();
+        UUID afterId = UUID.randomUUID();
+        Instant upperBound = Instant.parse("2026-06-21T23:59:59Z");
+        insertOutboxEvent(beforeId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(atUpperBoundId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(afterId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        updateProcessedAt(beforeId, Instant.parse("2026-06-21T23:59:58Z"));
+        updateProcessedAt(atUpperBoundId, upperBound);
+        updateProcessedAt(afterId, Instant.parse("2026-06-22T00:00:00Z"));
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, null, upperBound, null, null, null, null, null, null)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactlyInAnyOrder(beforeId, atUpperBoundId)
+                .doesNotContain(afterId);
+    }
+
+    @Test
+    void findAll_shouldFilterByProcessedRangeInclusiveAndExcludeNullProcessedAt() {
+        UUID beforeId = UUID.randomUUID();
+        UUID insideId = UUID.randomUUID();
+        UUID afterId = UUID.randomUUID();
+        UUID nullProcessedId = UUID.randomUUID();
+        Instant lowerBound = Instant.parse("2026-06-21T00:00:00Z");
+        Instant upperBound = Instant.parse("2026-06-21T23:59:59Z");
+        insertOutboxEvent(beforeId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(insideId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(afterId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(nullProcessedId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        updateProcessedAt(beforeId, Instant.parse("2026-06-20T23:59:59Z"));
+        updateProcessedAt(insideId, Instant.parse("2026-06-21T12:00:00Z"));
+        updateProcessedAt(afterId, Instant.parse("2026-06-22T00:00:00Z"));
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, lowerBound, upperBound, null, null, null, null, null, null)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactly(insideId)
+                .doesNotContain(beforeId, afterId, nullProcessedId);
+    }
+
+    @Test
+    void findAll_shouldCombineProcessedRangeWithProcessedStatus() {
+        UUID matchingId = UUID.randomUUID();
+        UUID wrongStatusId = UUID.randomUUID();
+        UUID outsideRangeId = UUID.randomUUID();
+        Instant lowerBound = Instant.parse("2026-06-21T00:00:00Z");
+        Instant upperBound = Instant.parse("2026-06-21T23:59:59Z");
+        insertOutboxEvent(matchingId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(wrongStatusId, OutboxEventStatus.FAILED, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(outsideRangeId, OutboxEventStatus.PROCESSED, "Order", UUID.randomUUID(), "OrderPlaced");
+        updateProcessedAt(matchingId, Instant.parse("2026-06-21T12:00:00Z"));
+        updateProcessedAt(wrongStatusId, Instant.parse("2026-06-21T12:00:00Z"));
+        updateProcessedAt(outsideRangeId, Instant.parse("2026-06-22T00:00:00Z"));
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(new OutboxEventAdminSearchCriteria(
+                    OutboxEventStatus.PROCESSED, null, null, null, null, null, null, lowerBound, upperBound,
+                    null, null, null, null, null, null)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matchingId);
+    }
+
+    @Test
     void findAll_shouldFilterByLastAttemptFromInclusive() {
         UUID beforeId = UUID.randomUUID();
         UUID atLowerBoundId = UUID.randomUUID();
@@ -1074,6 +1173,13 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         jdbcTemplate.update(
                 "UPDATE outbox_events SET created_at = CAST(? AS timestamptz) WHERE id = ?",
                 createdAt.toString(),
+                eventId);
+    }
+
+    private void updateProcessedAt(UUID eventId, Instant processedAt) {
+        jdbcTemplate.update(
+                "UPDATE outbox_events SET processed_at = CAST(? AS timestamptz) WHERE id = ?",
+                processedAt.toString(),
                 eventId);
     }
 

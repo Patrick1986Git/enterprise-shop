@@ -51,6 +51,7 @@ import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeIn
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
+import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventRequeueNotAllowedException;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
@@ -199,6 +200,51 @@ class AdminOutboxEventControllerWebMvcTest {
     }
 
     @Test
+    void getEvents_shouldPassProcessedFiltersToService() throws Exception {
+        Instant processedFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant processedTo = Instant.parse("2026-06-21T23:59:59Z");
+        when(outboxEventQueryService.getEvents(eq(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, processedFrom, processedTo,
+                    null, null, null, null, null, null)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("processedFrom", processedFrom.toString())
+                        .param("processedTo", processedTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(outboxEventQueryService).getEvents(eq(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, processedFrom, processedTo,
+                    null, null, null, null, null, null)), any(Pageable.class));
+    }
+
+    @Test
+    void getEvents_shouldReturnBadRequestWhenProcessedFromIsAfterProcessedTo() throws Exception {
+        Instant processedFrom = Instant.parse("2026-06-22T00:00:00Z");
+        Instant processedTo = Instant.parse("2026-06-21T00:00:00Z");
+        when(outboxEventQueryService.getEvents(eq(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, processedFrom, processedTo,
+                    null, null, null, null, null, null)), any(Pageable.class)))
+                .thenThrow(new OutboxEventProcessedDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("processedFrom", processedFrom.toString())
+                        .param("processedTo", processedTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_PROCESSED_DATE_RANGE_INVALID"))
+                .andExpect(jsonPath("$.message").value("processedFrom must be before or equal to processedTo."))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventQueryService).getEvents(eq(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, processedFrom, processedTo,
+                    null, null, null, null, null, null)), any(Pageable.class));
+    }
+
+    @Test
     void getEvents_shouldPassLastAttemptFiltersToService() throws Exception {
         Instant lastAttemptFrom = Instant.parse("2026-06-01T00:00:00Z");
         Instant lastAttemptTo = Instant.parse("2026-06-30T23:59:59Z");
@@ -314,8 +360,10 @@ class AdminOutboxEventControllerWebMvcTest {
         UUID aggregateId = UUID.randomUUID();
         Instant createdFrom = Instant.parse("2026-06-01T00:00:00Z");
         Instant createdTo = Instant.parse("2026-06-30T23:59:59Z");
+        Instant processedFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant processedTo = Instant.parse("2026-06-21T23:59:59Z");
         when(outboxEventQueryService.getEvents(eq(new OutboxEventAdminSearchCriteria(
-                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, null, null, 2, 4, Boolean.TRUE, OutboxEventProblemType.HIGH_ATTEMPT_FAILED)), any(Pageable.class)))
+                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, processedFrom, processedTo, null, null, 2, 4, Boolean.TRUE, OutboxEventProblemType.HIGH_ATTEMPT_FAILED)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "eventType")), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
@@ -326,6 +374,8 @@ class AdminOutboxEventControllerWebMvcTest {
                         .param("lastErrorContains", "timeout")
                         .param("createdFrom", createdFrom.toString())
                         .param("createdTo", createdTo.toString())
+                        .param("processedFrom", processedFrom.toString())
+                        .param("processedTo", processedTo.toString())
                         .param("attemptsMin", "2")
                         .param("attemptsMax", "4")
                         .param("requeuedOnly", "true")
@@ -338,7 +388,7 @@ class AdminOutboxEventControllerWebMvcTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(outboxEventQueryService).getEvents(eq(new OutboxEventAdminSearchCriteria(
-                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, null, null, 2, 4, Boolean.TRUE, OutboxEventProblemType.HIGH_ATTEMPT_FAILED)), pageableCaptor.capture());
+                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, processedFrom, processedTo, null, null, 2, 4, Boolean.TRUE, OutboxEventProblemType.HIGH_ATTEMPT_FAILED)), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
         assertThat(pageableCaptor.getValue().getSort()).containsExactly(Sort.Order.asc("eventType"));
