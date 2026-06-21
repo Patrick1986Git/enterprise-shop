@@ -40,6 +40,7 @@ import com.company.shop.module.order.outbox.OutboxEventAdminActionLogQueryServic
 import com.company.shop.module.order.outbox.OutboxEventAdminActionType;
 import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
 import com.company.shop.module.order.outbox.OutboxEventAdminSearchCriteria;
+import com.company.shop.module.order.outbox.OutboxEventProblemType;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventStatus;
 import com.company.shop.module.order.outbox.dto.OutboxEventAdminActionLogResponseDTO;
@@ -238,6 +239,24 @@ class AdminOutboxEventControllerWebMvcTest {
                     null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null)), any(Pageable.class));
     }
 
+
+    @Test
+    void getEvents_shouldPassProblemTypeToService() throws Exception {
+        when(outboxEventQueryService.getEvents(eq(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, null, null, null, null, null,
+                    OutboxEventProblemType.STALE_PENDING)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                        .param("problemType", "STALE_PENDING")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(outboxEventQueryService).getEvents(eq(new OutboxEventAdminSearchCriteria(
+                    null, null, null, null, null, null, null, null, null, null, null, null,
+                    OutboxEventProblemType.STALE_PENDING)), any(Pageable.class));
+    }
+
     @Test
     void getEvents_shouldPassAttemptsFiltersToService() throws Exception {
         when(outboxEventQueryService.getEvents(eq(new OutboxEventAdminSearchCriteria(
@@ -296,7 +315,7 @@ class AdminOutboxEventControllerWebMvcTest {
         Instant createdFrom = Instant.parse("2026-06-01T00:00:00Z");
         Instant createdTo = Instant.parse("2026-06-30T23:59:59Z");
         when(outboxEventQueryService.getEvents(eq(new OutboxEventAdminSearchCriteria(
-                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, null, null, 2, 4, Boolean.TRUE)), any(Pageable.class)))
+                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, null, null, 2, 4, Boolean.TRUE, OutboxEventProblemType.HIGH_ATTEMPT_FAILED)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "eventType")), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
@@ -310,6 +329,7 @@ class AdminOutboxEventControllerWebMvcTest {
                         .param("attemptsMin", "2")
                         .param("attemptsMax", "4")
                         .param("requeuedOnly", "true")
+                        .param("problemType", "HIGH_ATTEMPT_FAILED")
                         .param("page", "2")
                         .param("size", "5")
                         .param("sort", "eventType,asc")
@@ -318,7 +338,7 @@ class AdminOutboxEventControllerWebMvcTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(outboxEventQueryService).getEvents(eq(new OutboxEventAdminSearchCriteria(
-                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, null, null, 2, 4, Boolean.TRUE)), pageableCaptor.capture());
+                    OutboxEventStatus.PENDING, "Order", aggregateId, "Placed", "timeout", createdFrom, createdTo, null, null, 2, 4, Boolean.TRUE, OutboxEventProblemType.HIGH_ATTEMPT_FAILED)), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
         assertThat(pageableCaptor.getValue().getSort()).containsExactly(Sort.Order.asc("eventType"));

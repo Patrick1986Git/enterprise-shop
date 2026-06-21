@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -14,6 +15,11 @@ public final class OutboxEventSpecifications {
     }
 
     public static Specification<OutboxEvent> adminFilters(OutboxEventAdminSearchCriteria criteria) {
+        return adminFilters(criteria, null, 3);
+    }
+
+    static Specification<OutboxEvent> adminFilters(
+            OutboxEventAdminSearchCriteria criteria, Instant staleThreshold, int highFailedAttemptsThreshold) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -66,6 +72,23 @@ public final class OutboxEventSpecifications {
 
             if (Boolean.TRUE.equals(criteria.requeuedOnly())) {
                 predicates.add(cb.greaterThan(root.get("requeueCount"), 0));
+            }
+
+            if (criteria.problemType() != null) {
+                switch (criteria.problemType()) {
+                    case STALE_PENDING -> {
+                        predicates.add(cb.equal(root.get("status"), OutboxEventStatus.PENDING));
+                        predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), staleThreshold));
+                    }
+                    case STALE_FAILED -> {
+                        predicates.add(cb.equal(root.get("status"), OutboxEventStatus.FAILED));
+                        predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), staleThreshold));
+                    }
+                    case HIGH_ATTEMPT_FAILED -> {
+                        predicates.add(cb.equal(root.get("status"), OutboxEventStatus.FAILED));
+                        predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), highFailedAttemptsThreshold));
+                    }
+                }
             }
 
             return cb.and(predicates.toArray(Predicate[]::new));
