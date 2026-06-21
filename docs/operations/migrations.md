@@ -26,6 +26,17 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V18 | `V18__order_user_snapshot.sql` | Adds required user email snapshot to orders. |
 | V19 | `V19__create_outbox_events.sql` | Adds `outbox_events` with JSON payload, status, attempts, processing timestamps, failure details, and indexes. |
 | V20 | `V20__create_notifications.sql` | Adds `notifications` with type/recipient/content/status/source event, sent/failure state, and indexes. |
+| V21 | `V21__add_notification_delivery_attempts.sql` | Adds notification delivery attempt tracking. |
+| V22 | `V22__add_notification_next_attempt_at.sql` | Adds notification next-attempt scheduling support and an index for pending due notifications. |
+| V23 | `V23__make_notification_source_event_unique.sql` | Enforces uniqueness for non-null notification source event ids. |
+| V24 | `V24__add_notification_last_attempt_at.sql` | Adds notification last-attempt timestamp tracking. |
+| V25 | `V25__add_notification_requeue_metadata.sql` | Adds notification requeue count and timestamp metadata. |
+| V26 | `V26__add_notification_last_requeued_by.sql` | Adds notification last-requeued-by actor metadata. |
+| V27 | `V27__create_notification_admin_action_logs.sql` | Adds notification admin action audit logs and lookup indexes. |
+| V28 | `V28__add_outbox_event_requeue_metadata.sql` | Adds outbox event requeue count, timestamp, and actor metadata. |
+| V29 | `V29__create_outbox_event_admin_action_logs.sql` | Adds outbox event admin action audit logs and lookup indexes. |
+| V30 | `V30__add_outbox_event_last_attempt_at.sql` | Adds outbox event last-attempt timestamp tracking. |
+| V31 | `V31__add_outbox_observability_indexes.sql` | Adds outbox event indexes for status with last-attempt timestamp and attempts filters. |
 
 ## Rules for future migrations
 
