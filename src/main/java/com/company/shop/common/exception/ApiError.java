@@ -10,6 +10,8 @@ package com.company.shop.common.exception;
 
 import java.time.LocalDateTime;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Standardized API error response container for production-grade applications.
  * <p>
@@ -26,11 +28,21 @@ import java.time.LocalDateTime;
  * @param timestamp the exact time the error occurred.
  * @since 1.1.0
  */
+@Schema(name = "ApiError", description = "Standard API error response.")
 public record ApiError(
+        @Schema(description = "Numeric HTTP status code.", example = "400")
         int status,
+
+        @Schema(description = "Human-readable error message, possibly localized.", example = "Validation failed")
         String message,
+
+        @Schema(description = "Stable machine-readable error code.", example = "VALIDATION_FAILED")
         String errorCode,
+
+        @Schema(description = "Optional structured error details, such as field validation errors.")
         Object errors,
+
+        @Schema(description = "Time the error response was created.", example = "2026-06-22T12:30:00")
         LocalDateTime timestamp
 ) {
 
