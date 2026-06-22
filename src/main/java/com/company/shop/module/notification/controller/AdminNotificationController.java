@@ -22,6 +22,7 @@ import com.company.shop.module.notification.service.NotificationAdminCommandServ
 import com.company.shop.module.notification.service.NotificationQueryService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,9 +54,14 @@ public class AdminNotificationController {
             @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
     })
     public PageResponseDTO<NotificationResponseDTO> getNotifications(
+            @Parameter(description = "Filter by notification delivery status.")
             @RequestParam(required = false) NotificationStatus status,
+            @Parameter(description = "Filter by notification type, such as the logical notification category.")
             @RequestParam(required = false) String type,
+            @Parameter(description = "Filter by recipient address or identifier.")
             @RequestParam(required = false) String recipient,
+            @Parameter(description = "When true, return only notifications that have been manually requeued "
+                    + "at least once.")
             @RequestParam(required = false) Boolean requeuedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(notificationQueryService.getNotifications(
