@@ -11,6 +11,7 @@ This repository intentionally does not maintain a manual Markdown endpoint inven
 When the application is running locally, SpringDoc exposes API documentation through the configured OpenAPI and Swagger UI endpoints:
 
 - OpenAPI JSON: `http://localhost:8080/api-docs`
+- Grouped OpenAPI JSON: `http://localhost:8080/api-docs/{group}` for stable SpringDoc groups such as `all-api`, `public-api`, `customer-api`, `admin-api`, `webhooks-api`, and `system-api`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 These runtime endpoints are generated from the application. Generated files such as `openapi.json`, `openapi.yaml`, Swagger UI bundles, and `target/generated-docs` are build artifacts and must not be committed under the current policy.
