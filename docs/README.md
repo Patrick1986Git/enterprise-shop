@@ -1,6 +1,9 @@
 # Documentation index
 
-This `docs/` folder contains practical documentation that is currently grounded in the codebase and repository workflows.
+This `docs/` folder contains practical documentation that is currently grounded in the codebase and repository workflows. API contracts should come from generated documentation, not manually duplicated endpoint inventories.
+
+## Policy
+- [`documentation-policy.md`](./documentation-policy.md) — documentation source-of-truth rules, manual documentation scope, and future API documentation automation direction.
 
 ## Architecture
 - [`architecture/overview.md`](./architecture/overview.md) — high-level runtime stack, module structure, and cross-cutting architecture.
@@ -11,7 +14,7 @@ This `docs/` folder contains practical documentation that is currently grounded 
 - [`architecture/archunit.md`](./architecture/archunit.md) — ArchUnit quality gate and currently enforced architecture rules.
 
 ## API
-- [`api/overview.md`](./api/overview.md) — endpoint inventory grouped by area, including access expectations.
+- [`api/overview.md`](./api/overview.md) — current API documentation policy note and generated documentation entry points.
 
 ## Testing
 - [`testing/strategy.md`](./testing/strategy.md) — current test categories, tooling, and Maven Wrapper commands.
@@ -30,6 +33,6 @@ This `docs/` folder contains practical documentation that is currently grounded 
 The following candidate docs are not currently maintained because they would duplicate existing files or add process that is not represented in the repository:
 
 - `architecture/decisions/*.md` — no ADR history is maintained in the repo.
-- Per-resource API files such as `api/carts.md` or `api/orders.md` — the endpoint set is still maintainable in one API overview.
+- Per-resource API files such as `api/carts.md` or `api/orders.md` — these would duplicate generated API contracts; `api/overview.md` remains a policy and entry-point page for generated documentation rather than a manually maintained endpoint inventory.
 - Detailed testing governance or release-runbook documents — current practices are covered by the testing strategy, CI workflow, and lightweight release checklist.
 - `domain/*.md` — domain behavior is best represented by entities, services, migrations, and focused tests until a separate domain reference becomes useful.
