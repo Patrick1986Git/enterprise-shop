@@ -1,5 +1,11 @@
 package com.company.shop.config;
 
+import static com.company.shop.config.OpenApiGroupsConfig.ADMIN_API_GROUP;
+import static com.company.shop.config.OpenApiGroupsConfig.ALL_API_GROUP;
+import static com.company.shop.config.OpenApiGroupsConfig.CUSTOMER_API_GROUP;
+import static com.company.shop.config.OpenApiGroupsConfig.PUBLIC_API_GROUP;
+import static com.company.shop.config.OpenApiGroupsConfig.SYSTEM_API_GROUP;
+import static com.company.shop.config.OpenApiGroupsConfig.WEBHOOKS_API_GROUP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -67,6 +73,13 @@ import tools.jackson.databind.ObjectMapper;
 class OpenApiDocsSmokeTest {
 
     private static final String API_DOCS_ENDPOINT = "/api-docs";
+    private static final List<String> OPENAPI_GROUPS = List.of(
+            ALL_API_GROUP,
+            PUBLIC_API_GROUP,
+            CUSTOMER_API_GROUP,
+            ADMIN_API_GROUP,
+            WEBHOOKS_API_GROUP,
+            SYSTEM_API_GROUP);
 
     @Autowired
     private MockMvc mockMvc;
@@ -215,6 +228,61 @@ class OpenApiDocsSmokeTest {
     }
 
     @Test
+    void groupedOpenApiDocs_shouldBePublicForEachConfiguredGroup() throws Exception {
+        for (String group : OPENAPI_GROUPS) {
+            mockMvc.perform(get(API_DOCS_ENDPOINT + "/{group}", group))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Type", containsString("application/json")))
+                    .andExpect(jsonPath("$.openapi").isNotEmpty())
+                    .andExpect(jsonPath("$.paths").exists());
+        }
+    }
+
+    @Test
+    void groupedOpenApiDocs_shouldExposeRepresentativePathsForConfiguredAudiences() throws Exception {
+        Map<String, Object> adminPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + ADMIN_API_GROUP));
+        assertThat(adminPaths)
+                .containsKeys("/api/v1/admin/notifications", "/api/v1/admin/outbox-events")
+                .doesNotContainKeys("/api/v1/products", "/api/v1/auth/login");
+
+        Map<String, Object> webhookPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + WEBHOOKS_API_GROUP));
+        assertThat(webhookPaths).containsOnlyKeys("/api/v1/webhooks/stripe");
+
+        Map<String, Object> systemPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + SYSTEM_API_GROUP));
+        assertThat(systemPaths).containsKey("/api/v1/system/status");
+
+        Map<String, Object> publicPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + PUBLIC_API_GROUP));
+        assertThat(publicPaths)
+                .containsKeys("/api/v1/auth/login", "/api/v1/products", "/api/v1/categories", "/api/v1/system/status")
+                .doesNotContainKeys("/api/v1/admin/notifications", "/api/v1/me", "/api/v1/webhooks/stripe");
+
+        Map<String, Object> customerPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + CUSTOMER_API_GROUP));
+        assertThat(customerPaths)
+                .containsKeys("/api/v1/me", "/api/v1/me/cart", "/api/v1/reviews")
+                .doesNotContainKeys("/api/v1/products", "/api/v1/admin/notifications");
+    }
+
+    @Test
+    void groupedOpenApiDocs_shouldRetainSharedComponents() throws Exception {
+        Map<String, Object> openApi = readOpenApi(API_DOCS_ENDPOINT + "/" + ALL_API_GROUP);
+        Map<String, Object> components = objectMapper.convertValue(
+                openApi.get("components"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> schemas = objectMapper.convertValue(
+                components.get("schemas"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> securitySchemes = objectMapper.convertValue(
+                components.get("securitySchemes"),
+                new TypeReference<>() {
+                });
+
+        assertThat(schemas).containsKey("ApiError");
+        assertThat(securitySchemes).containsKey("bearerAuth");
+    }
+
+    @Test
     void openApiDocs_shouldContainReusableApiErrorComponents() throws Exception {
         MvcResult result = mockMvc.perform(get(API_DOCS_ENDPOINT))
                 .andExpect(status().isOk())
@@ -257,6 +325,24 @@ class OpenApiDocsSmokeTest {
                 "ConflictError",
                 "InternalServerError")
                 .forEach(responseName -> assertApiErrorResponseComponent(responses, responseName));
+    }
+
+    private Map<String, Object> readOpenApi(String endpoint) throws Exception {
+        MvcResult result = mockMvc.perform(get(endpoint))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        return objectMapper.readValue(
+                result.getResponse().getContentAsString(),
+                new TypeReference<>() {
+                });
+    }
+
+    private Map<String, Object> paths(Map<String, Object> openApi) {
+        return objectMapper.convertValue(
+                openApi.get("paths"),
+                new TypeReference<>() {
+                });
     }
 
     private void assertApiErrorResponseComponent(Map<String, Object> responses, String responseName) {
