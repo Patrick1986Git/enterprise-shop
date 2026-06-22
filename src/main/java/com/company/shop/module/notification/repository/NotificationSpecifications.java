@@ -20,6 +20,7 @@ public final class NotificationSpecifications {
             NotificationStatus status,
             String type,
             String recipient,
+            String lastErrorContains,
             Boolean requeuedOnly) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -35,6 +36,11 @@ public final class NotificationSpecifications {
             if (recipient != null && !recipient.isBlank()) {
                 String pattern = "%" + recipient.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("recipient")), pattern));
+            }
+
+            if (lastErrorContains != null && !lastErrorContains.isBlank()) {
+                String pattern = "%" + lastErrorContains.trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.like(cb.lower(root.get("lastError")), pattern));
             }
 
             if (Boolean.TRUE.equals(requeuedOnly)) {

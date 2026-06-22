@@ -321,7 +321,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAndFlush(sentNotification);
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.PENDING, null, null, null),
+                NotificationSpecifications.adminFilters(NotificationStatus.PENDING, null, null, null, null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -345,7 +345,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, "ORDER_PLACED_EMAIL", null, null),
+                NotificationSpecifications.adminFilters(null, "ORDER_PLACED_EMAIL", null, null, null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -369,12 +369,108 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, "CUSTOMER", null),
+                NotificationSpecifications.adminFilters(null, null, "CUSTOMER", null, null),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
                 .extracting(Notification::getId)
                 .containsExactly(customerNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByLastErrorContainsIgnoreCaseAndTrimInput() {
+        Notification matchingNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "timeout@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        matchingNotification.markFailed("SMTP Timeout while sending");
+        Notification otherErrorNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "authentication@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        otherErrorNotification.markFailed("SMTP authentication failed");
+        Notification nullErrorNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "pending@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        notificationRepository.saveAllAndFlush(List.of(
+                matchingNotification,
+                otherErrorNotification,
+                nullErrorNotification));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, "  timeout  ", null),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineLastErrorContainsWithFailedStatus() {
+        Notification failedTimeoutNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "failed-timeout@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        failedTimeoutNotification.markFailed("SMTP timeout");
+        Notification pendingTimeoutNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "pending-timeout@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        pendingTimeoutNotification.markDeliveryAttemptFailed(
+                "SMTP timeout",
+                3,
+                Instant.now().plus(5, ChronoUnit.MINUTES));
+        notificationRepository.saveAllAndFlush(List.of(failedTimeoutNotification, pendingTimeoutNotification));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, "timeout", null),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(failedTimeoutNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineLastErrorContainsWithRequeuedOnly() {
+        Notification requeuedTimeoutNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "requeued-timeout@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        requeuedTimeoutNotification.requeueForDelivery("admin@example.com");
+        requeuedTimeoutNotification.markFailed("SMTP timeout");
+        Notification neverRequeuedTimeoutNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-requeued-timeout@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        neverRequeuedTimeoutNotification.markFailed("SMTP timeout");
+        notificationRepository.saveAllAndFlush(List.of(
+                requeuedTimeoutNotification,
+                neverRequeuedTimeoutNotification));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, "timeout", Boolean.TRUE),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(requeuedTimeoutNotification.getId());
     }
 
     @Test
@@ -395,7 +491,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, Boolean.TRUE),
+                NotificationSpecifications.adminFilters(null, null, null, null, Boolean.TRUE),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -421,7 +517,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, Boolean.FALSE),
+                NotificationSpecifications.adminFilters(null, null, null, null, Boolean.FALSE),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -459,7 +555,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 neverRequeuedFailedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, Boolean.TRUE),
+                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, null, Boolean.TRUE),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
