@@ -60,12 +60,14 @@ public class AdminNotificationController {
             @RequestParam(required = false) String type,
             @Parameter(description = "Filter by recipient address or identifier.")
             @RequestParam(required = false) String recipient,
+            @Parameter(description = "Filter by text contained in the last delivery error, case-insensitively.")
+            @RequestParam(required = false) String lastErrorContains,
             @Parameter(description = "When true, return only notifications that have been manually requeued "
                     + "at least once.")
             @RequestParam(required = false) Boolean requeuedOnly,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(notificationQueryService.getNotifications(
-                status, type, recipient, requeuedOnly, pageable));
+                status, type, recipient, lastErrorContains, requeuedOnly, pageable));
     }
 
     @GetMapping("/summary")

@@ -104,7 +104,7 @@ class AdminNotificationControllerWebMvcTest {
         NotificationResponseDTO notification = responseWithLastAttemptAt(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(notification), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -128,12 +128,12 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(notificationQueryService).getNotifications(eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
+        verify(notificationQueryService).getNotifications(eq(null), eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 
     @Test
     void getNotifications_shouldPassFiltersAndPageableToService() throws Exception {
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5), 0));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -141,6 +141,7 @@ class AdminNotificationControllerWebMvcTest {
                         .param("status", "FAILED")
                         .param("type", "ORDER_PLACED_EMAIL")
                         .param("recipient", "customer")
+                        .param("lastErrorContains", "timeout")
                         .param("page", "2")
                         .param("size", "5")
                         .param("sort", "createdAt,desc"))
@@ -155,6 +156,7 @@ class AdminNotificationControllerWebMvcTest {
                 eq(NotificationStatus.FAILED),
                 eq("ORDER_PLACED_EMAIL"),
                 eq("customer"),
+                eq("timeout"),
                 eq(null),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
@@ -166,7 +168,7 @@ class AdminNotificationControllerWebMvcTest {
 
     @Test
     void getNotifications_shouldPassRequeuedOnlyToService() throws Exception {
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -177,6 +179,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content").isArray());
 
         verify(notificationQueryService).getNotifications(
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),

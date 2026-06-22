@@ -137,6 +137,7 @@ class NotificationQueryServiceTest {
                     NotificationStatus.PENDING,
                     "ORDER_PLACED_EMAIL",
                     "CUSTOMER",
+                    "Timeout",
                     Boolean.TRUE))
                     .thenReturn(specification);
 
@@ -144,6 +145,7 @@ class NotificationQueryServiceTest {
                     NotificationStatus.PENDING,
                     " ORDER_PLACED_EMAIL ",
                     " CUSTOMER ",
+                    " Timeout ",
                     Boolean.TRUE,
                     pageable);
 
@@ -151,6 +153,7 @@ class NotificationQueryServiceTest {
                     NotificationStatus.PENDING,
                     "ORDER_PLACED_EMAIL",
                     "CUSTOMER",
+                    "Timeout",
                     Boolean.TRUE));
         }
 
@@ -158,6 +161,40 @@ class NotificationQueryServiceTest {
         assertThat(result.getNumber()).isEqualTo(1);
         verify(notificationRepository).findAll(specification, pageable);
         verify(notificationMapper).toDto(notification);
+    }
+
+    @Test
+    void getNotifications_shouldIgnoreBlankStringFilters() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        Pageable pageable = PageRequest.of(0, 10);
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Page<NotificationResponseDTO> result;
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null))
+                    .thenReturn(specification);
+
+            result = service.getNotifications(null, " ", " ", " ", null, pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null));
+        }
+
+        assertThat(result.getContent()).isEmpty();
+        verify(notificationRepository).findAll(specification, pageable);
+        verifyNoMoreInteractions(notificationMapper);
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {
