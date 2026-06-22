@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -212,4 +213,73 @@ class OpenApiDocsSmokeTest {
                 .as("Generated OpenAPI path keys: %s", pathKeys)
                 .anyMatch(path -> path.matches("^/api/v1/admin/categories/\\{[^/]+\\}$"));
     }
+
+    @Test
+    void openApiDocs_shouldContainReusableApiErrorComponents() throws Exception {
+        MvcResult result = mockMvc.perform(get(API_DOCS_ENDPOINT))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Map<String, Object> openApi = objectMapper.readValue(
+                result.getResponse().getContentAsString(),
+                new TypeReference<>() {
+                });
+        Map<String, Object> components = objectMapper.convertValue(
+                openApi.get("components"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> schemas = objectMapper.convertValue(
+                components.get("schemas"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> apiErrorSchema = objectMapper.convertValue(
+                schemas.get("ApiError"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> properties = objectMapper.convertValue(
+                apiErrorSchema.get("properties"),
+                new TypeReference<>() {
+                });
+
+        assertThat(apiErrorSchema.get("description")).isEqualTo("Standard API error response.");
+        assertThat(properties).containsKeys("status", "message", "errorCode", "errors", "timestamp");
+
+        Map<String, Object> responses = objectMapper.convertValue(
+                components.get("responses"),
+                new TypeReference<>() {
+                });
+
+        List.of(
+                "BadRequestError",
+                "UnauthorizedError",
+                "ForbiddenError",
+                "NotFoundError",
+                "ConflictError",
+                "InternalServerError")
+                .forEach(responseName -> assertApiErrorResponseComponent(responses, responseName));
+    }
+
+    private void assertApiErrorResponseComponent(Map<String, Object> responses, String responseName) {
+        Map<String, Object> response = objectMapper.convertValue(
+                responses.get(responseName),
+                new TypeReference<>() {
+                });
+        Map<String, Object> content = objectMapper.convertValue(
+                response.get("content"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> jsonContent = objectMapper.convertValue(
+                content.get("application/json"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> schema = objectMapper.convertValue(
+                jsonContent.get("schema"),
+                new TypeReference<>() {
+                });
+
+        assertThat(response.get("description")).isInstanceOf(String.class);
+        assertThat(content).containsKey("application/json");
+        assertThat(schema).containsEntry("$ref", "#/components/schemas/ApiError");
+    }
+
 }
