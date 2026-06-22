@@ -7,12 +7,22 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Request payload for updating user profile details.")
 public class UserUpdateDTO {
 
-	@Schema(description = "Updated user first name.", example = "Alex", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(
+	        description = "Updated user first name.",
+	        example = "Alex",
+	        maxLength = 100,
+	        requiredMode = Schema.RequiredMode.REQUIRED
+	)
 	@NotBlank(message = "{validation.user.firstName.required}")
 	@Size(max = 100, message = "{validation.user.firstName.size}")
 	private String firstName;
 
-	@Schema(description = "Updated user last name.", example = "Morgan", maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(
+	        description = "Updated user last name.",
+	        example = "Morgan",
+	        maxLength = 100,
+	        requiredMode = Schema.RequiredMode.REQUIRED
+	)
 	@NotBlank(message = "{validation.user.lastName.required}")
 	@Size(max = 100, message = "{validation.user.lastName.size}")
 	private String lastName;

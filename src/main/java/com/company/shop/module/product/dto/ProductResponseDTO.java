@@ -37,33 +37,85 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Response payload containing product details.")
 public class ProductResponseDTO {
 
-    @Schema(description = "Unique product identifier.", example = "11111111-1111-1111-1111-111111111111", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Unique product identifier.",
+            example = "11111111-1111-1111-1111-111111111111",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final UUID id;
-    @Schema(description = "Product display name.", example = "Wireless Keyboard", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Product display name.",
+            example = "Wireless Keyboard",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String name;
-    @Schema(description = "URL-friendly product identifier.", example = "wireless-keyboard", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "URL-friendly product identifier.",
+            example = "wireless-keyboard",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String slug;
-    @Schema(description = "Product stock keeping unit.", example = "KEYBOARD-001", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Product stock keeping unit.",
+            example = "KEYBOARD-001",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String sku;
-    @Schema(description = "Product description.", example = "Compact wireless keyboard with rechargeable battery.", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Product description.",
+            example = "Compact wireless keyboard with rechargeable battery.",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String description;
-    @Schema(description = "Current unit price.", example = "79.99", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Current unit price.",
+            example = "79.99",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final BigDecimal price;
-    @Schema(description = "Available stock quantity.", example = "25", minimum = "0", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Available stock quantity.",
+            example = "25",
+            minimum = "0",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final int stock;
-    @Schema(description = "Assigned category identifier.", example = "22222222-2222-2222-2222-222222222222", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Assigned category identifier.",
+            example = "22222222-2222-2222-2222-222222222222",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final UUID categoryId;
-    @Schema(description = "Assigned category display name.", example = "Electronics", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Assigned category display name.",
+            example = "Electronics",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String categoryName;
-    @Schema(description = "Average customer rating.", example = "4.5", minimum = "0", maximum = "5", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Average customer rating.",
+            example = "4.5",
+            minimum = "0",
+            maximum = "5",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final Double averageRating;
-    @Schema(description = "Number of submitted reviews.", example = "12", minimum = "0", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Number of submitted reviews.",
+            example = "12",
+            minimum = "0",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final int reviewCount;
 
     /**
      * List of associated image URLs, typically ordered by display priority.
      */
-    @Schema(description = "Product image URLs ordered for display.", example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]", accessMode = Schema.AccessMode.READ_ONLY)
+    @Schema(
+            description = "Product image URLs ordered for display.",
+            example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final List<String> imageUrls;
 
     /**

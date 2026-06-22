@@ -11,30 +11,50 @@ import jakarta.validation.constraints.Size;
 @PasswordMatches
 public class RegisterRequestDTO {
 
-	@Schema(description = "Email address for the new user account.", example = "user@example.com",
-			requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(
+			description = "Email address for the new user account.",
+			example = "user@example.com",
+			requiredMode = Schema.RequiredMode.REQUIRED
+	)
 	@Email(message = "{validation.user.email.invalid}")
 	@NotBlank(message = "{validation.user.email.required}")
 	private String email;
 
-	@Schema(description = "Password for the new account. Must be at least 8 characters.",
-			example = "StrongPassword123!", format = "password", minLength = 8,
-			requiredMode = Schema.RequiredMode.REQUIRED, accessMode = Schema.AccessMode.WRITE_ONLY)
+	@Schema(
+			description = "Password for the new account. Must be at least 8 characters.",
+			example = "StrongPassword123!",
+			format = "password",
+			minLength = 8,
+			requiredMode = Schema.RequiredMode.REQUIRED,
+			accessMode = Schema.AccessMode.WRITE_ONLY
+	)
 	@NotBlank(message = "{validation.user.password.required}")
 	@Size(min = 8, message = "{validation.user.password.size}")
 	private String password;
 
-	@Schema(description = "Repeated password used to confirm the account password.",
-			example = "StrongPassword123!", format = "password",
-			requiredMode = Schema.RequiredMode.REQUIRED, accessMode = Schema.AccessMode.WRITE_ONLY)
+	@Schema(
+			description = "Repeated password used to confirm the account password.",
+			example = "StrongPassword123!",
+			format = "password",
+			requiredMode = Schema.RequiredMode.REQUIRED,
+			accessMode = Schema.AccessMode.WRITE_ONLY
+	)
 	@NotBlank(message = "{validation.user.password.confirmation.required}")
 	private String passwordRepeat;
 
-	@Schema(description = "User first name.", example = "Alex", requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(
+	        description = "User first name.",
+	        example = "Alex",
+	        requiredMode = Schema.RequiredMode.REQUIRED
+	)
 	@NotBlank(message = "{validation.user.firstName.required}")
 	private String firstName;
 
-	@Schema(description = "User last name.", example = "Morgan", requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(
+	        description = "User last name.",
+	        example = "Morgan",
+	        requiredMode = Schema.RequiredMode.REQUIRED
+	)
 	@NotBlank(message = "{validation.user.lastName.required}")
 	private String lastName;
 

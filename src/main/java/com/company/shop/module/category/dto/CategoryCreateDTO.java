@@ -12,16 +12,30 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Request payload for creating a category.")
 public class CategoryCreateDTO {
 
-	@Schema(description = "Category display name.", example = "Electronics", maxLength = 150, requiredMode = Schema.RequiredMode.REQUIRED)
+	@Schema(
+	        description = "Category display name.",
+	        example = "Electronics",
+	        maxLength = 150,
+	        requiredMode = Schema.RequiredMode.REQUIRED
+	)
 	@NotBlank(message = "{validation.category.name.required}")
 	@Size(max = 150, message = "{validation.category.name.size}")
 	private String name;
 
-	@Schema(description = "Optional category description.", example = "Devices, accessories, and related products.", maxLength = 500, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+	@Schema(
+	        description = "Optional category description.",
+	        example = "Devices, accessories, and related products.",
+	        maxLength = 500,
+	        requiredMode = Schema.RequiredMode.NOT_REQUIRED
+	)
 	@Size(max = 500, message = "{validation.category.description.size}")
 	private String description;
 
-	@Schema(description = "Optional parent category identifier for nested categories.", example = "11111111-1111-1111-1111-111111111111", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+	@Schema(
+	        description = "Optional parent category identifier for nested categories.",
+	        example = "11111111-1111-1111-1111-111111111111",
+	        requiredMode = Schema.RequiredMode.NOT_REQUIRED
+	)
 	private UUID parentId;
 
 	public CategoryCreateDTO() {
