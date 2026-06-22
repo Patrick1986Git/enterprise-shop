@@ -401,9 +401,39 @@ Example naming style to preserve:
 
 ---
 
-## Documentation and code comments rules
+## Documentation policy and code comments rules
 
-Prefer self-explanatory code over verbose comments.
+Prefer self-explanatory code over verbose comments. The project documentation policy is defined in `docs/documentation-policy.md`; follow it for all documentation changes.
+
+### API documentation source of truth
+
+API documentation must be generated from the stable API behavior sources in the codebase:
+
+- Spring MVC controller mappings
+- request and response DTOs
+- Bean Validation and custom validation annotations
+- centralized exception and error contracts
+- security configuration and method-level authorization
+- OpenAPI annotations where present
+- automated tests that verify API behavior
+
+Generated API documentation is the source of truth for endpoint contracts. Contributors and Codex must not manually maintain endpoint lists, request/response tables, field catalogs, status-code matrices, or duplicated API contracts in Markdown unless explicitly requested for a specific task.
+
+When adding or changing an endpoint, update the controller, DTOs, validation rules, exception/error behavior, security rules, OpenAPI annotations, and affected tests as needed so generated documentation remains accurate. Do not treat manual Markdown endpoint inventories as authoritative.
+
+Generated documentation artifacts such as `openapi.json`, `openapi.yaml`, generated Swagger UI bundles, and `target/generated-docs` are build artifacts and must not be committed unless the project explicitly changes that policy in a later task.
+
+### Manual documentation scope
+
+Manual documentation under `docs/` should be limited to durable project knowledge that is not a duplicated endpoint contract, including:
+
+- architecture and module responsibilities
+- operational procedures
+- setup and local development
+- database migrations
+- testing strategy
+- ADRs and design decisions
+- security model explanations
 
 ### Rules
 
@@ -411,7 +441,7 @@ Prefer self-explanatory code over verbose comments.
 - Add comments only when they provide real architectural or domain value.
 - Keep documentation aligned with actual code behavior.
 - Do not introduce placeholder documentation or speculative notes.
-- If updating behavior that is already documented, keep the docs consistent.
+- If updating behavior that is already documented, keep the docs consistent without duplicating generated API contracts manually.
 
 ---
 
