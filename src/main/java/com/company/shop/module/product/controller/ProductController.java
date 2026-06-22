@@ -19,6 +19,7 @@ import com.company.shop.module.product.dto.ProductSearchCriteria;
 import com.company.shop.module.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,7 +37,7 @@ public class ProductController {
     }
 
     @GetMapping
-    @Operation(summary = "List products")
+    @Operation(operationId = "getProducts", summary = "List products")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Products returned successfully.")
     })
@@ -49,10 +50,10 @@ public class ProductController {
     }
 
     @GetMapping("/category/{categoryId}")
-    @Operation(summary = "List products by category")
+    @Operation(operationId = "getProductsByCategory", summary = "List products by category")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Category products returned successfully."),
-            @ApiResponse(responseCode = "404", description = "Category not found.")
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
     public Page<ProductResponseDTO> getProductsByCategory(
             @PathVariable UUID categoryId,
@@ -64,17 +65,17 @@ public class ProductController {
     }
 
     @GetMapping("/slug/{slug}")
-    @Operation(summary = "Get product details by slug")
+    @Operation(operationId = "getProductBySlug", summary = "Get product details by slug")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product found."),
-            @ApiResponse(responseCode = "404", description = "Product not found.")
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public ProductResponseDTO getProductBySlug(@PathVariable String slug) {
+    public ProductResponseDTO getProductBySlug(@Parameter(description = "URL-safe resource slug.") @PathVariable String slug) {
         return productService.findBySlug(slug);
     }
 
     @GetMapping("/search")
-    @Operation(summary = "Search products")
+    @Operation(operationId = "searchProducts", summary = "Search products")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Search results returned successfully.")
     })

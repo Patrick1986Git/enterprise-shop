@@ -25,7 +25,7 @@ public class SystemController {
     }
 
     @GetMapping("/status")
-    @Operation(summary = "Get application status")
+    @Operation(operationId = "getSystemStatus", summary = "Get application status")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Application status returned successfully.")
     })

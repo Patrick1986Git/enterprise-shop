@@ -19,6 +19,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventAdminActionLogRespons
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -35,11 +36,11 @@ public class AdminOutboxEventActionLogController {
     }
 
     @GetMapping
-    @Operation(summary = "Search outbox event admin action logs")
+    @Operation(operationId = "searchOutboxEventActionLogs", summary = "Search outbox event admin action logs", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event admin action logs returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
     public PageResponseDTO<OutboxEventAdminActionLogResponseDTO> searchActionLogs(
             @RequestParam(required = false) UUID outboxEventId,

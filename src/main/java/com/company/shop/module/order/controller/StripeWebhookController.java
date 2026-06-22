@@ -26,14 +26,14 @@ public class StripeWebhookController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Handle Stripe webhook events")
+	@Operation(operationId = "handleStripeWebhook", summary = "Handle Stripe webhook events")
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Webhook processed successfully."),
-			@ApiResponse(responseCode = "400", description = "Invalid payload or signature."),
-			@ApiResponse(responseCode = "404", description = "Order associated with the payment was not found."),
-			@ApiResponse(responseCode = "409", description = "Payment or order state conflict.")
+			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public ResponseEntity<Void> handleStripeWebhook(@RequestBody String payload,
+	public ResponseEntity<Void> handleStripeWebhook(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Raw Stripe webhook payload.") @RequestBody String payload,
 			@RequestHeader("Stripe-Signature") String sigHeader) {
 
 		paymentService.handleWebhook(payload, sigHeader);

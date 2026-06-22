@@ -21,8 +21,10 @@ import com.company.shop.module.user.dto.UserUpdateDTO;
 import com.company.shop.module.user.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -39,52 +41,52 @@ public class AdminUserController {
 	}
 
 	@GetMapping
-	@Operation(summary = "List users (admin-only)")
+	@Operation(operationId = "getUsers", summary = "List users (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Users returned successfully."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
 	})
 	public Page<UserResponseDTO> getUsers(@PageableDefault(size = 20) Pageable pageable) {
 		return service.findAll(pageable);
 	}
 
 	@GetMapping("/{id}")
-	@Operation(summary = "Get user details by ID (admin-only)")
+	@Operation(operationId = "getUserById", summary = "Get user details by ID (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "User found."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "404", description = "User not found.")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public UserResponseDTO getUserById(@PathVariable UUID id) {
+	public UserResponseDTO getUserById(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
 		return service.findById(id);
 	}
 
 	@PutMapping("/{id}")
-	@Operation(summary = "Update a user (admin-only)")
+	@Operation(operationId = "updateUser", summary = "Update a user (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "User updated successfully."),
-			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "404", description = "User not found."),
-			@ApiResponse(responseCode = "409", description = "User data conflict.")
+			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public UserResponseDTO updateUser(@PathVariable UUID id, @Valid @RequestBody UserUpdateDTO dto) {
+	public UserResponseDTO updateUser(@Parameter(description = "Resource identifier.") @PathVariable UUID id, @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User profile and role data to update.") @Valid @RequestBody UserUpdateDTO dto) {
 		return service.update(id, dto);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@Operation(summary = "Delete a user (admin-only)")
+	@Operation(operationId = "deleteUser", summary = "Delete a user (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "204", description = "User deleted successfully."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "404", description = "User not found.")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public void deleteUser(@PathVariable UUID id) {
+	public void deleteUser(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
 		service.delete(id);
 	}
 }

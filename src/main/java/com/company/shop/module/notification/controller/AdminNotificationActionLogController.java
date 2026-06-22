@@ -20,6 +20,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -36,11 +37,11 @@ public class AdminNotificationActionLogController {
     }
 
     @GetMapping
-    @Operation(summary = "Search notification admin action logs")
+    @Operation(operationId = "searchNotificationActionLogs", summary = "Search notification admin action logs", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notification admin action logs returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
     public PageResponseDTO<NotificationAdminActionLogResponseDTO> searchActionLogs(
             @Parameter(description = "Filter action logs for a specific notification identifier.")

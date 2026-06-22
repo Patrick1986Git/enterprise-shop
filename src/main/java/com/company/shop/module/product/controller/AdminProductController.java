@@ -19,8 +19,10 @@ import com.company.shop.module.product.dto.ProductResponseDTO;
 import com.company.shop.module.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -37,49 +39,49 @@ public class AdminProductController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get product by ID (admin-only)")
+    @Operation(operationId = "getAdminProductById", summary = "Get product by ID (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product found."),
-            @ApiResponse(responseCode = "404", description = "Product not found."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
-    public ProductResponseDTO getProductById(@PathVariable UUID id) {
+    public ProductResponseDTO getProductById(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
         return productService.findById(id);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create a product (admin-only)")
+    @Operation(operationId = "createProduct", summary = "Create a product (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Product created successfully."),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
-    public ProductResponseDTO createProduct(@Valid @RequestBody ProductCreateDTO dto) {
+    public ProductResponseDTO createProduct(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Product data used to create or update a product.") @Valid @RequestBody ProductCreateDTO dto) {
         return productService.create(dto);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update a product (admin-only)")
+    @Operation(operationId = "updateProduct", summary = "Update a product (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product updated successfully."),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Product not found.")
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public ProductResponseDTO updateProduct(@PathVariable UUID id, @Valid @RequestBody ProductCreateDTO dto) {
+    public ProductResponseDTO updateProduct(@Parameter(description = "Resource identifier.") @PathVariable UUID id, @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Product data used to create or update a product.") @Valid @RequestBody ProductCreateDTO dto) {
         return productService.update(id, dto);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Delete a product (admin-only)")
+    @Operation(operationId = "deleteProduct", summary = "Delete a product (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "Product deleted successfully."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Product not found.")
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public void deleteProduct(@PathVariable UUID id) {
+    public void deleteProduct(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
         productService.delete(id);
     }
 }

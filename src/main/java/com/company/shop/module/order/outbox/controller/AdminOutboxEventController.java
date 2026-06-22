@@ -29,6 +29,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -51,11 +52,11 @@ public class AdminOutboxEventController {
     }
 
     @GetMapping
-    @Operation(summary = "List outbox events (admin-only)")
+    @Operation(operationId = "getOutboxEvents", summary = "List outbox events (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox events returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
     public PageResponseDTO<OutboxEventResponseDTO> getEvents(
             @Parameter(description = "Filter by outbox processing status.")
@@ -102,50 +103,50 @@ public class AdminOutboxEventController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get outbox event details")
+    @Operation(operationId = "getOutboxEventById", summary = "Get outbox event details", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event details returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Outbox event not found.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public OutboxEventDetailResponseDTO getEvent(@PathVariable UUID id) {
+    public OutboxEventDetailResponseDTO getEvent(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
         return outboxEventQueryService.getEvent(id);
     }
 
     @GetMapping("/{id}/actions")
-    @Operation(summary = "List outbox event admin action logs")
+    @Operation(operationId = "getOutboxEventActionLogs", summary = "List outbox event admin action logs", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event admin action logs returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Outbox event not found.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
     public PageResponseDTO<OutboxEventAdminActionLogResponseDTO> getEventActionLogs(
-            @PathVariable UUID id,
+            @Parameter(description = "Resource identifier.") @PathVariable UUID id,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(outboxEventAdminActionLogQueryService.getOutboxEventActionLogs(id, pageable));
     }
 
     @PostMapping("/{id}/requeue")
-    @Operation(summary = "Requeue failed outbox event for processing")
+    @Operation(operationId = "requeueOutboxEvent", summary = "Requeue failed outbox event for processing", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event requeued successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Outbox event not found."),
-            @ApiResponse(responseCode = "409", description = "Outbox event cannot be requeued from its current status.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
     })
-    public OutboxEventResponseDTO requeueEvent(@PathVariable UUID id) {
+    public OutboxEventResponseDTO requeueEvent(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
         return outboxEventAdminCommandService.requeueFailedEvent(id);
     }
 
     @GetMapping("/summary")
-    @Operation(summary = "Get outbox event summary")
+    @Operation(operationId = "getOutboxEventSummary", summary = "Get outbox event summary", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event summary returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
     public OutboxEventSummaryDTO getSummary() {
         return outboxEventQueryService.getSummary();

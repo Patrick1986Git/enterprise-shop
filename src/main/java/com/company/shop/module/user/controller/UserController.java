@@ -11,6 +11,7 @@ import com.company.shop.module.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -26,10 +27,10 @@ public class UserController {
 	}
 
 	@GetMapping
-	@Operation(summary = "Get the authenticated user profile")
+	@Operation(operationId = "getCurrentUser", summary = "Get the authenticated user profile", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "User profile returned successfully."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized.")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
 	})
 	public UserResponseDTO getCurrentUser() {
 		return service.getCurrentUserProfile();

@@ -19,8 +19,10 @@ import com.company.shop.module.category.dto.CategoryResponseDTO;
 import com.company.shop.module.category.service.CategoryService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -37,55 +39,55 @@ public class AdminCategoryController {
 	}
 
 	@GetMapping("/{id}")
-	@Operation(summary = "Get category by ID (admin-only)")
+	@Operation(operationId = "getAdminCategoryById", summary = "Get category by ID (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Category found."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "404", description = "Category not found.")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public CategoryResponseDTO getCategoryById(@PathVariable UUID id) {
+	public CategoryResponseDTO getCategoryById(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
 		return service.findById(id);
 	}
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@Operation(summary = "Create a category (admin-only)")
+	@Operation(operationId = "createCategory", summary = "Create a category (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "201", description = "Category created successfully."),
-			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "409", description = "Category data conflict.")
+			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public CategoryResponseDTO createCategory(@Valid @RequestBody CategoryCreateDTO dto) {
+	public CategoryResponseDTO createCategory(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Category data used to create or update a category.") @Valid @RequestBody CategoryCreateDTO dto) {
 		return service.create(dto);
 	}
 
 	@PutMapping("/{id}")
-	@Operation(summary = "Update a category (admin-only)")
+	@Operation(operationId = "updateCategory", summary = "Update a category (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Category updated successfully."),
-			@ApiResponse(responseCode = "400", description = "Invalid request payload."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "404", description = "Category not found."),
-			@ApiResponse(responseCode = "409", description = "Category data conflict.")
+			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public CategoryResponseDTO updateCategory(@PathVariable UUID id, @Valid @RequestBody CategoryCreateDTO dto) {
+	public CategoryResponseDTO updateCategory(@Parameter(description = "Resource identifier.") @PathVariable UUID id, @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Category data used to create or update a category.") @Valid @RequestBody CategoryCreateDTO dto) {
 		return service.update(id, dto);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@Operation(summary = "Delete a category (admin-only)")
+	@Operation(operationId = "deleteCategory", summary = "Delete a category (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "204", description = "Category deleted successfully."),
-			@ApiResponse(responseCode = "401", description = "Unauthorized."),
-			@ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-			@ApiResponse(responseCode = "404", description = "Category not found.")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public void deleteCategory(@PathVariable UUID id) {
+	public void deleteCategory(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
 		service.delete(id);
 	}
 }

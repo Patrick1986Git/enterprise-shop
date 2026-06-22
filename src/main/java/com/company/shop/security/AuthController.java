@@ -29,23 +29,23 @@ public class AuthController {
 	}
 
 	@PostMapping("/login")
-	@Operation(summary = "Authenticate a user and return a JWT access token")
+	@Operation(operationId = "login", summary = "Authenticate a user and return a JWT access token")
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Authentication successful."),
-			@ApiResponse(responseCode = "401", description = "Invalid credentials.")
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
 	})
-	public AuthResponseDTO login(@Valid @RequestBody LoginRequestDTO request) {
+	public AuthResponseDTO login(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Credentials used to authenticate a user.") @Valid @RequestBody LoginRequestDTO request) {
 		return authService.login(request);
 	}
 
 	@PostMapping("/register")
 	@ResponseStatus(HttpStatus.CREATED)
-	@Operation(summary = "Register a new user account")
+	@Operation(operationId = "registerUser", summary = "Register a new user account")
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "201", description = "User account registered successfully."),
-			@ApiResponse(responseCode = "409", description = "A user with the provided email already exists.")
+			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public void register(@Valid @RequestBody RegisterRequestDTO request) {
+	public void register(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Registration data used to create a user account.") @Valid @RequestBody RegisterRequestDTO request) {
 		authService.register(request);
 	}
 }
