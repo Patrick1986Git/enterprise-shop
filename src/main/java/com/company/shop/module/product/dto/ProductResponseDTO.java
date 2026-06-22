@@ -12,33 +12,100 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Data Transfer Object for detailed product information.
  * <p>
- * This class provides a read-only snapshot of a product's state, enriched with 
- * category details and media assets. It is designed to be immutable to ensure 
+ * This class provides a read-only snapshot of a product's state, enriched with
+ * category details and media assets. It is designed to be immutable to ensure
  * thread-safety and data integrity across application layers.
  * </p>
  *
  * @since 1.0.0
  */
+@Schema(description = "Response payload containing product details.")
 public class ProductResponseDTO {
 
+    @Schema(
+            description = "Unique product identifier.",
+            example = "11111111-1111-1111-1111-111111111111",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final UUID id;
+    @Schema(
+            description = "Product display name.",
+            example = "Wireless Keyboard",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String name;
+    @Schema(
+            description = "URL-friendly product identifier.",
+            example = "wireless-keyboard",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String slug;
+    @Schema(
+            description = "Product stock keeping unit.",
+            example = "KEYBOARD-001",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String sku;
+    @Schema(
+            description = "Product description.",
+            example = "Compact wireless keyboard with rechargeable battery.",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String description;
+    @Schema(
+            description = "Current unit price.",
+            example = "79.99",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final BigDecimal price;
+    @Schema(
+            description = "Available stock quantity.",
+            example = "25",
+            minimum = "0",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final int stock;
+    @Schema(
+            description = "Assigned category identifier.",
+            example = "22222222-2222-2222-2222-222222222222",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final UUID categoryId;
+    @Schema(
+            description = "Assigned category display name.",
+            example = "Electronics",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final String categoryName;
+    @Schema(
+            description = "Average customer rating.",
+            example = "4.5",
+            minimum = "0",
+            maximum = "5",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final Double averageRating;
+    @Schema(
+            description = "Number of submitted reviews.",
+            example = "12",
+            minimum = "0",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final int reviewCount;
-    
+
     /**
      * List of associated image URLs, typically ordered by display priority.
      */
+    @Schema(
+            description = "Product image URLs ordered for display.",
+            example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]",
+            accessMode = Schema.AccessMode.READ_ONLY
+    )
     private final List<String> imageUrls;
 
     /**

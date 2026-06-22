@@ -12,11 +12,13 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Data Transfer Object representing the complete state of a shopping cart.
  * <p>
- * This DTO aggregates all line items and provides summary calculations 
- * such as total value and total item count. It serves as the primary 
+ * This DTO aggregates all line items and provides summary calculations
+ * such as total value and total item count. It serves as the primary
  * response object for cart-related operations.
  * </p>
  *
@@ -26,9 +28,30 @@ import java.util.UUID;
  * @param totalItemsCount  Aggregate count of all product units in the cart.
  * @since 1.0.0
  */
+@Schema(description = "Response payload containing the complete cart state.")
 public record CartResponseDTO(
+        @Schema(
+                description = "Unique cart identifier.",
+                example = "33333333-3333-3333-3333-333333333333",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
         UUID id,
+        @Schema(
+                description = "Items currently in the cart.",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
         List<CartItemResponseDTO> items,
+        @Schema(
+                description = "Total monetary amount for all cart items.",
+                example = "159.98",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
         BigDecimal totalAmount,
+        @Schema(
+                description = "Total number of product units in the cart.",
+                example = "2",
+                minimum = "0",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
         int totalItemsCount
 ) {}

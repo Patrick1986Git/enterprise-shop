@@ -8,21 +8,29 @@
 
 package com.company.shop.module.cart.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 /**
  * Data Transfer Object representing a request to update an existing cart item's quantity.
  * <p>
- * This DTO is used in PUT or PATCH operations where the target product is already 
+ * This DTO is used in PUT or PATCH operations where the target product is already
  * identified by a path variable, and only the new absolute quantity needs to be provided.
  * </p>
  *
  * @param quantity The new absolute number of units for the product. Must be at least 1.
  * @since 1.0.0
  */
+@Schema(description = "Request payload for updating a cart item quantity.")
 public record UpdateCartItemRequestDTO(
+        @Schema(
+                description = "New absolute quantity for the cart item.",
+                example = "3",
+                minimum = "1",
+                requiredMode = Schema.RequiredMode.REQUIRED
+        )
         @NotNull(message = "{validation.cart.quantity.required}")
-        @Min(value = 1, message = "{validation.cart.quantity.min}") 
+        @Min(value = 1, message = "{validation.cart.quantity.min}")
         Integer quantity
 ) {}
