@@ -17,6 +17,7 @@ import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,10 +43,15 @@ public class AdminNotificationActionLogController {
             @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
     })
     public PageResponseDTO<NotificationAdminActionLogResponseDTO> searchActionLogs(
+            @Parameter(description = "Filter action logs for a specific notification identifier.")
             @RequestParam(required = false) UUID notificationId,
+            @Parameter(description = "Filter by admin action type, such as REQUEUE.")
             @RequestParam(required = false) NotificationAdminActionType actionType,
+            @Parameter(description = "Filter by the email address of the admin actor who performed the action.")
             @RequestParam(required = false) String actorEmail,
+            @Parameter(description = "Filter action logs created at or after this timestamp.")
             @RequestParam(required = false) Instant createdFrom,
+            @Parameter(description = "Filter action logs created at or before this timestamp.")
             @RequestParam(required = false) Instant createdTo,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(notificationAdminActionLogQueryService.searchActionLogs(
