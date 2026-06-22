@@ -12,10 +12,19 @@ public class CartDTO {
 	@Schema(description = "Items currently in the cart.", accessMode = Schema.AccessMode.READ_ONLY)
 	private final List<CartItemDTO> items;
 
-	public CartDTO(List<CartItemDTO> items) { this.items = items != null ? items : Collections.emptyList(); }
-	public List<CartItemDTO> getItems() { return items; }
+	public CartDTO(List<CartItemDTO> items) {
+		this.items = items != null ? items : Collections.emptyList();
+	}
+
+	public List<CartItemDTO> getItems() {
+		return items;
+	}
 	@Schema(description = "Total monetary amount for all cart items.", example = "159.98", accessMode = Schema.AccessMode.READ_ONLY)
-	public BigDecimal getTotalAmount() { return items.stream().map(CartItemDTO::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add); }
+	public BigDecimal getTotalAmount() {
+		return items.stream().map(CartItemDTO::getTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
 	@Schema(description = "Total number of product units in the cart.", example = "2", minimum = "0", accessMode = Schema.AccessMode.READ_ONLY)
-	public int getTotalItems() { return items.stream().mapToInt(CartItemDTO::getQuantity).sum(); }
+	public int getTotalItems() {
+		return items.stream().mapToInt(CartItemDTO::getQuantity).sum();
+	}
 }

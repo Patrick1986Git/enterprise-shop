@@ -44,13 +44,44 @@ public class ProductCreateDTO {
 	@Schema(description = "Product image URLs ordered for display.", example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
 	private List<String> imageUrls;
 
-	public ProductCreateDTO() { }
-	public ProductCreateDTO(String name, String sku, String description, BigDecimal price, int stock, UUID categoryId, List<String> imageUrls) { this.name = name; this.sku = sku; this.description = description; this.price = price; this.stock = stock; this.categoryId = categoryId; this.imageUrls = imageUrls; }
-	public String getName() { return name; }
-	public String getSku() { return sku; }
-	public String getDescription() { return description; }
-	public BigDecimal getPrice() { return price; }
-	public int getStock() { return stock; }
-	public UUID getCategoryId() { return categoryId; }
-	public List<String> getImageUrls() { return imageUrls; }
+	public ProductCreateDTO() {
+	}
+
+	public ProductCreateDTO(String name, String sku, String description, BigDecimal price, int stock, UUID categoryId, List<String> imageUrls) {
+		this.name = name;
+		this.sku = sku;
+		this.description = description;
+		this.price = price;
+		this.stock = stock;
+		this.categoryId = categoryId;
+		this.imageUrls = imageUrls;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public String getSku() {
+		return sku;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public BigDecimal getPrice() {
+		return price;
+	}
+
+	public int getStock() {
+		return stock;
+	}
+
+	public UUID getCategoryId() {
+		return categoryId;
+	}
+
+	public List<String> getImageUrls() {
+		return imageUrls;
+	}
 }

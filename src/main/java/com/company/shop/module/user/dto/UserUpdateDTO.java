@@ -17,8 +17,19 @@ public class UserUpdateDTO {
 	@Size(max = 100, message = "{validation.user.lastName.size}")
 	private String lastName;
 
-	public UserUpdateDTO() { }
-	public UserUpdateDTO(String firstName, String lastName) { this.firstName = firstName; this.lastName = lastName; }
-	public String getFirstName() { return firstName; }
-	public String getLastName() { return lastName; }
+	public UserUpdateDTO() {
+	}
+
+	public UserUpdateDTO(String firstName, String lastName) {
+		this.firstName = firstName;
+		this.lastName = lastName;
+	}
+
+	public String getFirstName() {
+		return firstName;
+	}
+
+	public String getLastName() {
+		return lastName;
+	}
 }

@@ -24,6 +24,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * @since 1.0.0
  */
+/**
+ * Data Transfer Object for detailed product information.
+ * <p>
+ * This class provides a read-only snapshot of a product's state, enriched with
+ * category details and media assets. It is designed to be immutable to ensure
+ * thread-safety and data integrity across application layers.
+ * </p>
+ *
+ * @since 1.0.0
+ */
 @Schema(description = "Response payload containing product details.")
 public class ProductResponseDTO {
 

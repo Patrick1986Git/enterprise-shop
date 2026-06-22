@@ -24,9 +24,24 @@ public class CategoryCreateDTO {
 	@Schema(description = "Optional parent category identifier for nested categories.", example = "11111111-1111-1111-1111-111111111111", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
 	private UUID parentId;
 
-	public CategoryCreateDTO() { }
-	public CategoryCreateDTO(String name, String description, UUID parentId) { this.name = name; this.description = description; this.parentId = parentId; }
-	public String getName() { return name; }
-	public String getDescription() { return description; }
-	public UUID getParentId() { return parentId; }
+	public CategoryCreateDTO() {
+	}
+
+	public CategoryCreateDTO(String name, String description, UUID parentId) {
+		this.name = name;
+		this.description = description;
+		this.parentId = parentId;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public UUID getParentId() {
+		return parentId;
+	}
 }

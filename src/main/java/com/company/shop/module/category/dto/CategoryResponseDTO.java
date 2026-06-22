@@ -22,10 +22,31 @@ public class CategoryResponseDTO {
 	@Schema(description = "Display name of the parent category, when present.", example = "Home", accessMode = Schema.AccessMode.READ_ONLY)
 	private final String parentName;
 
-	public CategoryResponseDTO(UUID id, String name, String slug, String description, String parentName) { this.id = id; this.name = name; this.slug = slug; this.description = description; this.parentName = parentName; }
-	public UUID getId() { return id; }
-	public String getName() { return name; }
-	public String getSlug() { return slug; }
-	public String getDescription() { return description; }
-	public String getParentName() { return parentName; }
+	public CategoryResponseDTO(UUID id, String name, String slug, String description, String parentName) {
+		this.id = id;
+		this.name = name;
+		this.slug = slug;
+		this.description = description;
+		this.parentName = parentName;
+	}
+
+	public UUID getId() {
+		return id;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public String getSlug() {
+		return slug;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public String getParentName() {
+		return parentName;
+	}
 }

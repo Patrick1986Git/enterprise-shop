@@ -23,10 +23,31 @@ public class UserResponseDTO {
 	@Schema(description = "Role names assigned to the user.", example = "[\"ROLE_USER\"]", requiredMode = Schema.RequiredMode.REQUIRED, accessMode = Schema.AccessMode.READ_ONLY)
 	private final Set<String> roles;
 
-	public UserResponseDTO(UUID id, String email, String firstName, String lastName, Set<String> roles) { this.id = id; this.email = email; this.firstName = firstName; this.lastName = lastName; this.roles = roles; }
-	public UUID getId() { return id; }
-	public String getEmail() { return email; }
-	public String getFirstName() { return firstName; }
-	public String getLastName() { return lastName; }
-	public Set<String> getRoles() { return roles; }
+	public UserResponseDTO(UUID id, String email, String firstName, String lastName, Set<String> roles) {
+		this.id = id;
+		this.email = email;
+		this.firstName = firstName;
+		this.lastName = lastName;
+		this.roles = roles;
+	}
+
+	public UUID getId() {
+		return id;
+	}
+
+	public String getEmail() {
+		return email;
+	}
+
+	public String getFirstName() {
+		return firstName;
+	}
+
+	public String getLastName() {
+		return lastName;
+	}
+
+	public Set<String> getRoles() {
+		return roles;
+	}
 }

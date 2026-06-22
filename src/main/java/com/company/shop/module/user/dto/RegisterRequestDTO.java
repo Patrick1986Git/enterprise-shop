@@ -49,9 +49,23 @@ public class RegisterRequestDTO {
 		this.lastName = lastName;
 	}
 
-	public String getEmail() { return email; }
-	public String getPassword() { return password; }
-	public String getPasswordRepeat() { return passwordRepeat; }
-	public String getFirstName() { return firstName; }
-	public String getLastName() { return lastName; }
+	public String getEmail() {
+		return email;
+	}
+
+	public String getPassword() {
+		return password;
+	}
+
+	public String getPasswordRepeat() {
+		return passwordRepeat;
+	}
+
+	public String getFirstName() {
+		return firstName;
+	}
+
+	public String getLastName() {
+		return lastName;
+	}
 }
