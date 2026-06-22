@@ -30,24 +30,34 @@ public class CategoryController {
 	}
 
 	@GetMapping
-	@Operation(operationId = "getCategories", summary = "List categories")
+	@Operation(
+	        operationId = "getCategories",
+	        summary = "List categories"
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Categories returned successfully.")
 	})
 	public Page<CategoryResponseDTO> getCategories(
+			@Parameter(description = "Zero-based page index.")
 			@RequestParam(defaultValue = "0") int page,
+			@Parameter(description = "Number of categories to return per page.")
 			@RequestParam(defaultValue = "20") int size) {
 		Pageable pageable = PageRequest.of(page, size);
 		return service.findAll(pageable);
 	}
 
 	@GetMapping("/slug/{slug}")
-	@Operation(operationId = "getCategoryBySlug", summary = "Get category details by slug")
+	@Operation(
+	        operationId = "getCategoryBySlug",
+	        summary = "Get category details by slug"
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Category found."),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public CategoryResponseDTO getCategoryBySlug(@Parameter(description = "URL-safe resource slug.") @PathVariable String slug) {
+	public CategoryResponseDTO getCategoryBySlug(
+			@Parameter(description = "URL-safe category slug.")
+			@PathVariable String slug) {
 		return service.findBySlug(slug);
 	}
 }

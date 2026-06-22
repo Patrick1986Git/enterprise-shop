@@ -41,7 +41,11 @@ public class ProductReviewController {
 	@PostMapping("/reviews")
 	@ResponseStatus(HttpStatus.CREATED)
 	@PreAuthorize("isAuthenticated()")
-	@Operation(operationId = "createProductReview", summary = "Create a product review", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "createProductReview",
+	        summary = "Create a product review",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "201", description = "Review created successfully."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
@@ -49,31 +53,48 @@ public class ProductReviewController {
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
 			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public ProductReviewResponseDTO createReview(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Review payload containing product identifier, rating, and comment.") @Valid @RequestBody ProductReviewRequestDTO dto) {
+	public ProductReviewResponseDTO createReview(
+			@io.swagger.v3.oas.annotations.parameters.RequestBody(
+					description = "Review payload containing product identifier, rating, and comment."
+			)
+			@Valid @RequestBody ProductReviewRequestDTO dto) {
 		return reviewService.addReview(dto);
 	}
 
 	@GetMapping("/products/{productId}/reviews")
-	@Operation(operationId = "getProductReviews", summary = "List product reviews")
+	@Operation(
+	        operationId = "getProductReviews",
+	        summary = "List product reviews"
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Reviews returned successfully."),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public Page<ProductReviewResponseDTO> getProductReviews(@Parameter(description = "Product identifier.") @PathVariable UUID productId, Pageable pageable) {
+	public Page<ProductReviewResponseDTO> getProductReviews(
+			@Parameter(description = "Product identifier.")
+			@PathVariable UUID productId,
+			@Parameter(description = "Pagination and sorting options.")
+			Pageable pageable) {
 		return reviewService.getProductReviews(productId, pageable);
 	}
 
 	@DeleteMapping("/reviews/{reviewId}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@PreAuthorize("isAuthenticated()")
-	@Operation(operationId = "deleteProductReview", summary = "Delete a product review", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "deleteProductReview",
+	        summary = "Delete a product review",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "204", description = "Review deleted successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public void deleteReview(@Parameter(description = "Review identifier.") @PathVariable UUID reviewId) {
+	public void deleteReview(
+			@Parameter(description = "Review identifier.")
+			@PathVariable UUID reviewId) {
 		reviewService.deleteReview(reviewId);
 	}
 }

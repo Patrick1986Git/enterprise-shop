@@ -36,7 +36,11 @@ public class CurrentUserOrderController {
     }
 
     @GetMapping
-    @Operation(operationId = "getCurrentUserOrders", summary = "List the authenticated user's orders", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getCurrentUserOrders",
+            summary = "List the authenticated user's orders",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Orders returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
@@ -47,13 +51,21 @@ public class CurrentUserOrderController {
 
     @PostMapping("/checkout")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(operationId = "checkoutCurrentUserCart", summary = "Checkout the cart and create an order", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "checkoutCurrentUserCart",
+            summary = "Checkout the cart and create an order",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Order created successfully."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
-    public OrderResponseDTO checkout(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Checkout payload containing shipping and payment information.") @Valid @RequestBody OrderCheckoutRequestDTO request) {
+    public OrderResponseDTO checkout(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Checkout payload containing shipping and payment information."
+            )
+            @Valid @RequestBody OrderCheckoutRequestDTO request) {
         return orderService.placeOrderFromCart(request);
     }
 }

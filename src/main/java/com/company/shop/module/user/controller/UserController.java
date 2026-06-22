@@ -27,7 +27,11 @@ public class UserController {
 	}
 
 	@GetMapping
-	@Operation(operationId = "getCurrentUser", summary = "Get the authenticated user profile", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "getCurrentUser",
+	        summary = "Get the authenticated user profile",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "User profile returned successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")

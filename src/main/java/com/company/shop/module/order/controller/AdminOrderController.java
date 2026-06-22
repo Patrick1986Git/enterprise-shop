@@ -30,7 +30,11 @@ public class AdminOrderController {
     }
 
     @GetMapping
-    @Operation(operationId = "getAdminOrders", summary = "List orders (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getAdminOrders",
+            summary = "List orders (admin-only)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Orders returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),

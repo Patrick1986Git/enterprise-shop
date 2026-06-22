@@ -15,7 +15,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class HomeController {
 
     @GetMapping
-    @Operation(operationId = "getApiStatus", summary = "Get API status message")
+    @Operation(
+            operationId = "getApiStatus",
+            summary = "Get API status message"
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "API status message returned successfully.")
     })

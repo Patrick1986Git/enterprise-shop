@@ -37,7 +37,11 @@ public class AdminNotificationActionLogController {
     }
 
     @GetMapping
-    @Operation(operationId = "searchNotificationActionLogs", summary = "Search notification admin action logs", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "searchNotificationActionLogs",
+            summary = "Search notification admin action logs",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notification admin action logs returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),

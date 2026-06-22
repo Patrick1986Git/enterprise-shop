@@ -373,6 +373,24 @@ class OpenApiDocsSmokeTest {
         assertResponseRef(paths, "/api/v1/products/slug/{slug}", "get", "404", "#/components/responses/NotFoundError");
     }
 
+    @Test
+    void openApiDocs_shouldDocumentRepresentativeParameters() throws Exception {
+        Map<String, Object> paths = paths(readOpenApi(API_DOCS_ENDPOINT));
+
+        assertParameterDescription(
+                paths,
+                "/api/v1/products",
+                "get",
+                "page",
+                "Zero-based page index.");
+        assertParameterDescription(
+                paths,
+                "/api/v1/admin/outbox-event-actions",
+                "get",
+                "outboxEventId",
+                "Filter action logs for a specific outbox event identifier.");
+    }
+
     private Map<String, Object> readOpenApi(String endpoint) throws Exception {
         MvcResult result = mockMvc.perform(get(endpoint))
                 .andExpect(status().isOk())
@@ -420,6 +438,25 @@ class OpenApiDocsSmokeTest {
                 });
 
         assertThat(response).containsEntry("$ref", expectedRef);
+    }
+
+    private void assertParameterDescription(
+            Map<String, Object> paths,
+            String path,
+            String method,
+            String parameterName,
+            String expectedDescription) {
+        Map<String, Object> operation = operation(paths, path, method);
+        List<Map<String, Object>> parameters = objectMapper.convertValue(
+                operation.get("parameters"),
+                new TypeReference<>() {
+                });
+
+        assertThat(parameters)
+                .filteredOn(parameter -> parameterName.equals(parameter.get("name")))
+                .singleElement()
+                .extracting(parameter -> parameter.get("description"))
+                .isEqualTo(expectedDescription);
     }
 
     private void assertApiErrorResponseComponent(Map<String, Object> responses, String responseName) {

@@ -41,7 +41,11 @@ public class AdminUserController {
 	}
 
 	@GetMapping
-	@Operation(operationId = "getUsers", summary = "List users (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "getUsers",
+	        summary = "List users (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Users returned successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
@@ -52,19 +56,29 @@ public class AdminUserController {
 	}
 
 	@GetMapping("/{id}")
-	@Operation(operationId = "getUserById", summary = "Get user details by ID (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "getUserById",
+	        summary = "Get user details by ID (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "User found."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public UserResponseDTO getUserById(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+	public UserResponseDTO getUserById(
+			@Parameter(description = "User identifier.")
+			@PathVariable UUID id) {
 		return service.findById(id);
 	}
 
 	@PutMapping("/{id}")
-	@Operation(operationId = "updateUser", summary = "Update a user (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "updateUser",
+	        summary = "Update a user (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "User updated successfully."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
@@ -73,20 +87,32 @@ public class AdminUserController {
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
 			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public UserResponseDTO updateUser(@Parameter(description = "Resource identifier.") @PathVariable UUID id, @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User profile and role data to update.") @Valid @RequestBody UserUpdateDTO dto) {
+	public UserResponseDTO updateUser(
+			@Parameter(description = "User identifier.")
+			@PathVariable UUID id,
+			@io.swagger.v3.oas.annotations.parameters.RequestBody(
+					description = "User profile and role data to update."
+			)
+			@Valid @RequestBody UserUpdateDTO dto) {
 		return service.update(id, dto);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@Operation(operationId = "deleteUser", summary = "Delete a user (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "deleteUser",
+	        summary = "Delete a user (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "204", description = "User deleted successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public void deleteUser(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+	public void deleteUser(
+			@Parameter(description = "User identifier.")
+			@PathVariable UUID id) {
 		service.delete(id);
 	}
 }

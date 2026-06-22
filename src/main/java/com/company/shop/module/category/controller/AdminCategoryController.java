@@ -39,20 +39,30 @@ public class AdminCategoryController {
 	}
 
 	@GetMapping("/{id}")
-	@Operation(operationId = "getAdminCategoryById", summary = "Get category by ID (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "getAdminCategoryById",
+	        summary = "Get category by ID (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Category found."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public CategoryResponseDTO getCategoryById(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+	public CategoryResponseDTO getCategoryById(
+			@Parameter(description = "Category identifier.")
+			@PathVariable UUID id) {
 		return service.findById(id);
 	}
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	@Operation(operationId = "createCategory", summary = "Create a category (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "createCategory",
+	        summary = "Create a category (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "201", description = "Category created successfully."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
@@ -60,12 +70,20 @@ public class AdminCategoryController {
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
 			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public CategoryResponseDTO createCategory(@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Category data used to create or update a category.") @Valid @RequestBody CategoryCreateDTO dto) {
+	public CategoryResponseDTO createCategory(
+			@io.swagger.v3.oas.annotations.parameters.RequestBody(
+					description = "Category data used to create a new category."
+			)
+			@Valid @RequestBody CategoryCreateDTO dto) {
 		return service.create(dto);
 	}
 
 	@PutMapping("/{id}")
-	@Operation(operationId = "updateCategory", summary = "Update a category (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "updateCategory",
+	        summary = "Update a category (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Category updated successfully."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
@@ -74,20 +92,32 @@ public class AdminCategoryController {
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
 			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
-	public CategoryResponseDTO updateCategory(@Parameter(description = "Resource identifier.") @PathVariable UUID id, @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Category data used to create or update a category.") @Valid @RequestBody CategoryCreateDTO dto) {
+	public CategoryResponseDTO updateCategory(
+			@Parameter(description = "Category identifier.")
+			@PathVariable UUID id,
+			@io.swagger.v3.oas.annotations.parameters.RequestBody(
+					description = "Category data used to update an existing category."
+			)
+			@Valid @RequestBody CategoryCreateDTO dto) {
 		return service.update(id, dto);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	@Operation(operationId = "deleteCategory", summary = "Delete a category (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+	@Operation(
+	        operationId = "deleteCategory",
+	        summary = "Delete a category (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth")
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "204", description = "Category deleted successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
 			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public void deleteCategory(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+	public void deleteCategory(
+			@Parameter(description = "Category identifier.")
+			@PathVariable UUID id) {
 		service.delete(id);
 	}
 }

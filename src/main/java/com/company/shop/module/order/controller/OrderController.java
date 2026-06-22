@@ -31,14 +31,20 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    @Operation(operationId = "getOrderById", summary = "Get order details by ID", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getOrderById",
+            summary = "Get order details by ID",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Order found."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public OrderDetailedResponseDTO getOrderById(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+    public OrderDetailedResponseDTO getOrderById(
+            @Parameter(description = "Order identifier.")
+            @PathVariable UUID id) {
         return orderService.findById(id);
     }
 }

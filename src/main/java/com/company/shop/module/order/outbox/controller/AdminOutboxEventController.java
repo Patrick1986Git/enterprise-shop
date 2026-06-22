@@ -52,7 +52,11 @@ public class AdminOutboxEventController {
     }
 
     @GetMapping
-    @Operation(operationId = "getOutboxEvents", summary = "List outbox events (admin-only)", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getOutboxEvents",
+            summary = "List outbox events (admin-only)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox events returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
@@ -103,19 +107,29 @@ public class AdminOutboxEventController {
     }
 
     @GetMapping("/{id}")
-    @Operation(operationId = "getOutboxEventById", summary = "Get outbox event details", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getOutboxEventById",
+            summary = "Get outbox event details",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event details returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public OutboxEventDetailResponseDTO getEvent(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+    public OutboxEventDetailResponseDTO getEvent(
+            @Parameter(description = "Outbox event identifier.")
+            @PathVariable UUID id) {
         return outboxEventQueryService.getEvent(id);
     }
 
     @GetMapping("/{id}/actions")
-    @Operation(operationId = "getOutboxEventActionLogs", summary = "List outbox event admin action logs", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getOutboxEventActionLogs",
+            summary = "List outbox event admin action logs",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event admin action logs returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
@@ -129,7 +143,11 @@ public class AdminOutboxEventController {
     }
 
     @PostMapping("/{id}/requeue")
-    @Operation(operationId = "requeueOutboxEvent", summary = "Requeue failed outbox event for processing", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "requeueOutboxEvent",
+            summary = "Requeue failed outbox event for processing",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event requeued successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
@@ -137,12 +155,18 @@ public class AdminOutboxEventController {
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
             @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
     })
-    public OutboxEventResponseDTO requeueEvent(@Parameter(description = "Resource identifier.") @PathVariable UUID id) {
+    public OutboxEventResponseDTO requeueEvent(
+            @Parameter(description = "Outbox event identifier.")
+            @PathVariable UUID id) {
         return outboxEventAdminCommandService.requeueFailedEvent(id);
     }
 
     @GetMapping("/summary")
-    @Operation(operationId = "getOutboxEventSummary", summary = "Get outbox event summary", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            operationId = "getOutboxEventSummary",
+            summary = "Get outbox event summary",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Outbox event summary returned successfully."),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
