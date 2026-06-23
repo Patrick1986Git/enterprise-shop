@@ -20,4 +20,6 @@ These runtime endpoints are generated from the application. Generated files such
 
 CI generates downloadable OpenAPI JSON and YAML files from the same SpringDoc runtime contracts during the Maven build. The generated files are published as the `openapi-docs` GitHub Actions artifact and include the default OpenAPI document plus the configured SpringDoc groups.
 
-Generated OpenAPI files are written under `target/generated-docs/openapi/` during the build. This directory is build output only and must not be committed.
+CI also packages a lightweight static documentation site as the `api-docs-site` GitHub Actions artifact. The site contains an `index.html` page with links to the default and grouped OpenAPI JSON/YAML files so the generated API contracts can be browsed from a downloaded artifact or published later through GitHub Pages or another static host. This repository does not enable static site deployment from this artifact by default.
+
+Generated OpenAPI files are written under `target/generated-docs/openapi/`, and the static site is written under `target/generated-docs/site/` during the build. These directories are build output only and must not be committed.

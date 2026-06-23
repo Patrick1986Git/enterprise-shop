@@ -42,6 +42,13 @@ jobs:
           path: target/generated-docs/openapi/**
           if-no-files-found: error
 
+      - name: Upload static API docs site
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-docs-site
+          path: target/generated-docs/site/**
+          if-no-files-found: error
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v7
