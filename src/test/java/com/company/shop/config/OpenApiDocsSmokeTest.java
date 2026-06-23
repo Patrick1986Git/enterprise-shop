@@ -18,6 +18,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,6 +81,7 @@ class OpenApiDocsSmokeTest {
 
     private static final String API_DOCS_ENDPOINT = "/api-docs";
     private static final Path OPENAPI_OUTPUT_DIRECTORY = Path.of("target", "generated-docs", "openapi");
+    private static final Path SITE_OUTPUT_DIRECTORY = Path.of("target", "generated-docs", "site");
     private static final List<String> OPENAPI_GROUPS = List.of(
             ALL_API_GROUP,
             PUBLIC_API_GROUP,
@@ -86,6 +89,17 @@ class OpenApiDocsSmokeTest {
             ADMIN_API_GROUP,
             WEBHOOKS_API_GROUP,
             SYSTEM_API_GROUP);
+    private static final Map<String, String> OPENAPI_SITE_SECTIONS = new LinkedHashMap<>();
+
+    static {
+        OPENAPI_SITE_SECTIONS.put("Default", "openapi");
+        OPENAPI_SITE_SECTIONS.put("All API", ALL_API_GROUP);
+        OPENAPI_SITE_SECTIONS.put("Public API", PUBLIC_API_GROUP);
+        OPENAPI_SITE_SECTIONS.put("Customer API", CUSTOMER_API_GROUP);
+        OPENAPI_SITE_SECTIONS.put("Admin API", ADMIN_API_GROUP);
+        OPENAPI_SITE_SECTIONS.put("Webhooks API", WEBHOOKS_API_GROUP);
+        OPENAPI_SITE_SECTIONS.put("System API", SYSTEM_API_GROUP);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -467,6 +481,7 @@ class OpenApiDocsSmokeTest {
     @Test
     void openApiDocsArtifacts_shouldBeGeneratedForDefaultAndGroupedDocs() throws Exception {
         Files.createDirectories(OPENAPI_OUTPUT_DIRECTORY);
+        Files.createDirectories(SITE_OUTPUT_DIRECTORY);
 
         writeOpenApiArtifacts("openapi", readOpenApi(API_DOCS_ENDPOINT));
         for (String group : OPENAPI_GROUPS) {
@@ -475,6 +490,10 @@ class OpenApiDocsSmokeTest {
 
         assertGeneratedOpenApiArtifactPair("openapi");
         OPENAPI_GROUPS.forEach(group -> assertGeneratedOpenApiArtifactPair(group));
+
+        writeStaticApiDocsSite();
+
+        assertStaticApiDocsSite();
     }
 
     private void assertApiErrorResponseComponent(Map<String, Object> responses, String responseName) {
@@ -498,6 +517,76 @@ class OpenApiDocsSmokeTest {
         assertThat(response.get("description")).isInstanceOf(String.class);
         assertThat(content).containsKey("application/json");
         assertThat(schema).containsEntry("$ref", "#/components/schemas/ApiError");
+    }
+
+    private void writeStaticApiDocsSite() throws Exception {
+        for (String fileName : OPENAPI_SITE_SECTIONS.values()) {
+            copyOpenApiArtifactToSite(fileName + ".json");
+            copyOpenApiArtifactToSite(fileName + ".yaml");
+        }
+
+        Files.writeString(
+                SITE_OUTPUT_DIRECTORY.resolve("index.html"),
+                buildStaticApiDocsIndex(),
+                StandardCharsets.UTF_8);
+    }
+
+    private void copyOpenApiArtifactToSite(String fileName) throws Exception {
+        Files.copy(
+                OPENAPI_OUTPUT_DIRECTORY.resolve(fileName),
+                SITE_OUTPUT_DIRECTORY.resolve(fileName),
+                StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private String buildStaticApiDocsIndex() {
+        StringBuilder html = new StringBuilder();
+        html.append("<!doctype html>\n")
+                .append("<html lang=\"en\">\n")
+                .append("<head>\n")
+                .append("  <meta charset=\"utf-8\">\n")
+                .append("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+                .append("  <title>Enterprise Shop API Documentation</title>\n")
+                .append("</head>\n")
+                .append("<body>\n")
+                .append("  <main>\n")
+                .append("    <h1>Enterprise Shop API Documentation</h1>\n")
+                .append("    <p>Download or browse the generated OpenAPI specifications.</p>\n");
+
+        OPENAPI_SITE_SECTIONS.forEach((label, fileName) -> html
+                .append("    <section>\n")
+                .append("      <h2>").append(label).append("</h2>\n")
+                .append("      <ul>\n")
+                .append("        <li><a href=\"").append(fileName).append(".json\">")
+                .append(fileName).append(".json</a></li>\n")
+                .append("        <li><a href=\"").append(fileName).append(".yaml\">")
+                .append(fileName).append(".yaml</a></li>\n")
+                .append("      </ul>\n")
+                .append("    </section>\n"));
+
+        return html.append("  </main>\n")
+                .append("</body>\n")
+                .append("</html>\n")
+                .toString();
+    }
+
+    private void assertStaticApiDocsSite() {
+        Path indexPath = SITE_OUTPUT_DIRECTORY.resolve("index.html");
+
+        assertThat(indexPath).exists().isRegularFile();
+        assertThat(readFileSize(indexPath)).isPositive();
+
+        String index = readString(indexPath);
+        OPENAPI_SITE_SECTIONS.values().forEach(fileName -> {
+            Path jsonPath = SITE_OUTPUT_DIRECTORY.resolve(fileName + ".json");
+            Path yamlPath = SITE_OUTPUT_DIRECTORY.resolve(fileName + ".yaml");
+
+            assertThat(jsonPath).exists().isRegularFile();
+            assertThat(yamlPath).exists().isRegularFile();
+            assertThat(readFileSize(jsonPath)).isPositive();
+            assertThat(readFileSize(yamlPath)).isPositive();
+            assertThat(index).contains("href=\"" + fileName + ".json\"");
+            assertThat(index).contains("href=\"" + fileName + ".yaml\"");
+        });
     }
 
     private void writeOpenApiArtifacts(String fileName, Map<String, Object> openApi) throws Exception {
@@ -529,9 +618,17 @@ class OpenApiDocsSmokeTest {
         }
     }
 
+    private String readString(Path path) {
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            throw new AssertionError("Failed to read generated documentation artifact: " + path, ex);
+        }
+    }
+
     private Map<String, Object> readJsonArtifact(Path path) {
         try {
-            return objectMapper.readValue(Files.readString(path, StandardCharsets.UTF_8), new TypeReference<>() {
+            return objectMapper.readValue(readString(path), new TypeReference<>() {
             });
         } catch (Exception ex) {
             throw new AssertionError("Generated OpenAPI JSON artifact is not parseable: " + path, ex);
@@ -540,7 +637,7 @@ class OpenApiDocsSmokeTest {
 
     private Map<String, Object> readYamlArtifact(Path path) {
         try {
-            Map<?, ?> yaml = Yaml.mapper().readValue(Files.readString(path, StandardCharsets.UTF_8), Map.class);
+            Map<?, ?> yaml = Yaml.mapper().readValue(readString(path), Map.class);
             return objectMapper.convertValue(yaml, new TypeReference<>() {
             });
         } catch (Exception ex) {
