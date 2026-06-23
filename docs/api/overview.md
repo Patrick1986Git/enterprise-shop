@@ -15,3 +15,9 @@ When the application is running locally, SpringDoc exposes API documentation thr
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
 These runtime endpoints are generated from the application. Generated files such as `openapi.json`, `openapi.yaml`, Swagger UI bundles, and `target/generated-docs` are build artifacts and must not be committed under the current policy.
+
+## CI-generated OpenAPI artifacts
+
+CI generates downloadable OpenAPI JSON and YAML files from the same SpringDoc runtime contracts during the Maven build. The generated files are published as the `openapi-docs` GitHub Actions artifact and include the default OpenAPI document plus the configured SpringDoc groups.
+
+Generated OpenAPI files are written under `target/generated-docs/openapi/` during the build. This directory is build output only and must not be committed.

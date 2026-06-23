@@ -15,6 +15,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -58,6 +61,7 @@ import com.company.shop.security.AuthService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.UserRolesStartupValidator;
 import com.company.shop.security.jwt.JwtTokenProvider;
+import io.swagger.v3.core.util.Yaml;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
@@ -74,6 +78,7 @@ import tools.jackson.databind.ObjectMapper;
 class OpenApiDocsSmokeTest {
 
     private static final String API_DOCS_ENDPOINT = "/api-docs";
+    private static final Path OPENAPI_OUTPUT_DIRECTORY = Path.of("target", "generated-docs", "openapi");
     private static final List<String> OPENAPI_GROUPS = List.of(
             ALL_API_GROUP,
             PUBLIC_API_GROUP,
@@ -459,6 +464,19 @@ class OpenApiDocsSmokeTest {
                 .isEqualTo(expectedDescription);
     }
 
+    @Test
+    void openApiDocsArtifacts_shouldBeGeneratedForDefaultAndGroupedDocs() throws Exception {
+        Files.createDirectories(OPENAPI_OUTPUT_DIRECTORY);
+
+        writeOpenApiArtifacts("openapi", readOpenApi(API_DOCS_ENDPOINT));
+        for (String group : OPENAPI_GROUPS) {
+            writeOpenApiArtifacts(group, readOpenApi(API_DOCS_ENDPOINT + "/" + group));
+        }
+
+        assertGeneratedOpenApiArtifactPair("openapi");
+        OPENAPI_GROUPS.forEach(group -> assertGeneratedOpenApiArtifactPair(group));
+    }
+
     private void assertApiErrorResponseComponent(Map<String, Object> responses, String responseName) {
         Map<String, Object> response = objectMapper.convertValue(
                 responses.get(responseName),
@@ -480,6 +498,54 @@ class OpenApiDocsSmokeTest {
         assertThat(response.get("description")).isInstanceOf(String.class);
         assertThat(content).containsKey("application/json");
         assertThat(schema).containsEntry("$ref", "#/components/schemas/ApiError");
+    }
+
+    private void writeOpenApiArtifacts(String fileName, Map<String, Object> openApi) throws Exception {
+        String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(openApi);
+        String yaml = Yaml.pretty(openApi);
+
+        Files.writeString(OPENAPI_OUTPUT_DIRECTORY.resolve(fileName + ".json"), json, StandardCharsets.UTF_8);
+        Files.writeString(OPENAPI_OUTPUT_DIRECTORY.resolve(fileName + ".yaml"), yaml, StandardCharsets.UTF_8);
+    }
+
+    private void assertGeneratedOpenApiArtifactPair(String fileName) {
+        Path jsonPath = OPENAPI_OUTPUT_DIRECTORY.resolve(fileName + ".json");
+        Path yamlPath = OPENAPI_OUTPUT_DIRECTORY.resolve(fileName + ".yaml");
+
+        assertThat(jsonPath).exists().isRegularFile();
+        assertThat(yamlPath).exists().isRegularFile();
+        assertThat(readFileSize(jsonPath)).isPositive();
+        assertThat(readFileSize(yamlPath)).isPositive();
+
+        assertThat(readJsonArtifact(jsonPath)).containsKey("openapi");
+        assertThat(readYamlArtifact(yamlPath)).containsKey("openapi");
+    }
+
+    private long readFileSize(Path path) {
+        try {
+            return Files.size(path);
+        } catch (Exception ex) {
+            throw new AssertionError("Failed to read generated OpenAPI artifact size: " + path, ex);
+        }
+    }
+
+    private Map<String, Object> readJsonArtifact(Path path) {
+        try {
+            return objectMapper.readValue(Files.readString(path, StandardCharsets.UTF_8), new TypeReference<>() {
+            });
+        } catch (Exception ex) {
+            throw new AssertionError("Generated OpenAPI JSON artifact is not parseable: " + path, ex);
+        }
+    }
+
+    private Map<String, Object> readYamlArtifact(Path path) {
+        try {
+            Map<?, ?> yaml = Yaml.mapper().readValue(Files.readString(path, StandardCharsets.UTF_8), Map.class);
+            return objectMapper.convertValue(yaml, new TypeReference<>() {
+            });
+        } catch (Exception ex) {
+            throw new AssertionError("Generated OpenAPI YAML artifact is not parseable: " + path, ex);
+        }
     }
 
 }
