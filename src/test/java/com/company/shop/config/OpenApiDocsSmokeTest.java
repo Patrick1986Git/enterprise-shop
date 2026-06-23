@@ -538,9 +538,11 @@ class OpenApiDocsSmokeTest {
         }
     }
 
-    private Map<?, ?> readYamlArtifact(Path path) {
+    private Map<String, Object> readYamlArtifact(Path path) {
         try {
-            return Yaml.mapper().readValue(Files.readString(path, StandardCharsets.UTF_8), Map.class);
+            Map<?, ?> yaml = Yaml.mapper().readValue(Files.readString(path, StandardCharsets.UTF_8), Map.class);
+            return objectMapper.convertValue(yaml, new TypeReference<>() {
+            });
         } catch (Exception ex) {
             throw new AssertionError("Generated OpenAPI YAML artifact is not parseable: " + path, ex);
         }
