@@ -28,6 +28,7 @@ import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
+import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
@@ -138,7 +139,9 @@ class NotificationQueryServiceTest {
                     "ORDER_PLACED_EMAIL",
                     "CUSTOMER",
                     "Timeout",
-                    Boolean.TRUE))
+                    Boolean.TRUE,
+                    2,
+                    5))
                     .thenReturn(specification);
 
             result = service.getNotifications(
@@ -147,6 +150,8 @@ class NotificationQueryServiceTest {
                     " CUSTOMER ",
                     " Timeout ",
                     Boolean.TRUE,
+                    2,
+                    5,
                     pageable);
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
@@ -154,7 +159,9 @@ class NotificationQueryServiceTest {
                     "ORDER_PLACED_EMAIL",
                     "CUSTOMER",
                     "Timeout",
-                    Boolean.TRUE));
+                    Boolean.TRUE,
+                    2,
+                    5));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -179,12 +186,16 @@ class NotificationQueryServiceTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     null))
                     .thenReturn(specification);
 
-            result = service.getNotifications(null, " ", " ", " ", null, pageable);
+            result = service.getNotifications(null, " ", " ", " ", null, null, null, pageable);
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    null,
+                    null,
                     null,
                     null,
                     null,
@@ -195,6 +206,30 @@ class NotificationQueryServiceTest {
         assertThat(result.getContent()).isEmpty();
         verify(notificationRepository).findAll(specification, pageable);
         verifyNoMoreInteractions(notificationMapper);
+    }
+
+    @Test
+    void getNotifications_shouldRejectNegativeAttemptsMin() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(null, null, null, null, null, -1, null, Pageable.unpaged()))
+                .isInstanceOf(NotificationAttemptsRangeInvalidException.class);
+    }
+
+    @Test
+    void getNotifications_shouldRejectNegativeAttemptsMax() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(null, null, null, null, null, null, -1, Pageable.unpaged()))
+                .isInstanceOf(NotificationAttemptsRangeInvalidException.class);
+    }
+
+    @Test
+    void getNotifications_shouldRejectAttemptsMinGreaterThanAttemptsMax() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(null, null, null, null, null, 5, 2, Pageable.unpaged()))
+                .isInstanceOf(NotificationAttemptsRangeInvalidException.class);
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {

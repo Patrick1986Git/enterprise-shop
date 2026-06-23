@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
+import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
@@ -54,16 +55,30 @@ public class NotificationQueryService {
             String recipient,
             String lastErrorContains,
             Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax,
             Pageable pageable) {
+        validateAttemptsRange(attemptsMin, attemptsMax);
+
         return notificationRepository.findAll(
                 NotificationSpecifications.adminFilters(
                         status,
                         normalize(type),
                         normalize(recipient),
                         normalize(lastErrorContains),
-                        requeuedOnly),
+                        requeuedOnly,
+                        attemptsMin,
+                        attemptsMax),
                 pageable)
                 .map(notificationMapper::toDto);
+    }
+
+    private void validateAttemptsRange(Integer attemptsMin, Integer attemptsMax) {
+        if ((attemptsMin != null && attemptsMin < 0)
+                || (attemptsMax != null && attemptsMax < 0)
+                || (attemptsMin != null && attemptsMax != null && attemptsMin > attemptsMax)) {
+            throw new NotificationAttemptsRangeInvalidException();
+        }
     }
 
     private String normalize(String value) {

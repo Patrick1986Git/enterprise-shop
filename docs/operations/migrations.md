@@ -38,6 +38,7 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V30 | `V30__add_outbox_event_last_attempt_at.sql` | Adds outbox event last-attempt timestamp tracking. |
 | V31 | `V31__add_outbox_observability_indexes.sql` | Adds outbox event indexes for status with last-attempt timestamp and attempts filters. |
 | V32 | `V32__add_outbox_event_processed_at_index.sql` | Adds an outbox event index for status with processed timestamp filters. |
+| V33 | `V33__add_notification_status_attempts_index.sql` | Adds a notification index for status with attempts filters. |
 
 ## Rules for future migrations
 
