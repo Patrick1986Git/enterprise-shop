@@ -20,6 +20,8 @@ These runtime endpoints are generated from the application. Generated files such
 
 CI generates downloadable OpenAPI JSON and YAML files from the same SpringDoc runtime contracts during the Maven build. The generated files are published as the `openapi-docs` GitHub Actions artifact and include the default OpenAPI document plus the configured SpringDoc groups.
 
-CI also packages a lightweight static documentation site as the `api-docs-site` GitHub Actions artifact. The site contains an `index.html` page with links to the default and grouped OpenAPI JSON/YAML files so the generated API contracts can be browsed from a downloaded artifact or published later through GitHub Pages or another static host. This repository does not enable static site deployment from this artifact by default.
+CI also packages a lightweight static documentation site as the `api-docs-site` GitHub Actions artifact. The site contains an `index.html` page with links to the default and grouped OpenAPI JSON/YAML files so the generated API contracts can be browsed from a downloaded artifact. Pull request builds are validation-only: they run the documentation generation checks and upload the `openapi-docs` and `api-docs-site` artifacts for review, but they do not publish GitHub Pages.
+
+Pushes to `master` publish the generated static site from `target/generated-docs/site/` to GitHub Pages through the repository's GitHub Actions Pages workflow, if GitHub Pages is enabled and configured to use GitHub Actions in the repository settings. The workflow uses the `github-pages` deployment environment and does not require secrets, a custom domain, or a generated documentation branch.
 
 Generated OpenAPI files are written under `target/generated-docs/openapi/`, and the static site is written under `target/generated-docs/site/` during the build. These directories are build output only and must not be committed.
