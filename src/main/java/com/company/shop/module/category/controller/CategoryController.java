@@ -13,6 +13,7 @@ import com.company.shop.module.category.dto.CategoryResponseDTO;
 import com.company.shop.module.category.service.CategoryService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,24 +30,34 @@ public class CategoryController {
 	}
 
 	@GetMapping
-	@Operation(summary = "List categories")
+	@Operation(
+	        operationId = "getCategories",
+	        summary = "List categories"
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Categories returned successfully.")
 	})
 	public Page<CategoryResponseDTO> getCategories(
+			@Parameter(description = "Zero-based page index.")
 			@RequestParam(defaultValue = "0") int page,
+			@Parameter(description = "Number of categories to return per page.")
 			@RequestParam(defaultValue = "20") int size) {
 		Pageable pageable = PageRequest.of(page, size);
 		return service.findAll(pageable);
 	}
 
 	@GetMapping("/slug/{slug}")
-	@Operation(summary = "Get category details by slug")
+	@Operation(
+	        operationId = "getCategoryBySlug",
+	        summary = "Get category details by slug"
+	)
 	@ApiResponses(value = {
 			@ApiResponse(responseCode = "200", description = "Category found."),
-			@ApiResponse(responseCode = "404", description = "Category not found.")
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
 	})
-	public CategoryResponseDTO getCategoryBySlug(@PathVariable String slug) {
+	public CategoryResponseDTO getCategoryBySlug(
+			@Parameter(description = "URL-safe category slug.")
+			@PathVariable String slug) {
 		return service.findBySlug(slug);
 	}
 }

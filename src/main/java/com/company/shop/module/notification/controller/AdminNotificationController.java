@@ -25,6 +25,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -47,11 +48,15 @@ public class AdminNotificationController {
     }
 
     @GetMapping
-    @Operation(summary = "List notifications (admin-only)")
+    @Operation(
+            operationId = "getNotifications",
+            summary = "List notifications (admin-only)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notifications returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
     public PageResponseDTO<NotificationResponseDTO> getNotifications(
             @Parameter(description = "Filter by notification delivery status.")
@@ -71,53 +76,73 @@ public class AdminNotificationController {
     }
 
     @GetMapping("/summary")
-    @Operation(summary = "Get notification summary (admin-only)")
+    @Operation(
+            operationId = "getNotificationSummary",
+            summary = "Get notification summary (admin-only)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notification summary returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required).")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
     })
     public NotificationSummaryDTO getSummary() {
         return notificationQueryService.getSummary();
     }
 
     @PostMapping("/{id}/requeue")
-    @Operation(summary = "Requeue failed notification for delivery (admin-only)")
+    @Operation(
+            operationId = "requeueNotification",
+            summary = "Requeue failed notification for delivery (admin-only)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notification requeued successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Notification not found."),
-            @ApiResponse(responseCode = "409", description = "Notification cannot be requeued from its current status.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
     })
-    public NotificationResponseDTO requeueNotification(@PathVariable UUID id) {
+    public NotificationResponseDTO requeueNotification(
+            @Parameter(description = "Notification identifier.")
+            @PathVariable UUID id) {
         return notificationAdminCommandService.requeueFailedNotification(id);
     }
 
     @GetMapping("/{id}/actions")
-    @Operation(summary = "Get notification admin action logs")
+    @Operation(
+            operationId = "getNotificationActionLogs",
+            summary = "Get notification admin action logs",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notification admin action logs returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Notification not found.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
     public PageResponseDTO<NotificationAdminActionLogResponseDTO> getNotificationActionLogs(
-            @PathVariable UUID id,
+            @Parameter(description = "Resource identifier.") @PathVariable UUID id,
             Pageable pageable) {
         return PageResponseDTO.from(
                 notificationAdminActionLogQueryService.getNotificationActionLogs(id, pageable));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get notification by ID (admin-only)")
+    @Operation(
+            operationId = "getNotificationById",
+            summary = "Get notification by ID (admin-only)",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Notification found."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden (admin role required)."),
-            @ApiResponse(responseCode = "404", description = "Notification not found.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public NotificationResponseDTO getNotification(@PathVariable UUID id) {
+    public NotificationResponseDTO getNotification(
+            @Parameter(description = "Notification identifier.")
+            @PathVariable UUID id) {
         return notificationQueryService.getNotification(id);
     }
 }

@@ -19,8 +19,10 @@ import com.company.shop.module.cart.dto.UpdateCartItemRequestDTO;
 import com.company.shop.module.cart.service.CartService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -37,54 +39,84 @@ public class CartController {
     }
 
     @GetMapping
-    @Operation(summary = "Get the authenticated user's cart")
+    @Operation(
+            operationId = "getCurrentUserCart",
+            summary = "Get the authenticated user's cart",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Cart returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
     public ResponseEntity<CartResponseDTO> getCart() {
         return ResponseEntity.ok(cartService.getMyCart());
     }
 
     @PostMapping("/items")
-    @Operation(summary = "Add a product to the cart")
+    @Operation(
+            operationId = "addCartItem",
+            summary = "Add a product to the cart",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product added to cart."),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
-    public ResponseEntity<CartResponseDTO> addCartItem(@Valid @RequestBody AddToCartRequestDTO request) {
+    public ResponseEntity<CartResponseDTO> addCartItem(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Cart item payload containing product identifier and quantity."
+            )
+            @Valid @RequestBody AddToCartRequestDTO request) {
         return ResponseEntity.ok(cartService.addToCart(request));
     }
 
     @PatchMapping("/items/{productId}")
-    @Operation(summary = "Update cart item quantity")
+    @Operation(
+            operationId = "updateCartItemQuantity",
+            summary = "Update cart item quantity",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Cart item quantity updated."),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
     public ResponseEntity<CartResponseDTO> updateCartItemQuantity(
+            @Parameter(description = "Product identifier.")
             @PathVariable UUID productId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Cart item quantity update payload."
+            )
             @Valid @RequestBody UpdateCartItemRequestDTO request) {
         return ResponseEntity.ok(cartService.updateItemQuantity(productId, request));
     }
 
     @DeleteMapping("/items/{productId}")
-    @Operation(summary = "Remove a product from the cart")
+    @Operation(
+            operationId = "removeCartItem",
+            summary = "Remove a product from the cart",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Product removed from cart."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
-    public ResponseEntity<CartResponseDTO> removeCartItem(@PathVariable UUID productId) {
+    public ResponseEntity<CartResponseDTO> removeCartItem(
+            @Parameter(description = "Product identifier.")
+            @PathVariable UUID productId) {
         return ResponseEntity.ok(cartService.removeItem(productId));
     }
 
     @DeleteMapping
-    @Operation(summary = "Clear the cart")
+    @Operation(
+            operationId = "clearCurrentUserCart",
+            summary = "Clear the cart",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "204", description = "Cart cleared successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
     public ResponseEntity<Void> clearCart() {
         cartService.clearCart();

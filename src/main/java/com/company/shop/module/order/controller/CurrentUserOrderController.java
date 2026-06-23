@@ -19,6 +19,7 @@ import com.company.shop.module.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -35,10 +36,14 @@ public class CurrentUserOrderController {
     }
 
     @GetMapping
-    @Operation(summary = "List the authenticated user's orders")
+    @Operation(
+            operationId = "getCurrentUserOrders",
+            summary = "List the authenticated user's orders",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Orders returned successfully."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
     public PageResponseDTO<OrderResponseDTO> getCurrentUserOrders(@PageableDefault(size = 10) Pageable pageable) {
         return PageResponseDTO.from(orderService.findMyOrders(pageable));
@@ -46,13 +51,21 @@ public class CurrentUserOrderController {
 
     @PostMapping("/checkout")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Checkout the cart and create an order")
+    @Operation(
+            operationId = "checkoutCurrentUserCart",
+            summary = "Checkout the cart and create an order",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Order created successfully."),
-            @ApiResponse(responseCode = "400", description = "Invalid request payload."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized.")
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
     })
-    public OrderResponseDTO checkout(@Valid @RequestBody OrderCheckoutRequestDTO request) {
+    public OrderResponseDTO checkout(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Checkout payload containing shipping and payment information."
+            )
+            @Valid @RequestBody OrderCheckoutRequestDTO request) {
         return orderService.placeOrderFromCart(request);
     }
 }

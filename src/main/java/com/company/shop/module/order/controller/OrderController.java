@@ -12,8 +12,10 @@ import com.company.shop.module.order.dto.OrderDetailedResponseDTO;
 import com.company.shop.module.order.service.OrderService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -29,14 +31,20 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Get order details by ID")
+    @Operation(
+            operationId = "getOrderById",
+            summary = "Get order details by ID",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Order found."),
-            @ApiResponse(responseCode = "401", description = "Unauthorized."),
-            @ApiResponse(responseCode = "403", description = "Forbidden."),
-            @ApiResponse(responseCode = "404", description = "Order not found.")
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
-    public OrderDetailedResponseDTO getOrderById(@PathVariable UUID id) {
+    public OrderDetailedResponseDTO getOrderById(
+            @Parameter(description = "Order identifier.")
+            @PathVariable UUID id) {
         return orderService.findById(id);
     }
 }

@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -327,6 +328,69 @@ class OpenApiDocsSmokeTest {
                 .forEach(responseName -> assertApiErrorResponseComponent(responses, responseName));
     }
 
+    @Test
+    void openApiDocs_shouldExposeStableUniqueOperationIds() throws Exception {
+        Map<String, Object> paths = paths(readOpenApi(API_DOCS_ENDPOINT));
+
+        List<String> operationIds = paths.values().stream()
+                .map(pathItem -> objectMapper.convertValue(pathItem, new TypeReference<Map<String, Object>>() {
+                }))
+                .flatMap(pathItem -> pathItem.values().stream())
+                .map(operation -> objectMapper.convertValue(operation, new TypeReference<Map<String, Object>>() {
+                }))
+                .map(operation -> (String) operation.get("operationId"))
+                .filter(Objects::nonNull)
+                .toList();
+
+        assertThat(operationIds)
+                .as("Every OpenAPI operation should have a stable operationId.")
+                .allSatisfy(operationId -> assertThat(operationId).isNotBlank());
+        assertThat(operationIds)
+                .as("Operation IDs should be unique for client generation.")
+                .doesNotHaveDuplicates();
+
+        int operationCount = paths.values().stream()
+                .map(pathItem -> objectMapper.convertValue(pathItem, new TypeReference<Map<String, Object>>() {
+                }))
+                .mapToInt(pathItem -> pathItem.size())
+                .sum();
+        assertThat(operationIds).hasSize(operationCount);
+    }
+
+    @Test
+    void openApiDocs_shouldDocumentRepresentativeEndpointSecurityAndErrorReferences() throws Exception {
+        Map<String, Object> paths = paths(readOpenApi(API_DOCS_ENDPOINT));
+
+        assertThat(operation(paths, "/api/v1/me/cart", "get").get("security").toString())
+                .as("Authenticated cart endpoint should document bearerAuth.")
+                .contains("bearerAuth");
+        assertThat(operation(paths, "/api/v1/admin/notifications", "get").get("security").toString())
+                .as("Admin notification endpoint should document bearerAuth.")
+                .contains("bearerAuth");
+
+        assertResponseRef(paths, "/api/v1/auth/login", "post", "401", "#/components/responses/UnauthorizedError");
+        assertResponseRef(paths, "/api/v1/admin/notifications", "get", "403", "#/components/responses/ForbiddenError");
+        assertResponseRef(paths, "/api/v1/products/slug/{slug}", "get", "404", "#/components/responses/NotFoundError");
+    }
+
+    @Test
+    void openApiDocs_shouldDocumentRepresentativeParameters() throws Exception {
+        Map<String, Object> paths = paths(readOpenApi(API_DOCS_ENDPOINT));
+
+        assertParameterDescription(
+                paths,
+                "/api/v1/products",
+                "get",
+                "page",
+                "Zero-based page index.");
+        assertParameterDescription(
+                paths,
+                "/api/v1/admin/outbox-event-actions",
+                "get",
+                "outboxEventId",
+                "Filter action logs for a specific outbox event identifier.");
+    }
+
     private Map<String, Object> readOpenApi(String endpoint) throws Exception {
         MvcResult result = mockMvc.perform(get(endpoint))
                 .andExpect(status().isOk())
@@ -343,6 +407,56 @@ class OpenApiDocsSmokeTest {
                 openApi.get("paths"),
                 new TypeReference<>() {
                 });
+    }
+
+    private Map<String, Object> operation(Map<String, Object> paths, String path, String method) {
+        Map<String, Object> pathItem = objectMapper.convertValue(
+                paths.get(path),
+                new TypeReference<>() {
+                });
+
+        return objectMapper.convertValue(
+                pathItem.get(method),
+                new TypeReference<>() {
+                });
+    }
+
+    private void assertResponseRef(
+            Map<String, Object> paths,
+            String path,
+            String method,
+            String responseCode,
+            String expectedRef) {
+        Map<String, Object> operation = operation(paths, path, method);
+        Map<String, Object> responses = objectMapper.convertValue(
+                operation.get("responses"),
+                new TypeReference<>() {
+                });
+        Map<String, Object> response = objectMapper.convertValue(
+                responses.get(responseCode),
+                new TypeReference<>() {
+                });
+
+        assertThat(response).containsEntry("$ref", expectedRef);
+    }
+
+    private void assertParameterDescription(
+            Map<String, Object> paths,
+            String path,
+            String method,
+            String parameterName,
+            String expectedDescription) {
+        Map<String, Object> operation = operation(paths, path, method);
+        List<Map<String, Object>> parameters = objectMapper.convertValue(
+                operation.get("parameters"),
+                new TypeReference<>() {
+                });
+
+        assertThat(parameters)
+                .filteredOn(parameter -> parameterName.equals(parameter.get("name")))
+                .singleElement()
+                .extracting(parameter -> parameter.get("description"))
+                .isEqualTo(expectedDescription);
     }
 
     private void assertApiErrorResponseComponent(Map<String, Object> responses, String responseName) {
