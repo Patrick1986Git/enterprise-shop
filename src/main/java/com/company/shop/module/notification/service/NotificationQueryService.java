@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.company.shop.module.notification.NotificationAdminSearchCriteria;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
@@ -50,25 +51,21 @@ public class NotificationQueryService {
 
     @Transactional(readOnly = true)
     public Page<NotificationResponseDTO> getNotifications(
-            NotificationStatus status,
-            String type,
-            String recipient,
-            String lastErrorContains,
-            Boolean requeuedOnly,
-            Integer attemptsMin,
-            Integer attemptsMax,
+            NotificationAdminSearchCriteria criteria,
             Pageable pageable) {
-        validateAttemptsRange(attemptsMin, attemptsMax);
+        validateAttemptsRange(criteria.attemptsMin(), criteria.attemptsMax());
+
+        NotificationAdminSearchCriteria normalizedCriteria = new NotificationAdminSearchCriteria(
+                criteria.status(),
+                normalize(criteria.type()),
+                normalize(criteria.recipient()),
+                normalize(criteria.lastErrorContains()),
+                criteria.requeuedOnly(),
+                criteria.attemptsMin(),
+                criteria.attemptsMax());
 
         return notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(
-                        status,
-                        normalize(type),
-                        normalize(recipient),
-                        normalize(lastErrorContains),
-                        requeuedOnly,
-                        attemptsMin,
-                        attemptsMax),
+                NotificationSpecifications.adminFilters(normalizedCriteria),
                 pageable)
                 .map(notificationMapper::toDto);
     }

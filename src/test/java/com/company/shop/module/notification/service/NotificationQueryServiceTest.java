@@ -24,6 +24,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
+import com.company.shop.module.notification.NotificationAdminSearchCriteria;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
@@ -134,34 +135,33 @@ class NotificationQueryServiceTest {
         Page<NotificationResponseDTO> result;
         try (MockedStatic<NotificationSpecifications> notificationSpecifications =
                 org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
-            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(criteria(
                     NotificationStatus.PENDING,
                     "ORDER_PLACED_EMAIL",
                     "CUSTOMER",
                     "Timeout",
                     Boolean.TRUE,
                     2,
-                    5))
+                    5)))
                     .thenReturn(specification);
 
-            result = service.getNotifications(
+            result = service.getNotifications(criteria(
                     NotificationStatus.PENDING,
                     " ORDER_PLACED_EMAIL ",
                     " CUSTOMER ",
                     " Timeout ",
                     Boolean.TRUE,
                     2,
-                    5,
-                    pageable);
+                    5), pageable);
 
-            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(criteria(
                     NotificationStatus.PENDING,
                     "ORDER_PLACED_EMAIL",
                     "CUSTOMER",
                     "Timeout",
                     Boolean.TRUE,
                     2,
-                    5));
+                    5)));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -182,25 +182,14 @@ class NotificationQueryServiceTest {
         try (MockedStatic<NotificationSpecifications> notificationSpecifications =
                 org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
             notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null))
+                    criteria(null, null, null, null, null, null, null)))
                     .thenReturn(specification);
 
-            result = service.getNotifications(null, " ", " ", " ", null, null, null, pageable);
+            result = service.getNotifications(
+                    criteria(null, " ", " ", " ", null, null, null), pageable);
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null));
+                    criteria(null, null, null, null, null, null, null)));
         }
 
         assertThat(result.getContent()).isEmpty();
@@ -212,7 +201,8 @@ class NotificationQueryServiceTest {
     void getNotifications_shouldRejectNegativeAttemptsMin() {
         NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
 
-        assertThatThrownBy(() -> service.getNotifications(null, null, null, null, null, -1, null, Pageable.unpaged()))
+        assertThatThrownBy(() -> service.getNotifications(
+                criteria(null, null, null, null, null, -1, null), Pageable.unpaged()))
                 .isInstanceOf(NotificationAttemptsRangeInvalidException.class);
     }
 
@@ -220,7 +210,8 @@ class NotificationQueryServiceTest {
     void getNotifications_shouldRejectNegativeAttemptsMax() {
         NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
 
-        assertThatThrownBy(() -> service.getNotifications(null, null, null, null, null, null, -1, Pageable.unpaged()))
+        assertThatThrownBy(() -> service.getNotifications(
+                criteria(null, null, null, null, null, null, -1), Pageable.unpaged()))
                 .isInstanceOf(NotificationAttemptsRangeInvalidException.class);
     }
 
@@ -228,8 +219,21 @@ class NotificationQueryServiceTest {
     void getNotifications_shouldRejectAttemptsMinGreaterThanAttemptsMax() {
         NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
 
-        assertThatThrownBy(() -> service.getNotifications(null, null, null, null, null, 5, 2, Pageable.unpaged()))
+        assertThatThrownBy(() -> service.getNotifications(
+                criteria(null, null, null, null, null, 5, 2), Pageable.unpaged()))
                 .isInstanceOf(NotificationAttemptsRangeInvalidException.class);
+    }
+
+    private NotificationAdminSearchCriteria criteria(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax) {
+        return new NotificationAdminSearchCriteria(
+                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax);
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {
