@@ -22,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.company.shop.module.notification.NotificationAdminSearchCriteria;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.persistence.support.PostgresContainerSupport;
@@ -321,7 +322,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAndFlush(sentNotification);
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.PENDING, null, null, null, null),
+                NotificationSpecifications.adminFilters(criteria(NotificationStatus.PENDING, null, null, null, null)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -345,7 +346,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, "ORDER_PLACED_EMAIL", null, null, null),
+                NotificationSpecifications.adminFilters(criteria(null, "ORDER_PLACED_EMAIL", null, null, null)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -369,7 +370,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, "CUSTOMER", null, null),
+                NotificationSpecifications.adminFilters(criteria(null, null, "CUSTOMER", null, null)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -405,7 +406,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 nullErrorNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, "  timeout  ", null),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, "  timeout  ", null)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -435,7 +436,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(failedTimeoutNotification, pendingTimeoutNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, "timeout", null),
+                NotificationSpecifications.adminFilters(
+                        criteria(NotificationStatus.FAILED, null, null, "timeout", null)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -465,7 +467,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 neverRequeuedTimeoutNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, "timeout", Boolean.TRUE),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, "timeout", Boolean.TRUE)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -491,7 +493,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, null, Boolean.TRUE),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, null, Boolean.TRUE)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -517,7 +519,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(neverRequeuedNotification, requeuedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, null, Boolean.FALSE),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, null, Boolean.FALSE)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -555,7 +557,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 neverRequeuedFailedNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, null, Boolean.TRUE),
+                NotificationSpecifications.adminFilters(
+                        criteria(NotificationStatus.FAILED, null, null, null, Boolean.TRUE)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -571,7 +574,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(lowAttempts, matchingAttempts));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, null, null, 3, null),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, null, null, 3, null)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -587,7 +590,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(matchingAttempts, highAttempts));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, null, null, null, 2),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, null, null, null, 2)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -603,7 +606,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(belowRange, insideRange, aboveRange));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, null, null, 2, 5),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, null, null, 2, 5)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -620,7 +623,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(failedInsideRange, pendingInsideRange));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, null, null, 2, 5),
+                NotificationSpecifications.adminFilters(
+                        criteria(NotificationStatus.FAILED, null, null, null, null, 2, 5)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -637,7 +641,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         notificationRepository.saveAllAndFlush(List.of(timeoutInsideRange, authInsideRange));
 
         List<Notification> notifications = notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(null, null, null, "timeout", null, 2, 5),
+                NotificationSpecifications.adminFilters(criteria(null, null, null, "timeout", null, 2, 5)),
                 Pageable.unpaged()).getContent();
 
         assertThat(notifications)
@@ -795,6 +799,28 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             return statement;
         });
     }
+
+    private NotificationAdminSearchCriteria criteria(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly) {
+        return criteria(status, type, recipient, lastErrorContains, requeuedOnly, null, null);
+    }
+
+    private NotificationAdminSearchCriteria criteria(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax) {
+        return new NotificationAdminSearchCriteria(
+                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax);
+    }
+
     private Notification notificationWithAttempts(String recipient, int attempts, String errorMessage) {
         Notification notification = Notification.pending(
                 "ORDER_PLACED_EMAIL",

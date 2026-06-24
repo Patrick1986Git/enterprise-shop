@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.common.dto.PageResponseDTO;
+import com.company.shop.module.notification.NotificationAdminSearchCriteria;
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
@@ -75,8 +76,9 @@ public class AdminNotificationController {
             @Parameter(description = "Filter notifications with attempts less than or equal to this value.")
             @RequestParam(required = false) Integer attemptsMax,
             @PageableDefault(size = 20) Pageable pageable) {
-        return PageResponseDTO.from(notificationQueryService.getNotifications(
-                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax, pageable));
+        NotificationAdminSearchCriteria criteria = new NotificationAdminSearchCriteria(
+                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax);
+        return PageResponseDTO.from(notificationQueryService.getNotifications(criteria, pageable));
     }
 
     @GetMapping("/summary")
