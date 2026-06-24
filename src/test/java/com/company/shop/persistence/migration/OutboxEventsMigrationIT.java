@@ -97,6 +97,21 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                         "idx_outbox_events_status_processed_at");
     }
 
+    @Test
+    void migrate_shouldCreateNotificationStatusAttemptsIndex() {
+        List<String> indexNames = jdbcTemplate.queryForList(
+                """
+                        SELECT indexname
+                        FROM pg_indexes
+                        WHERE schemaname = 'public'
+                        AND tablename = 'notifications'
+                        """,
+                String.class);
+
+        assertThat(indexNames)
+                .contains("idx_notifications_status_attempts");
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration({
             DataSourceAutoConfiguration.class,

@@ -70,9 +70,13 @@ public class AdminNotificationController {
             @Parameter(description = "When true, return only notifications that have been manually requeued "
                     + "at least once.")
             @RequestParam(required = false) Boolean requeuedOnly,
+            @Parameter(description = "Filter notifications with attempts greater than or equal to this value.")
+            @RequestParam(required = false) Integer attemptsMin,
+            @Parameter(description = "Filter notifications with attempts less than or equal to this value.")
+            @RequestParam(required = false) Integer attemptsMax,
             @PageableDefault(size = 20) Pageable pageable) {
         return PageResponseDTO.from(notificationQueryService.getNotifications(
-                status, type, recipient, lastErrorContains, requeuedOnly, pageable));
+                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax, pageable));
     }
 
     @GetMapping("/summary")

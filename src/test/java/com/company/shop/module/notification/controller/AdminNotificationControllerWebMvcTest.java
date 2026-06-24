@@ -40,6 +40,7 @@ import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationActionLogDateRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
 import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
@@ -104,7 +105,8 @@ class AdminNotificationControllerWebMvcTest {
         NotificationResponseDTO notification = responseWithLastAttemptAt(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 UUID.fromString("22222222-2222-2222-2222-222222222222"));
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(
+                any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(notification), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -128,12 +130,14 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.number").value(0))
                 .andExpect(jsonPath("$.size").value(20));
 
-        verify(notificationQueryService).getNotifications(eq(null), eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
+        verify(notificationQueryService).getNotifications(
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
     }
 
     @Test
     void getNotifications_shouldPassFiltersAndPageableToService() throws Exception {
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(
+                any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5), 0));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -158,6 +162,8 @@ class AdminNotificationControllerWebMvcTest {
                 eq("customer"),
                 eq("timeout"),
                 eq(null),
+                eq(null),
+                eq(null),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
@@ -168,7 +174,8 @@ class AdminNotificationControllerWebMvcTest {
 
     @Test
     void getNotifications_shouldPassRequeuedOnlyToService() throws Exception {
-        when(notificationQueryService.getNotifications(any(), any(), any(), any(), any(), any(Pageable.class)))
+        when(notificationQueryService.getNotifications(
+                any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
@@ -184,7 +191,57 @@ class AdminNotificationControllerWebMvcTest {
                 eq(null),
                 eq(null),
                 eq(Boolean.TRUE),
+                eq(null),
+                eq(null),
                 any(Pageable.class));
+    }
+
+    @Test
+    void getNotifications_shouldPassAttemptsRangeAndExistingFiltersToService() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("status", "FAILED")
+                        .param("lastErrorContains", "timeout")
+                        .param("attemptsMin", "2")
+                        .param("attemptsMax", "5")
+                        .param("page", "1")
+                        .param("size", "10")
+                        .param("sort", "attempts,asc"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationQueryService).getNotifications(
+                eq(NotificationStatus.FAILED),
+                eq(null),
+                eq(null),
+                eq("timeout"),
+                eq(null),
+                eq(2),
+                eq(5),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(10);
+        assertThat(pageable.getSort().getOrderFor("attempts")).isNotNull();
+    }
+
+    @Test
+    void getNotifications_shouldReturnBadRequestWhenAttemptsRangeIsInvalid() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenThrow(new NotificationAttemptsRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("attemptsMin", "5")
+                        .param("attemptsMax", "2"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_ATTEMPTS_RANGE_INVALID"));
     }
 
     @Test

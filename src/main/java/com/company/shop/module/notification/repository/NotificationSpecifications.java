@@ -22,6 +22,17 @@ public final class NotificationSpecifications {
             String recipient,
             String lastErrorContains,
             Boolean requeuedOnly) {
+        return adminFilters(status, type, recipient, lastErrorContains, requeuedOnly, null, null);
+    }
+
+    public static Specification<Notification> adminFilters(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -45,6 +56,14 @@ public final class NotificationSpecifications {
 
             if (Boolean.TRUE.equals(requeuedOnly)) {
                 predicates.add(cb.greaterThan(root.get("requeueCount"), 0));
+            }
+
+            if (attemptsMin != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), attemptsMin));
+            }
+
+            if (attemptsMax != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("attempts"), attemptsMax));
             }
 
             return cb.and(predicates.toArray(Predicate[]::new));

@@ -564,6 +564,88 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findAllWithAdminFilters_shouldFilterByAttemptsMin() {
+        Notification lowAttempts = notificationWithAttempts("low-attempts@example.com", 1, "temporary timeout");
+        Notification matchingAttempts = notificationWithAttempts(
+                "matching-attempts@example.com", 3, "temporary timeout");
+        notificationRepository.saveAllAndFlush(List.of(lowAttempts, matchingAttempts));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, null, null, 3, null),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingAttempts.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByAttemptsMax() {
+        Notification matchingAttempts = notificationWithAttempts(
+                "matching-max-attempts@example.com", 2, "temporary timeout");
+        Notification highAttempts = notificationWithAttempts("high-attempts@example.com", 4, "temporary timeout");
+        notificationRepository.saveAllAndFlush(List.of(matchingAttempts, highAttempts));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, null, null, null, 2),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingAttempts.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByAttemptsRange() {
+        Notification belowRange = notificationWithAttempts("below-range@example.com", 1, "temporary timeout");
+        Notification insideRange = notificationWithAttempts("inside-range@example.com", 3, "temporary timeout");
+        Notification aboveRange = notificationWithAttempts("above-range@example.com", 6, "temporary timeout");
+        notificationRepository.saveAllAndFlush(List.of(belowRange, insideRange, aboveRange));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, null, null, 2, 5),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(insideRange.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineAttemptsRangeWithFailedStatus() {
+        Notification failedInsideRange = notificationWithAttempts("failed-inside-range@example.com", 3, "SMTP timeout");
+        failedInsideRange.markFailed("SMTP timeout");
+        Notification pendingInsideRange = notificationWithAttempts(
+                "pending-inside-range@example.com", 3, "SMTP timeout");
+        notificationRepository.saveAllAndFlush(List.of(failedInsideRange, pendingInsideRange));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationStatus.FAILED, null, null, null, null, 2, 5),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(failedInsideRange.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineAttemptsRangeWithLastErrorContains() {
+        Notification timeoutInsideRange = notificationWithAttempts(
+                "timeout-inside-range@example.com", 3, "SMTP timeout");
+        Notification authInsideRange = notificationWithAttempts(
+                "auth-inside-range@example.com", 3, "SMTP authentication failed");
+        notificationRepository.saveAllAndFlush(List.of(timeoutInsideRange, authInsideRange));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(null, null, null, "timeout", null, 2, 5),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(timeoutInsideRange.getId());
+    }
+
+    @Test
     void countByRequeueCountGreaterThan_shouldCountNotificationsWithRequeueCountGreaterThanZero() {
         Notification neverRequeuedNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
@@ -713,4 +795,18 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             return statement;
         });
     }
+    private Notification notificationWithAttempts(String recipient, int attempts, String errorMessage) {
+        Notification notification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                recipient,
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        for (int i = 0; i < attempts; i++) {
+            notification.markDeliveryAttemptFailed(
+                    errorMessage, attempts + 1, Instant.now().plus(5, ChronoUnit.MINUTES));
+        }
+        return notification;
+    }
+
 }
