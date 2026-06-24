@@ -25,8 +25,7 @@ public final class NotificationSpecifications {
             }
 
             if (criteria.type() != null && !criteria.type().isBlank()) {
-                String pattern = "%" + criteria.type().trim().toLowerCase(Locale.ROOT) + "%";
-                predicates.add(cb.like(cb.lower(root.get("type")), pattern));
+                predicates.add(cb.equal(root.get("type"), criteria.type().trim()));
             }
 
             if (criteria.recipient() != null && !criteria.recipient().isBlank()) {

@@ -355,6 +355,30 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findAllWithAdminFilters_shouldFilterByTypeExactly() {
+        Notification matchingNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER",
+                "order@example.com",
+                "Order notification",
+                "Order notification body.",
+                UUID.randomUUID()));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteria(null, "ORDER", null, null, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId());
+    }
+
+    @Test
     void findAllWithAdminFilters_shouldFilterByRecipientContainsIgnoreCase() {
         Notification customerNotification = notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",
