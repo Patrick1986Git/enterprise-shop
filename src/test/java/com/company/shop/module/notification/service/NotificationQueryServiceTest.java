@@ -30,6 +30,7 @@ import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
@@ -142,7 +143,9 @@ class NotificationQueryServiceTest {
                     "Timeout",
                     Boolean.TRUE,
                     2,
-                    5)))
+                    5,
+                    Instant.parse("2026-06-21T00:00:00Z"),
+                    Instant.parse("2026-06-21T23:59:59Z"))))
                     .thenReturn(specification);
 
             result = service.getNotifications(criteria(
@@ -152,7 +155,9 @@ class NotificationQueryServiceTest {
                     " Timeout ",
                     Boolean.TRUE,
                     2,
-                    5), pageable);
+                    5,
+                    Instant.parse("2026-06-21T00:00:00Z"),
+                    Instant.parse("2026-06-21T23:59:59Z")), pageable);
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(criteria(
                     NotificationStatus.PENDING,
@@ -161,7 +166,9 @@ class NotificationQueryServiceTest {
                     "Timeout",
                     Boolean.TRUE,
                     2,
-                    5)));
+                    5,
+                    Instant.parse("2026-06-21T00:00:00Z"),
+                    Instant.parse("2026-06-21T23:59:59Z"))));
         }
 
         assertThat(result.getContent()).containsExactly(response);
@@ -193,6 +200,53 @@ class NotificationQueryServiceTest {
         }
 
         assertThat(result.getContent()).isEmpty();
+        verify(notificationRepository).findAll(specification, pageable);
+        verifyNoMoreInteractions(notificationMapper);
+    }
+
+
+    @Test
+    void getNotifications_shouldRejectLastAttemptFromAfterLastAttemptTo() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(
+                criteria(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Instant.parse("2026-06-22T00:00:00Z"),
+                        Instant.parse("2026-06-21T00:00:00Z")),
+                Pageable.unpaged()))
+                .isInstanceOf(NotificationLastAttemptDateRangeInvalidException.class);
+    }
+
+    @Test
+    void getNotifications_shouldPassValidLastAttemptFiltersToSpecifications() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        Pageable pageable = PageRequest.of(0, 10);
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Instant lastAttemptFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant lastAttemptTo = Instant.parse("2026-06-21T23:59:59Z");
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    criteria(null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo)))
+                    .thenReturn(specification);
+
+            service.getNotifications(
+                    criteria(null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo), pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    criteria(null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo)));
+        }
+
         verify(notificationRepository).findAll(specification, pageable);
         verifyNoMoreInteractions(notificationMapper);
     }
@@ -232,8 +286,29 @@ class NotificationQueryServiceTest {
             Boolean requeuedOnly,
             Integer attemptsMin,
             Integer attemptsMax) {
+        return criteria(status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax, null, null);
+    }
+
+    private NotificationAdminSearchCriteria criteria(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax,
+            Instant lastAttemptFrom,
+            Instant lastAttemptTo) {
         return new NotificationAdminSearchCriteria(
-                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax);
+                status,
+                type,
+                recipient,
+                lastErrorContains,
+                requeuedOnly,
+                attemptsMin,
+                attemptsMax,
+                lastAttemptFrom,
+                lastAttemptTo);
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {

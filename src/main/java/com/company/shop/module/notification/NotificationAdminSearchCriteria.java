@@ -1,5 +1,7 @@
 package com.company.shop.module.notification;
 
+import java.time.Instant;
+
 import com.company.shop.module.notification.entity.NotificationStatus;
 
 public record NotificationAdminSearchCriteria(
@@ -9,5 +11,7 @@ public record NotificationAdminSearchCriteria(
         String lastErrorContains,
         Boolean requeuedOnly,
         Integer attemptsMin,
-        Integer attemptsMax) {
+        Integer attemptsMax,
+        Instant lastAttemptFrom,
+        Instant lastAttemptTo) {
 }

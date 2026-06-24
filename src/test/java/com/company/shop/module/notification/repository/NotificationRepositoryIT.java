@@ -673,6 +673,138 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .containsExactly(timeoutInsideRange.getId());
     }
 
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByLastAttemptFromInclusively() {
+        Instant boundary = Instant.parse("2026-06-21T00:00:00Z");
+        Notification before = notificationWithLastAttemptAt(
+                "before-last-attempt-from@example.com", boundary.minusSeconds(1), NotificationStatus.FAILED, "timeout");
+        Notification atBoundary = notificationWithLastAttemptAt(
+                "at-last-attempt-from@example.com", boundary, NotificationStatus.FAILED, "timeout");
+        Notification after = notificationWithLastAttemptAt(
+                "after-last-attempt-from@example.com", boundary.plusSeconds(1), NotificationStatus.FAILED, "timeout");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, null, null, null, null, null, null, boundary, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(atBoundary.getId(), after.getId())
+                .doesNotContain(before.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByLastAttemptToInclusively() {
+        Instant boundary = Instant.parse("2026-06-21T23:59:59Z");
+        Notification before = notificationWithLastAttemptAt(
+                "before-last-attempt-to@example.com", boundary.minusSeconds(1), NotificationStatus.FAILED, "timeout");
+        Notification atBoundary = notificationWithLastAttemptAt(
+                "at-last-attempt-to@example.com", boundary, NotificationStatus.FAILED, "timeout");
+        Notification after = notificationWithLastAttemptAt(
+                "after-last-attempt-to@example.com", boundary.plusSeconds(1), NotificationStatus.FAILED, "timeout");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, null, null, null, null, null, null, null, boundary)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(before.getId(), atBoundary.getId())
+                .doesNotContain(after.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByLastAttemptRangeAndExcludeNullLastAttemptAt() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Instant to = Instant.parse("2026-06-21T23:59:59Z");
+        Notification before = notificationWithLastAttemptAt(
+                "before-last-attempt-range@example.com", from.minusSeconds(1), NotificationStatus.FAILED, "timeout");
+        Notification inside = notificationWithLastAttemptAt(
+                "inside-last-attempt-range@example.com", from.plusSeconds(60), NotificationStatus.FAILED, "timeout");
+        Notification after = notificationWithLastAttemptAt(
+                "after-last-attempt-range@example.com", to.plusSeconds(1), NotificationStatus.FAILED, "timeout");
+        Notification nullLastAttempt = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "null-last-attempt@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, null, null, null, null, null, null, from, to)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(inside.getId())
+                .doesNotContain(before.getId(), after.getId(), nullLastAttempt.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineLastAttemptRangeWithFailedStatus() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Instant to = Instant.parse("2026-06-21T23:59:59Z");
+        Notification failedInsideRange = notificationWithLastAttemptAt(
+                "failed-last-attempt-range@example.com", from.plusSeconds(60), NotificationStatus.FAILED, "timeout");
+        Notification pendingInsideRange = notificationWithLastAttemptAt(
+                "pending-last-attempt-range@example.com", from.plusSeconds(60), NotificationStatus.PENDING, "timeout");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(NotificationStatus.FAILED, null, null, null, null, null, null, from, to)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(failedInsideRange.getId())
+                .doesNotContain(pendingInsideRange.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineLastAttemptRangeWithLastErrorContains() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Instant to = Instant.parse("2026-06-21T23:59:59Z");
+        Notification timeoutInsideRange = notificationWithLastAttemptAt(
+                "timeout-last-attempt-range@example.com", from.plusSeconds(60), NotificationStatus.FAILED, "SMTP timeout");
+        Notification authInsideRange = notificationWithLastAttemptAt(
+                "auth-last-attempt-range@example.com", from.plusSeconds(60), NotificationStatus.FAILED,
+                "SMTP authentication failed");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, null, null, "timeout", null, null, null, from, to)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(timeoutInsideRange.getId())
+                .doesNotContain(authInsideRange.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldKeepTypeExactMatchWithLastAttemptRange() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Instant to = Instant.parse("2026-06-21T23:59:59Z");
+        Notification exactType = notificationWithLastAttemptAtAndType(
+                "ORDER", "exact-type-last-attempt-range@example.com", from.plusSeconds(60));
+        Notification partialType = notificationWithLastAttemptAtAndType(
+                "ORDER_PLACED_EMAIL", "partial-type-last-attempt-range@example.com", from.plusSeconds(60));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, "ORDER", null, null, null, null, null, from, to)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(exactType.getId())
+                .doesNotContain(partialType.getId());
+    }
+
     @Test
     void countByRequeueCountGreaterThan_shouldCountNotificationsWithRequeueCountGreaterThanZero() {
         Notification neverRequeuedNotification = Notification.pending(
@@ -841,8 +973,69 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             Boolean requeuedOnly,
             Integer attemptsMin,
             Integer attemptsMax) {
+        return criteria(status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax, null, null);
+    }
+
+    private NotificationAdminSearchCriteria criteria(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax,
+            Instant lastAttemptFrom,
+            Instant lastAttemptTo) {
         return new NotificationAdminSearchCriteria(
-                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax);
+                status,
+                type,
+                recipient,
+                lastErrorContains,
+                requeuedOnly,
+                attemptsMin,
+                attemptsMax,
+                lastAttemptFrom,
+                lastAttemptTo);
+    }
+
+    private Notification notificationWithLastAttemptAt(
+            String recipient,
+            Instant lastAttemptAt,
+            NotificationStatus status,
+            String errorMessage) {
+        Notification notification = notificationWithLastAttemptAtAndType(
+                "ORDER_PLACED_EMAIL", recipient, lastAttemptAt);
+        if (status == NotificationStatus.PENDING) {
+            jdbcTemplate.update(
+                    "UPDATE notifications SET status = 'PENDING', last_error = ? WHERE id = ?",
+                    errorMessage,
+                    notification.getId());
+        } else {
+            jdbcTemplate.update(
+                    "UPDATE notifications SET status = ?, last_error = ? WHERE id = ?",
+                    status.name(),
+                    errorMessage,
+                    notification.getId());
+        }
+        entityManager.clear();
+        return notification;
+    }
+
+    private Notification notificationWithLastAttemptAtAndType(String type, String recipient, Instant lastAttemptAt) {
+        Notification notification = Notification.pending(
+                type,
+                recipient,
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        notification.markFailed("SMTP timeout");
+        Notification saved = notificationRepository.saveAndFlush(notification);
+        jdbcTemplate.update(
+                "UPDATE notifications SET last_attempt_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(lastAttemptAt),
+                saved.getId());
+        entityManager.clear();
+        return saved;
     }
 
     private Notification notificationWithAttempts(String recipient, int attempts, String errorMessage) {

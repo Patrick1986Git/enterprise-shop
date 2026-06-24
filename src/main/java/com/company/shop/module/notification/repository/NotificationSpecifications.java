@@ -50,6 +50,14 @@ public final class NotificationSpecifications {
                 predicates.add(cb.lessThanOrEqualTo(root.get("attempts"), criteria.attemptsMax()));
             }
 
+            if (criteria.lastAttemptFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptFrom()));
+            }
+
+            if (criteria.lastAttemptTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptTo()));
+            }
+
             return cb.and(predicates.toArray(Predicate[]::new));
         };
     }
