@@ -360,13 +360,25 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON));
 
+        ArgumentCaptor<NotificationAdminSearchCriteria> criteriaCaptor =
+                ArgumentCaptor.forClass(NotificationAdminSearchCriteria.class);
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        null, null, null, null, null, null, null, null, null,
-                        Instant.parse("2026-06-21T00:00:00Z"),
-                        Instant.parse("2026-06-21T23:59:59Z"))),
+                criteriaCaptor.capture(),
                 pageableCaptor.capture());
+        NotificationAdminSearchCriteria criteria = criteriaCaptor.getValue();
+        assertThat(criteria.status()).isNull();
+        assertThat(criteria.deliveryState()).isNull();
+        assertThat(criteria.type()).isNull();
+        assertThat(criteria.recipient()).isNull();
+        assertThat(criteria.lastErrorContains()).isNull();
+        assertThat(criteria.requeuedOnly()).isNull();
+        assertThat(criteria.attemptsMin()).isNull();
+        assertThat(criteria.attemptsMax()).isNull();
+        assertThat(criteria.lastAttemptFrom()).isNull();
+        assertThat(criteria.lastAttemptTo()).isNull();
+        assertThat(criteria.sentFrom()).isEqualTo(Instant.parse("2026-06-21T00:00:00Z"));
+        assertThat(criteria.sentTo()).isEqualTo(Instant.parse("2026-06-21T23:59:59Z"));
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(10);
@@ -389,12 +401,22 @@ class AdminNotificationControllerWebMvcTest {
                         .param("sentTo", "2026-06-21T23:59:59Z"))
                 .andExpect(status().isOk());
 
-        verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        NotificationStatus.SENT, null, "ORDER_PLACED_EMAIL", "customer", null, null, null, null, null,
-                        Instant.parse("2026-06-21T00:00:00Z"),
-                        Instant.parse("2026-06-21T23:59:59Z"))),
-                any(Pageable.class));
+        ArgumentCaptor<NotificationAdminSearchCriteria> criteriaCaptor =
+                ArgumentCaptor.forClass(NotificationAdminSearchCriteria.class);
+        verify(notificationQueryService).getNotifications(criteriaCaptor.capture(), any(Pageable.class));
+        NotificationAdminSearchCriteria criteria = criteriaCaptor.getValue();
+        assertThat(criteria.status()).isEqualTo(NotificationStatus.SENT);
+        assertThat(criteria.deliveryState()).isNull();
+        assertThat(criteria.type()).isEqualTo("ORDER_PLACED_EMAIL");
+        assertThat(criteria.recipient()).isEqualTo("customer");
+        assertThat(criteria.lastErrorContains()).isNull();
+        assertThat(criteria.requeuedOnly()).isNull();
+        assertThat(criteria.attemptsMin()).isNull();
+        assertThat(criteria.attemptsMax()).isNull();
+        assertThat(criteria.lastAttemptFrom()).isNull();
+        assertThat(criteria.lastAttemptTo()).isNull();
+        assertThat(criteria.sentFrom()).isEqualTo(Instant.parse("2026-06-21T00:00:00Z"));
+        assertThat(criteria.sentTo()).isEqualTo(Instant.parse("2026-06-21T23:59:59Z"));
     }
 
     @Test
