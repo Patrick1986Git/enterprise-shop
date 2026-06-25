@@ -29,7 +29,7 @@ The admin notification observability endpoints help administrators and admin UI 
 
 ## Common operational queries
 
-`GET /api/v1/admin/notifications` supports `status`, `type`, `recipient`, `requeuedOnly`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
+`GET /api/v1/admin/notifications` supports `status`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `deliveryState`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
 
@@ -48,6 +48,26 @@ GET /api/v1/admin/notifications?status=PENDING&sort=scheduledAt,asc&size=20
 ```
 
 Use this to inspect pending delivery work, including notifications that may be due soon.
+
+### Delivery state filtering
+
+Use `deliveryState=DUE_PENDING` to list the concrete pending notifications behind `duePendingCount`. Use `deliveryState=SCHEDULED_PENDING` to list the concrete pending notifications behind `scheduledPendingCount`.
+
+```http
+GET /api/v1/admin/notifications?deliveryState=DUE_PENDING
+```
+
+```http
+GET /api/v1/admin/notifications?deliveryState=SCHEDULED_PENDING
+```
+
+```http
+GET /api/v1/admin/notifications?deliveryState=DUE_PENDING&recipient=customer@example.com
+```
+
+```http
+GET /api/v1/admin/notifications?deliveryState=SCHEDULED_PENDING&type=ORDER_PLACED_EMAIL
+```
 
 ### List requeued notifications
 
