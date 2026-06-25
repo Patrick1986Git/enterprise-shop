@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.repository;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -7,7 +8,9 @@ import java.util.Locale;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.company.shop.module.notification.NotificationAdminSearchCriteria;
+import com.company.shop.module.notification.NotificationDeliveryState;
 import com.company.shop.module.notification.entity.Notification;
+import com.company.shop.module.notification.entity.NotificationStatus;
 
 import jakarta.persistence.criteria.Predicate;
 
@@ -17,11 +20,27 @@ public final class NotificationSpecifications {
     }
 
     public static Specification<Notification> adminFilters(NotificationAdminSearchCriteria criteria) {
+        return adminFilters(criteria, criteria.deliveryState() == null ? null : Instant.now());
+    }
+
+    public static Specification<Notification> adminFilters(NotificationAdminSearchCriteria criteria, Instant now) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
             if (criteria.status() != null) {
                 predicates.add(cb.equal(root.get("status"), criteria.status()));
+            }
+
+            if (criteria.deliveryState() == NotificationDeliveryState.DUE_PENDING) {
+                predicates.add(cb.equal(root.get("status"), NotificationStatus.PENDING));
+                predicates.add(cb.or(
+                        cb.isNull(root.get("nextAttemptAt")),
+                        cb.lessThanOrEqualTo(root.get("nextAttemptAt"), now)));
+            }
+
+            if (criteria.deliveryState() == NotificationDeliveryState.SCHEDULED_PENDING) {
+                predicates.add(cb.equal(root.get("status"), NotificationStatus.PENDING));
+                predicates.add(cb.greaterThan(root.get("nextAttemptAt"), now));
             }
 
             if (criteria.type() != null && !criteria.type().isBlank()) {

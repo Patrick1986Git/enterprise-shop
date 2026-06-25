@@ -35,6 +35,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.module.notification.NotificationAdminSearchCriteria;
+import com.company.shop.module.notification.NotificationDeliveryState;
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
@@ -168,6 +169,60 @@ class AdminNotificationControllerWebMvcTest {
         assertThat(pageable.getPageSize()).isEqualTo(5);
         assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
         assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+
+    @Test
+    void getNotifications_shouldPassDuePendingDeliveryStateAndPreservePageableAndSortToService() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 5), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("deliveryState", "DUE_PENDING")
+                        .param("page", "1")
+                        .param("size", "5")
+                        .param("sort", "nextAttemptAt,asc"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationQueryService).getNotifications(
+                eq(new NotificationAdminSearchCriteria(
+                        null, NotificationDeliveryState.DUE_PENDING, null, null, null, null, null, null, null, null)),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(5);
+        assertThat(pageable.getSort().getOrderFor("nextAttemptAt")).isNotNull();
+    }
+
+    @Test
+    void getNotifications_shouldCombineScheduledPendingDeliveryStateWithExistingFiltersToService() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("deliveryState", "SCHEDULED_PENDING")
+                        .param("type", "ORDER_PLACED_EMAIL")
+                        .param("recipient", "customer"))
+                .andExpect(status().isOk());
+
+        verify(notificationQueryService).getNotifications(
+                eq(new NotificationAdminSearchCriteria(
+                        null,
+                        NotificationDeliveryState.SCHEDULED_PENDING,
+                        "ORDER_PLACED_EMAIL",
+                        "customer",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null)),
+                any(Pageable.class));
     }
 
     @Test
