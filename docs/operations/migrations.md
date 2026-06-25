@@ -40,6 +40,7 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V32 | `V32__add_outbox_event_processed_at_index.sql` | Adds an outbox event index for status with processed timestamp filters. |
 | V33 | `V33__add_notification_status_attempts_index.sql` | Adds a notification index for status with attempts filters. |
 | V34 | `V34__add_notification_status_last_attempt_at_index.sql` | Adds a notification index for status with last-attempt timestamp filters. |
+| V35 | `V35__add_notification_status_sent_at_index.sql` | Adds a notification index for status with sent timestamp filters. |
 
 ## Rules for future migrations
 

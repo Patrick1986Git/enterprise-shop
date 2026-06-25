@@ -46,6 +46,7 @@ import com.company.shop.module.notification.exception.NotificationAttemptsRangeI
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
+import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
 import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
 import com.company.shop.module.notification.service.NotificationAdminCommandService;
 import com.company.shop.module.notification.service.NotificationQueryService;
@@ -340,6 +341,74 @@ class AdminNotificationControllerWebMvcTest {
                         Instant.parse("2026-06-21T00:00:00Z"),
                         Instant.parse("2026-06-21T23:59:59Z"))),
                 any(Pageable.class));
+    }
+
+
+    @Test
+    void getNotifications_shouldPassSentRangeAndPreservePageableAndSortToService() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sentFrom", "2026-06-21T00:00:00Z")
+                        .param("sentTo", "2026-06-21T23:59:59Z")
+                        .param("page", "1")
+                        .param("size", "10")
+                        .param("sort", "sentAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationQueryService).getNotifications(
+                eq(new NotificationAdminSearchCriteria(
+                        null, null, null, null, null, null, null, null, null,
+                        Instant.parse("2026-06-21T00:00:00Z"),
+                        Instant.parse("2026-06-21T23:59:59Z"))),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(10);
+        assertThat(pageable.getSort().getOrderFor("sentAt")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("sentAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getNotifications_shouldCombineSentRangeWithExistingFilters() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("status", "SENT")
+                        .param("type", "ORDER_PLACED_EMAIL")
+                        .param("recipient", "customer")
+                        .param("sentFrom", "2026-06-21T00:00:00Z")
+                        .param("sentTo", "2026-06-21T23:59:59Z"))
+                .andExpect(status().isOk());
+
+        verify(notificationQueryService).getNotifications(
+                eq(new NotificationAdminSearchCriteria(
+                        NotificationStatus.SENT, null, "ORDER_PLACED_EMAIL", "customer", null, null, null, null, null,
+                        Instant.parse("2026-06-21T00:00:00Z"),
+                        Instant.parse("2026-06-21T23:59:59Z"))),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getNotifications_shouldReturnBadRequestWhenSentRangeIsInvalid() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenThrow(new NotificationSentDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sentFrom", "2026-06-22T00:00:00Z")
+                        .param("sentTo", "2026-06-21T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_SENT_DATE_RANGE_INVALID"));
     }
 
     @Test

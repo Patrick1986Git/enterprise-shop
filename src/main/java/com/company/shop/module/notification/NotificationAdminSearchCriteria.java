@@ -14,7 +14,35 @@ public record NotificationAdminSearchCriteria(
         Integer attemptsMin,
         Integer attemptsMax,
         Instant lastAttemptFrom,
-        Instant lastAttemptTo) {
+        Instant lastAttemptTo,
+        Instant sentFrom,
+        Instant sentTo) {
+
+    public NotificationAdminSearchCriteria(
+            NotificationStatus status,
+            NotificationDeliveryState deliveryState,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly,
+            Integer attemptsMin,
+            Integer attemptsMax,
+            Instant lastAttemptFrom,
+            Instant lastAttemptTo) {
+        this(
+                status,
+                deliveryState,
+                type,
+                recipient,
+                lastErrorContains,
+                requeuedOnly,
+                attemptsMin,
+                attemptsMax,
+                lastAttemptFrom,
+                lastAttemptTo,
+                null,
+                null);
+    }
 
     public NotificationAdminSearchCriteria(
             NotificationStatus status,
@@ -36,6 +64,8 @@ public record NotificationAdminSearchCriteria(
                 attemptsMin,
                 attemptsMax,
                 lastAttemptFrom,
-                lastAttemptTo);
+                lastAttemptTo,
+                null,
+                null);
     }
 }

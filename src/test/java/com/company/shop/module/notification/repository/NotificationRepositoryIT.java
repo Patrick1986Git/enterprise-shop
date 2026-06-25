@@ -807,6 +807,127 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
 
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterBySentFromInclusively() {
+        Instant boundary = Instant.parse("2026-06-21T00:00:00Z");
+        Notification before = notificationWithSentAt("before-sent-from@example.com", boundary.minusSeconds(1), "ORDER_PLACED_EMAIL");
+        Notification atBoundary = notificationWithSentAt("at-sent-from@example.com", boundary, "ORDER_PLACED_EMAIL");
+        Notification after = notificationWithSentAt("after-sent-from@example.com", boundary.plusSeconds(1), "ORDER_PLACED_EMAIL");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(null, null, null, boundary, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(atBoundary.getId(), after.getId())
+                .doesNotContain(before.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterBySentToInclusively() {
+        Instant boundary = Instant.parse("2026-06-21T23:59:59Z");
+        Notification before = notificationWithSentAt("before-sent-to@example.com", boundary.minusSeconds(1), "ORDER_PLACED_EMAIL");
+        Notification atBoundary = notificationWithSentAt("at-sent-to@example.com", boundary, "ORDER_PLACED_EMAIL");
+        Notification after = notificationWithSentAt("after-sent-to@example.com", boundary.plusSeconds(1), "ORDER_PLACED_EMAIL");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(null, null, null, null, boundary)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(before.getId(), atBoundary.getId())
+                .doesNotContain(after.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterBySentRangeAndExcludeNullSentAt() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Instant to = Instant.parse("2026-06-21T23:59:59Z");
+        Notification before = notificationWithSentAt("before-sent-range@example.com", from.minusSeconds(1), "ORDER_PLACED_EMAIL");
+        Notification inside = notificationWithSentAt("inside-sent-range@example.com", from.plusSeconds(60), "ORDER_PLACED_EMAIL");
+        Notification after = notificationWithSentAt("after-sent-range@example.com", to.plusSeconds(1), "ORDER_PLACED_EMAIL");
+        Notification nullSentAt = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "null-sent@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(null, null, null, from, to)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(inside.getId())
+                .doesNotContain(before.getId(), after.getId(), nullSentAt.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineSentRangeWithSentStatus() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Notification sentInsideRange = notificationWithSentAt("sent-inside-range@example.com", from.plusSeconds(60), "ORDER_PLACED_EMAIL");
+        Notification pendingNullSentAt = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL", "pending@example.com", "Order placed", "Your order has been placed.", UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(NotificationStatus.SENT, null, null, from, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(sentInsideRange.getId())
+                .doesNotContain(pendingNullSentAt.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineSentRangeWithRecipient() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Notification matching = notificationWithSentAt("important.customer@example.com", from.plusSeconds(60), "ORDER_PLACED_EMAIL");
+        Notification other = notificationWithSentAt("other@example.com", from.plusSeconds(60), "ORDER_PLACED_EMAIL");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(null, null, "CUSTOMER", from, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matching.getId())
+                .doesNotContain(other.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldReturnEmptyForContradictoryFailedStatusAndSentFrom() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Notification sentInsideRange = notificationWithSentAt("sent-contradictory@example.com", from.plusSeconds(60), "ORDER_PLACED_EMAIL");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(NotificationStatus.FAILED, null, null, from, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications).isEmpty();
+        assertThat(notifications).extracting(Notification::getId).doesNotContain(sentInsideRange.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldKeepTypeExactMatchWithSentRange() {
+        Instant from = Instant.parse("2026-06-21T00:00:00Z");
+        Notification exactType = notificationWithSentAt("exact-type-sent-range@example.com", from.plusSeconds(60), "ORDER");
+        Notification partialType = notificationWithSentAt("partial-type-sent-range@example.com", from.plusSeconds(60), "ORDER_PLACED_EMAIL");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(criteriaWithSentRange(null, "ORDER", null, from, null)),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(exactType.getId())
+                .doesNotContain(partialType.getId());
+    }
+
     @Test
     void findAllWithAdminFilters_shouldFilterDuePendingDeliveryState() {
         Instant now = Instant.parse("2026-06-21T12:00:00Z");
@@ -1111,6 +1232,28 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
 
+
+    private NotificationAdminSearchCriteria criteriaWithSentRange(
+            NotificationStatus status,
+            String type,
+            String recipient,
+            Instant sentFrom,
+            Instant sentTo) {
+        return new NotificationAdminSearchCriteria(
+                status,
+                null,
+                type,
+                recipient,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                sentFrom,
+                sentTo);
+    }
+
     private Notification notificationWithNextAttemptAt(
             String type,
             String recipient,
@@ -1131,6 +1274,24 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 notification.getId());
         entityManager.clear();
         return notification;
+    }
+
+
+    private Notification notificationWithSentAt(String recipient, Instant sentAt, String type) {
+        Notification notification = Notification.pending(
+                type,
+                recipient,
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID());
+        Notification saved = notificationRepository.saveAndFlush(notification);
+        jdbcTemplate.update(
+                "UPDATE notifications SET status = 'SENT', sent_at = ?, last_attempt_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(sentAt),
+                java.sql.Timestamp.from(sentAt),
+                saved.getId());
+        entityManager.clear();
+        return saved;
     }
 
     private Notification notificationWithLastAttemptAt(

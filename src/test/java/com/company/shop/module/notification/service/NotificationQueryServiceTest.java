@@ -33,6 +33,7 @@ import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
+import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
 import com.company.shop.module.notification.repository.NotificationSpecifications;
@@ -311,6 +312,45 @@ class NotificationQueryServiceTest {
         verifyNoMoreInteractions(notificationMapper);
     }
 
+
+    @Test
+    void getNotifications_shouldRejectSentFromAfterSentTo() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(
+                criteriaWithSentRange(
+                        Instant.parse("2026-06-22T00:00:00Z"),
+                        Instant.parse("2026-06-21T00:00:00Z")),
+                Pageable.unpaged()))
+                .isInstanceOf(NotificationSentDateRangeInvalidException.class);
+    }
+
+    @Test
+    void getNotifications_shouldPassValidSentFiltersToSpecifications() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        Pageable pageable = PageRequest.of(0, 10);
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Instant sentFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant sentTo = Instant.parse("2026-06-21T23:59:59Z");
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    criteriaWithSentRange(sentFrom, sentTo)))
+                    .thenReturn(specification);
+
+            service.getNotifications(criteriaWithSentRange(sentFrom, sentTo), pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    criteriaWithSentRange(sentFrom, sentTo)));
+        }
+
+        verify(notificationRepository).findAll(specification, pageable);
+        verifyNoMoreInteractions(notificationMapper);
+    }
+
     @Test
     void getNotifications_shouldRejectNegativeAttemptsMin() {
         NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
@@ -369,6 +409,23 @@ class NotificationQueryServiceTest {
                 attemptsMax,
                 lastAttemptFrom,
                 lastAttemptTo);
+    }
+
+
+    private NotificationAdminSearchCriteria criteriaWithSentRange(Instant sentFrom, Instant sentTo) {
+        return new NotificationAdminSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                sentFrom,
+                sentTo);
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {
