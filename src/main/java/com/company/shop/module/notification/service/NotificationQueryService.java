@@ -17,6 +17,7 @@ import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
+import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
 import com.company.shop.module.notification.repository.NotificationSpecifications;
@@ -58,6 +59,7 @@ public class NotificationQueryService {
             Pageable pageable) {
         validateAttemptsRange(criteria.attemptsMin(), criteria.attemptsMax());
         validateLastAttemptDateRange(criteria.lastAttemptFrom(), criteria.lastAttemptTo());
+        validateSentDateRange(criteria.sentFrom(), criteria.sentTo());
 
         NotificationAdminSearchCriteria normalizedCriteria = new NotificationAdminSearchCriteria(
                 criteria.status(),
@@ -69,7 +71,9 @@ public class NotificationQueryService {
                 criteria.attemptsMin(),
                 criteria.attemptsMax(),
                 criteria.lastAttemptFrom(),
-                criteria.lastAttemptTo());
+                criteria.lastAttemptTo(),
+                criteria.sentFrom(),
+                criteria.sentTo());
 
         Specification<Notification> specification = normalizedCriteria.deliveryState() == null
                 ? NotificationSpecifications.adminFilters(normalizedCriteria)
@@ -79,6 +83,12 @@ public class NotificationQueryService {
                 specification,
                 pageable)
                 .map(notificationMapper::toDto);
+    }
+
+    private void validateSentDateRange(Instant sentFrom, Instant sentTo) {
+        if (sentFrom != null && sentTo != null && sentFrom.isAfter(sentTo)) {
+            throw new NotificationSentDateRangeInvalidException();
+        }
     }
 
     private void validateLastAttemptDateRange(Instant lastAttemptFrom, Instant lastAttemptTo) {

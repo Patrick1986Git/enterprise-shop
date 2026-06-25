@@ -85,6 +85,10 @@ public class AdminNotificationController {
             @RequestParam(required = false) Instant lastAttemptFrom,
             @Parameter(description = "Filter notifications whose last attempt timestamp is less than or equal to this value.")
             @RequestParam(required = false) Instant lastAttemptTo,
+            @Parameter(description = "Filter notifications whose sent timestamp is greater than or equal to this value.")
+            @RequestParam(required = false) Instant sentFrom,
+            @Parameter(description = "Filter notifications whose sent timestamp is less than or equal to this value.")
+            @RequestParam(required = false) Instant sentTo,
             @PageableDefault(size = 20) Pageable pageable) {
         NotificationAdminSearchCriteria criteria = new NotificationAdminSearchCriteria(
                 status,
@@ -96,7 +100,9 @@ public class AdminNotificationController {
                 attemptsMin,
                 attemptsMax,
                 lastAttemptFrom,
-                lastAttemptTo);
+                lastAttemptTo,
+                sentFrom,
+                sentTo);
         return PageResponseDTO.from(notificationQueryService.getNotifications(criteria, pageable));
     }
 
