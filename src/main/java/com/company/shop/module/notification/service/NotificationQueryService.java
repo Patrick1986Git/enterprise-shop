@@ -13,6 +13,7 @@ import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
 import com.company.shop.module.notification.repository.NotificationRepository;
@@ -54,6 +55,7 @@ public class NotificationQueryService {
             NotificationAdminSearchCriteria criteria,
             Pageable pageable) {
         validateAttemptsRange(criteria.attemptsMin(), criteria.attemptsMax());
+        validateLastAttemptDateRange(criteria.lastAttemptFrom(), criteria.lastAttemptTo());
 
         NotificationAdminSearchCriteria normalizedCriteria = new NotificationAdminSearchCriteria(
                 criteria.status(),
@@ -62,12 +64,20 @@ public class NotificationQueryService {
                 normalize(criteria.lastErrorContains()),
                 criteria.requeuedOnly(),
                 criteria.attemptsMin(),
-                criteria.attemptsMax());
+                criteria.attemptsMax(),
+                criteria.lastAttemptFrom(),
+                criteria.lastAttemptTo());
 
         return notificationRepository.findAll(
                 NotificationSpecifications.adminFilters(normalizedCriteria),
                 pageable)
                 .map(notificationMapper::toDto);
+    }
+
+    private void validateLastAttemptDateRange(Instant lastAttemptFrom, Instant lastAttemptTo) {
+        if (lastAttemptFrom != null && lastAttemptTo != null && lastAttemptFrom.isAfter(lastAttemptTo)) {
+            throw new NotificationLastAttemptDateRangeInvalidException();
+        }
     }
 
     private void validateAttemptsRange(Integer attemptsMin, Integer attemptsMax) {

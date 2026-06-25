@@ -109,7 +109,7 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                 String.class);
 
         assertThat(indexNames)
-                .contains("idx_notifications_status_attempts");
+                .contains("idx_notifications_status_attempts", "idx_notifications_status_last_attempt_at");
     }
 
     @Configuration(proxyBeanMethods = false)

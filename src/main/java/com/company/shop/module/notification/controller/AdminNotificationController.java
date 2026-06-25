@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.controller;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.data.domain.Pageable;
@@ -75,9 +76,21 @@ public class AdminNotificationController {
             @RequestParam(required = false) Integer attemptsMin,
             @Parameter(description = "Filter notifications with attempts less than or equal to this value.")
             @RequestParam(required = false) Integer attemptsMax,
+            @Parameter(description = "Filter notifications whose last attempt timestamp is greater than or equal to this value.")
+            @RequestParam(required = false) Instant lastAttemptFrom,
+            @Parameter(description = "Filter notifications whose last attempt timestamp is less than or equal to this value.")
+            @RequestParam(required = false) Instant lastAttemptTo,
             @PageableDefault(size = 20) Pageable pageable) {
         NotificationAdminSearchCriteria criteria = new NotificationAdminSearchCriteria(
-                status, type, recipient, lastErrorContains, requeuedOnly, attemptsMin, attemptsMax);
+                status,
+                type,
+                recipient,
+                lastErrorContains,
+                requeuedOnly,
+                attemptsMin,
+                attemptsMax,
+                lastAttemptFrom,
+                lastAttemptTo);
         return PageResponseDTO.from(notificationQueryService.getNotifications(criteria, pageable));
     }
 

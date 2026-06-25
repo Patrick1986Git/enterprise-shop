@@ -42,6 +42,7 @@ import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationActionLogDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
 import com.company.shop.module.notification.service.NotificationAdminActionLogQueryService;
@@ -132,7 +133,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.size").value(20));
 
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(null, null, null, null, null, null, null)),
+                eq(new NotificationAdminSearchCriteria(null, null, null, null, null, null, null, null, null)),
                 any(Pageable.class));
     }
 
@@ -160,7 +161,7 @@ class AdminNotificationControllerWebMvcTest {
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
                 eq(new NotificationAdminSearchCriteria(
-                        NotificationStatus.FAILED, "ORDER_PLACED_EMAIL", "customer", "timeout", null, null, null)),
+                        NotificationStatus.FAILED, "ORDER_PLACED_EMAIL", "customer", "timeout", null, null, null, null, null)),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
@@ -183,7 +184,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content").isArray());
 
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(null, null, null, null, Boolean.TRUE, null, null)),
+                eq(new NotificationAdminSearchCriteria(null, null, null, null, Boolean.TRUE, null, null, null, null)),
                 any(Pageable.class));
     }
 
@@ -208,12 +209,96 @@ class AdminNotificationControllerWebMvcTest {
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
                 eq(new NotificationAdminSearchCriteria(
-                        NotificationStatus.FAILED, null, null, "timeout", null, 2, 5)),
+                        NotificationStatus.FAILED, null, null, "timeout", null, 2, 5, null, null)),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
         assertThat(pageable.getPageSize()).isEqualTo(10);
         assertThat(pageable.getSort().getOrderFor("attempts")).isNotNull();
+    }
+
+
+    @Test
+    void getNotifications_shouldPassLastAttemptRangeAndPreservePageableAndSortToService() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("lastAttemptFrom", "2026-06-21T00:00:00Z")
+                        .param("lastAttemptTo", "2026-06-21T23:59:59Z")
+                        .param("page", "1")
+                        .param("size", "10")
+                        .param("sort", "lastAttemptAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationQueryService).getNotifications(
+                eq(new NotificationAdminSearchCriteria(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Instant.parse("2026-06-21T00:00:00Z"),
+                        Instant.parse("2026-06-21T23:59:59Z"))),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(10);
+        assertThat(pageable.getSort().getOrderFor("lastAttemptAt")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("lastAttemptAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getNotifications_shouldCombineLastAttemptRangeWithExistingFilters() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("status", "FAILED")
+                        .param("type", "ORDER_PLACED_EMAIL")
+                        .param("recipient", "customer")
+                        .param("lastErrorContains", "timeout")
+                        .param("requeuedOnly", "true")
+                        .param("attemptsMin", "2")
+                        .param("attemptsMax", "5")
+                        .param("lastAttemptFrom", "2026-06-21T00:00:00Z")
+                        .param("lastAttemptTo", "2026-06-21T23:59:59Z"))
+                .andExpect(status().isOk());
+
+        verify(notificationQueryService).getNotifications(
+                eq(new NotificationAdminSearchCriteria(
+                        NotificationStatus.FAILED,
+                        "ORDER_PLACED_EMAIL",
+                        "customer",
+                        "timeout",
+                        Boolean.TRUE,
+                        2,
+                        5,
+                        Instant.parse("2026-06-21T00:00:00Z"),
+                        Instant.parse("2026-06-21T23:59:59Z"))),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getNotifications_shouldReturnBadRequestWhenLastAttemptRangeIsInvalid() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenThrow(new NotificationLastAttemptDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("lastAttemptFrom", "2026-06-22T00:00:00Z")
+                        .param("lastAttemptTo", "2026-06-21T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_LAST_ATTEMPT_DATE_RANGE_INVALID"));
     }
 
     @Test
