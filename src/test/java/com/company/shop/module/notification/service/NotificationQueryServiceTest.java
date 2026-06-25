@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import com.company.shop.module.notification.NotificationAdminSearchCriteria;
+import com.company.shop.module.notification.NotificationDeliveryState;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
@@ -204,6 +205,65 @@ class NotificationQueryServiceTest {
         verifyNoMoreInteractions(notificationMapper);
     }
 
+
+
+    @Test
+    void getNotifications_shouldPassDeliveryStateCriteriaToSpecificationsWithNow() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        Pageable pageable = PageRequest.of(0, 10);
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    org.mockito.Mockito.eq(new NotificationAdminSearchCriteria(
+                            null,
+                            NotificationDeliveryState.DUE_PENDING,
+                            "ORDER_PLACED_EMAIL",
+                            "customer",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null)),
+                    org.mockito.Mockito.any(Instant.class)))
+                    .thenReturn(specification);
+
+            service.getNotifications(
+                    new NotificationAdminSearchCriteria(
+                            null,
+                            NotificationDeliveryState.DUE_PENDING,
+                            " ORDER_PLACED_EMAIL ",
+                            " customer ",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
+                    pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    org.mockito.Mockito.eq(new NotificationAdminSearchCriteria(
+                            null,
+                            NotificationDeliveryState.DUE_PENDING,
+                            "ORDER_PLACED_EMAIL",
+                            "customer",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null)),
+                    org.mockito.Mockito.any(Instant.class)));
+        }
+
+        verify(notificationRepository).findAll(specification, pageable);
+        verifyNoMoreInteractions(notificationMapper);
+    }
 
     @Test
     void getNotifications_shouldRejectLastAttemptFromAfterLastAttemptTo() {

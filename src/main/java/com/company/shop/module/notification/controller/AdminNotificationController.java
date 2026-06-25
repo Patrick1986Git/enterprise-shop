@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.notification.NotificationAdminSearchCriteria;
+import com.company.shop.module.notification.NotificationDeliveryState;
 import com.company.shop.module.notification.dto.NotificationAdminActionLogResponseDTO;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
@@ -63,6 +64,10 @@ public class AdminNotificationController {
     public PageResponseDTO<NotificationResponseDTO> getNotifications(
             @Parameter(description = "Filter by notification delivery status.")
             @RequestParam(required = false) NotificationStatus status,
+            @Parameter(description = "Filter by pending delivery state. DUE_PENDING means PENDING notifications due now, "
+                    + "with nextAttemptAt null or nextAttemptAt less than or equal to now. SCHEDULED_PENDING means "
+                    + "PENDING notifications scheduled for later, with nextAttemptAt greater than now.")
+            @RequestParam(required = false) NotificationDeliveryState deliveryState,
             @Parameter(description = "Filter by notification type, such as the logical notification category.")
             @RequestParam(required = false) String type,
             @Parameter(description = "Filter by recipient address or identifier.")
@@ -83,6 +88,7 @@ public class AdminNotificationController {
             @PageableDefault(size = 20) Pageable pageable) {
         NotificationAdminSearchCriteria criteria = new NotificationAdminSearchCriteria(
                 status,
+                deliveryState,
                 type,
                 recipient,
                 lastErrorContains,

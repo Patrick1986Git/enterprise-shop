@@ -23,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.company.shop.module.notification.NotificationAdminSearchCriteria;
+import com.company.shop.module.notification.NotificationDeliveryState;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.persistence.support.PostgresContainerSupport;
@@ -805,6 +806,96 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 .doesNotContain(partialType.getId());
     }
 
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterDuePendingDeliveryState() {
+        Instant now = Instant.parse("2026-06-21T12:00:00Z");
+        Notification nullNextAttempt = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "null-next-attempt@example.com", null, NotificationStatus.PENDING);
+        Notification dueAtBoundary = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "due-at-boundary@example.com", now, NotificationStatus.PENDING);
+        Notification dueBefore = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "due-before@example.com", now.minusSeconds(1), NotificationStatus.PENDING);
+        Notification scheduled = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "scheduled@example.com", now.plusSeconds(1), NotificationStatus.PENDING);
+        Notification sentDue = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "sent-due@example.com", now.minusSeconds(1), NotificationStatus.SENT);
+        Notification failedDue = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "failed-due@example.com", now.minusSeconds(1), NotificationStatus.FAILED);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, NotificationDeliveryState.DUE_PENDING, null, null, null, null), now),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(nullNextAttempt.getId(), dueAtBoundary.getId(), dueBefore.getId())
+                .doesNotContain(scheduled.getId(), sentDue.getId(), failedDue.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterScheduledPendingDeliveryState() {
+        Instant now = Instant.parse("2026-06-21T12:00:00Z");
+        Notification scheduled = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "scheduled@example.com", now.plusSeconds(1), NotificationStatus.PENDING);
+        Notification nullNextAttempt = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "null-next-attempt@example.com", null, NotificationStatus.PENDING);
+        Notification dueAtBoundary = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "due-at-boundary@example.com", now, NotificationStatus.PENDING);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, NotificationDeliveryState.SCHEDULED_PENDING, null, null, null, null), now),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(scheduled.getId())
+                .doesNotContain(nullNextAttempt.getId(), dueAtBoundary.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineDeliveryStateWithRecipientAndType() {
+        Instant now = Instant.parse("2026-06-21T12:00:00Z");
+        Notification matching = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "important.customer@example.com", now.plusSeconds(1), NotificationStatus.PENDING);
+        Notification differentRecipient = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "other@example.com", now.plusSeconds(1), NotificationStatus.PENDING);
+        Notification differentType = notificationWithNextAttemptAt(
+                "PASSWORD_RESET_EMAIL", "important.customer@example.com", now.plusSeconds(1), NotificationStatus.PENDING);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(null, NotificationDeliveryState.SCHEDULED_PENDING, "ORDER_PLACED_EMAIL", "CUSTOMER", null, null), now),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matching.getId())
+                .doesNotContain(differentRecipient.getId(), differentType.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldReturnEmptyForContradictoryStatusAndDeliveryState() {
+        Instant now = Instant.parse("2026-06-21T12:00:00Z");
+        Notification duePending = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "due@example.com", now.minusSeconds(1), NotificationStatus.PENDING);
+        Notification sentDue = notificationWithNextAttemptAt(
+                "ORDER_PLACED_EMAIL", "sent-due@example.com", now.minusSeconds(1), NotificationStatus.SENT);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(
+                        criteria(NotificationStatus.SENT, NotificationDeliveryState.DUE_PENDING, null, null, null, null), now),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .isEmpty();
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .doesNotContain(duePending.getId(), sentDue.getId());
+    }
+
     @Test
     void countByRequeueCountGreaterThan_shouldCountNotificationsWithRequeueCountGreaterThanZero() {
         Notification neverRequeuedNotification = Notification.pending(
@@ -956,6 +1047,27 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         });
     }
 
+
+    private NotificationAdminSearchCriteria criteria(
+            NotificationStatus status,
+            NotificationDeliveryState deliveryState,
+            String type,
+            String recipient,
+            String lastErrorContains,
+            Boolean requeuedOnly) {
+        return new NotificationAdminSearchCriteria(
+                status,
+                deliveryState,
+                type,
+                recipient,
+                lastErrorContains,
+                requeuedOnly,
+                null,
+                null,
+                null,
+                null);
+    }
+
     private NotificationAdminSearchCriteria criteria(
             NotificationStatus status,
             String type,
@@ -996,6 +1108,29 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 attemptsMax,
                 lastAttemptFrom,
                 lastAttemptTo);
+    }
+
+
+    private Notification notificationWithNextAttemptAt(
+            String type,
+            String recipient,
+            Instant nextAttemptAt,
+            NotificationStatus status) {
+        Notification notification = notificationRepository.saveAndFlush(Notification.pending(
+                type,
+                recipient,
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+        jdbcTemplate.update(
+                "UPDATE notifications SET status = ?, sent_at = ?, last_error = ?, next_attempt_at = ? WHERE id = ?",
+                status.name(),
+                status == NotificationStatus.SENT ? java.sql.Timestamp.from(Instant.parse("2026-06-21T12:01:00Z")) : null,
+                status == NotificationStatus.FAILED ? "delivery failed" : null,
+                nextAttemptAt == null ? null : java.sql.Timestamp.from(nextAttemptAt),
+                notification.getId());
+        entityManager.clear();
+        return notification;
     }
 
     private Notification notificationWithLastAttemptAt(

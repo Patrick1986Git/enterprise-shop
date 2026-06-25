@@ -5,12 +5,14 @@ import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.company.shop.module.notification.NotificationAdminSearchCriteria;
 import com.company.shop.module.notification.dto.NotificationResponseDTO;
 import com.company.shop.module.notification.dto.NotificationSummaryDTO;
+import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
@@ -59,6 +61,7 @@ public class NotificationQueryService {
 
         NotificationAdminSearchCriteria normalizedCriteria = new NotificationAdminSearchCriteria(
                 criteria.status(),
+                criteria.deliveryState(),
                 normalize(criteria.type()),
                 normalize(criteria.recipient()),
                 normalize(criteria.lastErrorContains()),
@@ -68,8 +71,12 @@ public class NotificationQueryService {
                 criteria.lastAttemptFrom(),
                 criteria.lastAttemptTo());
 
+        Specification<Notification> specification = normalizedCriteria.deliveryState() == null
+                ? NotificationSpecifications.adminFilters(normalizedCriteria)
+                : NotificationSpecifications.adminFilters(normalizedCriteria, Instant.now());
+
         return notificationRepository.findAll(
-                NotificationSpecifications.adminFilters(normalizedCriteria),
+                specification,
                 pageable)
                 .map(notificationMapper::toDto);
     }
