@@ -74,7 +74,7 @@ jobs:
 
     steps:
       - name: Download static API docs site
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: api-docs-site
           path: target/generated-docs/site
