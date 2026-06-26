@@ -29,7 +29,7 @@ The admin notification observability endpoints help administrators and admin UI 
 
 ## Common operational queries
 
-`GET /api/v1/admin/notifications` supports `status`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `deliveryState`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
+`GET /api/v1/admin/notifications` supports `status`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `sentFrom`, `sentTo`, `deliveryState`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
 
@@ -67,6 +67,22 @@ GET /api/v1/admin/notifications?deliveryState=DUE_PENDING&recipient=customer@exa
 
 ```http
 GET /api/v1/admin/notifications?deliveryState=SCHEDULED_PENDING&type=ORDER_PLACED_EMAIL
+```
+
+### Sent date filtering
+
+Use `sentFrom` and `sentTo` to filter by `sentAt`: `sentFrom` matches notifications sent at or after the timestamp, and `sentTo` matches notifications sent at or before the timestamp. These filters are useful when listing sent notifications during a specific operational time window, are most useful with `status=SENT`, and can be combined with `recipient`, `type`, pagination, and sorting.
+
+```http
+GET /api/v1/admin/notifications?status=SENT&sentFrom=2026-06-21T00:00:00Z&sentTo=2026-06-21T23:59:59Z
+```
+
+```http
+GET /api/v1/admin/notifications?status=SENT&recipient=customer@example.com&sentFrom=2026-06-21T00:00:00Z
+```
+
+```http
+GET /api/v1/admin/notifications?status=SENT&type=ORDER_PLACED_EMAIL&sentFrom=2026-06-21T00:00:00Z&sentTo=2026-06-21T23:59:59Z
 ```
 
 ### List requeued notifications
