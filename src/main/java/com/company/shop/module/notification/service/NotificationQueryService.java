@@ -15,6 +15,7 @@ import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationCreatedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
@@ -59,6 +60,7 @@ public class NotificationQueryService {
             Pageable pageable) {
         validateAttemptsRange(criteria.attemptsMin(), criteria.attemptsMax());
         validateLastAttemptDateRange(criteria.lastAttemptFrom(), criteria.lastAttemptTo());
+        validateCreatedDateRange(criteria.createdFrom(), criteria.createdTo());
         validateSentDateRange(criteria.sentFrom(), criteria.sentTo());
 
         NotificationAdminSearchCriteria normalizedCriteria = NotificationAdminSearchCriteria.builder()
@@ -73,6 +75,8 @@ public class NotificationQueryService {
                 .attemptsMax(criteria.attemptsMax())
                 .lastAttemptFrom(criteria.lastAttemptFrom())
                 .lastAttemptTo(criteria.lastAttemptTo())
+                .createdFrom(criteria.createdFrom())
+                .createdTo(criteria.createdTo())
                 .sentFrom(criteria.sentFrom())
                 .sentTo(criteria.sentTo())
                 .build();
@@ -85,6 +89,12 @@ public class NotificationQueryService {
                 specification,
                 pageable)
                 .map(notificationMapper::toDto);
+    }
+
+    private void validateCreatedDateRange(Instant createdFrom, Instant createdTo) {
+        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
+            throw new NotificationCreatedDateRangeInvalidException();
+        }
     }
 
     private void validateSentDateRange(Instant sentFrom, Instant sentTo) {

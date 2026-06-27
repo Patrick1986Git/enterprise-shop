@@ -43,6 +43,7 @@ import com.company.shop.module.notification.entity.NotificationAdminActionType;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationActionLogDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationCreatedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationRequeueNotAllowedException;
@@ -404,6 +405,79 @@ class AdminNotificationControllerWebMvcTest {
                         .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
                         .build()),
                 any(Pageable.class));
+    }
+
+    @Test
+    void getNotifications_shouldPassCreatedRangeAndPreservePageableAndSortToService() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("createdFrom", "2026-06-21T00:00:00Z")
+                        .param("createdTo", "2026-06-21T23:59:59Z")
+                        .param("page", "1")
+                        .param("size", "10")
+                        .param("sort", "createdAt,desc"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON));
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationQueryService).getNotifications(
+                eq(NotificationAdminSearchCriteria.builder()
+                        .createdFrom(Instant.parse("2026-06-21T00:00:00Z"))
+                        .createdTo(Instant.parse("2026-06-21T23:59:59Z"))
+                        .build()),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(10);
+        assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getNotifications_shouldCombineCreatedRangeWithExistingFilters() throws Exception {
+        UUID sourceEventId = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("status", "FAILED")
+                        .param("sourceEventId", sourceEventId.toString())
+                        .param("type", "ORDER_PLACED_EMAIL")
+                        .param("recipient", "customer")
+                        .param("createdFrom", "2026-06-21T00:00:00Z")
+                        .param("createdTo", "2026-06-21T23:59:59Z"))
+                .andExpect(status().isOk());
+
+        verify(notificationQueryService).getNotifications(
+                eq(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.FAILED)
+                        .sourceEventId(sourceEventId)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .createdFrom(Instant.parse("2026-06-21T00:00:00Z"))
+                        .createdTo(Instant.parse("2026-06-21T23:59:59Z"))
+                        .build()),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getNotifications_shouldReturnBadRequestWhenCreatedRangeIsInvalid() throws Exception {
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenThrow(new NotificationCreatedDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("createdFrom", "2026-06-22T00:00:00Z")
+                        .param("createdTo", "2026-06-21T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_CREATED_DATE_RANGE_INVALID"));
     }
 
 

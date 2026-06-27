@@ -472,6 +472,103 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedFromInclusively() {
+        Instant createdFrom = Instant.parse("2026-06-21T12:00:00Z");
+        UUID beforeId = UUID.randomUUID();
+        UUID boundaryId = UUID.randomUUID();
+        UUID afterId = UUID.randomUUID();
+        insertNotification(beforeId, NotificationStatus.PENDING, createdFrom.minusSeconds(1), null);
+        insertNotification(boundaryId, NotificationStatus.PENDING, createdFrom, null);
+        insertNotification(afterId, NotificationStatus.PENDING, createdFrom.plusSeconds(1), null);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .createdFrom(createdFrom)
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(boundaryId, afterId);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedToInclusively() {
+        Instant createdTo = Instant.parse("2026-06-21T12:00:00Z");
+        UUID beforeId = UUID.randomUUID();
+        UUID boundaryId = UUID.randomUUID();
+        UUID afterId = UUID.randomUUID();
+        insertNotification(beforeId, NotificationStatus.PENDING, createdTo.minusSeconds(1), null);
+        insertNotification(boundaryId, NotificationStatus.PENDING, createdTo, null);
+        insertNotification(afterId, NotificationStatus.PENDING, createdTo.plusSeconds(1), null);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .createdTo(createdTo)
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactlyInAnyOrder(beforeId, boundaryId);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByCreatedRangeAndCombineWithStatus() {
+        Instant createdFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-06-21T23:59:59Z");
+        UUID matchingId = UUID.randomUUID();
+        UUID wrongStatusId = UUID.randomUUID();
+        UUID outsideRangeId = UUID.randomUUID();
+        insertNotification(matchingId, NotificationStatus.FAILED, createdFrom.plusSeconds(60), null);
+        insertNotification(wrongStatusId, NotificationStatus.PENDING, createdFrom.plusSeconds(60), null);
+        insertNotification(outsideRangeId, NotificationStatus.FAILED, createdFrom.minusSeconds(60), null);
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.FAILED)
+                        .createdFrom(createdFrom)
+                        .createdTo(createdTo)
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingId);
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineCreatedRangeWithSourceEventIdRecipientAndType() {
+        UUID sourceEventId = UUID.randomUUID();
+        Notification matchingNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                sourceEventId));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "PASSWORD_RESET_EMAIL",
+                "Important.Customer@example.com",
+                "Password reset",
+                "Reset your password.",
+                sourceEventId));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .sourceEventId(sourceEventId)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .createdFrom(matchingNotification.getCreatedAt())
+                        .createdTo(matchingNotification.getCreatedAt().plusSeconds(60))
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId());
+    }
+
+    @Test
     void findAllWithAdminFilters_shouldFilterByRecipientContainsIgnoreCase() {
         Notification customerNotification = notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",
