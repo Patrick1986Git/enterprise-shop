@@ -135,42 +135,40 @@ class NotificationQueryServiceTest {
                 .thenReturn(new PageImpl<>(List.of(notification), pageable, 1));
         when(notificationMapper.toDto(notification)).thenReturn(response);
 
+        NotificationAdminSearchCriteria normalizedCriteria = NotificationAdminSearchCriteria.builder()
+                .status(NotificationStatus.PENDING)
+                .sourceEventId(sourceEventId)
+                .type("ORDER_PLACED_EMAIL")
+                .recipient("CUSTOMER")
+                .lastErrorContains("Timeout")
+                .requeuedOnly(Boolean.TRUE)
+                .attemptsMin(2)
+                .attemptsMax(5)
+                .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
+                .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                .build();
+        NotificationAdminSearchCriteria inputCriteria = NotificationAdminSearchCriteria.builder()
+                .status(NotificationStatus.PENDING)
+                .sourceEventId(sourceEventId)
+                .type(" ORDER_PLACED_EMAIL ")
+                .recipient(" CUSTOMER ")
+                .lastErrorContains(" Timeout ")
+                .requeuedOnly(Boolean.TRUE)
+                .attemptsMin(2)
+                .attemptsMax(5)
+                .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
+                .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                .build();
+
         Page<NotificationResponseDTO> result;
         try (MockedStatic<NotificationSpecifications> notificationSpecifications =
                 org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
-            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(criteria(
-                    NotificationStatus.PENDING,
-                    "ORDER_PLACED_EMAIL",
-                    "CUSTOMER",
-                    "Timeout",
-                    Boolean.TRUE,
-                    2,
-                    5,
-                    Instant.parse("2026-06-21T00:00:00Z"),
-                    Instant.parse("2026-06-21T23:59:59Z"))))
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(normalizedCriteria))
                     .thenReturn(specification);
 
-            result = service.getNotifications(criteria(
-                    NotificationStatus.PENDING,
-                    " ORDER_PLACED_EMAIL ",
-                    " CUSTOMER ",
-                    " Timeout ",
-                    Boolean.TRUE,
-                    2,
-                    5,
-                    Instant.parse("2026-06-21T00:00:00Z"),
-                    Instant.parse("2026-06-21T23:59:59Z")), pageable);
+            result = service.getNotifications(inputCriteria, pageable);
 
-            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(criteria(
-                    NotificationStatus.PENDING,
-                    "ORDER_PLACED_EMAIL",
-                    "CUSTOMER",
-                    "Timeout",
-                    Boolean.TRUE,
-                    2,
-                    5,
-                    Instant.parse("2026-06-21T00:00:00Z"),
-                    Instant.parse("2026-06-21T23:59:59Z"))));
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(normalizedCriteria));
         }
 
         assertThat(result.getContent()).containsExactly(response);

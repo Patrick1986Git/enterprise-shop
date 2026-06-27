@@ -380,6 +380,98 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findAllWithAdminFilters_shouldFilterBySourceEventId() {
+        UUID matchingSourceEventId = UUID.randomUUID();
+        Notification matchingNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "matching@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                matchingSourceEventId));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "different@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "null-source@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                null));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .sourceEventId(matchingSourceEventId)
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineSourceEventIdWithStatus() {
+        UUID sourceEventId = UUID.randomUUID();
+        Notification matchingNotification = Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "sent@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                sourceEventId);
+        matchingNotification.markSent();
+        notificationRepository.saveAndFlush(matchingNotification);
+        notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "pending@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.SENT)
+                        .sourceEventId(sourceEventId)
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineSourceEventIdWithRecipientAndType() {
+        UUID sourceEventId = UUID.randomUUID();
+        Notification matchingNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                sourceEventId));
+        notificationRepository.saveAndFlush(Notification.pending(
+                "PASSWORD_RESET_EMAIL",
+                "Important.Customer@example.com",
+                "Password reset",
+                "Reset your password.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .sourceEventId(sourceEventId)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId());
+    }
+
+    @Test
     void findAllWithAdminFilters_shouldFilterByRecipientContainsIgnoreCase() {
         Notification customerNotification = notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",

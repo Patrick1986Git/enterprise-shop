@@ -1,12 +1,14 @@
 package com.company.shop.module.notification;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import com.company.shop.module.notification.entity.NotificationStatus;
 
 public record NotificationAdminSearchCriteria(
         NotificationStatus status,
         NotificationDeliveryState deliveryState,
+        UUID sourceEventId,
         String type,
         String recipient,
         String lastErrorContains,
@@ -18,57 +20,6 @@ public record NotificationAdminSearchCriteria(
         Instant sentFrom,
         Instant sentTo) {
 
-    public NotificationAdminSearchCriteria(
-            NotificationStatus status,
-            NotificationDeliveryState deliveryState,
-            String type,
-            String recipient,
-            String lastErrorContains,
-            Boolean requeuedOnly,
-            Integer attemptsMin,
-            Integer attemptsMax,
-            Instant lastAttemptFrom,
-            Instant lastAttemptTo) {
-        this(
-                status,
-                deliveryState,
-                type,
-                recipient,
-                lastErrorContains,
-                requeuedOnly,
-                attemptsMin,
-                attemptsMax,
-                lastAttemptFrom,
-                lastAttemptTo,
-                null,
-                null);
-    }
-
-    public NotificationAdminSearchCriteria(
-            NotificationStatus status,
-            String type,
-            String recipient,
-            String lastErrorContains,
-            Boolean requeuedOnly,
-            Integer attemptsMin,
-            Integer attemptsMax,
-            Instant lastAttemptFrom,
-            Instant lastAttemptTo) {
-        this(
-                status,
-                null,
-                type,
-                recipient,
-                lastErrorContains,
-                requeuedOnly,
-                attemptsMin,
-                attemptsMax,
-                lastAttemptFrom,
-                lastAttemptTo,
-                null,
-                null);
-    }
-
     public static Builder builder() {
         return new Builder();
     }
@@ -77,6 +28,7 @@ public record NotificationAdminSearchCriteria(
 
         private NotificationStatus status;
         private NotificationDeliveryState deliveryState;
+        private UUID sourceEventId;
         private String type;
         private String recipient;
         private String lastErrorContains;
@@ -98,6 +50,11 @@ public record NotificationAdminSearchCriteria(
 
         public Builder deliveryState(NotificationDeliveryState deliveryState) {
             this.deliveryState = deliveryState;
+            return this;
+        }
+
+        public Builder sourceEventId(UUID sourceEventId) {
+            this.sourceEventId = sourceEventId;
             return this;
         }
 
@@ -155,6 +112,7 @@ public record NotificationAdminSearchCriteria(
             return new NotificationAdminSearchCriteria(
                     status,
                     deliveryState,
+                    sourceEventId,
                     type,
                     recipient,
                     lastErrorContains,
