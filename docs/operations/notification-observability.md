@@ -29,7 +29,7 @@ The admin notification observability endpoints help administrators and admin UI 
 
 ## Common operational queries
 
-`GET /api/v1/admin/notifications` supports `status`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `sentFrom`, `sentTo`, `deliveryState`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
+`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `sentFrom`, `sentTo`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
 
@@ -83,6 +83,22 @@ GET /api/v1/admin/notifications?status=SENT&recipient=customer@example.com&sentF
 
 ```http
 GET /api/v1/admin/notifications?status=SENT&type=ORDER_PLACED_EMAIL&sentFrom=2026-06-21T00:00:00Z&sentTo=2026-06-21T23:59:59Z
+```
+
+### Source event filtering
+
+`sourceEventId` links a notification to its source outbox event. Use it to move from outbox observability to notification observability when investigating the notification produced from a specific event. The filter is an exact UUID match and can be combined with `status`, `recipient`, `type`, pagination, and sorting.
+
+```http
+GET /api/v1/admin/notifications?sourceEventId=66666666-6666-6666-6666-666666666666
+```
+
+```http
+GET /api/v1/admin/notifications?sourceEventId=66666666-6666-6666-6666-666666666666&status=FAILED
+```
+
+```http
+GET /api/v1/admin/notifications?sourceEventId=66666666-6666-6666-6666-666666666666&type=ORDER_PLACED_EMAIL
 ```
 
 ### List requeued notifications
