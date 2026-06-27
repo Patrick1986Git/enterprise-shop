@@ -81,6 +81,14 @@ public final class NotificationSpecifications {
                 predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptTo()));
             }
 
+            if (criteria.createdFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), criteria.createdFrom()));
+            }
+
+            if (criteria.createdTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), criteria.createdTo()));
+            }
+
             if (criteria.sentFrom() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("sentAt"), criteria.sentFrom()));
             }

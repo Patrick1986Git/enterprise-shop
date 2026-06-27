@@ -31,6 +31,7 @@ import com.company.shop.module.notification.dto.NotificationSummaryDTO;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationCreatedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
@@ -146,6 +147,8 @@ class NotificationQueryServiceTest {
                 .attemptsMax(5)
                 .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
                 .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                .createdFrom(Instant.parse("2026-06-20T00:00:00Z"))
+                .createdTo(Instant.parse("2026-06-22T00:00:00Z"))
                 .build();
         NotificationAdminSearchCriteria inputCriteria = NotificationAdminSearchCriteria.builder()
                 .status(NotificationStatus.PENDING)
@@ -158,6 +161,8 @@ class NotificationQueryServiceTest {
                 .attemptsMax(5)
                 .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
                 .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                .createdFrom(Instant.parse("2026-06-20T00:00:00Z"))
+                .createdTo(Instant.parse("2026-06-22T00:00:00Z"))
                 .build();
 
         Page<NotificationResponseDTO> result;
@@ -292,6 +297,44 @@ class NotificationQueryServiceTest {
         verifyNoMoreInteractions(notificationMapper);
     }
 
+    @Test
+    void getNotifications_shouldRejectCreatedFromAfterCreatedTo() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(
+                criteriaWithCreatedRange(
+                        Instant.parse("2026-06-22T00:00:00Z"),
+                        Instant.parse("2026-06-21T00:00:00Z")),
+                Pageable.unpaged()))
+                .isInstanceOf(NotificationCreatedDateRangeInvalidException.class);
+    }
+
+    @Test
+    void getNotifications_shouldPassValidCreatedFiltersToSpecifications() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        Pageable pageable = PageRequest.of(0, 10);
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Instant createdFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-06-21T23:59:59Z");
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    criteriaWithCreatedRange(createdFrom, createdTo)))
+                    .thenReturn(specification);
+
+            service.getNotifications(criteriaWithCreatedRange(createdFrom, createdTo), pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    criteriaWithCreatedRange(createdFrom, createdTo)));
+        }
+
+        verify(notificationRepository).findAll(specification, pageable);
+        verifyNoMoreInteractions(notificationMapper);
+    }
+
 
     @Test
     void getNotifications_shouldRejectSentFromAfterSentTo() {
@@ -392,6 +435,13 @@ class NotificationQueryServiceTest {
                 .build();
     }
 
+
+    private NotificationAdminSearchCriteria criteriaWithCreatedRange(Instant createdFrom, Instant createdTo) {
+        return NotificationAdminSearchCriteria.builder()
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .build();
+    }
 
     private NotificationAdminSearchCriteria criteriaWithSentRange(Instant sentFrom, Instant sentTo) {
         return NotificationAdminSearchCriteria.builder()

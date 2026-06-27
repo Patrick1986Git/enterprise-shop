@@ -87,6 +87,10 @@ public class AdminNotificationController {
             @RequestParam(required = false) Instant lastAttemptFrom,
             @Parameter(description = "Filter notifications whose last attempt timestamp is less than or equal to this value.")
             @RequestParam(required = false) Instant lastAttemptTo,
+            @Parameter(description = "Filter notifications whose creation timestamp is greater than or equal to this value.")
+            @RequestParam(required = false) Instant createdFrom,
+            @Parameter(description = "Filter notifications whose creation timestamp is less than or equal to this value.")
+            @RequestParam(required = false) Instant createdTo,
             @Parameter(description = "Filter notifications whose sent timestamp is greater than or equal to this value.")
             @RequestParam(required = false) Instant sentFrom,
             @Parameter(description = "Filter notifications whose sent timestamp is less than or equal to this value.")
@@ -104,6 +108,8 @@ public class AdminNotificationController {
                 .attemptsMax(attemptsMax)
                 .lastAttemptFrom(lastAttemptFrom)
                 .lastAttemptTo(lastAttemptTo)
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
                 .sentFrom(sentFrom)
                 .sentTo(sentTo)
                 .build();
