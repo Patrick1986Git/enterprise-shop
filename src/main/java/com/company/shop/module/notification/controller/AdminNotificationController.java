@@ -90,19 +90,20 @@ public class AdminNotificationController {
             @Parameter(description = "Filter notifications whose sent timestamp is less than or equal to this value.")
             @RequestParam(required = false) Instant sentTo,
             @PageableDefault(size = 20) Pageable pageable) {
-        NotificationAdminSearchCriteria criteria = new NotificationAdminSearchCriteria(
-                status,
-                deliveryState,
-                type,
-                recipient,
-                lastErrorContains,
-                requeuedOnly,
-                attemptsMin,
-                attemptsMax,
-                lastAttemptFrom,
-                lastAttemptTo,
-                sentFrom,
-                sentTo);
+        NotificationAdminSearchCriteria criteria = NotificationAdminSearchCriteria.builder()
+                .status(status)
+                .deliveryState(deliveryState)
+                .type(type)
+                .recipient(recipient)
+                .lastErrorContains(lastErrorContains)
+                .requeuedOnly(requeuedOnly)
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .sentFrom(sentFrom)
+                .sentTo(sentTo)
+                .build();
         return PageResponseDTO.from(notificationQueryService.getNotifications(criteria, pageable));
     }
 

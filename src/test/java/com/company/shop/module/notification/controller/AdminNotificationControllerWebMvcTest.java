@@ -135,7 +135,7 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.size").value(20));
 
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(null, null, null, null, null, null, null, null, null)),
+                eq(NotificationAdminSearchCriteria.builder().build()),
                 any(Pageable.class));
     }
 
@@ -162,8 +162,12 @@ class AdminNotificationControllerWebMvcTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        NotificationStatus.FAILED, "ORDER_PLACED_EMAIL", "customer", "timeout", null, null, null, null, null)),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.FAILED)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .lastErrorContains("timeout")
+                        .build()),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
@@ -189,8 +193,9 @@ class AdminNotificationControllerWebMvcTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        null, NotificationDeliveryState.DUE_PENDING, null, null, null, null, null, null, null, null)),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .deliveryState(NotificationDeliveryState.DUE_PENDING)
+                        .build()),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
@@ -212,17 +217,11 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(status().isOk());
 
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        null,
-                        NotificationDeliveryState.SCHEDULED_PENDING,
-                        "ORDER_PLACED_EMAIL",
-                        "customer",
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null)),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .deliveryState(NotificationDeliveryState.SCHEDULED_PENDING)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .build()),
                 any(Pageable.class));
     }
 
@@ -240,7 +239,9 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(jsonPath("$.content").isArray());
 
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(null, null, null, null, Boolean.TRUE, null, null, null, null)),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .requeuedOnly(Boolean.TRUE)
+                        .build()),
                 any(Pageable.class));
     }
 
@@ -264,8 +265,12 @@ class AdminNotificationControllerWebMvcTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        NotificationStatus.FAILED, null, null, "timeout", null, 2, 5, null, null)),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.FAILED)
+                        .lastErrorContains("timeout")
+                        .attemptsMin(2)
+                        .attemptsMax(5)
+                        .build()),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
@@ -292,16 +297,10 @@ class AdminNotificationControllerWebMvcTest {
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        Instant.parse("2026-06-21T00:00:00Z"),
-                        Instant.parse("2026-06-21T23:59:59Z"))),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
+                        .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                        .build()),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(1);
@@ -330,16 +329,17 @@ class AdminNotificationControllerWebMvcTest {
                 .andExpect(status().isOk());
 
         verify(notificationQueryService).getNotifications(
-                eq(new NotificationAdminSearchCriteria(
-                        NotificationStatus.FAILED,
-                        "ORDER_PLACED_EMAIL",
-                        "customer",
-                        "timeout",
-                        Boolean.TRUE,
-                        2,
-                        5,
-                        Instant.parse("2026-06-21T00:00:00Z"),
-                        Instant.parse("2026-06-21T23:59:59Z"))),
+                eq(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.FAILED)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .lastErrorContains("timeout")
+                        .requeuedOnly(Boolean.TRUE)
+                        .attemptsMin(2)
+                        .attemptsMax(5)
+                        .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
+                        .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                        .build()),
                 any(Pageable.class));
     }
 

@@ -219,46 +219,28 @@ class NotificationQueryServiceTest {
         try (MockedStatic<NotificationSpecifications> notificationSpecifications =
                 org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
             notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
-                    org.mockito.Mockito.eq(new NotificationAdminSearchCriteria(
-                            null,
-                            NotificationDeliveryState.DUE_PENDING,
-                            "ORDER_PLACED_EMAIL",
-                            "customer",
-                            null,
-                            null,
-                            null,
-                            null,
-                            null,
-                            null)),
+                    org.mockito.Mockito.eq(NotificationAdminSearchCriteria.builder()
+                            .deliveryState(NotificationDeliveryState.DUE_PENDING)
+                            .type("ORDER_PLACED_EMAIL")
+                            .recipient("customer")
+                            .build()),
                     org.mockito.Mockito.any(Instant.class)))
                     .thenReturn(specification);
 
             service.getNotifications(
-                    new NotificationAdminSearchCriteria(
-                            null,
-                            NotificationDeliveryState.DUE_PENDING,
-                            " ORDER_PLACED_EMAIL ",
-                            " customer ",
-                            null,
-                            null,
-                            null,
-                            null,
-                            null,
-                            null),
+                    NotificationAdminSearchCriteria.builder()
+                            .deliveryState(NotificationDeliveryState.DUE_PENDING)
+                            .type(" ORDER_PLACED_EMAIL ")
+                            .recipient(" customer ")
+                            .build(),
                     pageable);
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
-                    org.mockito.Mockito.eq(new NotificationAdminSearchCriteria(
-                            null,
-                            NotificationDeliveryState.DUE_PENDING,
-                            "ORDER_PLACED_EMAIL",
-                            "customer",
-                            null,
-                            null,
-                            null,
-                            null,
-                            null,
-                            null)),
+                    org.mockito.Mockito.eq(NotificationAdminSearchCriteria.builder()
+                            .deliveryState(NotificationDeliveryState.DUE_PENDING)
+                            .type("ORDER_PLACED_EMAIL")
+                            .recipient("customer")
+                            .build()),
                     org.mockito.Mockito.any(Instant.class)));
         }
 
@@ -399,33 +381,25 @@ class NotificationQueryServiceTest {
             Integer attemptsMax,
             Instant lastAttemptFrom,
             Instant lastAttemptTo) {
-        return new NotificationAdminSearchCriteria(
-                status,
-                type,
-                recipient,
-                lastErrorContains,
-                requeuedOnly,
-                attemptsMin,
-                attemptsMax,
-                lastAttemptFrom,
-                lastAttemptTo);
+        return NotificationAdminSearchCriteria.builder()
+                .status(status)
+                .type(type)
+                .recipient(recipient)
+                .lastErrorContains(lastErrorContains)
+                .requeuedOnly(requeuedOnly)
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .build();
     }
 
 
     private NotificationAdminSearchCriteria criteriaWithSentRange(Instant sentFrom, Instant sentTo) {
-        return new NotificationAdminSearchCriteria(
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                sentFrom,
-                sentTo);
+        return NotificationAdminSearchCriteria.builder()
+                .sentFrom(sentFrom)
+                .sentTo(sentTo)
+                .build();
     }
 
     private NotificationResponseDTO response(UUID notificationId, UUID sourceEventId) {
