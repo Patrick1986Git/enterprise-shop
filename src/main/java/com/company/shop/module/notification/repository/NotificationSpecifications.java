@@ -43,6 +43,10 @@ public final class NotificationSpecifications {
                 predicates.add(cb.greaterThan(root.get("nextAttemptAt"), now));
             }
 
+            if (criteria.sourceEventId() != null) {
+                predicates.add(cb.equal(root.get("sourceEventId"), criteria.sourceEventId()));
+            }
+
             if (criteria.type() != null && !criteria.type().isBlank()) {
                 predicates.add(cb.equal(root.get("type"), criteria.type().trim()));
             }

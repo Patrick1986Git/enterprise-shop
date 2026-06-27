@@ -176,6 +176,69 @@ class AdminNotificationControllerWebMvcTest {
         assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
     }
 
+    @Test
+    void getNotifications_shouldPassSourceEventIdAndPreservePageableAndSortToService() throws Exception {
+        UUID sourceEventId = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 5), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sourceEventId", sourceEventId.toString())
+                        .param("page", "1")
+                        .param("size", "5")
+                        .param("sort", "createdAt,desc"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(notificationQueryService).getNotifications(
+                eq(NotificationAdminSearchCriteria.builder()
+                        .sourceEventId(sourceEventId)
+                        .build()),
+                pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
+        assertThat(pageable.getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getPageSize()).isEqualTo(5);
+        assertThat(pageable.getSort().getOrderFor("createdAt")).isNotNull();
+        assertThat(pageable.getSort().getOrderFor("createdAt").getDirection().name()).isEqualTo("DESC");
+    }
+
+    @Test
+    void getNotifications_shouldCombineSourceEventIdWithExistingFilters() throws Exception {
+        UUID sourceEventId = UUID.fromString("66666666-6666-6666-6666-666666666666");
+        when(notificationQueryService.getNotifications(
+                any(NotificationAdminSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sourceEventId", sourceEventId.toString())
+                        .param("status", "FAILED")
+                        .param("type", "ORDER_PLACED_EMAIL")
+                        .param("recipient", "customer"))
+                .andExpect(status().isOk());
+
+        verify(notificationQueryService).getNotifications(
+                eq(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.FAILED)
+                        .sourceEventId(sourceEventId)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .build()),
+                any(Pageable.class));
+    }
+
+    @Test
+    void getNotifications_shouldReturnBadRequestForInvalidSourceEventId() throws Exception {
+        mockMvc.perform(get(ADMIN_NOTIFICATIONS_URL)
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sourceEventId", "not-a-uuid"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(notificationQueryService);
+    }
+
 
     @Test
     void getNotifications_shouldPassDuePendingDeliveryStateAndPreservePageableAndSortToService() throws Exception {

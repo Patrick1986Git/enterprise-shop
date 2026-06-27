@@ -68,6 +68,8 @@ public class AdminNotificationController {
                     + "with nextAttemptAt null or nextAttemptAt less than or equal to now. SCHEDULED_PENDING means "
                     + "PENDING notifications scheduled for later, with nextAttemptAt greater than now.")
             @RequestParam(required = false) NotificationDeliveryState deliveryState,
+            @Parameter(description = "Filter by source outbox event identifier.")
+            @RequestParam(required = false) UUID sourceEventId,
             @Parameter(description = "Filter by notification type, such as the logical notification category.")
             @RequestParam(required = false) String type,
             @Parameter(description = "Filter by recipient address or identifier.")
@@ -93,6 +95,7 @@ public class AdminNotificationController {
         NotificationAdminSearchCriteria criteria = NotificationAdminSearchCriteria.builder()
                 .status(status)
                 .deliveryState(deliveryState)
+                .sourceEventId(sourceEventId)
                 .type(type)
                 .recipient(recipient)
                 .lastErrorContains(lastErrorContains)

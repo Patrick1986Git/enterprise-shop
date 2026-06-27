@@ -64,6 +64,7 @@ public class NotificationQueryService {
         NotificationAdminSearchCriteria normalizedCriteria = NotificationAdminSearchCriteria.builder()
                 .status(criteria.status())
                 .deliveryState(criteria.deliveryState())
+                .sourceEventId(criteria.sourceEventId())
                 .type(normalize(criteria.type()))
                 .recipient(normalize(criteria.recipient()))
                 .lastErrorContains(normalize(criteria.lastErrorContains()))
