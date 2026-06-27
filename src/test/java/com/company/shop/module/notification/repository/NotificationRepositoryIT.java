@@ -551,7 +551,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Important.Customer@example.com",
                 "Password reset",
                 "Reset your password.",
-                sourceEventId));
+                UUID.randomUUID()));
 
         List<Notification> notifications = notificationRepository.findAll(
                 NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
