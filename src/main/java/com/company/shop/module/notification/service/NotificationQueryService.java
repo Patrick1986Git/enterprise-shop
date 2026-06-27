@@ -61,19 +61,20 @@ public class NotificationQueryService {
         validateLastAttemptDateRange(criteria.lastAttemptFrom(), criteria.lastAttemptTo());
         validateSentDateRange(criteria.sentFrom(), criteria.sentTo());
 
-        NotificationAdminSearchCriteria normalizedCriteria = new NotificationAdminSearchCriteria(
-                criteria.status(),
-                criteria.deliveryState(),
-                normalize(criteria.type()),
-                normalize(criteria.recipient()),
-                normalize(criteria.lastErrorContains()),
-                criteria.requeuedOnly(),
-                criteria.attemptsMin(),
-                criteria.attemptsMax(),
-                criteria.lastAttemptFrom(),
-                criteria.lastAttemptTo(),
-                criteria.sentFrom(),
-                criteria.sentTo());
+        NotificationAdminSearchCriteria normalizedCriteria = NotificationAdminSearchCriteria.builder()
+                .status(criteria.status())
+                .deliveryState(criteria.deliveryState())
+                .type(normalize(criteria.type()))
+                .recipient(normalize(criteria.recipient()))
+                .lastErrorContains(normalize(criteria.lastErrorContains()))
+                .requeuedOnly(criteria.requeuedOnly())
+                .attemptsMin(criteria.attemptsMin())
+                .attemptsMax(criteria.attemptsMax())
+                .lastAttemptFrom(criteria.lastAttemptFrom())
+                .lastAttemptTo(criteria.lastAttemptTo())
+                .sentFrom(criteria.sentFrom())
+                .sentTo(criteria.sentTo())
+                .build();
 
         Specification<Notification> specification = normalizedCriteria.deliveryState() == null
                 ? NotificationSpecifications.adminFilters(normalizedCriteria)

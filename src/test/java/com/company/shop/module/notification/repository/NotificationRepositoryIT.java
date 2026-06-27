@@ -1176,17 +1176,14 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             String recipient,
             String lastErrorContains,
             Boolean requeuedOnly) {
-        return new NotificationAdminSearchCriteria(
-                status,
-                deliveryState,
-                type,
-                recipient,
-                lastErrorContains,
-                requeuedOnly,
-                null,
-                null,
-                null,
-                null);
+        return NotificationAdminSearchCriteria.builder()
+                .status(status)
+                .deliveryState(deliveryState)
+                .type(type)
+                .recipient(recipient)
+                .lastErrorContains(lastErrorContains)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private NotificationAdminSearchCriteria criteria(
@@ -1219,16 +1216,17 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             Integer attemptsMax,
             Instant lastAttemptFrom,
             Instant lastAttemptTo) {
-        return new NotificationAdminSearchCriteria(
-                status,
-                type,
-                recipient,
-                lastErrorContains,
-                requeuedOnly,
-                attemptsMin,
-                attemptsMax,
-                lastAttemptFrom,
-                lastAttemptTo);
+        return NotificationAdminSearchCriteria.builder()
+                .status(status)
+                .type(type)
+                .recipient(recipient)
+                .lastErrorContains(lastErrorContains)
+                .requeuedOnly(requeuedOnly)
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .build();
     }
 
 
@@ -1239,19 +1237,13 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             String recipient,
             Instant sentFrom,
             Instant sentTo) {
-        return new NotificationAdminSearchCriteria(
-                status,
-                null,
-                type,
-                recipient,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                sentFrom,
-                sentTo);
+        return NotificationAdminSearchCriteria.builder()
+                .status(status)
+                .type(type)
+                .recipient(recipient)
+                .sentFrom(sentFrom)
+                .sentTo(sentTo)
+                .build();
     }
 
     private Notification notificationWithNextAttemptAt(
