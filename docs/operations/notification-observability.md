@@ -29,7 +29,7 @@ The admin notification observability endpoints help administrators and admin UI 
 
 ## Common operational queries
 
-`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `sentFrom`, `sentTo`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
+`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `createdFrom`, `createdTo`, `sentFrom`, `sentTo`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
 
@@ -67,6 +67,26 @@ GET /api/v1/admin/notifications?deliveryState=DUE_PENDING&recipient=customer@exa
 
 ```http
 GET /api/v1/admin/notifications?deliveryState=SCHEDULED_PENDING&type=ORDER_PLACED_EMAIL
+```
+
+### Created date filtering
+
+Use `createdFrom` and `createdTo` to filter by `createdAt`: `createdFrom` matches notifications created at or after the timestamp, and `createdTo` matches notifications created at or before the timestamp. These inclusive filters are useful when investigating notifications created during a specific operational time window and can be combined with `status`, `sourceEventId`, `recipient`, `type`, pagination, and sorting.
+
+```http
+GET /api/v1/admin/notifications?createdFrom=2026-06-21T00:00:00Z&createdTo=2026-06-21T23:59:59Z
+```
+
+```http
+GET /api/v1/admin/notifications?status=FAILED&createdFrom=2026-06-21T00:00:00Z&createdTo=2026-06-21T23:59:59Z
+```
+
+```http
+GET /api/v1/admin/notifications?sourceEventId=66666666-6666-6666-6666-666666666666&createdFrom=2026-06-21T00:00:00Z
+```
+
+```http
+GET /api/v1/admin/notifications?type=ORDER_PLACED_EMAIL&createdFrom=2026-06-21T00:00:00Z&createdTo=2026-06-21T23:59:59Z
 ```
 
 ### Sent date filtering
