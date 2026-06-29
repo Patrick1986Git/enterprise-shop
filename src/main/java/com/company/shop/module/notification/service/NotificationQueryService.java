@@ -17,6 +17,7 @@ import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationCreatedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationLastRequeuedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
@@ -60,6 +61,7 @@ public class NotificationQueryService {
             Pageable pageable) {
         validateAttemptsRange(criteria.attemptsMin(), criteria.attemptsMax());
         validateLastAttemptDateRange(criteria.lastAttemptFrom(), criteria.lastAttemptTo());
+        validateLastRequeuedDateRange(criteria.lastRequeuedFrom(), criteria.lastRequeuedTo());
         validateCreatedDateRange(criteria.createdFrom(), criteria.createdTo());
         validateSentDateRange(criteria.sentFrom(), criteria.sentTo());
 
@@ -75,6 +77,8 @@ public class NotificationQueryService {
                 .attemptsMax(criteria.attemptsMax())
                 .lastAttemptFrom(criteria.lastAttemptFrom())
                 .lastAttemptTo(criteria.lastAttemptTo())
+                .lastRequeuedFrom(criteria.lastRequeuedFrom())
+                .lastRequeuedTo(criteria.lastRequeuedTo())
                 .createdFrom(criteria.createdFrom())
                 .createdTo(criteria.createdTo())
                 .sentFrom(criteria.sentFrom())
@@ -89,6 +93,12 @@ public class NotificationQueryService {
                 specification,
                 pageable)
                 .map(notificationMapper::toDto);
+    }
+
+    private void validateLastRequeuedDateRange(Instant lastRequeuedFrom, Instant lastRequeuedTo) {
+        if (lastRequeuedFrom != null && lastRequeuedTo != null && lastRequeuedFrom.isAfter(lastRequeuedTo)) {
+            throw new NotificationLastRequeuedDateRangeInvalidException();
+        }
     }
 
     private void validateCreatedDateRange(Instant createdFrom, Instant createdTo) {

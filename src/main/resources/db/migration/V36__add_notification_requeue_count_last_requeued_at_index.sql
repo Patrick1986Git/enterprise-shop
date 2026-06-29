@@ -1,0 +1,2 @@
+CREATE INDEX idx_notifications_requeue_count_last_requeued_at
+ON notifications (requeue_count, last_requeued_at);

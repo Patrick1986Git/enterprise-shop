@@ -33,6 +33,7 @@ import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.exception.NotificationAttemptsRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationCreatedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationLastAttemptDateRangeInvalidException;
+import com.company.shop.module.notification.exception.NotificationLastRequeuedDateRangeInvalidException;
 import com.company.shop.module.notification.exception.NotificationNotFoundException;
 import com.company.shop.module.notification.exception.NotificationSentDateRangeInvalidException;
 import com.company.shop.module.notification.mapper.NotificationMapper;
@@ -147,6 +148,8 @@ class NotificationQueryServiceTest {
                 .attemptsMax(5)
                 .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
                 .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                .lastRequeuedFrom(Instant.parse("2026-06-21T01:00:00Z"))
+                .lastRequeuedTo(Instant.parse("2026-06-21T22:00:00Z"))
                 .createdFrom(Instant.parse("2026-06-20T00:00:00Z"))
                 .createdTo(Instant.parse("2026-06-22T00:00:00Z"))
                 .build();
@@ -161,6 +164,8 @@ class NotificationQueryServiceTest {
                 .attemptsMax(5)
                 .lastAttemptFrom(Instant.parse("2026-06-21T00:00:00Z"))
                 .lastAttemptTo(Instant.parse("2026-06-21T23:59:59Z"))
+                .lastRequeuedFrom(Instant.parse("2026-06-21T01:00:00Z"))
+                .lastRequeuedTo(Instant.parse("2026-06-21T22:00:00Z"))
                 .createdFrom(Instant.parse("2026-06-20T00:00:00Z"))
                 .createdTo(Instant.parse("2026-06-22T00:00:00Z"))
                 .build();
@@ -291,6 +296,45 @@ class NotificationQueryServiceTest {
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
                     criteria(null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo)));
+        }
+
+        verify(notificationRepository).findAll(specification, pageable);
+        verifyNoMoreInteractions(notificationMapper);
+    }
+
+
+    @Test
+    void getNotifications_shouldRejectLastRequeuedFromAfterLastRequeuedTo() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+
+        assertThatThrownBy(() -> service.getNotifications(
+                criteriaWithLastRequeuedRange(
+                        Instant.parse("2026-06-22T00:00:00Z"),
+                        Instant.parse("2026-06-21T00:00:00Z")),
+                Pageable.unpaged()))
+                .isInstanceOf(NotificationLastRequeuedDateRangeInvalidException.class);
+    }
+
+    @Test
+    void getNotifications_shouldPassValidLastRequeuedFiltersToSpecifications() {
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        Pageable pageable = PageRequest.of(0, 10);
+        Specification<Notification> specification = (root, query, cb) -> null;
+        when(notificationRepository.findAll(specification, pageable))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        Instant lastRequeuedFrom = Instant.parse("2026-06-21T00:00:00Z");
+        Instant lastRequeuedTo = Instant.parse("2026-06-21T23:59:59Z");
+        try (MockedStatic<NotificationSpecifications> notificationSpecifications =
+                org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
+            notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
+                    criteriaWithLastRequeuedRange(lastRequeuedFrom, lastRequeuedTo)))
+                    .thenReturn(specification);
+
+            service.getNotifications(criteriaWithLastRequeuedRange(lastRequeuedFrom, lastRequeuedTo), pageable);
+
+            notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
+                    criteriaWithLastRequeuedRange(lastRequeuedFrom, lastRequeuedTo)));
         }
 
         verify(notificationRepository).findAll(specification, pageable);
@@ -435,6 +479,13 @@ class NotificationQueryServiceTest {
                 .build();
     }
 
+
+    private NotificationAdminSearchCriteria criteriaWithLastRequeuedRange(Instant lastRequeuedFrom, Instant lastRequeuedTo) {
+        return NotificationAdminSearchCriteria.builder()
+                .lastRequeuedFrom(lastRequeuedFrom)
+                .lastRequeuedTo(lastRequeuedTo)
+                .build();
+    }
 
     private NotificationAdminSearchCriteria criteriaWithCreatedRange(Instant createdFrom, Instant createdTo) {
         return NotificationAdminSearchCriteria.builder()
