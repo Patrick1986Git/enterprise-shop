@@ -17,6 +17,8 @@ public record NotificationAdminSearchCriteria(
         Integer attemptsMax,
         Instant lastAttemptFrom,
         Instant lastAttemptTo,
+        Instant lastRequeuedFrom,
+        Instant lastRequeuedTo,
         Instant createdFrom,
         Instant createdTo,
         Instant sentFrom,
@@ -39,6 +41,8 @@ public record NotificationAdminSearchCriteria(
         private Integer attemptsMax;
         private Instant lastAttemptFrom;
         private Instant lastAttemptTo;
+        private Instant lastRequeuedFrom;
+        private Instant lastRequeuedTo;
         private Instant createdFrom;
         private Instant createdTo;
         private Instant sentFrom;
@@ -102,6 +106,16 @@ public record NotificationAdminSearchCriteria(
             return this;
         }
 
+        public Builder lastRequeuedFrom(Instant lastRequeuedFrom) {
+            this.lastRequeuedFrom = lastRequeuedFrom;
+            return this;
+        }
+
+        public Builder lastRequeuedTo(Instant lastRequeuedTo) {
+            this.lastRequeuedTo = lastRequeuedTo;
+            return this;
+        }
+
         public Builder createdFrom(Instant createdFrom) {
             this.createdFrom = createdFrom;
             return this;
@@ -135,6 +149,8 @@ public record NotificationAdminSearchCriteria(
                     attemptsMax,
                     lastAttemptFrom,
                     lastAttemptTo,
+                    lastRequeuedFrom,
+                    lastRequeuedTo,
                     createdFrom,
                     createdTo,
                     sentFrom,
