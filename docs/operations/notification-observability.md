@@ -29,7 +29,7 @@ The admin notification observability endpoints help administrators and admin UI 
 
 ## Common operational queries
 
-`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `createdFrom`, `createdTo`, `sentFrom`, `sentTo`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
+`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `lastRequeuedFrom`, `lastRequeuedTo`, `createdFrom`, `createdTo`, `sentFrom`, `sentTo`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
 
@@ -128,6 +128,26 @@ GET /api/v1/admin/notifications?requeuedOnly=true&sort=createdAt,desc&size=20
 ```
 
 Use this to review notifications that have been manually requeued at least once.
+
+### Last requeued date filtering
+
+Use `lastRequeuedFrom` and `lastRequeuedTo` to filter by `lastRequeuedAt`: `lastRequeuedFrom` matches notifications requeued at or after the timestamp, and `lastRequeuedTo` matches notifications requeued at or before the timestamp. These inclusive filters are useful for investigating manual requeue activity in a specific operational time window, especially with `requeuedOnly=true`. Notifications with a null `lastRequeuedAt` do not match when a last requeued range filter is active. These filters can be combined with `status`, `sourceEventId`, `recipient`, `type`, pagination, and sorting.
+
+```http
+GET /api/v1/admin/notifications?requeuedOnly=true&lastRequeuedFrom=2026-06-21T00:00:00Z&lastRequeuedTo=2026-06-21T23:59:59Z
+```
+
+```http
+GET /api/v1/admin/notifications?status=PENDING&lastRequeuedFrom=2026-06-21T00:00:00Z
+```
+
+```http
+GET /api/v1/admin/notifications?sourceEventId=66666666-6666-6666-6666-666666666666&lastRequeuedFrom=2026-06-21T00:00:00Z
+```
+
+```http
+GET /api/v1/admin/notifications?type=ORDER_PLACED_EMAIL&lastRequeuedFrom=2026-06-21T00:00:00Z&lastRequeuedTo=2026-06-21T23:59:59Z
+```
 
 ### Search notifications by recipient
 
