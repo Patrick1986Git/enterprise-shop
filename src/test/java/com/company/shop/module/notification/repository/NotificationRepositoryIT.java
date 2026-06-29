@@ -872,19 +872,19 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "customer-outside-range@example.com",
                 to.plusSeconds(60),
                 NotificationStatus.PENDING,
-                matchingSourceEventId);
+                UUID.randomUUID());
         Notification wrongStatus = notificationWithLastRequeuedAt(
                 "ORDER_PLACED_EMAIL",
                 "customer-failed-range@example.com",
                 from.plusSeconds(120),
                 NotificationStatus.FAILED,
-                matchingSourceEventId);
+                UUID.randomUUID());
         Notification wrongType = notificationWithLastRequeuedAt(
                 "PASSWORD_RESET_EMAIL",
                 "customer-wrong-type@example.com",
                 from.plusSeconds(180),
                 NotificationStatus.PENDING,
-                matchingSourceEventId);
+                UUID.randomUUID());
         Notification wrongSource = notificationWithLastRequeuedAt(
                 "ORDER_PLACED_EMAIL",
                 "customer-wrong-source@example.com",
