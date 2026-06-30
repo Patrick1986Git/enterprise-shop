@@ -114,6 +114,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID());
         notification.markFailed("delivery failed");
         Instant beforeRequeue = Instant.now();
+        // PostgreSQL stores timestamps with microsecond precision, while Instant.now() may contain nanoseconds.
+        Instant beforeRequeueLowerBound = beforeRequeue.truncatedTo(ChronoUnit.MICROS);
         notification.requeueForDelivery("admin@example.com");
 
         Notification savedNotification = notificationRepository.saveAndFlush(notification);
@@ -122,7 +124,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         Notification loadedNotification = notificationRepository.findById(savedNotification.getId()).orElseThrow();
         assertThat(loadedNotification.getRequeueCount()).isEqualTo(1);
         assertThat(loadedNotification.getLastRequeuedAt()).isNotNull();
-        assertThat(loadedNotification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeue);
+        assertThat(loadedNotification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeueLowerBound);
         assertThat(loadedNotification.getLastRequeuedAt())
                 .isCloseTo(beforeRequeue, within(1, ChronoUnit.SECONDS));
         assertThat(loadedNotification.getLastRequeuedBy()).isEqualTo("admin@example.com");
