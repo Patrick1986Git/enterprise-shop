@@ -2,6 +2,7 @@ package com.company.shop.module.notification.service;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -97,26 +98,33 @@ public class NotificationQueryService {
     }
 
     private void validateLastRequeuedDateRange(Instant lastRequeuedFrom, Instant lastRequeuedTo) {
-        if (lastRequeuedFrom != null && lastRequeuedTo != null && lastRequeuedFrom.isAfter(lastRequeuedTo)) {
-            throw new NotificationLastRequeuedDateRangeInvalidException();
-        }
+        validateInstantRange(
+                lastRequeuedFrom,
+                lastRequeuedTo,
+                NotificationLastRequeuedDateRangeInvalidException::new);
     }
 
     private void validateCreatedDateRange(Instant createdFrom, Instant createdTo) {
-        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
-            throw new NotificationCreatedDateRangeInvalidException();
-        }
+        validateInstantRange(createdFrom, createdTo, NotificationCreatedDateRangeInvalidException::new);
     }
 
     private void validateSentDateRange(Instant sentFrom, Instant sentTo) {
-        if (sentFrom != null && sentTo != null && sentFrom.isAfter(sentTo)) {
-            throw new NotificationSentDateRangeInvalidException();
-        }
+        validateInstantRange(sentFrom, sentTo, NotificationSentDateRangeInvalidException::new);
     }
 
     private void validateLastAttemptDateRange(Instant lastAttemptFrom, Instant lastAttemptTo) {
-        if (lastAttemptFrom != null && lastAttemptTo != null && lastAttemptFrom.isAfter(lastAttemptTo)) {
-            throw new NotificationLastAttemptDateRangeInvalidException();
+        validateInstantRange(
+                lastAttemptFrom,
+                lastAttemptTo,
+                NotificationLastAttemptDateRangeInvalidException::new);
+    }
+
+    private void validateInstantRange(
+            Instant from,
+            Instant to,
+            Supplier<? extends RuntimeException> exceptionSupplier) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw exceptionSupplier.get();
         }
     }
 
