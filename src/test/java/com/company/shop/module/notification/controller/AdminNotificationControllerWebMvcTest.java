@@ -153,6 +153,7 @@ class AdminNotificationControllerWebMvcTest {
                         .param("type", "ORDER_PLACED_EMAIL")
                         .param("recipient", "customer")
                         .param("lastErrorContains", "timeout")
+                        .param("lastRequeuedBy", "admin@example.com")
                         .param("page", "2")
                         .param("size", "5")
                         .param("sort", "createdAt,desc"))
@@ -169,6 +170,7 @@ class AdminNotificationControllerWebMvcTest {
                         .type("ORDER_PLACED_EMAIL")
                         .recipient("customer")
                         .lastErrorContains("timeout")
+                        .lastRequeuedBy("admin@example.com")
                         .build()),
                 pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
@@ -453,6 +455,7 @@ class AdminNotificationControllerWebMvcTest {
                         .param("type", "ORDER_PLACED_EMAIL")
                         .param("recipient", "customer")
                         .param("requeuedOnly", "true")
+                        .param("lastRequeuedBy", "admin@example.com")
                         .param("lastRequeuedFrom", "2026-06-21T00:00:00Z")
                         .param("lastRequeuedTo", "2026-06-21T23:59:59Z"))
                 .andExpect(status().isOk());
@@ -463,6 +466,7 @@ class AdminNotificationControllerWebMvcTest {
                         .sourceEventId(sourceEventId)
                         .type("ORDER_PLACED_EMAIL")
                         .recipient("customer")
+                        .lastRequeuedBy("admin@example.com")
                         .requeuedOnly(Boolean.TRUE)
                         .lastRequeuedFrom(Instant.parse("2026-06-21T00:00:00Z"))
                         .lastRequeuedTo(Instant.parse("2026-06-21T23:59:59Z"))

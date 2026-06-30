@@ -143,6 +143,7 @@ class NotificationQueryServiceTest {
                 .type("ORDER_PLACED_EMAIL")
                 .recipient("CUSTOMER")
                 .lastErrorContains("Timeout")
+                .lastRequeuedBy("Admin@Example.com")
                 .requeuedOnly(Boolean.TRUE)
                 .attemptsMin(2)
                 .attemptsMax(5)
@@ -159,6 +160,7 @@ class NotificationQueryServiceTest {
                 .type(" ORDER_PLACED_EMAIL ")
                 .recipient(" CUSTOMER ")
                 .lastErrorContains(" Timeout ")
+                .lastRequeuedBy(" Admin@Example.com ")
                 .requeuedOnly(Boolean.TRUE)
                 .attemptsMin(2)
                 .attemptsMax(5)
@@ -199,14 +201,19 @@ class NotificationQueryServiceTest {
         try (MockedStatic<NotificationSpecifications> notificationSpecifications =
                 org.mockito.Mockito.mockStatic(NotificationSpecifications.class)) {
             notificationSpecifications.when(() -> NotificationSpecifications.adminFilters(
-                    criteria(null, null, null, null, null, null, null)))
+                    NotificationAdminSearchCriteria.builder().build()))
                     .thenReturn(specification);
 
             result = service.getNotifications(
-                    criteria(null, " ", " ", " ", null, null, null), pageable);
+                    NotificationAdminSearchCriteria.builder()
+                            .type(" ")
+                            .recipient(" ")
+                            .lastErrorContains(" ")
+                            .lastRequeuedBy(" ")
+                            .build(), pageable);
 
             notificationSpecifications.verify(() -> NotificationSpecifications.adminFilters(
-                    criteria(null, null, null, null, null, null, null)));
+                    NotificationAdminSearchCriteria.builder().build()));
         }
 
         assertThat(result.getContent()).isEmpty();

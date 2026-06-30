@@ -114,6 +114,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID());
         notification.markFailed("delivery failed");
         Instant beforeRequeue = Instant.now();
+        // PostgreSQL stores timestamps with microsecond precision, while Instant.now() may contain nanoseconds.
+        Instant beforeRequeueLowerBound = beforeRequeue.truncatedTo(ChronoUnit.MICROS);
         notification.requeueForDelivery("admin@example.com");
 
         Notification savedNotification = notificationRepository.saveAndFlush(notification);
@@ -122,7 +124,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         Notification loadedNotification = notificationRepository.findById(savedNotification.getId()).orElseThrow();
         assertThat(loadedNotification.getRequeueCount()).isEqualTo(1);
         assertThat(loadedNotification.getLastRequeuedAt()).isNotNull();
-        assertThat(loadedNotification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeue);
+        assertThat(loadedNotification.getLastRequeuedAt()).isAfterOrEqualTo(beforeRequeueLowerBound);
         assertThat(loadedNotification.getLastRequeuedAt())
                 .isCloseTo(beforeRequeue, within(1, ChronoUnit.SECONDS));
         assertThat(loadedNotification.getLastRequeuedBy()).isEqualTo("admin@example.com");
@@ -739,6 +741,97 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         assertThat(notifications)
                 .extracting(Notification::getId)
                 .containsExactlyInAnyOrder(neverRequeuedNotification.getId(), requeuedNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldFilterByLastRequeuedByContainsIgnoreCaseAndExcludeNull() {
+        Notification matchingNotification = notificationWithLastRequeuedAt(
+                "ORDER_PLACED_EMAIL",
+                "manual-requeue@example.com",
+                Instant.parse("2026-06-21T12:00:00Z"),
+                NotificationStatus.PENDING,
+                UUID.randomUUID(),
+                "Senior.Admin@Example.com");
+        Notification differentAdminNotification = notificationWithLastRequeuedAt(
+                "ORDER_PLACED_EMAIL",
+                "other-manual-requeue@example.com",
+                Instant.parse("2026-06-21T12:01:00Z"),
+                NotificationStatus.PENDING,
+                UUID.randomUUID(),
+                "support@example.com");
+        Notification neverRequeuedNotification = notificationRepository.saveAndFlush(Notification.pending(
+                "ORDER_PLACED_EMAIL",
+                "never-manual-requeued@example.com",
+                "Order placed",
+                "Your order has been placed.",
+                UUID.randomUUID()));
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .lastRequeuedBy("  admin@example  ")
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId())
+                .doesNotContain(differentAdminNotification.getId(), neverRequeuedNotification.getId());
+    }
+
+    @Test
+    void findAllWithAdminFilters_shouldCombineLastRequeuedByWithRequeuedOnlyRangeStatusSourceAndRecipientType() {
+        Instant from = Instant.parse("2026-06-21T12:00:00Z");
+        Instant to = Instant.parse("2026-06-21T13:00:00Z");
+        UUID matchingSourceEventId = UUID.randomUUID();
+        Notification matchingNotification = notificationWithLastRequeuedAt(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer@example.com",
+                from.plusSeconds(60),
+                NotificationStatus.PENDING,
+                matchingSourceEventId,
+                "Admin.Observer@Example.com");
+        Notification wrongAdminNotification = notificationWithLastRequeuedAt(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer.Other@example.com",
+                from.plusSeconds(120),
+                NotificationStatus.PENDING,
+                UUID.randomUUID(),
+                "support@example.com");
+        Notification outsideRangeNotification = notificationWithLastRequeuedAt(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer.Range@example.com",
+                to.plusSeconds(60),
+                NotificationStatus.PENDING,
+                UUID.randomUUID(),
+                "admin.observer@example.com");
+        Notification wrongStatusNotification = notificationWithLastRequeuedAt(
+                "ORDER_PLACED_EMAIL",
+                "Important.Customer.Status@example.com",
+                from.plusSeconds(180),
+                NotificationStatus.FAILED,
+                UUID.randomUUID(),
+                "admin.observer@example.com");
+
+        List<Notification> notifications = notificationRepository.findAll(
+                NotificationSpecifications.adminFilters(NotificationAdminSearchCriteria.builder()
+                        .status(NotificationStatus.PENDING)
+                        .sourceEventId(matchingSourceEventId)
+                        .type("ORDER_PLACED_EMAIL")
+                        .recipient("customer")
+                        .lastRequeuedBy("observer")
+                        .requeuedOnly(Boolean.TRUE)
+                        .lastRequeuedFrom(from)
+                        .lastRequeuedTo(to)
+                        .build()),
+                Pageable.unpaged()).getContent();
+
+        assertThat(notifications)
+                .extracting(Notification::getId)
+                .containsExactly(matchingNotification.getId())
+                .doesNotContain(
+                        wrongAdminNotification.getId(),
+                        outsideRangeNotification.getId(),
+                        wrongStatusNotification.getId());
     }
 
     @Test
@@ -1595,13 +1688,29 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
             Instant lastRequeuedAt,
             NotificationStatus status,
             UUID sourceEventId) {
+        return notificationWithLastRequeuedAt(
+                type,
+                recipient,
+                lastRequeuedAt,
+                status,
+                sourceEventId,
+                "admin@example.com");
+    }
+
+    private Notification notificationWithLastRequeuedAt(
+            String type,
+            String recipient,
+            Instant lastRequeuedAt,
+            NotificationStatus status,
+            UUID sourceEventId,
+            String lastRequeuedBy) {
         Notification notification = Notification.pending(
                 type,
                 recipient,
                 "Order placed",
                 "Your order has been placed.",
                 sourceEventId);
-        notification.requeueForDelivery("admin@example.com");
+        notification.requeueForDelivery(lastRequeuedBy);
         Notification saved = notificationRepository.saveAndFlush(notification);
         jdbcTemplate.update(
                 "UPDATE notifications SET status = ?, last_requeued_at = ?, last_error = ? WHERE id = ?",
