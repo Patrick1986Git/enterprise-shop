@@ -72,6 +72,7 @@ public class NotificationQueryService {
                 .type(normalize(criteria.type()))
                 .recipient(normalize(criteria.recipient()))
                 .lastErrorContains(normalize(criteria.lastErrorContains()))
+                .lastRequeuedBy(normalize(criteria.lastRequeuedBy()))
                 .requeuedOnly(criteria.requeuedOnly())
                 .attemptsMin(criteria.attemptsMin())
                 .attemptsMax(criteria.attemptsMax())

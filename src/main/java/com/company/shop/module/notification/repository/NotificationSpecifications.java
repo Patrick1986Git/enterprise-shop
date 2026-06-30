@@ -61,6 +61,11 @@ public final class NotificationSpecifications {
                 predicates.add(cb.like(cb.lower(root.get("lastError")), pattern));
             }
 
+            if (criteria.lastRequeuedBy() != null && !criteria.lastRequeuedBy().isBlank()) {
+                String pattern = "%" + criteria.lastRequeuedBy().trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(cb.like(cb.lower(root.get("lastRequeuedBy")), pattern));
+            }
+
             if (Boolean.TRUE.equals(criteria.requeuedOnly())) {
                 predicates.add(cb.greaterThan(root.get("requeueCount"), 0));
             }

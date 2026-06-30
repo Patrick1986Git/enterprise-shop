@@ -12,6 +12,7 @@ public record NotificationAdminSearchCriteria(
         String type,
         String recipient,
         String lastErrorContains,
+        String lastRequeuedBy,
         Boolean requeuedOnly,
         Integer attemptsMin,
         Integer attemptsMax,
@@ -36,6 +37,7 @@ public record NotificationAdminSearchCriteria(
         private String type;
         private String recipient;
         private String lastErrorContains;
+        private String lastRequeuedBy;
         private Boolean requeuedOnly;
         private Integer attemptsMin;
         private Integer attemptsMax;
@@ -78,6 +80,11 @@ public record NotificationAdminSearchCriteria(
 
         public Builder lastErrorContains(String lastErrorContains) {
             this.lastErrorContains = lastErrorContains;
+            return this;
+        }
+
+        public Builder lastRequeuedBy(String lastRequeuedBy) {
+            this.lastRequeuedBy = lastRequeuedBy;
             return this;
         }
 
@@ -144,6 +151,7 @@ public record NotificationAdminSearchCriteria(
                     type,
                     recipient,
                     lastErrorContains,
+                    lastRequeuedBy,
                     requeuedOnly,
                     attemptsMin,
                     attemptsMax,

@@ -76,6 +76,9 @@ public class AdminNotificationController {
             @RequestParam(required = false) String recipient,
             @Parameter(description = "Filter by text contained in the last delivery error, case-insensitively.")
             @RequestParam(required = false) String lastErrorContains,
+            @Parameter(description = "Filter notifications by the administrator email that last manually requeued them. "
+                    + "Uses case-insensitive contains matching.")
+            @RequestParam(required = false) String lastRequeuedBy,
             @Parameter(description = "When true, return only notifications that have been manually requeued "
                     + "at least once.")
             @RequestParam(required = false) Boolean requeuedOnly,
@@ -107,6 +110,7 @@ public class AdminNotificationController {
                 .type(type)
                 .recipient(recipient)
                 .lastErrorContains(lastErrorContains)
+                .lastRequeuedBy(lastRequeuedBy)
                 .requeuedOnly(requeuedOnly)
                 .attemptsMin(attemptsMin)
                 .attemptsMax(attemptsMax)
