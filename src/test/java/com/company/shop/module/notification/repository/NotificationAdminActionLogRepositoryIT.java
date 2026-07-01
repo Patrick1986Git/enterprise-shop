@@ -56,7 +56,7 @@ class NotificationAdminActionLogRepositoryIT extends PostgresContainerSupport {
         assertThat(loadedLog.getActionType()).isEqualTo(NotificationAdminActionType.REQUEUE);
         assertThat(loadedLog.getActorEmail()).isEqualTo("admin@example.com");
         assertThat(loadedLog.getCreatedAt()).isNotNull();
-        assertThat(loadedLog.getDetails()).isNull();
+        assertThat(loadedLog.getDetails()).isEqualTo("Manual requeue requested for failed notification.");
     }
 
     @Test

@@ -15,6 +15,8 @@ import jakarta.persistence.Table;
 @Table(name = "notification_admin_action_logs")
 public class NotificationAdminActionLog extends BaseEntity {
 
+    private static final String REQUEUE_DETAILS = "Manual requeue requested for failed notification.";
+
     @Column(name = "notification_id", nullable = false)
     private UUID notificationId;
 
@@ -42,7 +44,12 @@ public class NotificationAdminActionLog extends BaseEntity {
     }
 
     public static NotificationAdminActionLog requeue(UUID notificationId, String actorEmail) {
-        return new NotificationAdminActionLog(notificationId, NotificationAdminActionType.REQUEUE, actorEmail);
+        NotificationAdminActionLog log = new NotificationAdminActionLog(
+                notificationId,
+                NotificationAdminActionType.REQUEUE,
+                actorEmail);
+        log.details = REQUEUE_DETAILS;
+        return log;
     }
 
     public UUID getNotificationId() {
