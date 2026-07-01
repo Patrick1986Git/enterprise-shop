@@ -82,7 +82,7 @@ class NotificationAdminCommandServiceTest {
         assertThat(savedLog.getActionType()).isEqualTo(NotificationAdminActionType.REQUEUE);
         assertThat(savedLog.getActorEmail()).isEqualTo("admin@example.com");
         assertThat(savedLog.getCreatedAt()).isNotNull();
-        assertThat(savedLog.getDetails()).isNull();
+        assertThat(savedLog.getDetails()).isEqualTo("Manual requeue requested for failed notification.");
         verifyNoMoreInteractions(
                 notificationRepository,
                 notificationAdminActionLogRepository,
