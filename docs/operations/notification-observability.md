@@ -195,7 +195,7 @@ Use the detail endpoint to inspect a notification's current state, type, recipie
 GET /api/v1/admin/notifications/11111111-1111-1111-1111-111111111111/actions?sort=createdAt,desc&size=20
 ```
 
-Use notification-specific action logs to audit who requeued a notification and when the action was recorded.
+Use notification-specific action logs to audit who requeued a notification and when the action was recorded. `REQUEUE` entries include `actorEmail`, `createdAt`, `actionType`, `notificationId`, and `details`. For manual requeue actions, `details` currently contains `Manual requeue requested for failed notification.`
 
 ### Search global notification action logs by actor and time window
 
@@ -209,6 +209,7 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 
 - These endpoints are admin-only.
 - Requeue is available only according to the current notification service rules.
-- Requeue records admin action log entries for auditability.
+- Requeue records admin action log entries for auditability. `REQUEUE` action log entries include a deterministic `details` value: `Manual requeue requested for failed notification.` This makes the audit entry self-descriptive for admins and admin UI consumers while preserving the existing requeue behavior.
+- The `details` field is informational and does not change delivery, retry, requeue, scheduling, or persistence behavior.
 - Delete endpoints, manual status mutation, and retry-now operations are intentionally not part of this API.
 - This remains part of the modular monolith. It does not introduce Kafka, RabbitMQ, external brokers, or microservices.
