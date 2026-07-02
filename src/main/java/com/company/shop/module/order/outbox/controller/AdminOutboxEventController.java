@@ -99,10 +99,23 @@ public class AdminOutboxEventController {
                     + "with attempts greater than or equal to the high failed attempts threshold.")
             @RequestParam(required = false) OutboxEventProblemType problemType,
             @PageableDefault(size = 20) Pageable pageable) {
-        OutboxEventAdminSearchCriteria criteria = new OutboxEventAdminSearchCriteria(
-                status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
-                processedFrom, processedTo, lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly,
-                problemType);
+        OutboxEventAdminSearchCriteria criteria = OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .aggregateType(aggregateType)
+                .aggregateId(aggregateId)
+                .eventType(eventType)
+                .lastErrorContains(lastErrorContains)
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .requeuedOnly(requeuedOnly)
+                .problemType(problemType)
+                .build();
         return PageResponseDTO.from(outboxEventQueryService.getEvents(criteria, pageable));
     }
 

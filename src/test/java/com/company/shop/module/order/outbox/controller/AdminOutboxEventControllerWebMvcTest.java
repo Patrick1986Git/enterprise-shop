@@ -165,7 +165,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("requeuedOnly", "false")
+                 .param("requeuedOnly", "false")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -180,8 +180,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenThrow(new OutboxEventDateRangeInvalidException());
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("createdFrom", createdFrom.toString())
-                        .param("createdTo", createdTo.toString())
+                 .param("createdFrom", createdFrom.toString())
+                 .param("createdTo", createdTo.toString())
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
@@ -201,8 +201,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("processedFrom", processedFrom.toString())
-                        .param("processedTo", processedTo.toString())
+                 .param("processedFrom", processedFrom.toString())
+                 .param("processedTo", processedTo.toString())
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -217,8 +217,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenThrow(new OutboxEventProcessedDateRangeInvalidException());
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("processedFrom", processedFrom.toString())
-                        .param("processedTo", processedTo.toString())
+                 .param("processedFrom", processedFrom.toString())
+                 .param("processedTo", processedTo.toString())
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
@@ -238,8 +238,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("lastAttemptFrom", lastAttemptFrom.toString())
-                        .param("lastAttemptTo", lastAttemptTo.toString())
+                 .param("lastAttemptFrom", lastAttemptFrom.toString())
+                 .param("lastAttemptTo", lastAttemptTo.toString())
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -254,8 +254,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenThrow(new OutboxEventLastAttemptDateRangeInvalidException());
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("lastAttemptFrom", lastAttemptFrom.toString())
-                        .param("lastAttemptTo", lastAttemptTo.toString())
+                 .param("lastAttemptFrom", lastAttemptFrom.toString())
+                 .param("lastAttemptTo", lastAttemptTo.toString())
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
@@ -274,7 +274,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("problemType", "STALE_PENDING")
+                 .param("problemType", "STALE_PENDING")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -287,8 +287,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("attemptsMin", "3")
-                        .param("attemptsMax", "7")
+                 .param("attemptsMin", "3")
+                 .param("attemptsMax", "7")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -301,7 +301,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("lastErrorContains", "timeout")
+                 .param("lastErrorContains", "timeout")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -314,8 +314,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenThrow(new OutboxEventAttemptsRangeInvalidException());
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("attemptsMin", "5")
-                        .param("attemptsMax", "3")
+                 .param("attemptsMin", "5")
+                 .param("attemptsMax", "3")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
@@ -338,22 +338,22 @@ class AdminOutboxEventControllerWebMvcTest {
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 5, Sort.by(Sort.Direction.ASC, "eventType")), 0));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
-                        .param("status", "PENDING")
-                        .param("aggregateType", "Order")
-                        .param("aggregateId", aggregateId.toString())
-                        .param("eventType", "Placed")
-                        .param("lastErrorContains", "timeout")
-                        .param("createdFrom", createdFrom.toString())
-                        .param("createdTo", createdTo.toString())
-                        .param("processedFrom", processedFrom.toString())
-                        .param("processedTo", processedTo.toString())
-                        .param("attemptsMin", "2")
-                        .param("attemptsMax", "4")
-                        .param("requeuedOnly", "true")
-                        .param("problemType", "HIGH_ATTEMPT_FAILED")
-                        .param("page", "2")
-                        .param("size", "5")
-                        .param("sort", "eventType,asc")
+                 .param("status", "PENDING")
+                 .param("aggregateType", "Order")
+                 .param("aggregateId", aggregateId.toString())
+                 .param("eventType", "Placed")
+                 .param("lastErrorContains", "timeout")
+                 .param("createdFrom", createdFrom.toString())
+                 .param("createdTo", createdTo.toString())
+                 .param("processedFrom", processedFrom.toString())
+                 .param("processedTo", processedTo.toString())
+                 .param("attemptsMin", "2")
+                 .param("attemptsMax", "4")
+                 .param("requeuedOnly", "true")
+                 .param("problemType", "HIGH_ATTEMPT_FAILED")
+                 .param("page", "2")
+                 .param("size", "5")
+                 .param("sort", "eventType,asc")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk());
 
@@ -479,9 +479,9 @@ class AdminOutboxEventControllerWebMvcTest {
                         11));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL + "/{id}/actions", outboxEventId)
-                        .param("page", "1")
-                        .param("size", "5")
-                        .param("sort", "actorEmail,asc")
+                 .param("page", "1")
+                 .param("size", "5")
+                 .param("sort", "actorEmail,asc")
                         .with(user("admin").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
@@ -693,46 +693,56 @@ class AdminOutboxEventControllerWebMvcTest {
     }
 
     private static OutboxEventAdminSearchCriteria emptyCriteria() {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithCreatedRange(Instant createdFrom, Instant createdTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, createdFrom, createdTo, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProcessedRange(Instant processedFrom, Instant processedTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, processedFrom, processedTo,
-                null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastAttemptRange(
             Instant lastAttemptFrom,
             Instant lastAttemptTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAttempts(Integer attemptsMin, Integer attemptsMax) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, attemptsMin, attemptsMax, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithRequeuedOnly(Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastErrorContains(String lastErrorContains) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, lastErrorContains, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastErrorContains(lastErrorContains)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProblemType(OutboxEventProblemType problemType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, null, problemType);
+        return OutboxEventAdminSearchCriteria.builder()
+                .problemType(problemType)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAllFilters(
@@ -741,22 +751,21 @@ class AdminOutboxEventControllerWebMvcTest {
             Instant createdTo,
             Instant processedFrom,
             Instant processedTo) {
-        return new OutboxEventAdminSearchCriteria(
-                OutboxEventStatus.PENDING,
-                "Order",
-                aggregateId,
-                "Placed",
-                "timeout",
-                createdFrom,
-                createdTo,
-                processedFrom,
-                processedTo,
-                null,
-                null,
-                2,
-                4,
-                Boolean.TRUE,
-                OutboxEventProblemType.HIGH_ATTEMPT_FAILED);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(OutboxEventStatus.PENDING)
+                .aggregateType("Order")
+                .aggregateId(aggregateId)
+                .eventType("Placed")
+                .lastErrorContains("timeout")
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .attemptsMin(2)
+                .attemptsMax(4)
+                .requeuedOnly(Boolean.TRUE)
+                .problemType(OutboxEventProblemType.HIGH_ATTEMPT_FAILED)
+                .build();
     }
 
 }
