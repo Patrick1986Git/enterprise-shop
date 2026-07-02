@@ -1195,55 +1195,68 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     private static OutboxEventAdminSearchCriteria emptyCriteria() {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithStatus(OutboxEventStatus status) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAggregateType(String aggregateType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, aggregateType, null, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .aggregateType(aggregateType)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAggregateId(UUID aggregateId) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, aggregateId, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .aggregateId(aggregateId)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithEventType(String eventType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, eventType, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .eventType(eventType)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAggregateTypeAndEventType(
             String aggregateType,
             String eventType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, aggregateType, null, eventType, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .aggregateType(aggregateType)
+                .eventType(eventType)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithStatusAndAggregateType(
             OutboxEventStatus status,
             String aggregateType) {
-        return new OutboxEventAdminSearchCriteria(
-                status, aggregateType, null, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .aggregateType(aggregateType)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithCreatedRange(Instant createdFrom, Instant createdTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, createdFrom, createdTo, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithStatusAndCreatedRange(
             OutboxEventStatus status,
             Instant createdFrom,
             Instant createdTo) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, null, createdFrom, createdTo, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAggregateTypeAndEventTypeAndCreatedRange(
@@ -1251,54 +1264,72 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             String eventType,
             Instant createdFrom,
             Instant createdTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, aggregateType, null, eventType, null, createdFrom, createdTo, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .aggregateType(aggregateType)
+                .eventType(eventType)
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithCreatedRangeAndRequeuedOnly(
             Instant createdFrom,
             Instant createdTo,
             Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, createdFrom, createdTo, null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProcessedRange(Instant processedFrom, Instant processedTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, processedFrom, processedTo,
-                null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProcessedRangeAndStatus(
             OutboxEventStatus status,
             Instant processedFrom,
             Instant processedTo) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, null, null, null, processedFrom, processedTo,
-                null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastAttemptRange(
             Instant lastAttemptFrom,
             Instant lastAttemptTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastAttemptRangeAndStatus(
             OutboxEventStatus status,
             Instant lastAttemptFrom,
             Instant lastAttemptTo) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastAttemptRangeAndRequeuedOnly(
             Instant lastAttemptFrom,
             Instant lastAttemptTo,
             Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithStatusLastAttemptRangeAttemptsAndRequeuedOnly(
@@ -1308,26 +1339,36 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             Integer attemptsMin,
             Integer attemptsMax,
             Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo,
-                attemptsMin, attemptsMax, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAttempts(Integer attemptsMin, Integer attemptsMax) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, attemptsMin, attemptsMax, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithRequeuedOnly(Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithStatusAndRequeuedOnly(
             OutboxEventStatus status,
             Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, null, null, null, null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithStatusLastErrorAndAttempts(
@@ -1335,25 +1376,33 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
             String lastErrorContains,
             Integer attemptsMin,
             Integer attemptsMax) {
-        return new OutboxEventAdminSearchCriteria(
-                status, null, null, null, lastErrorContains, null, null, null, null, attemptsMin, attemptsMax, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .lastErrorContains(lastErrorContains)
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastErrorContains(String lastErrorContains) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, lastErrorContains, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastErrorContains(lastErrorContains)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProblemType(OutboxEventProblemType problemType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, null, problemType);
+        return OutboxEventAdminSearchCriteria.builder()
+                .problemType(problemType)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAttemptsMaxAndProblemType(
             Integer attemptsMax,
             OutboxEventProblemType problemType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, attemptsMax, null, problemType);
+        return OutboxEventAdminSearchCriteria.builder()
+                .attemptsMax(attemptsMax)
+                .problemType(problemType)
+                .build();
     }
 
     private String valueOrNull(String nullableColumnName, String currentColumnName, String value) {

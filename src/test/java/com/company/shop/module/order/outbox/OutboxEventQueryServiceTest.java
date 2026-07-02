@@ -253,6 +253,51 @@ class OutboxEventQueryServiceTest {
     }
 
     @Test
+    void builder_shouldPopulateAllCriteriaFields() {
+        UUID aggregateId = UUID.randomUUID();
+        Instant createdFrom = Instant.parse("2026-01-01T00:00:00Z");
+        Instant createdTo = Instant.parse("2026-01-02T00:00:00Z");
+        Instant processedFrom = Instant.parse("2026-01-03T00:00:00Z");
+        Instant processedTo = Instant.parse("2026-01-04T00:00:00Z");
+        Instant lastAttemptFrom = Instant.parse("2026-01-05T00:00:00Z");
+        Instant lastAttemptTo = Instant.parse("2026-01-06T00:00:00Z");
+
+        OutboxEventAdminSearchCriteria criteria = OutboxEventAdminSearchCriteria.builder()
+                .status(OutboxEventStatus.FAILED)
+                .aggregateType("Order")
+                .aggregateId(aggregateId)
+                .eventType("OrderPlaced")
+                .lastErrorContains("timeout")
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .attemptsMin(2)
+                .attemptsMax(4)
+                .requeuedOnly(Boolean.TRUE)
+                .problemType(OutboxEventProblemType.HIGH_ATTEMPT_FAILED)
+                .build();
+
+        assertThat(criteria.status()).isEqualTo(OutboxEventStatus.FAILED);
+        assertThat(criteria.aggregateType()).isEqualTo("Order");
+        assertThat(criteria.aggregateId()).isEqualTo(aggregateId);
+        assertThat(criteria.eventType()).isEqualTo("OrderPlaced");
+        assertThat(criteria.lastErrorContains()).isEqualTo("timeout");
+        assertThat(criteria.createdFrom()).isEqualTo(createdFrom);
+        assertThat(criteria.createdTo()).isEqualTo(createdTo);
+        assertThat(criteria.processedFrom()).isEqualTo(processedFrom);
+        assertThat(criteria.processedTo()).isEqualTo(processedTo);
+        assertThat(criteria.lastAttemptFrom()).isEqualTo(lastAttemptFrom);
+        assertThat(criteria.lastAttemptTo()).isEqualTo(lastAttemptTo);
+        assertThat(criteria.attemptsMin()).isEqualTo(2);
+        assertThat(criteria.attemptsMax()).isEqualTo(4);
+        assertThat(criteria.requeuedOnly()).isTrue();
+        assertThat(criteria.problemType()).isEqualTo(OutboxEventProblemType.HIGH_ATTEMPT_FAILED);
+    }
+
+    @Test
     void getEvents_shouldReturnMappedPageAndApplyDefaultSortWhenUnsorted() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
         OutboxEventResponseDTO response = response(UUID.randomUUID());
@@ -625,13 +670,15 @@ class OutboxEventQueryServiceTest {
     }
 
     private static OutboxEventAdminSearchCriteria emptyCriteria() {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithCreatedRange(Instant createdFrom, Instant createdTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, createdFrom, createdTo, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithFilters(
@@ -643,50 +690,68 @@ class OutboxEventQueryServiceTest {
             Instant createdFrom,
             Instant createdTo,
             Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo,
-                null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .status(status)
+                .aggregateType(aggregateType)
+                .aggregateId(aggregateId)
+                .eventType(eventType)
+                .lastErrorContains(lastErrorContains)
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithCreatedRangeAndRequeuedOnly(
             Instant createdFrom,
             Instant createdTo,
             Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, createdFrom, createdTo, null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProcessedRange(Instant processedFrom, Instant processedTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, processedFrom, processedTo,
-                null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .processedFrom(processedFrom)
+                .processedTo(processedTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastAttemptRange(
             Instant lastAttemptFrom,
             Instant lastAttemptTo) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, lastAttemptFrom, lastAttemptTo, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastAttemptFrom(lastAttemptFrom)
+                .lastAttemptTo(lastAttemptTo)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithAttempts(Integer attemptsMin, Integer attemptsMax) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, attemptsMin, attemptsMax, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .attemptsMin(attemptsMin)
+                .attemptsMax(attemptsMax)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithRequeuedOnly(Boolean requeuedOnly) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, requeuedOnly);
+        return OutboxEventAdminSearchCriteria.builder()
+                .requeuedOnly(requeuedOnly)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithLastErrorContains(String lastErrorContains) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, lastErrorContains, null, null, null, null, null, null, null);
+        return OutboxEventAdminSearchCriteria.builder()
+                .lastErrorContains(lastErrorContains)
+                .build();
     }
 
     private static OutboxEventAdminSearchCriteria criteriaWithProblemType(OutboxEventProblemType problemType) {
-        return new OutboxEventAdminSearchCriteria(
-                null, null, null, null, null, null, null, null, null, null, null, null, problemType);
+        return OutboxEventAdminSearchCriteria.builder()
+                .problemType(problemType)
+                .build();
     }
 
     private OutboxEventDetailResponseDTO detailResponse(UUID id) {
