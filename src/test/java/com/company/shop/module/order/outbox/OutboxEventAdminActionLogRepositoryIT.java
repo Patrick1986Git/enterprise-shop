@@ -54,7 +54,7 @@ class OutboxEventAdminActionLogRepositoryIT extends PostgresContainerSupport {
         assertThat(loadedLog.getActionType()).isEqualTo(OutboxEventAdminActionType.REQUEUE);
         assertThat(loadedLog.getActorEmail()).isEqualTo("admin@example.com");
         assertThat(loadedLog.getCreatedAt()).isNotNull();
-        assertThat(loadedLog.getDetails()).isNull();
+        assertThat(loadedLog.getDetails()).isEqualTo("Manual requeue requested for failed outbox event.");
     }
 
     @Test

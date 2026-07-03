@@ -146,7 +146,8 @@ class OutboxEventAdminCommandServiceTest {
         verify(outboxEventAdminActionLogRepository).save(argThat(log ->
                 eventId.equals(log.getOutboxEventId())
                         && log.getActionType() == OutboxEventAdminActionType.REQUEUE
-                        && "admin@example.com".equals(log.getActorEmail())));
+                        && "admin@example.com".equals(log.getActorEmail())
+                        && "Manual requeue requested for failed outbox event.".equals(log.getDetails())));
     }
 
     private OutboxEventResponseDTO response(UUID id, OutboxEventStatus status) {

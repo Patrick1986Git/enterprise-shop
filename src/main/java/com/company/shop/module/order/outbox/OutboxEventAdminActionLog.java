@@ -15,6 +15,8 @@ import jakarta.persistence.Table;
 @Table(name = "outbox_event_admin_action_logs")
 public class OutboxEventAdminActionLog extends BaseEntity {
 
+    private static final String REQUEUE_DETAILS = "Manual requeue requested for failed outbox event.";
+
     @Column(name = "outbox_event_id", nullable = false)
     private UUID outboxEventId;
 
@@ -42,7 +44,12 @@ public class OutboxEventAdminActionLog extends BaseEntity {
     }
 
     public static OutboxEventAdminActionLog requeue(UUID outboxEventId, String actorEmail) {
-        return new OutboxEventAdminActionLog(outboxEventId, OutboxEventAdminActionType.REQUEUE, actorEmail);
+        OutboxEventAdminActionLog log = new OutboxEventAdminActionLog(
+                outboxEventId,
+                OutboxEventAdminActionType.REQUEUE,
+                actorEmail);
+        log.details = REQUEUE_DETAILS;
+        return log;
     }
 
     public UUID getOutboxEventId() {
