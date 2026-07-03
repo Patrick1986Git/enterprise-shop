@@ -101,7 +101,7 @@ Use this to review events that have been manually requeued at least once.
 GET /api/v1/admin/outbox-events/11111111-1111-1111-1111-111111111111/actions?sort=createdAt,desc&size=20
 ```
 
-Use event-specific action logs to audit who requeued an event and when the action was recorded.
+Use event-specific action logs to audit who requeued an event and when the action was recorded. `REQUEUE` entries include `actorEmail`, `createdAt`, `actionType`, `outboxEventId`, and `details`. For manual requeues, `details` is deterministic: `Manual requeue requested for failed outbox event.`
 
 ### Search global outbox action logs
 
@@ -116,5 +116,7 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 - These endpoints are admin-only.
 - Requeue is available only for failed outbox events.
 - Requeue records admin action log entries for auditability.
+- Action log `details` is informational and makes audit entries self-descriptive for admins and admin UI consumers.
+- The documented `REQUEUE` details value does not change outbox processing, retry, requeue eligibility, scheduling, persistence behavior, endpoint paths, DTO shape, or security.
 - Delete endpoints, manual status mutation, and retry-now operations are intentionally not part of this API.
 - This remains a modular monolith transactional outbox. It does not introduce Kafka, RabbitMQ, external brokers, or microservices.
