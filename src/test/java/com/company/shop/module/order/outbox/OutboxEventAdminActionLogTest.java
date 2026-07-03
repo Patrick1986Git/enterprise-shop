@@ -21,7 +21,7 @@ class OutboxEventAdminActionLogTest {
         assertThat(log.getActionType()).isEqualTo(OutboxEventAdminActionType.REQUEUE);
         assertThat(log.getActorEmail()).isEqualTo("admin@example.com");
         assertThat(log.getCreatedAt()).isNotNull().isAfterOrEqualTo(beforeCreate);
-        assertThat(log.getDetails()).isNull();
+        assertThat(log.getDetails()).isEqualTo("Manual requeue requested for failed outbox event.");
     }
 
     @Test

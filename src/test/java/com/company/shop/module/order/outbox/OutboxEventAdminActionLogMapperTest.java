@@ -23,7 +23,6 @@ class OutboxEventAdminActionLogMapperTest {
         OutboxEventAdminActionLog log = OutboxEventAdminActionLog.requeue(outboxEventId, "admin@example.com");
         setId(log, id);
         setField(log, "createdAt", createdAt);
-        setField(log, "details", "Requeued after failure");
 
         var result = mapper.toDto(log);
 
@@ -32,7 +31,7 @@ class OutboxEventAdminActionLogMapperTest {
         assertThat(result.actionType()).isEqualTo(OutboxEventAdminActionType.REQUEUE);
         assertThat(result.actorEmail()).isEqualTo("admin@example.com");
         assertThat(result.createdAt()).isEqualTo(createdAt);
-        assertThat(result.details()).isEqualTo("Requeued after failure");
+        assertThat(result.details()).isEqualTo("Manual requeue requested for failed outbox event.");
     }
 
     private void setId(Object entity, UUID id) throws Exception {
