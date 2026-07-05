@@ -27,9 +27,13 @@ The admin notification observability endpoints help administrators and admin UI 
 - `requeuedNotificationCount`: number of notifications that have been manually requeued at least once.
 - `totalRequeueCount`: total number of manual requeue actions recorded across notifications.
 
+## Supported notification list filters
+
+`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `lastRequeuedBy`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `lastRequeuedFrom`, `lastRequeuedTo`, `createdFrom`, `createdTo`, `sentFrom`, `sentTo`, pagination, and sorting. `status` and `deliveryState` are enum filters. `sourceEventId` is an exact UUID match. `type` uses trimmed exact matching. `recipient`, `lastErrorContains`, and `lastRequeuedBy` use trimmed case-insensitive contains matching and ignore blank values. `requeuedOnly=true` returns notifications with `requeueCount > 0`; omitting it or setting it to `false` does not restrict by requeue count. `attemptsMin` and `attemptsMax` are inclusive numeric bounds. `lastAttemptFrom`/`lastAttemptTo`, `lastRequeuedFrom`/`lastRequeuedTo`, `createdFrom`/`createdTo`, and `sentFrom`/`sentTo` are inclusive timestamp ranges. `deliveryState=DUE_PENDING` means pending notifications with `nextAttemptAt` null or due now. `deliveryState=SCHEDULED_PENDING` means pending notifications scheduled for later.
+
 ## Common operational queries
 
-`GET /api/v1/admin/notifications` supports `status`, `deliveryState`, `sourceEventId`, `type`, `recipient`, `lastErrorContains`, `lastRequeuedBy`, `requeuedOnly`, `attemptsMin`, `attemptsMax`, `lastAttemptFrom`, `lastAttemptTo`, `lastRequeuedFrom`, `lastRequeuedTo`, `createdFrom`, `createdTo`, `sentFrom`, `sentTo`, pagination, and sorting. `GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
+`GET /api/v1/admin/notification-actions` supports `notificationId`, `actionType`, `actorEmail`, `createdFrom`, `createdTo`, pagination, and sorting.
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
 
