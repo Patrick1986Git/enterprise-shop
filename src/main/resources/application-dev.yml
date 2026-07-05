@@ -48,6 +48,16 @@ security:
     refresh-expiration: 86400000 # Refresh Token: 24h (in milliseconds)
 
 # #############################################################################
+# INTEGRATIONS: STRIPE PAYMENT GATEWAY
+# Local placeholders keep development startup convenient. Override via environment
+# variables when testing with real Stripe credentials.
+# #############################################################################
+stripe:
+  api-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
+  public-key: ${STRIPE_PUBLIC_KEY:pk_test_placeholder}
+
+# #############################################################################
 # OBSERVABILITY & LOGGING (Dev Specific)
 # #############################################################################
 logging:
