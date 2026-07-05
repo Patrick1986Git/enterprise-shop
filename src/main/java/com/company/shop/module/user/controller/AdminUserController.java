@@ -91,7 +91,7 @@ public class AdminUserController {
 			@Parameter(description = "User identifier.")
 			@PathVariable UUID id,
 			@io.swagger.v3.oas.annotations.parameters.RequestBody(
-					description = "User profile and role data to update."
+					description = "User first and last name data to update."
 			)
 			@Valid @RequestBody UserUpdateDTO dto) {
 		return service.update(id, dto);
