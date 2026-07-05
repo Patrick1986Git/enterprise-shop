@@ -48,6 +48,15 @@ security:
     refresh-expiration: 86400000 # 24 hours
 
 # #############################################################################
+# INTEGRATIONS: STRIPE PAYMENT GATEWAY
+# Production requires real credentials from environment or secret management.
+# #############################################################################
+stripe:
+  api-key: ${STRIPE_SECRET_KEY}
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET}
+  public-key: ${STRIPE_PUBLIC_KEY}
+
+# #############################################################################
 # OBSERVABILITY: PRODUCTION LOGGING
 # Minimalistic logging to focus on system health and critical failures.
 # #############################################################################

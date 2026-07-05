@@ -8,9 +8,6 @@ spring:
   application:
     name: enterprise-shop
 
-  profiles:
-    active: dev
-
   # Global MVC & Resource Handling
   # Configuration ensures that 404 errors are handled as exceptions for consistent API responses.
   mvc:
@@ -66,17 +63,6 @@ management:
     health:
       show-details: when_authorized
 
-# #############################################################################
-# INTEGRATIONS: STRIPE PAYMENT GATEWAY
-# Sensitive keys must be injected via secure Environment Variables or Vault.
-# #############################################################################
-stripe:
-  # Secret key for server-to-server communication (Restricted API access)
-  api-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}
-  # Webhook secret used for cryptographic signature verification in PaymentServiceImpl
-  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
-  # Public key for client-side Stripe Elements/SDK initialization
-  public-key: ${STRIPE_PUBLIC_KEY:pk_test_placeholder}
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} requestId=%X{requestId} - %msg%n"
