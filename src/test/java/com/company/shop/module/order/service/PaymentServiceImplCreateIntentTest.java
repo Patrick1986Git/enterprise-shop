@@ -24,7 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
 import com.company.shop.module.order.entity.Order;
@@ -51,7 +51,7 @@ class PaymentServiceImplCreateIntentTest {
 	private PaymentRepository paymentRepository;
 
 	@Mock
-	private CartService cartService;
+	private CartCheckoutFacade cartCheckoutFacade;
 
 	@Mock
 	private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
@@ -62,7 +62,7 @@ class PaymentServiceImplCreateIntentTest {
 	@BeforeEach
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
-		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar,
+		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartCheckoutFacade, stripeWebhookEventRegistrar,
 				meterRegistry);
 		setField(service, "publicKey", "pk_test_123");
 	}

@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import io.micrometer.core.instrument.MeterRegistry;
 
 import com.company.shop.common.exception.BusinessException;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderStatus;
@@ -68,15 +68,15 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepo;
     private final PaymentRepository paymentRepo;
-    private final CartService cartService;
+    private final CartCheckoutFacade cartCheckoutFacade;
     private final StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
     private final MeterRegistry meterRegistry;
 
-    public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo, CartService cartService,
+    public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo, CartCheckoutFacade cartCheckoutFacade,
             StripeWebhookEventRegistrar stripeWebhookEventRegistrar, MeterRegistry meterRegistry) {
         this.orderRepo = orderRepo;
         this.paymentRepo = paymentRepo;
-        this.cartService = cartService;
+        this.cartCheckoutFacade = cartCheckoutFacade;
         this.stripeWebhookEventRegistrar = stripeWebhookEventRegistrar;
         this.meterRegistry = meterRegistry;
     }
@@ -239,7 +239,7 @@ public class PaymentServiceImpl implements PaymentService {
                 order.getId(), payment.getId(), order.getUserId(), intent.getId(), order.getStatus(),
                 payment.getStatus());
 
-        cartService.clearCartForUser(order.getUserId());
+        cartCheckoutFacade.clearCartAfterSuccessfulPayment(order.getUserId());
         return true;
     }
 

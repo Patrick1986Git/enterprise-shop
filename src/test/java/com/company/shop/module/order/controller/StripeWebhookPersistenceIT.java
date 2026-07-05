@@ -28,7 +28,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.common.model.AuditableEntity;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.entity.Payment;
@@ -72,7 +72,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	private StripeWebhookEventRepository stripeWebhookEventRepository;
 
 	@MockitoBean
-	private CartService cartService;
+	private CartCheckoutFacade cartCheckoutFacade;
 
 	@Test
 	void handleStripeWebhook_shouldPersistOrderAndPaymentAsCompletedWhenPaymentIntentSucceeded() throws Exception {
@@ -102,7 +102,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertStripeWebhookEventPersisted("evt_persistence_success", SUCCEEDED_EVENT_TYPE);
-		verify(cartService).clearCartForUser(seededOrder.user().getId());
+		verify(cartCheckoutFacade).clearCartAfterSuccessfulPayment(seededOrder.user().getId());
 	}
 
 	@Test
@@ -130,7 +130,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 		assertStripeWebhookEventPersisted("evt_persistence_unsupported", UNSUPPORTED_EVENT_TYPE);
-		verifyNoInteractions(cartService);
+		verifyNoInteractions(cartCheckoutFacade);
 	}
 
 	@Test
@@ -162,7 +162,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertStripeWebhookEventPersisted("evt_persistence_already_paid", SUCCEEDED_EVENT_TYPE);
-		verifyNoInteractions(cartService);
+		verifyNoInteractions(cartCheckoutFacade);
 	}
 
 	@Test
@@ -189,7 +189,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(orderAfterRequests.getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(paymentAfterRequests.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertStripeWebhookEventPersisted("evt_persistence_duplicate", SUCCEEDED_EVENT_TYPE);
-		verify(cartService, times(1)).clearCartForUser(seededOrder.user().getId());
+		verify(cartCheckoutFacade, times(1)).clearCartAfterSuccessfulPayment(seededOrder.user().getId());
 	}
 
 	@Test
@@ -221,7 +221,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 		assertStripeWebhookEventNotPersisted("evt_persistence_amount_mismatch");
-		verifyNoInteractions(cartService);
+		verifyNoInteractions(cartCheckoutFacade);
 	}
 
 	@Test
@@ -253,7 +253,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 		assertStripeWebhookEventNotPersisted("evt_persistence_currency_mismatch");
-		verifyNoInteractions(cartService);
+		verifyNoInteractions(cartCheckoutFacade);
 	}
 
 	@Test
@@ -284,7 +284,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 		assertStripeWebhookEventNotPersisted("evt_persistence_missing_order_metadata");
-		verifyNoInteractions(cartService);
+		verifyNoInteractions(cartCheckoutFacade);
 	}
 
 	@Test
@@ -316,7 +316,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 		assertStripeWebhookEventNotPersisted("evt_persistence_provider_id_mismatch");
-		verifyNoInteractions(cartService);
+		verifyNoInteractions(cartCheckoutFacade);
 	}
 
 	private SeededOrder seedOrderWithPayment(BigDecimal orderAmount, String paymentIntentId) {

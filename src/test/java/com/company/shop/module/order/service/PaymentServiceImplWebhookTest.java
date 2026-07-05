@@ -25,7 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.company.shop.common.model.BaseEntity;
-import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderItem;
@@ -55,7 +55,7 @@ class PaymentServiceImplWebhookTest {
     private PaymentRepository paymentRepository;
 
     @Mock
-    private CartService cartService;
+    private CartCheckoutFacade cartCheckoutFacade;
 
     @Mock
     private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
@@ -66,7 +66,7 @@ class PaymentServiceImplWebhookTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new PaymentServiceImpl(orderRepository, paymentRepository, cartService, stripeWebhookEventRegistrar,
+        service = new PaymentServiceImpl(orderRepository, paymentRepository, cartCheckoutFacade, stripeWebhookEventRegistrar,
                 meterRegistry);
         setField(service, "webhookSecret", "whsec_test_123");
     }
@@ -84,7 +84,7 @@ class PaymentServiceImplWebhookTest {
             verifyWebhookEventRegistered("evt_unsupported", "payment_intent.processing");
             assertWebhookMetricCount("received", 1);
             assertWebhookMetricCount("ignored", 1);
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -104,7 +104,7 @@ class PaymentServiceImplWebhookTest {
             verifyWebhookEventRegistered("evt_missing_intent", "payment_intent.succeeded");
             assertWebhookMetricCount("received", 1);
             assertWebhookMetricCount("ignored", 1);
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -122,7 +122,7 @@ class PaymentServiceImplWebhookTest {
             service.handleWebhook("payload", "sig");
 
             verifyWebhookEventRegistered("evt_failed_missing_intent", "payment_intent.payment_failed");
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -147,7 +147,7 @@ class PaymentServiceImplWebhookTest {
             verifyWebhookEventRegistered("evt_missing_order_id", "payment_intent.succeeded");
             assertWebhookMetricCount("received", 1);
             assertWebhookMetricCount("failed", 1);
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -164,7 +164,7 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("orderId");
 
             verifyWebhookEventRegistered("evt_failed_missing_order_id", "payment_intent.payment_failed");
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -186,7 +186,7 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class);
 
             verifyWebhookEventRegistered("evt_invalid_uuid", "payment_intent.succeeded");
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -209,7 +209,7 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("orderId");
 
             verifyWebhookEventRegistered("evt_null_metadata", "payment_intent.succeeded");
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -225,7 +225,7 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("event id");
 
             assertWebhookMetricCount("failed", 1);
-            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -240,7 +240,7 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class)
                     .hasMessageContaining("event id");
 
-            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -256,7 +256,7 @@ class PaymentServiceImplWebhookTest {
                     .hasMessageContaining("event type");
 
             assertWebhookMetricCount("failed", 1);
-            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -271,7 +271,7 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class)
                     .hasMessageContaining("event type");
 
-            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -285,7 +285,7 @@ class PaymentServiceImplWebhookTest {
                     .isInstanceOf(WebhookSignatureInvalidException.class);
 
             assertWebhookMetricCount("failed", 1);
-            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(stripeWebhookEventRegistrar, orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -302,7 +302,7 @@ class PaymentServiceImplWebhookTest {
             verify(stripeWebhookEventRegistrar).register("evt_duplicate", "payment_intent.succeeded");
             assertWebhookMetricCount("received", 1);
             assertWebhookMetricCount("duplicate", 1);
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -318,7 +318,7 @@ class PaymentServiceImplWebhookTest {
             service.handleWebhook("payload", "sig");
 
             verify(stripeWebhookEventRegistrar).register("evt_failed_duplicate", "payment_intent.payment_failed");
-            verifyNoInteractions(orderRepository, paymentRepository, cartService);
+            verifyNoInteractions(orderRepository, paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -339,7 +339,7 @@ class PaymentServiceImplWebhookTest {
             verifyWebhookEventRegistered("evt_already_paid", "payment_intent.succeeded");
             verify(orderRepository).findByIdForUpdate(paidOrder.getId());
             verify(orderRepository, never()).save(paidOrder);
-            verifyNoInteractions(paymentRepository, cartService);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -360,7 +360,7 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_order_not_found", "payment_intent.succeeded");
             verify(orderRepository).findByIdForUpdate(orderId);
-            verifyNoInteractions(paymentRepository, cartService);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -386,7 +386,7 @@ class PaymentServiceImplWebhookTest {
             verify(orderRepository, never()).save(order);
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             verify(paymentRepository, never()).save(any(Payment.class));
-            verify(cartService, never()).clearCartForUser(order.getUserId());
+            verify(cartCheckoutFacade, never()).clearCartAfterSuccessfulPayment(order.getUserId());
         }
     }
 
@@ -416,7 +416,7 @@ class PaymentServiceImplWebhookTest {
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
             verify(paymentRepository, never()).save(payment);
-            verify(cartService, never()).clearCartForUser(order.getUserId());
+            verify(cartCheckoutFacade, never()).clearCartAfterSuccessfulPayment(order.getUserId());
         }
     }
 
@@ -444,7 +444,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
             verify(paymentRepository, never()).save(payment);
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(cartService);
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -469,7 +469,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
             verify(paymentRepository).save(payment);
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(cartService);
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -494,7 +494,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
             verify(paymentRepository, never()).save(payment);
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(cartService);
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -516,7 +516,7 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_amount_mismatch", "payment_intent.succeeded");
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartService);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -538,7 +538,7 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_currency_mismatch", "payment_intent.succeeded");
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartService);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
         }
     }
 
@@ -568,7 +568,7 @@ class PaymentServiceImplWebhookTest {
             assertWebhookMetricCount("failed", 1);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
-            verify(cartService, never()).clearCartForUser(order.getUserId());
+            verify(cartCheckoutFacade, never()).clearCartAfterSuccessfulPayment(order.getUserId());
         }
     }
 
@@ -598,7 +598,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
-            verify(cartService).clearCartForUser(order.getUserId());
+            verify(cartCheckoutFacade).clearCartAfterSuccessfulPayment(order.getUserId());
         }
     }
 

@@ -5,4 +5,6 @@ import java.util.UUID;
 public interface CartCheckoutFacade {
 
     CartCheckoutSnapshot getCartForCheckout(UUID userId);
+
+    void clearCartAfterSuccessfulPayment(UUID userId);
 }

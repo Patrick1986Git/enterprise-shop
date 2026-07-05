@@ -29,4 +29,9 @@ public class CartCheckoutFacadeImpl implements CartCheckoutFacade {
 
         return new CartCheckoutSnapshot(cart.getId(), items);
     }
+
+    @Override
+    public void clearCartAfterSuccessfulPayment(UUID userId) {
+        cartService.clearCartForUser(userId);
+    }
 }
