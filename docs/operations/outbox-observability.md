@@ -43,6 +43,10 @@ The admin outbox observability endpoints help administrators and admin UI consum
 
 The problem type filter can be combined with other list filters such as `aggregateType`, `eventType`, `attemptsMin`, `attemptsMax`, pagination, and sorting.
 
+## Supported event list filters
+
+`GET /api/v1/admin/outbox-events` supports `status`, `aggregateType`, `aggregateId`, `eventType`, `lastErrorContains`, `createdFrom`, `createdTo`, `processedFrom`, `processedTo`, `lastAttemptFrom`, `lastAttemptTo`, `attemptsMin`, `attemptsMax`, `requeuedOnly`, `problemType`, pagination, and sorting. `aggregateType`, `eventType`, and `lastErrorContains` use case-insensitive contains matching after trimming and ignore blank values. `aggregateId` is an exact UUID match. `createdFrom`/`createdTo`, `processedFrom`/`processedTo`, and `lastAttemptFrom`/`lastAttemptTo` are inclusive timestamp ranges. `attemptsMin` and `attemptsMax` are inclusive numeric bounds. `requeuedOnly=true` returns events with `requeueCount > 0`; omitting it or setting it to `false` does not restrict by requeue count. `problemType` keeps the operational meanings listed above for `STALE_PENDING`, `STALE_FAILED`, and `HIGH_ATTEMPT_FAILED`.
+
 ## Common operational queries
 
 The examples below use relative paths and ISO-8601 UTC timestamps. Add the normal admin authentication headers used by the environment.
