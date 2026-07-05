@@ -4,7 +4,7 @@
 
 enterprise-shop is a Java 21 modular monolith built on the current repository stack:
 
-- Spring Boot 4.0.x
+- Spring Boot 4.1.0
 - Spring Web MVC
 - Spring Security with stateless JWT authentication
 - Spring Data JPA / Hibernate
