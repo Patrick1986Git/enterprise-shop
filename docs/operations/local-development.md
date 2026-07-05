@@ -28,18 +28,18 @@ The `dev` profile uses `jdbc:postgresql://localhost:5433/enterprise_shop_dev`, F
 
 ## Configuration
 
-The default active profile is `dev` in `application.yml`.
+The base `application.yml` does not activate a profile by default. Local development should explicitly activate the `dev` profile so the application uses the local PostgreSQL, JWT, and Stripe development settings from `application-dev.yml`.
 
 Required for real payment/webhook flows:
 
 | Variable | Purpose | Local fallback |
 | --- | --- | --- |
 | `JWT_SECRET` | JWT signing secret. | Development-only secret in `application-dev.yml`. |
-| `STRIPE_SECRET_KEY` | Stripe server API key. | `sk_test_placeholder`. |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature secret. | `whsec_placeholder`. |
-| `STRIPE_PUBLIC_KEY` | Stripe publishable key returned with payment intent data. | `pk_test_placeholder`. |
+| `STRIPE_SECRET_KEY` | Stripe server API key. | Development-profile-only `sk_test_placeholder`. |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signature secret. | Development-profile-only `whsec_placeholder`. |
+| `STRIPE_PUBLIC_KEY` | Stripe publishable key returned with payment intent data. | Development-profile-only `pk_test_placeholder`. |
 
-Production profile database variables are explicit: `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, and `JWT_SECRET`.
+Production profile variables are explicit and must be provided by the environment or secret management: `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `STRIPE_PUBLIC_KEY`.
 
 ## Build and run
 
@@ -53,7 +53,7 @@ Validate the toolchain and compile/test baseline:
 Run the application locally:
 
 ```bash
-./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
 The app listens on `http://localhost:8080` by default.
