@@ -102,6 +102,14 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.user.service..");
 
+
+    @ArchTest
+    static final ArchRule orderModuleMustNotDependOnCartServices =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.order..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.cart.service..");
+
     // TODO: Expand cart/order entity boundary rules after order item product snapshot decoupling.
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnCartEntities =

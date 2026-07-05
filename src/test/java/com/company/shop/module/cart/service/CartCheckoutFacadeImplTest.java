@@ -1,6 +1,7 @@
 package com.company.shop.module.cart.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -64,6 +65,17 @@ class CartCheckoutFacadeImplTest {
 
         assertThat(snapshot.items()).isEmpty();
         assertThat(snapshot.isEmpty()).isTrue();
+    }
+
+
+    @Test
+    void clearCartAfterSuccessfulPayment_shouldDelegateToCartService() {
+        CartCheckoutFacadeImpl facade = new CartCheckoutFacadeImpl(cartService);
+        UUID userId = UUID.randomUUID();
+
+        facade.clearCartAfterSuccessfulPayment(userId);
+
+        verify(cartService).clearCartForUser(userId);
     }
 
     private Product product(String suffix, BigDecimal price, int stock) throws Exception {
