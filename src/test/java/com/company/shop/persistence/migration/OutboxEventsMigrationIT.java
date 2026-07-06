@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,8 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                             'processed_at',
                             'attempts',
                             'last_error',
+                            'next_attempt_at',
+                            'dead_letter_reason',
                             'requeue_count',
                             'last_requeued_at',
                             'last_requeued_by'
@@ -71,6 +74,8 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                 .containsEntry("processed_at", "timestamp with time zone")
                 .containsEntry("attempts", "integer")
                 .containsEntry("last_error", "text")
+                .containsEntry("next_attempt_at", "timestamp with time zone")
+                .containsEntry("dead_letter_reason", "text")
                 .containsEntry("requeue_count", "integer")
                 .containsEntry("last_requeued_at", "timestamp with time zone")
                 .containsEntry("last_requeued_by", "character varying");
@@ -94,7 +99,38 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                         "idx_outbox_events_aggregate",
                         "idx_outbox_events_status_last_attempt_at",
                         "idx_outbox_events_status_attempts",
-                        "idx_outbox_events_status_processed_at");
+                        "idx_outbox_events_status_processed_at",
+                        "idx_outbox_events_status_next_attempt_at");
+    }
+
+    @Test
+    void migrate_shouldAllowOutboxEventLifecycleStatuses() {
+        String aggregateType = "MigrationStatusTest-" + UUID.randomUUID();
+        List<String> lifecycleStatuses = List.of("PENDING", "PROCESSED", "FAILED", "DEAD_LETTER");
+
+        for (String status : lifecycleStatuses) {
+            jdbcTemplate.update(
+                    """
+                            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, status)
+                            VALUES (?::uuid, ?, ?::uuid, 'OrderPlaced', '{}'::jsonb, ?)
+                            """,
+                    UUID.randomUUID().toString(),
+                    aggregateType,
+                    UUID.randomUUID().toString(),
+                    status);
+        }
+
+        List<String> statuses = jdbcTemplate.queryForList(
+                """
+                        SELECT status
+                        FROM outbox_events
+                        WHERE aggregate_type = ?
+                        AND status IN ('PENDING', 'PROCESSED', 'FAILED', 'DEAD_LETTER')
+                        """,
+                String.class,
+                aggregateType);
+
+        assertThat(statuses).containsExactlyInAnyOrderElementsOf(lifecycleStatuses);
     }
 
     @Test
