@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,22 +105,32 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
 
     @Test
     void migrate_shouldAllowOutboxEventLifecycleStatuses() {
-        for (String status : List.of("PENDING", "PROCESSED", "FAILED", "DEAD_LETTER")) {
+        String aggregateType = "MigrationStatusTest-" + UUID.randomUUID();
+        List<String> lifecycleStatuses = List.of("PENDING", "PROCESSED", "FAILED", "DEAD_LETTER");
+
+        for (String status : lifecycleStatuses) {
             jdbcTemplate.update(
                     """
                             INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, status)
-                            VALUES (?::uuid, 'Order', ?::uuid, 'OrderPlaced', '{}'::jsonb, ?)
+                            VALUES (?::uuid, ?, ?::uuid, 'OrderPlaced', '{}'::jsonb, ?)
                             """,
-                    java.util.UUID.randomUUID().toString(),
-                    java.util.UUID.randomUUID().toString(),
+                    UUID.randomUUID().toString(),
+                    aggregateType,
+                    UUID.randomUUID().toString(),
                     status);
         }
 
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outbox_events WHERE status IN ('PENDING', 'PROCESSED', 'FAILED', 'DEAD_LETTER')",
-                Integer.class);
+        List<String> statuses = jdbcTemplate.queryForList(
+                """
+                        SELECT status
+                        FROM outbox_events
+                        WHERE aggregate_type = ?
+                        AND status IN ('PENDING', 'PROCESSED', 'FAILED', 'DEAD_LETTER')
+                        """,
+                String.class,
+                aggregateType);
 
-        assertThat(count).isEqualTo(4);
+        assertThat(statuses).containsExactlyInAnyOrderElementsOf(lifecycleStatuses);
     }
 
     @Test
