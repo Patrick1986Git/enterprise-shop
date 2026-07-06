@@ -21,7 +21,7 @@ The recorded event uses:
 | --- | --- |
 | `OutboxEventPoller` | Scheduled entry point. Runs with `fixedDelayString = ${app.outbox.processing.fixed-delay:PT10S}` and returns immediately when processing is disabled. |
 | `OutboxProcessingProperties` | Binds `app.outbox.processing.*` with defaults. |
-| `OutboxEventProcessor` | Loads a pending batch, selects a handler by event type, marks events processed or failed, and stores failure details. |
+| `OutboxEventProcessor` | Loads due pending events, selects a handler by event type, marks events processed, schedules retryable failures, and dead-letters terminal failures. |
 | `OutboxEventHandler` | Handler interface implemented by event-specific consumers. |
 
 Current property defaults:
@@ -31,8 +31,10 @@ Current property defaults:
 | `app.outbox.processing.enabled` | `false` |
 | `app.outbox.processing.batch-size` | `25` |
 | `app.outbox.processing.fixed-delay` | `PT10S` |
+| `app.outbox.processing.retry-delay` | `PT1M` |
+| `app.outbox.processing.max-attempts` | `3` |
 
-Failed outbox events are marked `FAILED`, increment attempts, and store `last_error`. Unknown event types also fail with an explanatory error.
+The poller keeps using `fixed-delay` as its scheduling interval. The processor selects only due `PENDING` outbox events: events with `next_attempt_at` unset or not later than the current database timestamp. Retryable handler failures remain `PENDING`, increment attempts, store `last_error` and `last_attempt_at`, and set `next_attempt_at` to the next scheduled processor attempt. Failures that reach `max-attempts` are marked `DEAD_LETTER`, keep the terminal error details, store a dead-letter reason, and clear `next_attempt_at`. Unknown event types follow the same retry/dead-letter policy with an explanatory error. Existing `FAILED` events are not automatically retried by the processor.
 
 ## Notification handling
 
