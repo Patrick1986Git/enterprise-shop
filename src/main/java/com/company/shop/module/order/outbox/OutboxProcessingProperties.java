@@ -10,6 +10,8 @@ public class OutboxProcessingProperties {
     private boolean enabled = false;
     private int batchSize = 25;
     private Duration fixedDelay = Duration.ofSeconds(10);
+    private Duration retryDelay = Duration.ofMinutes(1);
+    private int maxAttempts = 3;
 
     public boolean enabled() {
         return enabled;
@@ -23,6 +25,14 @@ public class OutboxProcessingProperties {
         return fixedDelay;
     }
 
+    public Duration retryDelay() {
+        return retryDelay;
+    }
+
+    public int maxAttempts() {
+        return maxAttempts;
+    }
+
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
     }
@@ -33,5 +43,13 @@ public class OutboxProcessingProperties {
 
     public void setFixedDelay(Duration fixedDelay) {
         this.fixedDelay = fixedDelay;
+    }
+
+    public void setRetryDelay(Duration retryDelay) {
+        this.retryDelay = retryDelay;
+    }
+
+    public void setMaxAttempts(int maxAttempts) {
+        this.maxAttempts = maxAttempts;
     }
 }

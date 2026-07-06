@@ -1,5 +1,6 @@
 package com.company.shop.module.order.outbox;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,14 +11,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class OutboxEventProcessor {
 
+    private static final String MAX_ATTEMPTS_EXCEEDED_REASON = "Max attempts exceeded";
+
     private final OutboxEventRepository outboxEventRepository;
     private final Map<String, OutboxEventHandler> handlersByEventType;
+    private final OutboxProcessingProperties properties;
 
     public OutboxEventProcessor(
             OutboxEventRepository outboxEventRepository,
-            List<OutboxEventHandler> handlers) {
+            List<OutboxEventHandler> handlers,
+            OutboxProcessingProperties properties) {
         this.outboxEventRepository = outboxEventRepository;
         this.handlersByEventType = buildHandlersByEventType(handlers);
+        this.properties = properties;
     }
 
     @Transactional
@@ -29,7 +35,7 @@ public class OutboxEventProcessor {
         for (OutboxEvent event : pendingEvents) {
             OutboxEventHandler handler = handlersByEventType.get(event.getEventType());
             if (handler == null) {
-                event.markFailed("No outbox handler registered for event type: " + event.getEventType());
+                recordFailedAttempt(event, "No outbox handler registered for event type: " + event.getEventType());
                 failedCount++;
                 continue;
             }
@@ -39,12 +45,22 @@ public class OutboxEventProcessor {
                 event.markProcessed();
                 processedCount++;
             } catch (Exception ex) {
-                event.markFailed(errorMessage(ex));
+                recordFailedAttempt(event, errorMessage(ex));
                 failedCount++;
             }
         }
 
         return new OutboxEventProcessingResult(processedCount, failedCount);
+    }
+
+    private void recordFailedAttempt(OutboxEvent event, String errorMessage) {
+        if (event.getAttempts() + 1 >= properties.maxAttempts()) {
+            event.markDeadLetter(errorMessage, MAX_ATTEMPTS_EXCEEDED_REASON);
+            return;
+        }
+
+        Instant nextAttemptAt = Instant.now().plus(properties.retryDelay());
+        event.scheduleRetry(errorMessage, nextAttemptAt);
     }
 
     private Map<String, OutboxEventHandler> buildHandlersByEventType(List<OutboxEventHandler> handlers) {

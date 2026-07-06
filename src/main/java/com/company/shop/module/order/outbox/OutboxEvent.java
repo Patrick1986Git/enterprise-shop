@@ -114,6 +114,7 @@ public class OutboxEvent extends BaseEntity {
 
     public void markDeadLetter(String errorMessage, String deadLetterReason) {
         this.status = OutboxEventStatus.DEAD_LETTER;
+        this.attempts += 1;
         this.lastAttemptAt = Instant.now();
         this.lastError = errorMessage;
         this.deadLetterReason = deadLetterReason;

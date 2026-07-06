@@ -125,6 +125,7 @@ class OutboxEventTest {
         event.markDeadLetter("publisher unavailable", "attempt limit reached");
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.DEAD_LETTER);
+        assertThat(event.getAttempts()).isEqualTo(2);
         assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getLastError()).isEqualTo("publisher unavailable");
         assertThat(event.getDeadLetterReason()).isEqualTo("attempt limit reached");

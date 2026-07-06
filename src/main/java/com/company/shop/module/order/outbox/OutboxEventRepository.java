@@ -41,7 +41,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
             SELECT *
             FROM outbox_events
             WHERE status = 'PENDING'
-            ORDER BY created_at ASC
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
+            ORDER BY next_attempt_at ASC NULLS FIRST, created_at ASC, id ASC
             LIMIT :batchSize
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
