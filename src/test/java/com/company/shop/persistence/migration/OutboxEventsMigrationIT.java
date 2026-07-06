@@ -47,6 +47,8 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                             'processed_at',
                             'attempts',
                             'last_error',
+                            'next_attempt_at',
+                            'dead_letter_reason',
                             'requeue_count',
                             'last_requeued_at',
                             'last_requeued_by'
@@ -71,6 +73,8 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                 .containsEntry("processed_at", "timestamp with time zone")
                 .containsEntry("attempts", "integer")
                 .containsEntry("last_error", "text")
+                .containsEntry("next_attempt_at", "timestamp with time zone")
+                .containsEntry("dead_letter_reason", "text")
                 .containsEntry("requeue_count", "integer")
                 .containsEntry("last_requeued_at", "timestamp with time zone")
                 .containsEntry("last_requeued_by", "character varying");
@@ -94,7 +98,28 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                         "idx_outbox_events_aggregate",
                         "idx_outbox_events_status_last_attempt_at",
                         "idx_outbox_events_status_attempts",
-                        "idx_outbox_events_status_processed_at");
+                        "idx_outbox_events_status_processed_at",
+                        "idx_outbox_events_status_next_attempt_at");
+    }
+
+    @Test
+    void migrate_shouldAllowOutboxEventLifecycleStatuses() {
+        for (String status : List.of("PENDING", "PROCESSED", "FAILED", "DEAD_LETTER")) {
+            jdbcTemplate.update(
+                    """
+                            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, status)
+                            VALUES (?::uuid, 'Order', ?::uuid, 'OrderPlaced', '{}'::jsonb, ?)
+                            """,
+                    java.util.UUID.randomUUID().toString(),
+                    java.util.UUID.randomUUID().toString(),
+                    status);
+        }
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE status IN ('PENDING', 'PROCESSED', 'FAILED', 'DEAD_LETTER')",
+                Integer.class);
+
+        assertThat(count).isEqualTo(4);
     }
 
     @Test

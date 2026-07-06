@@ -50,6 +50,12 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "last_error")
     private String lastError;
 
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
+    @Column(name = "dead_letter_reason")
+    private String deadLetterReason;
+
     @Column(name = "requeue_count", nullable = false)
     private int requeueCount;
 
@@ -82,6 +88,8 @@ public class OutboxEvent extends BaseEntity {
         this.processedAt = now;
         this.lastAttemptAt = now;
         this.lastError = null;
+        this.nextAttemptAt = null;
+        this.deadLetterReason = null;
     }
 
     public void markFailed(String errorMessage) {
@@ -90,6 +98,26 @@ public class OutboxEvent extends BaseEntity {
         this.attempts += 1;
         this.lastAttemptAt = now;
         this.lastError = errorMessage;
+        this.processedAt = null;
+    }
+
+    public void scheduleRetry(String errorMessage, Instant nextAttemptAt) {
+        Instant now = Instant.now();
+        this.status = OutboxEventStatus.PENDING;
+        this.attempts += 1;
+        this.lastAttemptAt = now;
+        this.lastError = errorMessage;
+        this.nextAttemptAt = nextAttemptAt;
+        this.processedAt = null;
+        this.deadLetterReason = null;
+    }
+
+    public void markDeadLetter(String errorMessage, String deadLetterReason) {
+        this.status = OutboxEventStatus.DEAD_LETTER;
+        this.lastAttemptAt = Instant.now();
+        this.lastError = errorMessage;
+        this.deadLetterReason = deadLetterReason;
+        this.nextAttemptAt = null;
         this.processedAt = null;
     }
 
@@ -102,6 +130,8 @@ public class OutboxEvent extends BaseEntity {
         this.status = OutboxEventStatus.PENDING;
         this.processedAt = null;
         this.lastError = null;
+        this.nextAttemptAt = null;
+        this.deadLetterReason = null;
         this.requeueCount += 1;
         this.lastRequeuedAt = Instant.now();
         this.lastRequeuedBy = normalizedRequeuedBy;
@@ -145,6 +175,14 @@ public class OutboxEvent extends BaseEntity {
 
     public String getLastError() {
         return lastError;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public String getDeadLetterReason() {
+        return deadLetterReason;
     }
 
     public int getRequeueCount() {

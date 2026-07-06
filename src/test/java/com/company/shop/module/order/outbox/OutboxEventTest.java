@@ -2,6 +2,7 @@ package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -24,15 +25,18 @@ class OutboxEventTest {
         assertThat(event.getProcessedAt()).isNull();
         assertThat(event.getLastAttemptAt()).isNull();
         assertThat(event.getLastError()).isNull();
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getDeadLetterReason()).isNull();
         assertThat(event.getRequeueCount()).isZero();
         assertThat(event.getLastRequeuedAt()).isNull();
         assertThat(event.getLastRequeuedBy()).isNull();
     }
 
     @Test
-    void markProcessed_shouldSetProcessedStatusAndProcessedAtAndClearLastError() {
+    void markProcessed_shouldSetProcessedStatusProcessedAtLastAttemptAtAndClearFailureState() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.markFailed("temporary failure");
+        event.scheduleRetry("temporary failure", Instant.now().plusSeconds(60));
+        event.markDeadLetter("final failure", "attempt limit reached");
 
         event.markProcessed();
 
@@ -41,6 +45,8 @@ class OutboxEventTest {
         assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getProcessedAt()).isEqualTo(event.getLastAttemptAt());
         assertThat(event.getLastError()).isNull();
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getDeadLetterReason()).isNull();
     }
 
     @Test
@@ -57,6 +63,8 @@ class OutboxEventTest {
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getLastError()).isNull();
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getDeadLetterReason()).isNull();
         assertThat(event.getProcessedAt()).isNull();
         assertThat(event.getAttempts()).isEqualTo(attempts);
         assertThat(event.getLastAttemptAt()).isEqualTo(lastAttemptAt);
@@ -92,4 +100,36 @@ class OutboxEventTest {
         assertThat(event.getLastAttemptAt()).isNotNull();
         assertThat(event.getProcessedAt()).isNull();
     }
+
+    @Test
+    void scheduleRetry_shouldSetPendingIncrementAttemptsStoreFailureStateAndNextAttemptAt() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        Instant nextAttemptAt = Instant.now().plusSeconds(300);
+
+        event.scheduleRetry("publisher unavailable", nextAttemptAt);
+
+        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(event.getAttempts()).isEqualTo(1);
+        assertThat(event.getLastAttemptAt()).isNotNull();
+        assertThat(event.getLastError()).isEqualTo("publisher unavailable");
+        assertThat(event.getNextAttemptAt()).isEqualTo(nextAttemptAt);
+        assertThat(event.getProcessedAt()).isNull();
+        assertThat(event.getDeadLetterReason()).isNull();
+    }
+
+    @Test
+    void markDeadLetter_shouldSetDeadLetterStoreFailureAndReasonAndClearNextAttemptAt() {
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        event.scheduleRetry("temporary failure", Instant.now().plusSeconds(300));
+
+        event.markDeadLetter("publisher unavailable", "attempt limit reached");
+
+        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.DEAD_LETTER);
+        assertThat(event.getLastAttemptAt()).isNotNull();
+        assertThat(event.getLastError()).isEqualTo("publisher unavailable");
+        assertThat(event.getDeadLetterReason()).isEqualTo("attempt limit reached");
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getProcessedAt()).isNull();
+    }
+
 }
