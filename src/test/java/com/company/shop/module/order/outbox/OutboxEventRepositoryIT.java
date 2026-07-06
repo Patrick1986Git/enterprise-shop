@@ -1122,18 +1122,6 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEvent(eventId, status, aggregateType, aggregateId, eventType, Instant.parse("2026-01-01T10:00:00Z"));
     }
 
-    private void insertOutboxEventWithNextAttemptAt(
-            UUID eventId,
-            OutboxEventStatus status,
-            Instant createdAt,
-            Instant nextAttemptAt) {
-        insertOutboxEvent(eventId, status, createdAt);
-        jdbcTemplate.update(
-                "UPDATE outbox_events SET next_attempt_at = CAST(? AS timestamptz) WHERE id = ?",
-                nextAttemptAt.toString(),
-                eventId);
-    }
-
     private void insertOutboxEvent(
             UUID eventId,
             OutboxEventStatus status,
