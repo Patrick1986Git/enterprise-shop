@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The admin outbox observability endpoints help administrators and admin UI consumers inspect transactional outbox health in this modular monolith. They provide read-focused visibility into event processing state, failed processing attempts, requeue history, and admin action logs without changing the outbox architecture or introducing external brokers.
+The admin outbox observability endpoints help administrators and admin UI consumers inspect transactional outbox health in this modular monolith. They provide read-focused visibility into event processing state, failed processing attempts, scheduled retry timing, dead-letter state, requeue history, and admin action logs without changing the outbox architecture or introducing external brokers.
 
 ## Endpoints
 
@@ -19,7 +19,7 @@ The admin outbox observability endpoints help administrators and admin UI consum
 
 `GET /api/v1/admin/outbox-events/summary` returns counts and timestamps that are useful for a quick health check:
 
-- `pendingCount`, `processedCount`, `failedCount`, and `totalCount`: event counts by processing state and overall total.
+- `pendingCount`, `processedCount`, `failedCount`, `deadLetterCount`, and `totalCount`: event counts by processing state and overall total.
 - `requeuedEventCount`: number of events that have been manually requeued at least once.
 - `totalRequeueCount`: total number of manual requeue actions recorded across events.
 - `stalePendingCount`: number of `PENDING` events older than `staleThresholdMinutes` by `createdAt`.
@@ -32,6 +32,8 @@ The admin outbox observability endpoints help administrators and admin UI consum
 - `newestAttemptAt`: newest processing-attempt timestamp across outbox events.
 - `newestProcessedAttemptAt`: newest attempt timestamp among processed events.
 - `newestFailedAttemptAt`: newest attempt timestamp among failed events.
+- `oldestDeadLetterCreatedAt`: oldest creation timestamp among dead-lettered events.
+- `newestDeadLetterAttemptAt`: newest attempt timestamp among dead-lettered events.
 
 ## Problem type filter
 
@@ -40,12 +42,15 @@ The admin outbox observability endpoints help administrators and admin UI consum
 - `STALE_PENDING`: returns `PENDING` events older than the stale threshold by `createdAt`.
 - `STALE_FAILED`: returns `FAILED` events whose `lastAttemptAt` is older than the stale threshold.
 - `HIGH_ATTEMPT_FAILED`: returns `FAILED` events with `attempts >= highFailedAttemptsThreshold`.
+- `DEAD_LETTER`: returns `DEAD_LETTER` events that reached terminal retry handling and require operational review.
 
 The problem type filter can be combined with other list filters such as `aggregateType`, `eventType`, `attemptsMin`, `attemptsMax`, pagination, and sorting.
 
 ## Supported event list filters
 
-`GET /api/v1/admin/outbox-events` supports `status`, `aggregateType`, `aggregateId`, `eventType`, `lastErrorContains`, `createdFrom`, `createdTo`, `processedFrom`, `processedTo`, `lastAttemptFrom`, `lastAttemptTo`, `attemptsMin`, `attemptsMax`, `requeuedOnly`, `problemType`, pagination, and sorting. `aggregateType`, `eventType`, and `lastErrorContains` use case-insensitive contains matching after trimming and ignore blank values. `aggregateId` is an exact UUID match. `createdFrom`/`createdTo`, `processedFrom`/`processedTo`, and `lastAttemptFrom`/`lastAttemptTo` are inclusive timestamp ranges. `attemptsMin` and `attemptsMax` are inclusive numeric bounds. `requeuedOnly=true` returns events with `requeueCount > 0`; omitting it or setting it to `false` does not restrict by requeue count. `problemType` keeps the operational meanings listed above for `STALE_PENDING`, `STALE_FAILED`, and `HIGH_ATTEMPT_FAILED`.
+`GET /api/v1/admin/outbox-events` supports `status`, `aggregateType`, `aggregateId`, `eventType`, `lastErrorContains`, `createdFrom`, `createdTo`, `processedFrom`, `processedTo`, `lastAttemptFrom`, `lastAttemptTo`, `nextAttemptFrom`, `nextAttemptTo`, `attemptsMin`, `attemptsMax`, `requeuedOnly`, `problemType`, pagination, and sorting. `aggregateType`, `eventType`, and `lastErrorContains` use case-insensitive contains matching after trimming and ignore blank values. `aggregateId` is an exact UUID match. `createdFrom`/`createdTo`, `processedFrom`/`processedTo`, `lastAttemptFrom`/`lastAttemptTo`, and `nextAttemptFrom`/`nextAttemptTo` are inclusive timestamp ranges. `attemptsMin` and `attemptsMax` are inclusive numeric bounds. `requeuedOnly=true` returns events with `requeueCount > 0`; omitting it or setting it to `false` does not restrict by requeue count. `problemType` keeps the operational meanings listed above for `STALE_PENDING`, `STALE_FAILED`, `HIGH_ATTEMPT_FAILED`, and `DEAD_LETTER`.
+
+List responses include `nextAttemptAt` so admins can see delayed `PENDING` retry schedules. Detail responses include both `nextAttemptAt` and `deadLetterReason`; `deadLetterReason` explains why a `DEAD_LETTER` event became terminal.
 
 ## Common operational queries
 
@@ -74,6 +79,22 @@ GET /api/v1/admin/outbox-events?problemType=HIGH_ATTEMPT_FAILED&sort=attempts,de
 ```
 
 Use this when `highAttemptFailedCount` is greater than zero to review failed events that have reached the high-attempt threshold.
+
+### List scheduled retry events
+
+```http
+GET /api/v1/admin/outbox-events?status=PENDING&nextAttemptFrom=2026-06-21T00:00:00Z&nextAttemptTo=2026-06-21T01:00:00Z&sort=nextAttemptAt,asc&size=20
+```
+
+Use `nextAttemptFrom` and `nextAttemptTo` to inspect pending events scheduled for retry in a time window. A future `nextAttemptAt` means the event is pending but not due for the retry poller yet.
+
+### List dead-lettered events
+
+```http
+GET /api/v1/admin/outbox-events?problemType=DEAD_LETTER&sort=lastAttemptAt,desc&size=20
+```
+
+Use this to review terminal outbox events. `DEAD_LETTER` means retry handling exhausted the configured policy and the event is no longer eligible for scheduled retry processing. Inspect the detail response for `deadLetterReason` before planning follow-up remediation.
 
 ### Search failures by error text
 
@@ -118,7 +139,7 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 ## Operational notes
 
 - These endpoints are admin-only.
-- Requeue is available only for failed outbox events.
+- Requeue is available only for failed outbox events; `DEAD_LETTER` requeue remains intentionally unchanged and is not enabled by this observability slice.
 - Requeue records admin action log entries for auditability.
 - Action log `details` is informational and makes audit entries self-descriptive for admins and admin UI consumers.
 - The documented `REQUEUE` details value does not change outbox processing, retry, requeue eligibility, scheduling, persistence behavior, endpoint paths, DTO shape, or security.

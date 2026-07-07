@@ -160,6 +160,7 @@ class OutboxEventAdminCommandServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 Instant.parse("2026-01-01T10:01:30Z"),
+                null,
                 1,
                 null,
                 1,

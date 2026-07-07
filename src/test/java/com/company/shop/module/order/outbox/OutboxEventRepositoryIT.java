@@ -911,6 +911,59 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(matching.getId());
     }
 
+
+    @Test
+    void findAll_shouldFilterByNextAttemptRangeInclusive() {
+        UUID beforeId = UUID.randomUUID();
+        UUID insideId = UUID.randomUUID();
+        UUID afterId = UUID.randomUUID();
+        Instant lowerBound = Instant.parse("2026-06-01T00:00:00Z");
+        Instant upperBound = Instant.parse("2026-06-30T23:59:59Z");
+        insertOutboxEventWithNextAttemptAt(beforeId, OutboxEventStatus.PENDING, Instant.parse("2026-05-01T00:00:00Z"), Instant.parse("2026-05-31T23:59:59Z"));
+        insertOutboxEventWithNextAttemptAt(insideId, OutboxEventStatus.PENDING, Instant.parse("2026-05-01T00:00:01Z"), Instant.parse("2026-06-15T12:00:00Z"));
+        insertOutboxEventWithNextAttemptAt(afterId, OutboxEventStatus.PENDING, Instant.parse("2026-05-01T00:00:02Z"), Instant.parse("2026-07-01T00:00:00Z"));
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(criteriaWithNextAttemptRange(lowerBound, upperBound)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(insideId);
+    }
+
+    @Test
+    void findAll_shouldExcludeNullNextAttemptAtWhenNextAttemptRangeIsApplied() {
+        UUID unscheduledId = UUID.randomUUID();
+        UUID scheduledId = UUID.randomUUID();
+        Instant lowerBound = Instant.parse("2026-06-01T00:00:00Z");
+        insertOutboxEvent(unscheduledId, OutboxEventStatus.PENDING, Instant.parse("2026-05-01T00:00:00Z"));
+        insertOutboxEventWithNextAttemptAt(scheduledId, OutboxEventStatus.PENDING, Instant.parse("2026-05-01T00:00:01Z"), lowerBound);
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(criteriaWithNextAttemptRange(lowerBound, null)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId)
+                .containsExactly(scheduledId)
+                .doesNotContain(unscheduledId);
+    }
+
+    @Test
+    void findAll_shouldFilterByDeadLetterProblemType() {
+        UUID deadLetterId = UUID.randomUUID();
+        UUID failedId = UUID.randomUUID();
+        insertOutboxEvent(deadLetterId, OutboxEventStatus.DEAD_LETTER, "Order", UUID.randomUUID(), "OrderPlaced");
+        insertOutboxEvent(failedId, OutboxEventStatus.FAILED, "Order", UUID.randomUUID(), "OrderPlaced");
+        entityManager.clear();
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(criteriaWithProblemType(OutboxEventProblemType.DEAD_LETTER), Instant.parse("2026-06-01T00:00:00Z"), 3),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent()).extracting(OutboxEvent::getId).containsExactly(deadLetterId);
+    }
+
     @Test
     void findAll_shouldFilterByAttemptsMinInclusive() {
         OutboxEvent below = attemptedEvent(1);
@@ -1390,6 +1443,13 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 .attemptsMin(attemptsMin)
                 .attemptsMax(attemptsMax)
                 .requeuedOnly(requeuedOnly)
+                .build();
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithNextAttemptRange(Instant nextAttemptFrom, Instant nextAttemptTo) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .nextAttemptFrom(nextAttemptFrom)
+                .nextAttemptTo(nextAttemptTo)
                 .build();
     }
 

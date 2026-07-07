@@ -58,6 +58,12 @@ public record OutboxEventResponseDTO(
         )
         Instant lastAttemptAt,
         @Schema(
+                description = "Next scheduled retry attempt time for pending events, when delayed.",
+                example = "2026-06-22T10:21:00Z",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        Instant nextAttemptAt,
+        @Schema(
                 description = "Number of processing attempts.",
                 example = "1",
                 minimum = "0",
