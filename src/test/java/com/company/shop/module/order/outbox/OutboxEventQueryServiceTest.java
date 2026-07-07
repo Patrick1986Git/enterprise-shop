@@ -36,6 +36,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventNextAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 
@@ -65,11 +66,14 @@ class OutboxEventQueryServiceTest {
         Instant newestAttemptAt = Instant.parse("2026-01-01T12:00:00Z");
         Instant newestProcessedAttemptAt = Instant.parse("2026-01-01T11:30:00Z");
         Instant newestFailedAttemptAt = Instant.parse("2026-01-01T12:00:00Z");
+        Instant oldestDeadLetterCreatedAt = Instant.parse("2026-01-01T09:30:00Z");
+        Instant newestDeadLetterAttemptAt = Instant.parse("2026-01-01T12:30:00Z");
 
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(2L);
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED)).thenReturn(3L);
         when(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED)).thenReturn(1L);
-        when(outboxEventRepository.count()).thenReturn(6L);
+        when(outboxEventRepository.countByStatus(OutboxEventStatus.DEAD_LETTER)).thenReturn(1L);
+        when(outboxEventRepository.count()).thenReturn(7L);
         when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(2L);
         when(outboxEventRepository.sumRequeueCount()).thenReturn(5L);
         when(outboxEventRepository.countByStatusAndCreatedAtLessThanEqual(eq(OutboxEventStatus.PENDING), any(Instant.class)))
@@ -87,13 +91,18 @@ class OutboxEventQueryServiceTest {
                 .thenReturn(Optional.of(newestProcessedAttemptAt));
         when(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.FAILED))
                 .thenReturn(Optional.of(newestFailedAttemptAt));
+        when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.DEAD_LETTER))
+                .thenReturn(Optional.of(oldestDeadLetterCreatedAt));
+        when(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.DEAD_LETTER))
+                .thenReturn(Optional.of(newestDeadLetterAttemptAt));
 
         OutboxEventSummaryDTO summary = outboxEventQueryService.getSummary();
 
         assertThat(summary.pendingCount()).isEqualTo(2L);
         assertThat(summary.processedCount()).isEqualTo(3L);
         assertThat(summary.failedCount()).isEqualTo(1L);
-        assertThat(summary.totalCount()).isEqualTo(6L);
+        assertThat(summary.deadLetterCount()).isEqualTo(1L);
+        assertThat(summary.totalCount()).isEqualTo(7L);
         assertThat(summary.requeuedEventCount()).isEqualTo(2L);
         assertThat(summary.totalRequeueCount()).isEqualTo(5L);
         assertThat(summary.stalePendingCount()).isEqualTo(4L);
@@ -106,9 +115,12 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.newestAttemptAt()).isEqualTo(newestAttemptAt);
         assertThat(summary.newestProcessedAttemptAt()).isEqualTo(newestProcessedAttemptAt);
         assertThat(summary.newestFailedAttemptAt()).isEqualTo(newestFailedAttemptAt);
+        assertThat(summary.oldestDeadLetterCreatedAt()).isEqualTo(oldestDeadLetterCreatedAt);
+        assertThat(summary.newestDeadLetterAttemptAt()).isEqualTo(newestDeadLetterAttemptAt);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.FAILED);
+        verify(outboxEventRepository).countByStatus(OutboxEventStatus.DEAD_LETTER);
         verify(outboxEventRepository).count();
         verify(outboxEventRepository).countByRequeueCountGreaterThan(0);
         verify(outboxEventRepository).sumRequeueCount();
@@ -120,6 +132,8 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).findNewestAttemptAt();
         verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.FAILED);
+        verify(outboxEventRepository).findOldestCreatedAtByStatus(OutboxEventStatus.DEAD_LETTER);
+        verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.DEAD_LETTER);
         verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
         verifyNoInteractions(outboxEventProcessor);
     }
@@ -129,6 +143,7 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(0L);
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED)).thenReturn(4L);
         when(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED)).thenReturn(0L);
+        when(outboxEventRepository.countByStatus(OutboxEventStatus.DEAD_LETTER)).thenReturn(0L);
         when(outboxEventRepository.count()).thenReturn(4L);
         when(outboxEventRepository.countByRequeueCountGreaterThan(0)).thenReturn(0L);
         when(outboxEventRepository.sumRequeueCount()).thenReturn(0L);
@@ -143,12 +158,15 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findNewestAttemptAt()).thenReturn(Optional.empty());
         when(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED)).thenReturn(Optional.empty());
         when(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.FAILED)).thenReturn(Optional.empty());
+        when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.DEAD_LETTER)).thenReturn(Optional.empty());
+        when(outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.DEAD_LETTER)).thenReturn(Optional.empty());
 
         OutboxEventSummaryDTO summary = outboxEventQueryService.getSummary();
 
         assertThat(summary.pendingCount()).isZero();
         assertThat(summary.processedCount()).isEqualTo(4L);
         assertThat(summary.failedCount()).isZero();
+        assertThat(summary.deadLetterCount()).isZero();
         assertThat(summary.totalCount()).isEqualTo(4L);
         assertThat(summary.requeuedEventCount()).isZero();
         assertThat(summary.totalRequeueCount()).isZero();
@@ -162,9 +180,12 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.newestAttemptAt()).isNull();
         assertThat(summary.newestProcessedAttemptAt()).isNull();
         assertThat(summary.newestFailedAttemptAt()).isNull();
+        assertThat(summary.oldestDeadLetterCreatedAt()).isNull();
+        assertThat(summary.newestDeadLetterAttemptAt()).isNull();
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PENDING);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.FAILED);
+        verify(outboxEventRepository).countByStatus(OutboxEventStatus.DEAD_LETTER);
         verify(outboxEventRepository).count();
         verify(outboxEventRepository).countByRequeueCountGreaterThan(0);
         verify(outboxEventRepository).sumRequeueCount();
@@ -176,6 +197,8 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).findNewestAttemptAt();
         verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.FAILED);
+        verify(outboxEventRepository).findOldestCreatedAtByStatus(OutboxEventStatus.DEAD_LETTER);
+        verify(outboxEventRepository).findNewestAttemptAtByStatus(OutboxEventStatus.DEAD_LETTER);
         verifyNoMoreInteractions(outboxEventRepository, outboxEventMapper);
         verifyNoInteractions(outboxEventProcessor);
     }
@@ -261,6 +284,8 @@ class OutboxEventQueryServiceTest {
         Instant processedTo = Instant.parse("2026-01-04T00:00:00Z");
         Instant lastAttemptFrom = Instant.parse("2026-01-05T00:00:00Z");
         Instant lastAttemptTo = Instant.parse("2026-01-06T00:00:00Z");
+        Instant nextAttemptFrom = Instant.parse("2026-01-07T00:00:00Z");
+        Instant nextAttemptTo = Instant.parse("2026-01-08T00:00:00Z");
 
         OutboxEventAdminSearchCriteria criteria = OutboxEventAdminSearchCriteria.builder()
                 .status(OutboxEventStatus.FAILED)
@@ -274,6 +299,8 @@ class OutboxEventQueryServiceTest {
                 .processedTo(processedTo)
                 .lastAttemptFrom(lastAttemptFrom)
                 .lastAttemptTo(lastAttemptTo)
+                .nextAttemptFrom(nextAttemptFrom)
+                .nextAttemptTo(nextAttemptTo)
                 .attemptsMin(2)
                 .attemptsMax(4)
                 .requeuedOnly(Boolean.TRUE)
@@ -291,6 +318,8 @@ class OutboxEventQueryServiceTest {
         assertThat(criteria.processedTo()).isEqualTo(processedTo);
         assertThat(criteria.lastAttemptFrom()).isEqualTo(lastAttemptFrom);
         assertThat(criteria.lastAttemptTo()).isEqualTo(lastAttemptTo);
+        assertThat(criteria.nextAttemptFrom()).isEqualTo(nextAttemptFrom);
+        assertThat(criteria.nextAttemptTo()).isEqualTo(nextAttemptTo);
         assertThat(criteria.attemptsMin()).isEqualTo(2);
         assertThat(criteria.attemptsMax()).isEqualTo(4);
         assertThat(criteria.requeuedOnly()).isTrue();
@@ -462,6 +491,46 @@ class OutboxEventQueryServiceTest {
 
         verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
         verifyNoInteractions(outboxEventProcessor);
+    }
+
+
+    @Test
+    void getEvents_shouldPassNextAttemptFiltersToSpecification() {
+        Instant nextAttemptFrom = Instant.parse("2026-06-01T00:00:00Z");
+        Instant nextAttemptTo = Instant.parse("2026-06-30T23:59:59Z");
+        Pageable pageable = PageRequest.of(0, 20);
+        Specification<OutboxEvent> specification = (root, query, cb) -> null;
+        when(outboxEventRepository.findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt"))))
+                .thenReturn(Page.empty(pageable));
+
+        OutboxEventAdminSearchCriteria criteria = criteriaWithNextAttemptRange(nextAttemptFrom, nextAttemptTo);
+
+        try (MockedStatic<OutboxEventSpecifications> specifications =
+                org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
+            specifications.when(() -> OutboxEventSpecifications.adminFilters(criteria))
+                    .thenReturn(specification);
+
+            outboxEventQueryService.getEvents(criteria, pageable);
+
+            specifications.verify(() -> OutboxEventSpecifications.adminFilters(criteria));
+        }
+
+        verify(outboxEventRepository).findAll(specification, PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldThrowWhenNextAttemptFromIsAfterNextAttemptTo() {
+        Instant nextAttemptFrom = Instant.parse("2026-07-01T00:00:00Z");
+        Instant nextAttemptTo = Instant.parse("2026-06-01T00:00:00Z");
+
+        assertThatThrownBy(() -> outboxEventQueryService.getEvents(criteriaWithNextAttemptRange(nextAttemptFrom, nextAttemptTo), PageRequest.of(0, 20)))
+                .isInstanceOf(OutboxEventNextAttemptDateRangeInvalidException.class)
+                .hasMessage("nextAttemptFrom must be before or equal to nextAttemptTo.")
+                .extracting("errorCode")
+                .isEqualTo("OUTBOX_EVENT_NEXT_ATTEMPT_DATE_RANGE_INVALID");
+
+        verifyNoInteractions(outboxEventRepository, outboxEventMapper, outboxEventProcessor);
     }
 
     @Test
@@ -729,6 +798,15 @@ class OutboxEventQueryServiceTest {
                 .build();
     }
 
+    private static OutboxEventAdminSearchCriteria criteriaWithNextAttemptRange(
+            Instant nextAttemptFrom,
+            Instant nextAttemptTo) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .nextAttemptFrom(nextAttemptFrom)
+                .nextAttemptTo(nextAttemptTo)
+                .build();
+    }
+
     private static OutboxEventAdminSearchCriteria criteriaWithAttempts(Integer attemptsMin, Integer attemptsMax) {
         return OutboxEventAdminSearchCriteria.builder()
                 .attemptsMin(attemptsMin)
@@ -765,7 +843,9 @@ class OutboxEventQueryServiceTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 null,
+                null,
                 0,
+                null,
                 null,
                 0,
                 null,
@@ -786,6 +866,7 @@ class OutboxEventQueryServiceTest {
                 "OrderPlaced",
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-01-01T10:00:00Z"),
+                null,
                 null,
                 null,
                 0,

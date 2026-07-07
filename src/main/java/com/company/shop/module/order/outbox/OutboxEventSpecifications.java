@@ -70,6 +70,14 @@ public final class OutboxEventSpecifications {
                 predicates.add(cb.lessThanOrEqualTo(root.get("lastAttemptAt"), criteria.lastAttemptTo()));
             }
 
+            if (criteria.nextAttemptFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("nextAttemptAt"), criteria.nextAttemptFrom()));
+            }
+
+            if (criteria.nextAttemptTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("nextAttemptAt"), criteria.nextAttemptTo()));
+            }
+
             if (criteria.attemptsMin() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), criteria.attemptsMin()));
             }
@@ -96,6 +104,7 @@ public final class OutboxEventSpecifications {
                         predicates.add(cb.equal(root.get("status"), OutboxEventStatus.FAILED));
                         predicates.add(cb.greaterThanOrEqualTo(root.get("attempts"), highFailedAttemptsThreshold));
                     }
+                    case DEAD_LETTER -> predicates.add(cb.equal(root.get("status"), OutboxEventStatus.DEAD_LETTER));
                 }
             }
 

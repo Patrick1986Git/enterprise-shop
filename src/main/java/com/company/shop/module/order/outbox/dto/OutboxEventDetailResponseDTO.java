@@ -64,6 +64,12 @@ public record OutboxEventDetailResponseDTO(
         )
         Instant lastAttemptAt,
         @Schema(
+                description = "Next scheduled retry attempt time for pending events, when delayed.",
+                example = "2026-06-22T10:21:00Z",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        Instant nextAttemptAt,
+        @Schema(
                 description = "Number of processing attempts.",
                 example = "1",
                 minimum = "0",
@@ -76,6 +82,12 @@ public record OutboxEventDetailResponseDTO(
                 accessMode = Schema.AccessMode.READ_ONLY
         )
         String lastError,
+        @Schema(
+                description = "Terminal dead-letter reason when the event exhausted retry handling.",
+                example = "Maximum retry attempts exhausted",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        String deadLetterReason,
         @Schema(
                 description = "Number of times the event was manually requeued.",
                 example = "0",

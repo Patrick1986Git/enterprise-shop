@@ -50,6 +50,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventNextAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventRequeueNotAllowedException;
@@ -118,6 +119,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
                 Instant.parse("2026-01-01T10:01:30Z"),
+                Instant.parse("2026-01-01T10:06:30Z"),
                 2,
                 "boom",
                 1,
@@ -139,6 +141,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.content[0].processedAt").value("2026-01-01T10:01:00Z"))
                 .andExpect(jsonPath("$.content[0].lastAttemptAt").value("2026-01-01T10:01:30Z"))
+                .andExpect(jsonPath("$.content[0].nextAttemptAt").value("2026-01-01T10:06:30Z"))
                 .andExpect(jsonPath("$.content[0].attempts").value(2))
                 .andExpect(jsonPath("$.content[0].lastError").value("boom"))
                 .andExpect(jsonPath("$.content[0].requeueCount").value(1))
@@ -269,6 +272,44 @@ class AdminOutboxEventControllerWebMvcTest {
 
 
     @Test
+    void getEvents_shouldPassNextAttemptFiltersToService() throws Exception {
+        Instant nextAttemptFrom = Instant.parse("2026-06-01T00:00:00Z");
+        Instant nextAttemptTo = Instant.parse("2026-06-30T23:59:59Z");
+        when(outboxEventQueryService.getEvents(eq(criteriaWithNextAttemptRange(nextAttemptFrom, nextAttemptTo)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                 .param("nextAttemptFrom", nextAttemptFrom.toString())
+                 .param("nextAttemptTo", nextAttemptTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(outboxEventQueryService).getEvents(eq(criteriaWithNextAttemptRange(nextAttemptFrom, nextAttemptTo)), any(Pageable.class));
+    }
+
+    @Test
+    void getEvents_shouldReturnBadRequestWhenNextAttemptFromIsAfterNextAttemptTo() throws Exception {
+        Instant nextAttemptFrom = Instant.parse("2026-07-01T00:00:00Z");
+        Instant nextAttemptTo = Instant.parse("2026-06-01T00:00:00Z");
+        when(outboxEventQueryService.getEvents(eq(criteriaWithNextAttemptRange(nextAttemptFrom, nextAttemptTo)), any(Pageable.class)))
+                .thenThrow(new OutboxEventNextAttemptDateRangeInvalidException());
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                 .param("nextAttemptFrom", nextAttemptFrom.toString())
+                 .param("nextAttemptTo", nextAttemptTo.toString())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_NEXT_ATTEMPT_DATE_RANGE_INVALID"))
+                .andExpect(jsonPath("$.message").value("nextAttemptFrom must be before or equal to nextAttemptTo."))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventQueryService).getEvents(eq(criteriaWithNextAttemptRange(nextAttemptFrom, nextAttemptTo)), any(Pageable.class));
+    }
+
+
+    @Test
     void getEvents_shouldPassProblemTypeToService() throws Exception {
         when(outboxEventQueryService.getEvents(eq(criteriaWithProblemType(OutboxEventProblemType.STALE_PENDING)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
@@ -378,8 +419,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
                 Instant.parse("2026-01-01T10:01:30Z"),
+                Instant.parse("2026-01-01T10:06:30Z"),
                 2,
                 "boom",
+                null,
                 1,
                 Instant.parse("2026-01-01T10:02:00Z"),
                 "admin@example.com");
@@ -398,8 +441,10 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.processedAt").value("2026-01-01T10:01:00Z"))
                 .andExpect(jsonPath("$.lastAttemptAt").value("2026-01-01T10:01:30Z"))
+                .andExpect(jsonPath("$.nextAttemptAt").value("2026-01-01T10:06:30Z"))
                 .andExpect(jsonPath("$.attempts").value(2))
                 .andExpect(jsonPath("$.lastError").value("boom"))
+                .andExpect(jsonPath("$.deadLetterReason").value(nullValue()))
                 .andExpect(jsonPath("$.requeueCount").value(1))
                 .andExpect(jsonPath("$.lastRequeuedAt").value("2026-01-01T10:02:00Z"))
                 .andExpect(jsonPath("$.lastRequeuedBy").value("admin@example.com"));
@@ -542,6 +587,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
                 Instant.parse("2026-01-01T10:01:30Z"),
+                null,
                 3,
                 null,
                 2,
@@ -653,7 +699,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 2L,
                 3L,
                 1L,
-                6L,
+                1L,
+                7L,
                 2L,
                 5L,
                 4L,
@@ -665,7 +712,9 @@ class AdminOutboxEventControllerWebMvcTest {
                 Instant.parse("2026-01-01T11:00:00Z"),
                 Instant.parse("2026-01-01T12:00:00Z"),
                 Instant.parse("2026-01-01T11:30:00Z"),
-                Instant.parse("2026-01-01T12:00:00Z")));
+                Instant.parse("2026-01-01T12:00:00Z"),
+                Instant.parse("2026-01-01T09:30:00Z"),
+                Instant.parse("2026-01-01T12:30:00Z")));
 
         mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_SUMMARY_URL)
                         .with(user("admin").roles("ADMIN")))
@@ -674,7 +723,8 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.pendingCount").value(2))
                 .andExpect(jsonPath("$.processedCount").value(3))
                 .andExpect(jsonPath("$.failedCount").value(1))
-                .andExpect(jsonPath("$.totalCount").value(6))
+                .andExpect(jsonPath("$.deadLetterCount").value(1))
+                .andExpect(jsonPath("$.totalCount").value(7))
                 .andExpect(jsonPath("$.requeuedEventCount").value(2))
                 .andExpect(jsonPath("$.totalRequeueCount").value(5))
                 .andExpect(jsonPath("$.stalePendingCount").value(4))
@@ -686,7 +736,9 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.newestFailedCreatedAt").value("2026-01-01T11:00:00Z"))
                 .andExpect(jsonPath("$.newestAttemptAt").value("2026-01-01T12:00:00Z"))
                 .andExpect(jsonPath("$.newestProcessedAttemptAt").value("2026-01-01T11:30:00Z"))
-                .andExpect(jsonPath("$.newestFailedAttemptAt").value("2026-01-01T12:00:00Z"));
+                .andExpect(jsonPath("$.newestFailedAttemptAt").value("2026-01-01T12:00:00Z"))
+                .andExpect(jsonPath("$.oldestDeadLetterCreatedAt").value("2026-01-01T09:30:00Z"))
+                .andExpect(jsonPath("$.newestDeadLetterAttemptAt").value("2026-01-01T12:30:00Z"));
 
         verify(outboxEventQueryService).getSummary();
         verifyNoMoreInteractions(outboxEventQueryService);
@@ -717,6 +769,15 @@ class AdminOutboxEventControllerWebMvcTest {
         return OutboxEventAdminSearchCriteria.builder()
                 .lastAttemptFrom(lastAttemptFrom)
                 .lastAttemptTo(lastAttemptTo)
+                .build();
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithNextAttemptRange(
+            Instant nextAttemptFrom,
+            Instant nextAttemptTo) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .nextAttemptFrom(nextAttemptFrom)
+                .nextAttemptTo(nextAttemptTo)
                 .build();
     }
 

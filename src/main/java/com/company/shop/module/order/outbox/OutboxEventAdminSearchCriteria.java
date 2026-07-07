@@ -15,6 +15,8 @@ public record OutboxEventAdminSearchCriteria(
         Instant processedTo,
         Instant lastAttemptFrom,
         Instant lastAttemptTo,
+        Instant nextAttemptFrom,
+        Instant nextAttemptTo,
         Integer attemptsMin,
         Integer attemptsMax,
         Boolean requeuedOnly,
@@ -35,7 +37,7 @@ public record OutboxEventAdminSearchCriteria(
             Boolean requeuedOnly,
             OutboxEventProblemType problemType) {
         this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo, null, null,
-                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, problemType);
+                lastAttemptFrom, lastAttemptTo, null, null, attemptsMin, attemptsMax, requeuedOnly, problemType);
     }
 
     public OutboxEventAdminSearchCriteria(
@@ -52,7 +54,7 @@ public record OutboxEventAdminSearchCriteria(
             Integer attemptsMax,
             Boolean requeuedOnly) {
         this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo, null, null,
-                lastAttemptFrom, lastAttemptTo, attemptsMin, attemptsMax, requeuedOnly, null);
+                lastAttemptFrom, lastAttemptTo, null, null, attemptsMin, attemptsMax, requeuedOnly, null);
     }
 
     public static Builder builder() {
@@ -72,6 +74,8 @@ public record OutboxEventAdminSearchCriteria(
         private Instant processedTo;
         private Instant lastAttemptFrom;
         private Instant lastAttemptTo;
+        private Instant nextAttemptFrom;
+        private Instant nextAttemptTo;
         private Integer attemptsMin;
         private Integer attemptsMax;
         private Boolean requeuedOnly;
@@ -135,6 +139,16 @@ public record OutboxEventAdminSearchCriteria(
             return this;
         }
 
+        public Builder nextAttemptFrom(Instant nextAttemptFrom) {
+            this.nextAttemptFrom = nextAttemptFrom;
+            return this;
+        }
+
+        public Builder nextAttemptTo(Instant nextAttemptTo) {
+            this.nextAttemptTo = nextAttemptTo;
+            return this;
+        }
+
         public Builder attemptsMin(Integer attemptsMin) {
             this.attemptsMin = attemptsMin;
             return this;
@@ -168,6 +182,8 @@ public record OutboxEventAdminSearchCriteria(
                     processedTo,
                     lastAttemptFrom,
                     lastAttemptTo,
+                    nextAttemptFrom,
+                    nextAttemptTo,
                     attemptsMin,
                     attemptsMax,
                     requeuedOnly,

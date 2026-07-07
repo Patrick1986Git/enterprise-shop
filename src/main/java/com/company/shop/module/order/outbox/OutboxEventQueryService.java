@@ -18,6 +18,7 @@ import com.company.shop.module.order.outbox.dto.OutboxEventSummaryDTO;
 import com.company.shop.module.order.outbox.exception.OutboxEventAttemptsRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventNextAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 
@@ -43,6 +44,7 @@ public class OutboxEventQueryService {
                 outboxEventRepository.countByStatus(OutboxEventStatus.PENDING),
                 outboxEventRepository.countByStatus(OutboxEventStatus.PROCESSED),
                 outboxEventRepository.countByStatus(OutboxEventStatus.FAILED),
+                outboxEventRepository.countByStatus(OutboxEventStatus.DEAD_LETTER),
                 outboxEventRepository.count(),
                 outboxEventRepository.countByRequeueCountGreaterThan(0),
                 outboxEventRepository.sumRequeueCount(),
@@ -56,7 +58,9 @@ public class OutboxEventQueryService {
                 outboxEventRepository.findNewestCreatedAtByStatus(OutboxEventStatus.FAILED).orElse(null),
                 outboxEventRepository.findNewestAttemptAt().orElse(null),
                 outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.PROCESSED).orElse(null),
-                outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.FAILED).orElse(null));
+                outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.FAILED).orElse(null),
+                outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.DEAD_LETTER).orElse(null),
+                outboxEventRepository.findNewestAttemptAtByStatus(OutboxEventStatus.DEAD_LETTER).orElse(null));
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +86,11 @@ public class OutboxEventQueryService {
                 && criteria.lastAttemptTo() != null
                 && criteria.lastAttemptFrom().isAfter(criteria.lastAttemptTo())) {
             throw new OutboxEventLastAttemptDateRangeInvalidException();
+        }
+        if (criteria.nextAttemptFrom() != null
+                && criteria.nextAttemptTo() != null
+                && criteria.nextAttemptFrom().isAfter(criteria.nextAttemptTo())) {
+            throw new OutboxEventNextAttemptDateRangeInvalidException();
         }
         if ((criteria.attemptsMin() != null && criteria.attemptsMin() < 0)
                 || (criteria.attemptsMax() != null && criteria.attemptsMax() < 0)

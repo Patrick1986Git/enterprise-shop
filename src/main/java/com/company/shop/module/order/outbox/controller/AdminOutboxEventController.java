@@ -87,6 +87,10 @@ public class AdminOutboxEventController {
             @Parameter(description = "Filter events whose last processing attempt occurred at or before "
                     + "this timestamp.")
             @RequestParam(required = false) Instant lastAttemptTo,
+            @Parameter(description = "Filter events whose next scheduled retry attempt is at or after this timestamp.")
+            @RequestParam(required = false) Instant nextAttemptFrom,
+            @Parameter(description = "Filter events whose next scheduled retry attempt is at or before this timestamp.")
+            @RequestParam(required = false) Instant nextAttemptTo,
             @Parameter(description = "Filter events with attempts greater than or equal to this value.")
             @RequestParam(required = false) Integer attemptsMin,
             @Parameter(description = "Filter events with attempts less than or equal to this value.")
@@ -96,7 +100,8 @@ public class AdminOutboxEventController {
             @Parameter(description = "Filter operational problem categories. STALE_PENDING returns PENDING events "
                     + "older than the stale threshold by createdAt. STALE_FAILED returns FAILED events whose "
                     + "lastAttemptAt is older than the stale threshold. HIGH_ATTEMPT_FAILED returns FAILED events "
-                    + "with attempts greater than or equal to the high failed attempts threshold.")
+                    + "with attempts greater than or equal to the high failed attempts threshold. DEAD_LETTER returns "
+                    + "terminal dead-lettered events.")
             @RequestParam(required = false) OutboxEventProblemType problemType,
             @PageableDefault(size = 20) Pageable pageable) {
         OutboxEventAdminSearchCriteria criteria = OutboxEventAdminSearchCriteria.builder()
@@ -111,6 +116,8 @@ public class AdminOutboxEventController {
                 .processedTo(processedTo)
                 .lastAttemptFrom(lastAttemptFrom)
                 .lastAttemptTo(lastAttemptTo)
+                .nextAttemptFrom(nextAttemptFrom)
+                .nextAttemptTo(nextAttemptTo)
                 .attemptsMin(attemptsMin)
                 .attemptsMax(attemptsMax)
                 .requeuedOnly(requeuedOnly)

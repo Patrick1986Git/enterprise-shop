@@ -28,6 +28,13 @@ public record OutboxEventSummaryDTO(
         )
         long failedCount,
         @Schema(
+                description = "Number of dead-lettered events requiring operational review.",
+                example = "1",
+                minimum = "0",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        long deadLetterCount,
+        @Schema(
                 description = "Total number of outbox events.",
                 example = "127",
                 minimum = "0",
@@ -112,5 +119,17 @@ public record OutboxEventSummaryDTO(
                 example = "2026-06-22T10:17:00Z",
                 accessMode = Schema.AccessMode.READ_ONLY
         )
-        Instant newestFailedAttemptAt) {
+        Instant newestFailedAttemptAt,
+        @Schema(
+                description = "Oldest dead-lettered event creation time.",
+                example = "2026-06-22T08:00:00Z",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        Instant oldestDeadLetterCreatedAt,
+        @Schema(
+                description = "Newest dead-lettered processing attempt time.",
+                example = "2026-06-22T10:18:00Z",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        Instant newestDeadLetterAttemptAt) {
 }
