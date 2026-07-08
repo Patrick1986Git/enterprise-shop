@@ -11,7 +11,7 @@ The admin outbox observability endpoints help administrators and admin UI consum
 | `GET` | `/api/v1/admin/outbox-events/summary` | Return aggregate outbox health indicators and operational thresholds. |
 | `GET` | `/api/v1/admin/outbox-events` | List outbox events with filters, pagination, and sorting. |
 | `GET` | `/api/v1/admin/outbox-events/{id}` | Inspect one outbox event in detail. |
-| `POST` | `/api/v1/admin/outbox-events/{id}/requeue` | Requeue a failed outbox event for processing. |
+| `POST` | `/api/v1/admin/outbox-events/{id}/requeue` | Requeue a failed or dead-lettered outbox event for processing. |
 | `GET` | `/api/v1/admin/outbox-events/{id}/actions` | List admin action logs for one outbox event. |
 | `GET` | `/api/v1/admin/outbox-event-actions` | Search admin outbox action logs globally. |
 
@@ -94,7 +94,7 @@ Use `nextAttemptFrom` and `nextAttemptTo` to inspect pending events scheduled fo
 GET /api/v1/admin/outbox-events?problemType=DEAD_LETTER&sort=lastAttemptAt,desc&size=20
 ```
 
-Use this to review terminal outbox events. `DEAD_LETTER` means retry handling exhausted the configured policy and the event is no longer eligible for scheduled retry processing. Inspect the detail response for `deadLetterReason` before planning follow-up remediation.
+Use this to review terminal outbox events. `DEAD_LETTER` means retry handling exhausted the configured policy and the event is no longer eligible for scheduled retry processing. Inspect the detail response for `deadLetterReason` before planning follow-up remediation. After remediation, administrators can manually requeue `DEAD_LETTER` events through the existing requeue endpoint.
 
 ### Search failures by error text
 
@@ -139,7 +139,8 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 ## Operational notes
 
 - These endpoints are admin-only.
-- Requeue is available only for failed outbox events; `DEAD_LETTER` requeue remains intentionally unchanged and is not enabled by this observability slice.
+- Requeue is available for `FAILED` and `DEAD_LETTER` outbox events through `POST /api/v1/admin/outbox-events/{id}/requeue`; `PENDING` and `PROCESSED` events are rejected.
+- Manual requeue changes the event back to `PENDING`, clears `lastError`, `nextAttemptAt`, and `deadLetterReason`, increments `requeueCount`, and records `lastRequeuedAt` and `lastRequeuedBy`.
 - Requeue records admin action log entries for auditability.
 - Action log `details` is informational and makes audit entries self-descriptive for admins and admin UI consumers.
 - The documented `REQUEUE` details value does not change outbox processing, retry, requeue eligibility, scheduling, persistence behavior, endpoint paths, DTO shape, or security.

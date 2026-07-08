@@ -670,7 +670,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED"))
-                .andExpect(jsonPath("$.message").value("Outbox event can be requeued only when it is FAILED."))
+                .andExpect(jsonPath("$.message").value("Outbox event can be requeued only when it is FAILED or DEAD_LETTER."))
                 .andExpect(jsonPath("$.timestamp").exists());
 
         verify(outboxEventAdminCommandService).requeueFailedEvent(eventId);
