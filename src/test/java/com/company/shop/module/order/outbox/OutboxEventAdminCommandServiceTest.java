@@ -68,6 +68,8 @@ class OutboxEventAdminCommandServiceTest {
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getLastError()).isNull();
         assertThat(event.getProcessedAt()).isNull();
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getDeadLetterReason()).isNull();
         assertThat(event.getAttempts()).isEqualTo(1);
         assertThat(event.getRequeueCount()).isEqualTo(1);
         assertThat(event.getLastRequeuedAt()).isNotNull();
@@ -75,6 +77,42 @@ class OutboxEventAdminCommandServiceTest {
         verify(outboxEventRepository).findById(eventId);
         verify(currentUserProvider).getCurrentUserEmail();
         verify(outboxEventAdminActionLogRepository).save(any(OutboxEventAdminActionLog.class));
+        verify(outboxEventMapper).toDto(event);
+        verifyNoInteractions(outboxEventProcessor);
+        verifyNoMoreInteractions(outboxEventRepository, currentUserProvider, outboxEventMapper,
+                outboxEventAdminActionLogRepository);
+    }
+
+    @Test
+    void requeueFailedEvent_shouldRequeueDeadLetterEventClearTerminalStateAndReturnMappedDto() {
+        UUID eventId = UUID.randomUUID();
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        setId(event, eventId);
+        event.markDeadLetter("boom", "attempt limit reached");
+        setInstantField(event, "nextAttemptAt", Instant.parse("2026-01-01T10:06:30Z"));
+        OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
+        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
+        when(outboxEventMapper.toDto(event)).thenReturn(response);
+
+        OutboxEventResponseDTO result = outboxEventAdminCommandService.requeueFailedEvent(eventId);
+
+        assertThat(result).isEqualTo(response);
+        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(event.getProcessedAt()).isNull();
+        assertThat(event.getLastError()).isNull();
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getDeadLetterReason()).isNull();
+        assertThat(event.getRequeueCount()).isEqualTo(1);
+        assertThat(event.getLastRequeuedAt()).isNotNull();
+        assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
+        verify(outboxEventRepository).findById(eventId);
+        verify(currentUserProvider).getCurrentUserEmail();
+        verify(outboxEventAdminActionLogRepository).save(argThat(log ->
+                eventId.equals(log.getOutboxEventId())
+                        && log.getActionType() == OutboxEventAdminActionType.REQUEUE
+                        && "admin@example.com".equals(log.getActorEmail())
+                        && "Manual requeue requested for failed outbox event.".equals(log.getDetails())));
         verify(outboxEventMapper).toDto(event);
         verifyNoInteractions(outboxEventProcessor);
         verifyNoMoreInteractions(outboxEventRepository, currentUserProvider, outboxEventMapper,
@@ -173,6 +211,16 @@ class OutboxEventAdminCommandServiceTest {
             Field idField = com.company.shop.common.model.BaseEntity.class.getDeclaredField("id");
             idField.setAccessible(true);
             idField.set(event, id);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private void setInstantField(OutboxEvent event, String fieldName, Instant value) {
+        try {
+            Field field = OutboxEvent.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(event, value);
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException(ex);
         }

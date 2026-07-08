@@ -34,7 +34,7 @@ public class OutboxEventAdminCommandService {
         OutboxEvent event = outboxEventRepository.findById(id)
                 .orElseThrow(() -> new OutboxEventNotFoundException(id));
 
-        if (event.getStatus() != OutboxEventStatus.FAILED) {
+        if (!canBeManuallyRequeued(event)) {
             throw new OutboxEventRequeueNotAllowedException();
         }
 
@@ -43,6 +43,11 @@ public class OutboxEventAdminCommandService {
         outboxEventAdminActionLogRepository.save(
                 OutboxEventAdminActionLog.requeue(event.getId(), currentAdminEmail));
         return outboxEventMapper.toDto(event);
+    }
+
+    private boolean canBeManuallyRequeued(OutboxEvent event) {
+        return event.getStatus() == OutboxEventStatus.FAILED
+                || event.getStatus() == OutboxEventStatus.DEAD_LETTER;
     }
 
     private String normalizeCurrentAdminEmail(String currentAdminEmail) {

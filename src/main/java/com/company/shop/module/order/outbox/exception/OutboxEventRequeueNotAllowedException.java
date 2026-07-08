@@ -12,6 +12,6 @@ public class OutboxEventRequeueNotAllowedException extends BusinessException {
                 "OUTBOX_EVENT_REQUEUE_NOT_ALLOWED",
                 "error.business.order.outboxEventRequeueNotAllowed",
                 new Object[0],
-                "Outbox event can be requeued only when it is FAILED.");
+                "Outbox event can be requeued only when it is FAILED or DEAD_LETTER.");
     }
 }

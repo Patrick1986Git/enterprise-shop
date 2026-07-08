@@ -165,7 +165,7 @@ public class AdminOutboxEventController {
     @PostMapping("/{id}/requeue")
     @Operation(
             operationId = "requeueOutboxEvent",
-            summary = "Requeue failed outbox event for processing",
+            summary = "Requeue failed or dead-lettered outbox event for processing",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
