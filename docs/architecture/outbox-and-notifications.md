@@ -67,3 +67,25 @@ app.notification.smtp.from=no-reply@example.com
 spring.mail.host=localhost
 spring.mail.port=1025
 ```
+
+## Event metadata/versioning transition plan
+
+The current outbox contract intentionally stores routing metadata outside the JSON payload: `outbox_events.event_type` selects the handler and `outbox_events.payload` contains the raw event-specific payload. Existing rows therefore contain raw `OrderPlacedEventPayload` JSON, not an envelope. Future metadata/versioning work must keep that shape readable until all legacy rows have been processed or migrated deliberately.
+
+### Evaluated options
+
+| Option | Compatibility and migration impact | Producer changes | Handler changes | Test coverage | Operational/admin API impact | Risks |
+| --- | --- | --- | --- | --- | --- | --- |
+| Keep `event_type` as the routing source and add optional version metadata only to future raw payloads | No table migration. Existing rows remain readable if added payload fields are optional/ignored by current deserialization. | Add optional metadata fields to future payload records only when needed. | Handlers keep reading the typed payload and default missing metadata to version 1. | Serialization tests proving current raw payload shape remains accepted; handler tests for missing metadata default. | Existing list/detail/filter/requeue APIs continue to work because routing fields stay unchanged. | Metadata is duplicated per payload type and cannot be queried efficiently without JSON inspection. |
+| Add nullable `event_version` column to `outbox_events` | Small additive migration if nullable or defaulted. Existing rows can be interpreted as version 1. | `OutboxEvent.pending(...)` and recorders set version for new events after the entity is extended. | Handlers can branch on `event.getEventVersion()` while still parsing raw payloads. | Migration test for default/nullable behavior; repository/entity mapper tests; processor/handler tests for null/default version 1. | Admin DTOs may later expose/filter version, but the first migration can avoid API changes. | Requires schema/entity/API sequencing discipline; adding NOT NULL without a safe default/backfill would break existing rows. |
+| Introduce `EventEnvelope<T>` JSON wrapper in `payload` | Breaking if handlers switch directly to envelope parsing, because existing rows are raw payloads. No schema migration, but JSON shape changes. | Recorders write `{metadata..., payload:{...}}` instead of raw payload. | Handlers must unwrap envelope before parsing the typed payload. | Dual-shape parser tests for raw and enveloped JSON; producer tests for the new shape; processor retry tests for parse failures. | Admin detail payload display changes shape for new rows, which can surprise operators and clients that inspect payload. | Highest compatibility risk unless dual-read is implemented before any producer writes envelopes. |
+| Support both legacy raw payloads and new enveloped payloads during a transition period | No immediate migration required. Backward compatible if introduced as read-only support first. | Initially none; later producers can opt in event-by-event. | Add an envelope-aware parser that detects wrapper shape and falls back to raw typed payload parsing. | Handler/parser tests for legacy raw payloads, valid envelopes, malformed envelopes, unknown/unsupported versions, and required-field validation after unwrapping. | Admin APIs can remain unchanged, but documentation should state that payload may be raw or enveloped only after producer opt-in. | More parser complexity; ambiguous wrapper field names must be reserved and validated consistently. |
+
+### Recommended sequence
+
+1. Preserve `event_type` as the authoritative routing source. The processor already dispatches by the `event_type` column, so routing should not move into JSON metadata.
+2. First implementation PR: add tests and documentation that lock in legacy raw `OrderPlacedEventPayload` support and define version `1` as the implicit version for rows without metadata. Do not change the producer payload shape, processor behavior, or schema in that PR.
+3. Second PR, if queryable versioning is needed: add a nullable/defaulted `event_version` column and map it on `OutboxEvent`, interpreting null as `1`. Keep admin API exposure optional and separate from the migration.
+4. Only after dual-read support exists, consider an `EventEnvelope<T>` for new event types or explicitly opted-in versions. Envelope writes should be introduced per event type and accompanied by handler tests proving both raw legacy and enveloped rows process successfully.
+
+The smallest safe first slice is documentation plus focused tests around the current raw payload contract. A schema migration or producer envelope write should wait until the project has an agreed dual-read parser and version-default behavior.
