@@ -12,7 +12,7 @@ The recorded event uses:
 | --- | --- |
 | Aggregate type | `Order` |
 | Event type | `OrderPlaced` |
-| Payload | JSON containing order id, user id/email, status, total amount, created time, and item snapshots. |
+| Payload | `OrderPlacedEventPayload` JSON containing order id, user id/email, status, total amount, created time, and item snapshots. |
 | Initial status | `PENDING` |
 
 ## Outbox processing
@@ -38,7 +38,7 @@ The poller keeps using `fixed-delay` as its scheduling interval. The processor s
 
 ## Notification handling
 
-`OrderPlacedNotificationHandler` handles `OrderPlaced` outbox events. It validates the payload fields it needs and delegates to `NotificationService`.
+`OrderPlacedNotificationHandler` handles `OrderPlaced` outbox events using the shared event type constant and `OrderPlacedEventPayload` contract. It validates the payload fields it needs and delegates to `NotificationService`.
 
 `NotificationService` creates a notification record with:
 
