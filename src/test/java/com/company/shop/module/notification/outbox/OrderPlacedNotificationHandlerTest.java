@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.notification.service.NotificationService;
+import com.company.shop.module.order.outbox.OrderOutboxEventTypes;
 import com.company.shop.module.order.outbox.OutboxEvent;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,7 +38,7 @@ class OrderPlacedNotificationHandlerTest {
 
     @Test
     void eventType_shouldReturnOrderPlaced() {
-        assertThat(handler.eventType()).isEqualTo("OrderPlaced");
+        assertThat(handler.eventType()).isEqualTo(OrderOutboxEventTypes.ORDER_PLACED);
     }
 
     @Test
@@ -63,7 +64,7 @@ class OrderPlacedNotificationHandlerTest {
 
     @Test
     void handle_shouldFailClearlyWhenPayloadIsInvalidJson() {
-        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "not-json");
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), OrderOutboxEventTypes.ORDER_PLACED, "not-json");
 
         assertThatThrownBy(() -> handler.handle(event))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -73,7 +74,7 @@ class OrderPlacedNotificationHandlerTest {
 
     @Test
     void handle_shouldFailClearlyWhenRequiredPayloadDataIsMissing() {
-        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", """
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), OrderOutboxEventTypes.ORDER_PLACED, """
                 {
                   "orderId": "%s",
                   "totalAmount": 42.50
@@ -88,7 +89,7 @@ class OrderPlacedNotificationHandlerTest {
     }
 
     private OutboxEvent orderPlacedEvent(UUID eventId, String payload) throws Exception {
-        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", payload);
+        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), OrderOutboxEventTypes.ORDER_PLACED, payload);
         setId(event, eventId);
         return event;
     }

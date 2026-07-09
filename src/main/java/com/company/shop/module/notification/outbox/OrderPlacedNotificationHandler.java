@@ -1,22 +1,18 @@
 package com.company.shop.module.notification.outbox;
 
-import java.math.BigDecimal;
-import java.util.UUID;
-
 import org.springframework.stereotype.Component;
 
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.module.notification.service.NotificationService;
+import com.company.shop.module.order.outbox.OrderOutboxEventTypes;
+import com.company.shop.module.order.outbox.OrderPlacedEventPayload;
 import com.company.shop.module.order.outbox.OutboxEvent;
 import com.company.shop.module.order.outbox.OutboxEventHandler;
 
 @Component
 public class OrderPlacedNotificationHandler implements OutboxEventHandler {
-
-    private static final String ORDER_PLACED_EVENT_TYPE = "OrderPlaced";
 
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
@@ -28,12 +24,12 @@ public class OrderPlacedNotificationHandler implements OutboxEventHandler {
 
     @Override
     public String eventType() {
-        return ORDER_PLACED_EVENT_TYPE;
+        return OrderOutboxEventTypes.ORDER_PLACED;
     }
 
     @Override
     public void handle(OutboxEvent event) {
-        OrderPlacedNotificationPayload payload = parsePayload(event.getPayload());
+        OrderPlacedEventPayload payload = parsePayload(event.getPayload());
         notificationService.createOrderPlacedNotification(
                 payload.orderId(),
                 payload.userEmail(),
@@ -41,58 +37,28 @@ public class OrderPlacedNotificationHandler implements OutboxEventHandler {
                 event.getId());
     }
 
-    private OrderPlacedNotificationPayload parsePayload(String payload) {
+    private OrderPlacedEventPayload parsePayload(String payload) {
         try {
-            JsonNode root = objectMapper.readTree(payload);
-            if (root == null || !root.isObject()) {
-                throw new IllegalArgumentException("Payload must be a JSON object");
-            }
-            return new OrderPlacedNotificationPayload(
-                    requiredUuid(root, "orderId"),
-                    requiredText(root, "userEmail"),
-                    requiredBigDecimal(root, "totalAmount"));
+            OrderPlacedEventPayload eventPayload = objectMapper.readValue(payload, OrderPlacedEventPayload.class);
+            validateRequiredPayloadData(eventPayload);
+            return eventPayload;
         } catch (JacksonException | IllegalArgumentException ex) {
             throw new IllegalArgumentException("Invalid OrderPlaced outbox payload: " + ex.getMessage(), ex);
         }
     }
 
-    private UUID requiredUuid(JsonNode root, String fieldName) {
-        String value = requiredText(root, fieldName);
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Field '%s' must be a valid UUID".formatted(fieldName), ex);
+    private void validateRequiredPayloadData(OrderPlacedEventPayload payload) {
+        if (payload == null) {
+            throw new IllegalArgumentException("Payload must be a JSON object");
         }
-    }
-
-    private BigDecimal requiredBigDecimal(JsonNode root, String fieldName) {
-        JsonNode value = requiredField(root, fieldName);
-        if (!value.isNumber() && !value.isTextual()) {
-            throw new IllegalArgumentException("Field '%s' must be a number".formatted(fieldName));
+        if (payload.orderId() == null) {
+            throw new IllegalArgumentException("Field 'orderId' is required");
         }
-        try {
-            return new BigDecimal(value.asText());
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException("Field '%s' must be a valid decimal number".formatted(fieldName), ex);
+        if (payload.userEmail() == null || payload.userEmail().isBlank()) {
+            throw new IllegalArgumentException("Field 'userEmail' is required");
         }
-    }
-
-    private String requiredText(JsonNode root, String fieldName) {
-        JsonNode value = requiredField(root, fieldName);
-        if (!value.isTextual() || value.asText().isBlank()) {
-            throw new IllegalArgumentException("Field '%s' is required".formatted(fieldName));
+        if (payload.totalAmount() == null) {
+            throw new IllegalArgumentException("Field 'totalAmount' is required");
         }
-        return value.asText();
-    }
-
-    private JsonNode requiredField(JsonNode root, String fieldName) {
-        JsonNode value = root.get(fieldName);
-        if (value == null || value.isNull()) {
-            throw new IllegalArgumentException("Field '%s' is required".formatted(fieldName));
-        }
-        return value;
-    }
-
-    private record OrderPlacedNotificationPayload(UUID orderId, String userEmail, BigDecimal totalAmount) {
     }
 }

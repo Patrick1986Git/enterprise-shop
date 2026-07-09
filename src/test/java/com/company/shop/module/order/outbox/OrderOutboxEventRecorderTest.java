@@ -60,7 +60,7 @@ class OrderOutboxEventRecorderTest {
         OutboxEvent event = eventCaptor.getValue();
         assertThat(event.getAggregateType()).isEqualTo("Order");
         assertThat(event.getAggregateId()).isEqualTo(orderId);
-        assertThat(event.getEventType()).isEqualTo("OrderPlaced");
+        assertThat(event.getEventType()).isEqualTo(OrderOutboxEventTypes.ORDER_PLACED);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
 
         JsonNode payload = objectMapper.readTree(event.getPayload());
