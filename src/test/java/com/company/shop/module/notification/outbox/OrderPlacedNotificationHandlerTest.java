@@ -42,16 +42,28 @@ class OrderPlacedNotificationHandlerTest {
     }
 
     @Test
-    void handle_shouldCreatePendingNotificationFromValidPayload() throws Exception {
+    void handle_shouldCreatePendingNotificationFromLegacyRawPayloadWithoutEnvelope() throws Exception {
         UUID eventId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
         OutboxEvent event = orderPlacedEvent(eventId, """
                 {
                   "orderId": "%s",
+                  "userId": "%s",
                   "userEmail": "customer@example.com",
-                  "totalAmount": 42.50
+                  "status": "NEW",
+                  "totalAmount": 42.50,
+                  "createdAt": "2026-05-31T10:15:30",
+                  "items": [
+                    {
+                      "productId": "%s",
+                      "productName": "Product",
+                      "productSku": "SKU-1",
+                      "price": 12.50,
+                      "quantity": 2
+                    }
+                  ]
                 }
-                """.formatted(orderId));
+                """.formatted(orderId, UUID.randomUUID(), UUID.randomUUID()));
 
         handler.handle(event);
 
