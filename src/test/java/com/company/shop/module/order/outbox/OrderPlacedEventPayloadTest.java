@@ -51,6 +51,57 @@ class OrderPlacedEventPayloadTest {
         assertThat(root.get("items").get(0).get("productSku").asText()).isEqualTo("SKU-1");
         assertThat(root.get("items").get(0).get("price").decimalValue()).isEqualByComparingTo("12.50");
         assertThat(root.get("items").get(0).get("quantity").asInt()).isEqualTo(2);
+        assertThat(root.has("metadata")).isFalse();
+        assertThat(root.has("eventVersion")).isFalse();
+        assertThat(root.has("schemaVersion")).isFalse();
+        assertThat(root.has("payload")).isFalse();
         assertThat(deserialized).isEqualTo(payload);
+    }
+
+    @Test
+    void legacyRawPayloadJson_shouldDeserializeAsImplicitVersionOneWithoutEnvelopeMetadata() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        String json = """
+                {
+                  "orderId": "%s",
+                  "userId": "%s",
+                  "userEmail": "customer@example.com",
+                  "status": "NEW",
+                  "totalAmount": 42.50,
+                  "createdAt": "2026-05-31T10:15:30",
+                  "items": [
+                    {
+                      "productId": "%s",
+                      "productName": "Product",
+                      "productSku": "SKU-1",
+                      "price": 12.50,
+                      "quantity": 2
+                    }
+                  ]
+                }
+                """.formatted(orderId, userId, productId);
+
+        OrderPlacedEventPayload payload = objectMapper.readValue(json, OrderPlacedEventPayload.class);
+        JsonNode root = objectMapper.readTree(json);
+
+        assertThat(root.has("eventType")).isFalse();
+        assertThat(root.has("eventVersion")).isFalse();
+        assertThat(root.has("schemaVersion")).isFalse();
+        assertThat(root.has("metadata")).isFalse();
+        assertThat(root.has("payload")).isFalse();
+        assertThat(payload.orderId()).isEqualTo(orderId);
+        assertThat(payload.userId()).isEqualTo(userId);
+        assertThat(payload.userEmail()).isEqualTo("customer@example.com");
+        assertThat(payload.status()).isEqualTo(OrderStatus.NEW);
+        assertThat(payload.totalAmount()).isEqualByComparingTo("42.50");
+        assertThat(payload.createdAt()).isEqualTo("2026-05-31T10:15:30");
+        assertThat(payload.items()).hasSize(1);
+        assertThat(payload.items().get(0).productId()).isEqualTo(productId);
+        assertThat(payload.items().get(0).productName()).isEqualTo("Product");
+        assertThat(payload.items().get(0).productSku()).isEqualTo("SKU-1");
+        assertThat(payload.items().get(0).price()).isEqualByComparingTo("12.50");
+        assertThat(payload.items().get(0).quantity()).isEqualTo(2);
     }
 }
