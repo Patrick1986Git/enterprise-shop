@@ -13,6 +13,7 @@ Main business modules currently include:
 - cart
 - category
 - order
+- notification
 - product
 - system
 - user
@@ -69,6 +70,7 @@ Examples:
 - cart-related business logic belongs under `module.cart`
 - product-related business logic belongs under `module.product`
 - order-related business logic belongs under `module.order`
+- notification-related business logic belongs under `module.notification`
 
 Shared technical code belongs in:
 

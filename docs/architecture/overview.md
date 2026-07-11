@@ -19,7 +19,7 @@ enterprise-shop is a Java 21 modular monolith built on the current repository st
 
 The application is deployed as one Spring Boot service. Business capabilities are separated by package and layer rather than by independently deployed services. This keeps transactional boundaries local while preserving clear module ownership.
 
-`ShopApplication` enables component scanning and `@ConfigurationPropertiesScan`, which binds configuration properties such as outbox processing settings. Scheduling is enabled through `SchedulingConfig`; the current scheduled use is the outbox poller.
+`ShopApplication` enables component scanning and `@ConfigurationPropertiesScan`, which binds configuration properties such as outbox and notification delivery processing settings. Scheduling is enabled through `SchedulingConfig`; scheduled processing currently includes outbox event polling and notification delivery polling.
 
 ## Package layout
 
@@ -33,7 +33,7 @@ Root package: `com.company.shop`
 | `module.product` | Product catalog, search, stock reservation facade, and reviews. |
 | `module.system` | Root/status API probes. |
 | `module.user` | User profile, admin user management, and current-user facade. |
-| `module.notification` | Internal notification records and no-op delivery baseline. |
+| `module.notification` | Notification records, delivery processing, configurable sender adapters, and admin observability/requeue functionality. |
 | `common` | Shared exceptions, API error model, base entities, i18n support, and request correlation filter. |
 | `config` | Spring configuration for security, OpenAPI, auditing, scheduling, i18n, and SQL functions. |
 | `security` | Authentication endpoints/services, JWT filter/provider, roles, and current-user resolution. |

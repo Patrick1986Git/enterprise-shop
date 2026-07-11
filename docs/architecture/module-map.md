@@ -10,7 +10,7 @@
 | `product` | Public catalog/review reads + authenticated reviews + admin API | Product browsing/search, stock reservation, reviews, and admin product management. |
 | `system` | Public root probe + authenticated status API | Root API message and application status. |
 | `user` | Authenticated profile API + admin API | Current user profile and admin user management. |
-| `notification` | Internal only | Notification records and delivery baseline created from outbox events. |
+| `notification` | Admin-only API | Notification persistence, delivery processing, admin observability, manual requeue operations, and requeue audit logs. |
 
 ## Module details
 
@@ -69,11 +69,15 @@ Purpose: authenticated user profile and admin user management.
 
 ### notification
 
-Purpose: internal notification records and delivery baseline.
+Purpose: notification records, delivery processing, admin observability, manual requeue operations, and requeue audit logs.
 
-- No HTTP API is exposed by this module.
 - Handles `OrderPlaced` outbox events and creates `ORDER_PLACED_EMAIL` notification records.
-- Delivery uses the `NotificationSender` abstraction. The current sender implementation is `NoopNotificationSender`, which logs that delivery is skipped; there is no external email/SMS provider configured in the codebase.
+- Admin-only HTTP route ownership: `/api/v1/admin/notifications` and `/api/v1/admin/notification-actions`.
+- Authorization is restricted to administrators through the existing security configuration and method-level authorization.
+- The admin API provides notification visibility, summaries, detail access, filtering, requeue operations, and action-log visibility.
+- Delivery uses the `NotificationSender` abstraction. `NoopNotificationSender` is the fallback when no other sender bean is configured.
+- `SmtpNotificationSender` is selected when `app.notification.smtp.enabled=true`; SMTP transport settings use Spring Boot `spring.mail.*` configuration and the sender address comes from `app.notification.smtp.from`.
+- Scheduled delivery processing is controlled separately by `app.notification.delivery.enabled`.
 
 ## Cross-cutting packages
 
