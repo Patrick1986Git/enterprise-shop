@@ -1,6 +1,7 @@
 package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -18,6 +19,7 @@ class OutboxEventTest {
         assertThat(event.getAggregateType()).isEqualTo("Order");
         assertThat(event.getAggregateId()).isEqualTo(aggregateId);
         assertThat(event.getEventType()).isEqualTo("OrderPlaced");
+        assertThat(event.getEventVersion()).isEqualTo(1);
         assertThat(event.getPayload()).isEqualTo("{}");
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getAttempts()).isZero();
@@ -30,6 +32,27 @@ class OutboxEventTest {
         assertThat(event.getRequeueCount()).isZero();
         assertThat(event.getLastRequeuedAt()).isNull();
         assertThat(event.getLastRequeuedBy()).isNull();
+    }
+
+    @Test
+    void pending_shouldCreateEventWithSuppliedValidVersion() {
+        UUID aggregateId = UUID.randomUUID();
+
+        OutboxEvent event = OutboxEvent.pending("Order", aggregateId, "OrderPlaced", 2, "{}");
+
+        assertThat(event.getEventVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void pending_shouldRejectInvalidEventVersion() {
+        UUID aggregateId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> OutboxEvent.pending("Order", aggregateId, "OrderPlaced", 0, "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("eventVersion must be at least 1");
+        assertThatThrownBy(() -> OutboxEvent.pending("Order", aggregateId, "OrderPlaced", -1, "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("eventVersion must be at least 1");
     }
 
     @Test

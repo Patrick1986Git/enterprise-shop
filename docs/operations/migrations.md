@@ -43,6 +43,7 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V35 | `V35__add_notification_status_sent_at_index.sql` | Adds a notification index for status with sent timestamp filters. |
 | V36 | `V36__add_notification_requeue_count_last_requeued_at_index.sql` | Adds a notification index for requeue count with last-requeued timestamp filters. |
 | V37 | `V37__add_outbox_retry_dead_letter_foundation.sql` | Adds nullable outbox retry/dead-letter foundation columns, allows the `DEAD_LETTER` status, and adds a status/next-attempt index. |
+| V38 | `V38__add_outbox_event_version.sql` | Adds positive `event_version` metadata to outbox events with a default version of `1` for existing and new rows. |
 
 ## Rules for future migrations
 
