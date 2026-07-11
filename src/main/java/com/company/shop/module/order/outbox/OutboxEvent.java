@@ -27,6 +27,9 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "event_type", nullable = false, length = 150)
     private String eventType;
 
+    @Column(name = "event_version", nullable = false)
+    private int eventVersion;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", nullable = false, columnDefinition = "jsonb")
     private String payload;
@@ -68,10 +71,12 @@ public class OutboxEvent extends BaseEntity {
     protected OutboxEvent() {
     }
 
-    private OutboxEvent(String aggregateType, UUID aggregateId, String eventType, String payload) {
+    private OutboxEvent(String aggregateType, UUID aggregateId, String eventType, int eventVersion, String payload) {
+        validateEventVersion(eventVersion);
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;
+        this.eventVersion = eventVersion;
         this.payload = payload;
         this.status = OutboxEventStatus.PENDING;
         this.createdAt = Instant.now();
@@ -79,7 +84,18 @@ public class OutboxEvent extends BaseEntity {
     }
 
     public static OutboxEvent pending(String aggregateType, UUID aggregateId, String eventType, String payload) {
-        return new OutboxEvent(aggregateType, aggregateId, eventType, payload);
+        return pending(aggregateType, aggregateId, eventType, 1, payload);
+    }
+
+    public static OutboxEvent pending(
+            String aggregateType, UUID aggregateId, String eventType, int eventVersion, String payload) {
+        return new OutboxEvent(aggregateType, aggregateId, eventType, eventVersion, payload);
+    }
+
+    private static void validateEventVersion(int eventVersion) {
+        if (eventVersion < 1) {
+            throw new IllegalArgumentException("eventVersion must be at least 1");
+        }
     }
 
     public void markProcessed() {
@@ -148,6 +164,10 @@ public class OutboxEvent extends BaseEntity {
 
     public String getEventType() {
         return eventType;
+    }
+
+    public int getEventVersion() {
+        return eventVersion;
     }
 
     public String getPayload() {

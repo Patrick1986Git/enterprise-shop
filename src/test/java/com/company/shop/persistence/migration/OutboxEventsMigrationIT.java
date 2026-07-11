@@ -1,6 +1,7 @@
 package com.company.shop.persistence.migration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -42,6 +44,7 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                             'aggregate_type',
                             'aggregate_id',
                             'event_type',
+                            'event_version',
                             'payload',
                             'status',
                             'created_at',
@@ -68,6 +71,7 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                 .containsEntry("aggregate_type", "character varying")
                 .containsEntry("aggregate_id", "uuid")
                 .containsEntry("event_type", "character varying")
+                .containsEntry("event_version", "integer")
                 .containsEntry("payload", "jsonb")
                 .containsEntry("status", "character varying")
                 .containsEntry("created_at", "timestamp with time zone")
@@ -131,6 +135,51 @@ class OutboxEventsMigrationIT extends PostgresContainerSupport {
                 aggregateType);
 
         assertThat(statuses).containsExactlyInAnyOrderElementsOf(lifecycleStatuses);
+    }
+
+    @Test
+    void migrate_shouldDefaultOutboxEventVersionToOneWhenOmitted() {
+        String aggregateType = "MigrationVersionDefaultTest-" + UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+
+        jdbcTemplate.update(
+                """
+                        INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, status)
+                        VALUES (?::uuid, ?, ?::uuid, 'OrderPlaced', '{}'::jsonb, 'PENDING')
+                        """,
+                eventId.toString(),
+                aggregateType,
+                UUID.randomUUID().toString());
+
+        Integer eventVersion = jdbcTemplate.queryForObject(
+                """
+                        SELECT event_version
+                        FROM outbox_events
+                        WHERE id = ?::uuid
+                        AND aggregate_type = ?
+                        """,
+                Integer.class,
+                eventId.toString(),
+                aggregateType);
+
+        assertThat(eventVersion).isEqualTo(1);
+    }
+
+    @Test
+    void migrate_shouldRejectOutboxEventVersionBelowOne() {
+        String aggregateType = "MigrationVersionConstraintTest-" + UUID.randomUUID();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                """
+                        INSERT INTO outbox_events (
+                            id, aggregate_type, aggregate_id, event_type, event_version, payload, status
+                        )
+                        VALUES (?::uuid, ?, ?::uuid, 'OrderPlaced', 0, '{}'::jsonb, 'PENDING')
+                        """,
+                UUID.randomUUID().toString(),
+                aggregateType,
+                UUID.randomUUID().toString()))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
