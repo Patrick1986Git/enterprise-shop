@@ -61,9 +61,12 @@ class OrderOutboxEventRecorderTest {
         assertThat(event.getAggregateType()).isEqualTo("Order");
         assertThat(event.getAggregateId()).isEqualTo(orderId);
         assertThat(event.getEventType()).isEqualTo(OrderOutboxEventTypes.ORDER_PLACED);
+        assertThat(event.getEventVersion()).isEqualTo(OrderOutboxEventVersions.ORDER_PLACED_V1);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
 
         JsonNode payload = objectMapper.readTree(event.getPayload());
+        assertThat(payload.has("eventVersion")).isFalse();
+        assertThat(payload.has("payload")).isFalse();
         assertThat(payload.get("orderId").asText()).isEqualTo(orderId.toString());
         assertThat(payload.get("userId").asText()).isEqualTo(userId.toString());
         assertThat(payload.get("userEmail").asText()).isEqualTo("john@example.com");

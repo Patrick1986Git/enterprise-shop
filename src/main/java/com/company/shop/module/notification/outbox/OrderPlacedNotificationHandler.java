@@ -7,6 +7,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventTypes;
+import com.company.shop.module.order.outbox.OrderOutboxEventVersions;
 import com.company.shop.module.order.outbox.OrderPlacedEventPayload;
 import com.company.shop.module.order.outbox.OutboxEvent;
 import com.company.shop.module.order.outbox.OutboxEventHandler;
@@ -29,12 +30,21 @@ public class OrderPlacedNotificationHandler implements OutboxEventHandler {
 
     @Override
     public void handle(OutboxEvent event) {
+        validateSupportedVersion(event);
         OrderPlacedEventPayload payload = parsePayload(event.getPayload());
         notificationService.createOrderPlacedNotification(
                 payload.orderId(),
                 payload.userEmail(),
                 payload.totalAmount(),
                 event.getId());
+    }
+
+    private void validateSupportedVersion(OutboxEvent event) {
+        if (event.getEventVersion() != OrderOutboxEventVersions.ORDER_PLACED_V1) {
+            throw new IllegalArgumentException(
+                    "Unsupported OrderPlaced event version: " + event.getEventVersion()
+                            + ". Supported version: " + OrderOutboxEventVersions.ORDER_PLACED_V1 + ".");
+        }
     }
 
     private OrderPlacedEventPayload parsePayload(String payload) {

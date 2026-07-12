@@ -26,6 +26,7 @@ public class OrderOutboxEventRecorder {
                 ORDER_AGGREGATE_TYPE,
                 order.getId(),
                 OrderOutboxEventTypes.ORDER_PLACED,
+                OrderOutboxEventVersions.ORDER_PLACED_V1,
                 serialize(payload)));
     }
 
