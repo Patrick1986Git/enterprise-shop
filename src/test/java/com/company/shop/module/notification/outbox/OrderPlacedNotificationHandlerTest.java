@@ -21,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventTypes;
+import com.company.shop.module.order.outbox.OrderOutboxEventVersions;
 import com.company.shop.module.order.outbox.OutboxEvent;
 
 @ExtendWith(MockitoExtension.class)
@@ -42,7 +43,7 @@ class OrderPlacedNotificationHandlerTest {
     }
 
     @Test
-    void handle_shouldCreatePendingNotificationFromLegacyRawPayloadWithoutEnvelope() throws Exception {
+    void handle_shouldCreatePendingNotificationFromVersionOneLegacyRawPayloadWithoutEnvelope() throws Exception {
         UUID eventId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
         OutboxEvent event = orderPlacedEvent(eventId, """
@@ -75,8 +76,13 @@ class OrderPlacedNotificationHandlerTest {
     }
 
     @Test
-    void handle_shouldFailClearlyWhenPayloadIsInvalidJson() {
-        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), OrderOutboxEventTypes.ORDER_PLACED, "not-json");
+    void handle_shouldFailClearlyWhenPayloadIsInvalidJsonForVersionOne() {
+        OutboxEvent event = OutboxEvent.pending(
+                "Order",
+                UUID.randomUUID(),
+                OrderOutboxEventTypes.ORDER_PLACED,
+                OrderOutboxEventVersions.ORDER_PLACED_V1,
+                "not-json");
 
         assertThatThrownBy(() -> handler.handle(event))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -85,8 +91,13 @@ class OrderPlacedNotificationHandlerTest {
     }
 
     @Test
-    void handle_shouldFailClearlyWhenRequiredPayloadDataIsMissing() {
-        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), OrderOutboxEventTypes.ORDER_PLACED, """
+    void handle_shouldFailClearlyWhenRequiredPayloadDataIsMissingForVersionOne() {
+        OutboxEvent event = OutboxEvent.pending(
+                "Order",
+                UUID.randomUUID(),
+                OrderOutboxEventTypes.ORDER_PLACED,
+                OrderOutboxEventVersions.ORDER_PLACED_V1,
+                """
                 {
                   "orderId": "%s",
                   "totalAmount": 42.50
@@ -100,8 +111,28 @@ class OrderPlacedNotificationHandlerTest {
         verifyNoInteractions(notificationService);
     }
 
+    @Test
+    void handle_shouldRejectUnsupportedVersionBeforeProcessingPayload() {
+        OutboxEvent event = OutboxEvent.pending(
+                "Order",
+                UUID.randomUUID(),
+                OrderOutboxEventTypes.ORDER_PLACED,
+                2,
+                "not-json");
+
+        assertThatThrownBy(() -> handler.handle(event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unsupported OrderPlaced event version: 2. Supported version: 1.");
+        verifyNoInteractions(notificationService);
+    }
+
     private OutboxEvent orderPlacedEvent(UUID eventId, String payload) throws Exception {
-        OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), OrderOutboxEventTypes.ORDER_PLACED, payload);
+        OutboxEvent event = OutboxEvent.pending(
+                "Order",
+                UUID.randomUUID(),
+                OrderOutboxEventTypes.ORDER_PLACED,
+                OrderOutboxEventVersions.ORDER_PLACED_V1,
+                payload);
         setId(event, eventId);
         return event;
     }

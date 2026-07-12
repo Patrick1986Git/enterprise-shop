@@ -4,7 +4,7 @@ The current implementation is an internal, DB-backed outbox baseline. It does no
 
 ## Checkout event recording
 
-During checkout, `OrderCheckoutProcessor` creates the order, creates the Stripe payment record, and records an order placed outbox event through `OrderOutboxEventRecorder` in the same transactional flow.
+During checkout, `OrderCheckoutProcessor` creates the order, creates the Stripe payment record, and records an order placed outbox event through `OrderOutboxEventRecorder` in the same transactional flow. The recorder writes the currently supported `OrderPlaced` event version, `1`, explicitly.
 
 The recorded event uses:
 
@@ -35,11 +35,11 @@ Current property defaults:
 | `app.outbox.processing.retry-delay` | `PT1M` |
 | `app.outbox.processing.max-attempts` | `3` |
 
-The poller keeps using `fixed-delay` as its scheduling interval. The processor selects only due `PENDING` outbox events: events with `next_attempt_at` unset or not later than the current database timestamp. Retryable handler failures remain `PENDING`, increment attempts, store `last_error` and `last_attempt_at`, and set `next_attempt_at` to the next scheduled processor attempt. Failures that reach `max-attempts` are marked `DEAD_LETTER`, keep the terminal error details, store a dead-letter reason, and clear `next_attempt_at`. Unknown event types follow the same retry/dead-letter policy with an explanatory error. Existing `FAILED` events are not automatically retried by the processor.
+The poller keeps using `fixed-delay` as its scheduling interval. The processor selects only due `PENDING` outbox events: events with `next_attempt_at` unset or not later than the current database timestamp. The processor routes by `event_type`; version checks remain handler-specific. Retryable handler failures remain `PENDING`, increment attempts, store `last_error` and `last_attempt_at`, and set `next_attempt_at` to the next scheduled processor attempt. Failures that reach `max-attempts` are marked `DEAD_LETTER`, keep the terminal error details, store a dead-letter reason, and clear `next_attempt_at`. Unknown event types and unsupported handler-specific versions follow the same retry/dead-letter policy with an explanatory error. Existing `FAILED` events are not automatically retried by the processor.
 
 ## Notification handling
 
-`OrderPlacedNotificationHandler` handles `OrderPlaced` outbox events using the shared event type constant and `OrderPlacedEventPayload` contract. It validates the payload fields it needs and delegates to `NotificationService`.
+`OrderPlacedNotificationHandler` handles `OrderPlaced` outbox events using the shared event type constant and `OrderPlacedEventPayload` contract. It accepts only `OrderPlaced` event version `1`, rejects unsupported versions before payload parsing or notification creation, validates the version-1 payload fields it needs, and delegates to `NotificationService`.
 
 `NotificationService` creates a notification record with:
 
@@ -71,7 +71,7 @@ spring.mail.port=1025
 
 ## Event metadata/versioning transition plan
 
-The current outbox contract intentionally stores routing and version metadata outside the JSON payload: `outbox_events.event_type` remains the handler routing source, `outbox_events.event_version` stores queryable positive version metadata, and `outbox_events.payload` contains the raw event-specific payload. Legacy rows and payloads without metadata correspond to implicit version `1`; the schema default stores existing and new rows as version `1`. Existing rows therefore contain raw `OrderPlacedEventPayload` JSON, not an envelope, and new `OrderPlaced` events keep that non-enveloped payload shape.
+The current outbox contract intentionally stores routing and version metadata outside the JSON payload: `outbox_events.event_type` remains the handler routing source, `outbox_events.event_version` stores queryable positive version metadata, and `outbox_events.payload` contains the raw event-specific payload. Legacy rows and payloads without metadata correspond to implicit version `1`; the schema default stores existing and new rows as version `1`. Existing rows therefore contain raw `OrderPlacedEventPayload` JSON, not an envelope, and new `OrderPlaced` events keep that non-enveloped payload shape. The current supported `OrderPlaced` event version is `1`: the recorder writes version `1` explicitly, and the notification handler accepts only version `1`.
 
 ### Evaluated options
 
