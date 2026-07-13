@@ -8,6 +8,7 @@ public record OutboxEventAdminSearchCriteria(
         String aggregateType,
         UUID aggregateId,
         String eventType,
+        Integer eventVersion,
         String lastErrorContains,
         Instant createdFrom,
         Instant createdTo,
@@ -36,7 +37,7 @@ public record OutboxEventAdminSearchCriteria(
             Integer attemptsMax,
             Boolean requeuedOnly,
             OutboxEventProblemType problemType) {
-        this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo, null, null,
+        this(status, aggregateType, aggregateId, eventType, null, lastErrorContains, createdFrom, createdTo, null, null,
                 lastAttemptFrom, lastAttemptTo, null, null, attemptsMin, attemptsMax, requeuedOnly, problemType);
     }
 
@@ -53,7 +54,7 @@ public record OutboxEventAdminSearchCriteria(
             Integer attemptsMin,
             Integer attemptsMax,
             Boolean requeuedOnly) {
-        this(status, aggregateType, aggregateId, eventType, lastErrorContains, createdFrom, createdTo, null, null,
+        this(status, aggregateType, aggregateId, eventType, null, lastErrorContains, createdFrom, createdTo, null, null,
                 lastAttemptFrom, lastAttemptTo, null, null, attemptsMin, attemptsMax, requeuedOnly, null);
     }
 
@@ -67,6 +68,7 @@ public record OutboxEventAdminSearchCriteria(
         private String aggregateType;
         private UUID aggregateId;
         private String eventType;
+        private Integer eventVersion;
         private String lastErrorContains;
         private Instant createdFrom;
         private Instant createdTo;
@@ -101,6 +103,11 @@ public record OutboxEventAdminSearchCriteria(
 
         public Builder eventType(String eventType) {
             this.eventType = eventType;
+            return this;
+        }
+
+        public Builder eventVersion(Integer eventVersion) {
+            this.eventVersion = eventVersion;
             return this;
         }
 
@@ -175,6 +182,7 @@ public record OutboxEventAdminSearchCriteria(
                     aggregateType,
                     aggregateId,
                     eventType,
+                    eventVersion,
                     lastErrorContains,
                     createdFrom,
                     createdTo,

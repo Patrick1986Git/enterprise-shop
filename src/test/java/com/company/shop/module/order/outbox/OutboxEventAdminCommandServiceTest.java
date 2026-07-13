@@ -194,6 +194,7 @@ class OutboxEventAdminCommandServiceTest {
                 "Order",
                 UUID.randomUUID(),
                 "OrderPlaced",
+                1,
                 status,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,

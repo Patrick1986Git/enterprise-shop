@@ -31,6 +31,10 @@ class OutboxEventMapperTest {
         assertThat(result.aggregateType()).isEqualTo("Order");
         assertThat(result.aggregateId()).isEqualTo(aggregateId);
         assertThat(result.eventType()).isEqualTo("OrderPlaced");
+        assertThat(result.eventVersion()).isEqualTo(1);
+        assertThat(OutboxEventResponseDTO.class.getRecordComponents())
+                .extracting(component -> component.getName())
+                .doesNotContain("payload");
         assertThat(result.status()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(result.createdAt()).isEqualTo(event.getCreatedAt());
         assertThat(result.processedAt()).isNull();
@@ -58,6 +62,7 @@ class OutboxEventMapperTest {
         assertThat(result.aggregateType()).isEqualTo("Order");
         assertThat(result.aggregateId()).isEqualTo(aggregateId);
         assertThat(result.eventType()).isEqualTo("OrderPlaced");
+        assertThat(result.eventVersion()).isEqualTo(1);
         assertThat(result.payload()).isEqualTo(payload);
         assertThat(result.status()).isEqualTo(OutboxEventStatus.DEAD_LETTER);
         assertThat(result.createdAt()).isEqualTo(event.getCreatedAt());

@@ -72,6 +72,8 @@ public class AdminOutboxEventController {
             @RequestParam(required = false) UUID aggregateId,
             @Parameter(description = "Filter by event type, such as the logical name of the domain event.")
             @RequestParam(required = false) String eventType,
+            @Parameter(description = "Filter by exact event-specific payload contract version.")
+            @RequestParam(required = false) Integer eventVersion,
             @Parameter(description = "Filter events whose last processing error contains the provided text.")
             @RequestParam(required = false) String lastErrorContains,
             @Parameter(description = "Filter events created at or after this timestamp.")
@@ -109,6 +111,7 @@ public class AdminOutboxEventController {
                 .aggregateType(aggregateType)
                 .aggregateId(aggregateId)
                 .eventType(eventType)
+                .eventVersion(eventVersion)
                 .lastErrorContains(lastErrorContains)
                 .createdFrom(createdFrom)
                 .createdTo(createdTo)
