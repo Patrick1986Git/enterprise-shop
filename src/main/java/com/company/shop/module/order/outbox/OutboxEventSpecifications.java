@@ -41,6 +41,10 @@ public final class OutboxEventSpecifications {
                 predicates.add(cb.like(cb.lower(root.get("eventType")), pattern));
             }
 
+            if (criteria.eventVersion() != null) {
+                predicates.add(cb.equal(root.get("eventVersion"), criteria.eventVersion()));
+            }
+
             if (criteria.lastErrorContains() != null && !criteria.lastErrorContains().isBlank()) {
                 String pattern = "%" + criteria.lastErrorContains().trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.like(cb.lower(root.get("lastError")), pattern));

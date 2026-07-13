@@ -21,6 +21,7 @@ import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDate
 import com.company.shop.module.order.outbox.exception.OutboxEventNextAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventVersionInvalidException;
 
 @Service
 public class OutboxEventQueryService {
@@ -72,6 +73,9 @@ public class OutboxEventQueryService {
 
     @Transactional(readOnly = true)
     public Page<OutboxEventResponseDTO> getEvents(OutboxEventAdminSearchCriteria criteria, Pageable pageable) {
+        if (criteria.eventVersion() != null && criteria.eventVersion() < 1) {
+            throw new OutboxEventVersionInvalidException();
+        }
         if (criteria.createdFrom() != null
                 && criteria.createdTo() != null
                 && criteria.createdFrom().isAfter(criteria.createdTo())) {

@@ -39,6 +39,7 @@ import com.company.shop.module.order.outbox.exception.OutboxEventLastAttemptDate
 import com.company.shop.module.order.outbox.exception.OutboxEventNextAttemptDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
+import com.company.shop.module.order.outbox.exception.OutboxEventVersionInvalidException;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxEventQueryServiceTest {
@@ -580,6 +581,33 @@ class OutboxEventQueryServiceTest {
     }
 
     @Test
+    void getEvents_shouldAcceptPositiveEventVersion() {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty(pageable));
+
+        outboxEventQueryService.getEvents(criteriaWithEventVersion(1), pageable);
+
+        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verifyNoInteractions(outboxEventProcessor);
+    }
+
+    @Test
+    void getEvents_shouldThrowWhenEventVersionIsZeroOrNegative() {
+        Pageable pageable = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> outboxEventQueryService.getEvents(criteriaWithEventVersion(0), pageable))
+                .isInstanceOf(OutboxEventVersionInvalidException.class)
+                .hasMessage("eventVersion must be greater than or equal to 1.")
+                .extracting("errorCode")
+                .isEqualTo("OUTBOX_EVENT_VERSION_INVALID");
+        assertThatThrownBy(() -> outboxEventQueryService.getEvents(criteriaWithEventVersion(-1), pageable))
+                .isInstanceOf(OutboxEventVersionInvalidException.class);
+
+        verifyNoInteractions(outboxEventRepository, outboxEventMapper, outboxEventProcessor);
+    }
+
+    @Test
     void getEvents_shouldAllowNullAndBlankLastErrorContains() {
         Pageable pageable = PageRequest.of(0, 20);
         when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
@@ -826,6 +854,12 @@ class OutboxEventQueryServiceTest {
                 .build();
     }
 
+    private static OutboxEventAdminSearchCriteria criteriaWithEventVersion(Integer eventVersion) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .eventVersion(eventVersion)
+                .build();
+    }
+
     private static OutboxEventAdminSearchCriteria criteriaWithProblemType(OutboxEventProblemType problemType) {
         return OutboxEventAdminSearchCriteria.builder()
                 .problemType(problemType)
@@ -838,6 +872,7 @@ class OutboxEventQueryServiceTest {
                 "Order",
                 UUID.randomUUID(),
                 "OrderPlaced",
+                1,
                 "{\"id\":1}",
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-01-01T10:00:00Z"),
@@ -864,6 +899,7 @@ class OutboxEventQueryServiceTest {
                 "Order",
                 UUID.randomUUID(),
                 "OrderPlaced",
+                1,
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,

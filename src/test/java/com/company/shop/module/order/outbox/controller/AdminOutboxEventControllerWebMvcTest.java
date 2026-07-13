@@ -54,6 +54,7 @@ import com.company.shop.module.order.outbox.exception.OutboxEventNextAttemptDate
 import com.company.shop.module.order.outbox.exception.OutboxEventNotFoundException;
 import com.company.shop.module.order.outbox.exception.OutboxEventProcessedDateRangeInvalidException;
 import com.company.shop.module.order.outbox.exception.OutboxEventRequeueNotAllowedException;
+import com.company.shop.module.order.outbox.exception.OutboxEventVersionInvalidException;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.WebMvcSliceTestConfig;
@@ -115,6 +116,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 "Order",
                 aggregateId,
                 "OrderPlaced",
+                1,
                 OutboxEventStatus.FAILED,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 Instant.parse("2026-01-01T10:01:00Z"),
@@ -137,6 +139,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.content[0].aggregateType").value("Order"))
                 .andExpect(jsonPath("$.content[0].aggregateId").value(aggregateId.toString()))
                 .andExpect(jsonPath("$.content[0].eventType").value("OrderPlaced"))
+                .andExpect(jsonPath("$.content[0].eventVersion").value(1))
                 .andExpect(jsonPath("$.content[0].status").value("FAILED"))
                 .andExpect(jsonPath("$.content[0].createdAt").value("2026-01-01T10:00:00Z"))
                 .andExpect(jsonPath("$.content[0].processedAt").value("2026-01-01T10:01:00Z"))
@@ -337,6 +340,52 @@ class AdminOutboxEventControllerWebMvcTest {
     }
 
     @Test
+    void getEvents_shouldPassEventVersionToService() throws Exception {
+        when(outboxEventQueryService.getEvents(eq(criteriaWithEventVersion(2)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                 .param("eventVersion", "2")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(outboxEventQueryService).getEvents(eq(criteriaWithEventVersion(2)), any(Pageable.class));
+    }
+
+    @Test
+    void getEvents_shouldReturnBadRequestWhenEventVersionIsInvalid() throws Exception {
+        when(outboxEventQueryService.getEvents(eq(criteriaWithEventVersion(0)), any(Pageable.class)))
+                .thenThrow(new OutboxEventVersionInvalidException());
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                 .param("eventVersion", "0")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_VERSION_INVALID"))
+                .andExpect(jsonPath("$.message").value("eventVersion must be greater than or equal to 1."))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        verify(outboxEventQueryService).getEvents(eq(criteriaWithEventVersion(0)), any(Pageable.class));
+    }
+
+    @Test
+    void getEvents_shouldReturnBadRequestWhenEventVersionIsNegative() throws Exception {
+        when(outboxEventQueryService.getEvents(eq(criteriaWithEventVersion(-1)), any(Pageable.class)))
+                .thenThrow(new OutboxEventVersionInvalidException());
+
+        mockMvc.perform(get(ADMIN_OUTBOX_EVENTS_URL)
+                 .param("eventVersion", "-1")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("OUTBOX_EVENT_VERSION_INVALID"))
+                .andExpect(jsonPath("$.message").value("eventVersion must be greater than or equal to 1."));
+
+        verify(outboxEventQueryService).getEvents(eq(criteriaWithEventVersion(-1)), any(Pageable.class));
+    }
+
+    @Test
     void getEvents_shouldPassLastErrorContainsToService() throws Exception {
         when(outboxEventQueryService.getEvents(eq(criteriaWithLastErrorContains("timeout")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
@@ -383,6 +432,7 @@ class AdminOutboxEventControllerWebMvcTest {
                  .param("aggregateType", "Order")
                  .param("aggregateId", aggregateId.toString())
                  .param("eventType", "Placed")
+                 .param("eventVersion", "2")
                  .param("lastErrorContains", "timeout")
                  .param("createdFrom", createdFrom.toString())
                  .param("createdTo", createdTo.toString())
@@ -414,6 +464,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 "Order",
                 aggregateId,
                 "OrderPlaced",
+                1,
                 "{\"orderId\":\"" + aggregateId + "\"}",
                 OutboxEventStatus.FAILED,
                 Instant.parse("2026-01-01T10:00:00Z"),
@@ -436,6 +487,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .andExpect(jsonPath("$.aggregateType").value("Order"))
                 .andExpect(jsonPath("$.aggregateId").value(aggregateId.toString()))
                 .andExpect(jsonPath("$.eventType").value("OrderPlaced"))
+                .andExpect(jsonPath("$.eventVersion").value(1))
                 .andExpect(jsonPath("$.payload").value("{\"orderId\":\"" + aggregateId + "\"}"))
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.createdAt").value("2026-01-01T10:00:00Z"))
@@ -583,6 +635,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 "Order",
                 aggregateId,
                 "OrderPlaced",
+                1,
                 OutboxEventStatus.PENDING,
                 Instant.parse("2026-01-01T10:00:00Z"),
                 null,
@@ -800,6 +853,12 @@ class AdminOutboxEventControllerWebMvcTest {
                 .build();
     }
 
+    private static OutboxEventAdminSearchCriteria criteriaWithEventVersion(Integer eventVersion) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .eventVersion(eventVersion)
+                .build();
+    }
+
     private static OutboxEventAdminSearchCriteria criteriaWithProblemType(OutboxEventProblemType problemType) {
         return OutboxEventAdminSearchCriteria.builder()
                 .problemType(problemType)
@@ -817,6 +876,7 @@ class AdminOutboxEventControllerWebMvcTest {
                 .aggregateType("Order")
                 .aggregateId(aggregateId)
                 .eventType("Placed")
+                .eventVersion(2)
                 .lastErrorContains("timeout")
                 .createdFrom(createdFrom)
                 .createdTo(createdTo)

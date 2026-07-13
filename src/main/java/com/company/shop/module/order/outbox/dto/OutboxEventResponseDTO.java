@@ -34,6 +34,13 @@ public record OutboxEventResponseDTO(
         )
         String eventType,
         @Schema(
+                description = "Version of the event-specific payload contract.",
+                example = "1",
+                minimum = "1",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        int eventVersion,
+        @Schema(
                 description = "Current processing status.",
                 example = "PENDING",
                 accessMode = Schema.AccessMode.READ_ONLY

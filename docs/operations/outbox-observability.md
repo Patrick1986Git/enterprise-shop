@@ -44,13 +44,13 @@ The admin outbox observability endpoints help administrators and admin UI consum
 - `HIGH_ATTEMPT_FAILED`: returns `FAILED` events with `attempts >= highFailedAttemptsThreshold`.
 - `DEAD_LETTER`: returns `DEAD_LETTER` events that reached terminal retry handling and require operational review.
 
-The problem type filter can be combined with other list filters such as `aggregateType`, `eventType`, `attemptsMin`, `attemptsMax`, pagination, and sorting.
+The problem type filter can be combined with other list filters such as `aggregateType`, `eventType`, `eventVersion`, `attemptsMin`, `attemptsMax`, pagination, and sorting.
 
 ## Supported event list filters
 
-`GET /api/v1/admin/outbox-events` supports `status`, `aggregateType`, `aggregateId`, `eventType`, `lastErrorContains`, `createdFrom`, `createdTo`, `processedFrom`, `processedTo`, `lastAttemptFrom`, `lastAttemptTo`, `nextAttemptFrom`, `nextAttemptTo`, `attemptsMin`, `attemptsMax`, `requeuedOnly`, `problemType`, pagination, and sorting. `aggregateType`, `eventType`, and `lastErrorContains` use case-insensitive contains matching after trimming and ignore blank values. `aggregateId` is an exact UUID match. `createdFrom`/`createdTo`, `processedFrom`/`processedTo`, `lastAttemptFrom`/`lastAttemptTo`, and `nextAttemptFrom`/`nextAttemptTo` are inclusive timestamp ranges. `attemptsMin` and `attemptsMax` are inclusive numeric bounds. `requeuedOnly=true` returns events with `requeueCount > 0`; omitting it or setting it to `false` does not restrict by requeue count. `problemType` keeps the operational meanings listed above for `STALE_PENDING`, `STALE_FAILED`, `HIGH_ATTEMPT_FAILED`, and `DEAD_LETTER`.
+`GET /api/v1/admin/outbox-events` supports `status`, `aggregateType`, `aggregateId`, `eventType`, `eventVersion`, `lastErrorContains`, `createdFrom`, `createdTo`, `processedFrom`, `processedTo`, `lastAttemptFrom`, `lastAttemptTo`, `nextAttemptFrom`, `nextAttemptTo`, `attemptsMin`, `attemptsMax`, `requeuedOnly`, `problemType`, pagination, and sorting. `aggregateType`, `eventType`, and `lastErrorContains` use case-insensitive contains matching after trimming and ignore blank values. `aggregateId` is an exact UUID match. `eventVersion` is an exact positive integer match for the event-specific payload contract version. `createdFrom`/`createdTo`, `processedFrom`/`processedTo`, `lastAttemptFrom`/`lastAttemptTo`, and `nextAttemptFrom`/`nextAttemptTo` are inclusive timestamp ranges. `attemptsMin` and `attemptsMax` are inclusive numeric bounds. `requeuedOnly=true` returns events with `requeueCount > 0`; omitting it or setting it to `false` does not restrict by requeue count. `problemType` keeps the operational meanings listed above for `STALE_PENDING`, `STALE_FAILED`, `HIGH_ATTEMPT_FAILED`, and `DEAD_LETTER`.
 
-List responses include `nextAttemptAt` so admins can see delayed `PENDING` retry schedules. Detail responses include both `nextAttemptAt` and `deadLetterReason`; `deadLetterReason` explains why a `DEAD_LETTER` event became terminal.
+List responses include `eventVersion` next to `eventType` and remain payload-free. Detail responses also include `eventVersion` next to `eventType` and include the raw payload for the selected event. `event_type` remains the routing source used by handlers, while `eventVersion` is queryable contract metadata for observability. List responses include `nextAttemptAt` so admins can see delayed `PENDING` retry schedules. Detail responses include both `nextAttemptAt` and `deadLetterReason`; `deadLetterReason` explains why a `DEAD_LETTER` event became terminal.
 
 ## Common operational queries
 
@@ -111,6 +111,14 @@ GET /api/v1/admin/outbox-events?status=PROCESSED&processedFrom=2026-06-21T00:00:
 ```
 
 Use `processedFrom` and `processedTo` to inspect events completed during a deployment, incident, or support window.
+
+### List events by contract version
+
+```http
+GET /api/v1/admin/outbox-events?eventType=OrderPlaced&eventVersion=2
+```
+
+Use the exact positive `eventVersion` filter with `eventType`, `status`, `problemType`, or `lastErrorContains` to find unsupported-version failures or dead-lettered events without changing routing or payload shape.
 
 ### List requeued events
 

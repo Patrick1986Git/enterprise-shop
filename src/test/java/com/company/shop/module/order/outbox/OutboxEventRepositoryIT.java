@@ -449,6 +449,56 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void findAll_shouldFilterByExactEventVersionOne() {
+        OutboxEvent versionOne = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", 1, "{\"id\":1}");
+        OutboxEvent versionTwo = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", 2, "{\"id\":2}");
+        outboxEventRepository.saveAllAndFlush(List.of(versionOne, versionTwo));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(criteriaWithEventVersion(1)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactly(versionOne.getId())
+                .doesNotContain(versionTwo.getId());
+    }
+
+    @Test
+    void findAll_shouldFilterByExactEventVersionTwo() {
+        OutboxEvent versionOne = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", 1, "{\"id\":1}");
+        OutboxEvent versionTwo = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", 2, "{\"id\":2}");
+        OutboxEvent anotherVersionTwo = OutboxEvent.pending("Order", UUID.randomUUID(), "PaymentCaptured", 2, "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(versionOne, versionTwo, anotherVersionTwo));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(criteriaWithEventVersion(2)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactlyInAnyOrder(versionTwo.getId(), anotherVersionTwo.getId())
+                .doesNotContain(versionOne.getId());
+    }
+
+    @Test
+    void findAll_shouldCombineEventVersionWithEventType() {
+        OutboxEvent matching = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", 2, "{\"id\":1}");
+        OutboxEvent wrongVersion = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", 1, "{\"id\":2}");
+        OutboxEvent wrongType = OutboxEvent.pending("Order", UUID.randomUUID(), "PaymentCaptured", 2, "{\"id\":3}");
+        outboxEventRepository.saveAllAndFlush(List.of(matching, wrongVersion, wrongType));
+
+        Page<OutboxEvent> result = outboxEventRepository.findAll(
+                OutboxEventSpecifications.adminFilters(criteriaWithEventTypeAndVersion(" placed ", 2)),
+                PageRequest.of(0, 10));
+
+        assertThat(result.getContent())
+                .extracting(OutboxEvent::getId)
+                .containsExactly(matching.getId())
+                .doesNotContain(wrongVersion.getId(), wrongType.getId());
+    }
+
+    @Test
     void findAll_shouldFilterByAggregateId() {
         UUID matchingAggregateId = UUID.randomUUID();
         UUID matchingEventId = UUID.randomUUID();
@@ -1317,6 +1367,21 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     private static OutboxEventAdminSearchCriteria criteriaWithEventType(String eventType) {
         return OutboxEventAdminSearchCriteria.builder()
                 .eventType(eventType)
+                .build();
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithEventVersion(Integer eventVersion) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .eventVersion(eventVersion)
+                .build();
+    }
+
+    private static OutboxEventAdminSearchCriteria criteriaWithEventTypeAndVersion(
+            String eventType,
+            Integer eventVersion) {
+        return OutboxEventAdminSearchCriteria.builder()
+                .eventType(eventType)
+                .eventVersion(eventVersion)
                 .build();
     }
 

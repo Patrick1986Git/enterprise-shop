@@ -34,6 +34,13 @@ public record OutboxEventDetailResponseDTO(
         )
         String eventType,
         @Schema(
+                description = "Version of the event-specific payload contract.",
+                example = "1",
+                minimum = "1",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        int eventVersion,
+        @Schema(
                 description = "Serialized event payload.",
                 example = "{\"orderId\":\"44444444-4444-4444-4444-444444444444\"}",
                 accessMode = Schema.AccessMode.READ_ONLY
