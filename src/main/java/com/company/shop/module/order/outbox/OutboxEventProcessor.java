@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutboxEventProcessor {
 
     private static final String MAX_ATTEMPTS_EXCEEDED_REASON = "Max attempts exceeded";
+    private static final String NON_RETRYABLE_FAILURE_REASON = "Non-retryable processing failure";
 
     private final OutboxEventRepository outboxEventRepository;
     private final Map<String, OutboxEventHandler> handlersByEventType;
@@ -44,6 +45,9 @@ public class OutboxEventProcessor {
                 handler.handle(event);
                 event.markProcessed();
                 processedCount++;
+            } catch (NonRetryableOutboxEventException ex) {
+                event.markDeadLetter(errorMessage(ex), NON_RETRYABLE_FAILURE_REASON);
+                failedCount++;
             } catch (Exception ex) {
                 recordFailedAttempt(event, errorMessage(ex));
                 failedCount++;

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -20,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.notification.service.NotificationService;
+import com.company.shop.module.order.outbox.NonRetryableOutboxEventException;
 import com.company.shop.module.order.outbox.OrderOutboxEventTypes;
 import com.company.shop.module.order.outbox.OrderOutboxEventVersions;
 import com.company.shop.module.order.outbox.OutboxEvent;
@@ -85,7 +87,7 @@ class OrderPlacedNotificationHandlerTest {
                 "not-json");
 
         assertThatThrownBy(() -> handler.handle(event))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(NonRetryableOutboxEventException.class)
                 .hasMessageContaining("Invalid OrderPlaced outbox payload");
         verifyNoInteractions(notificationService);
     }
@@ -105,7 +107,7 @@ class OrderPlacedNotificationHandlerTest {
                 """.formatted(UUID.randomUUID()));
 
         assertThatThrownBy(() -> handler.handle(event))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(NonRetryableOutboxEventException.class)
                 .hasMessageContaining("Invalid OrderPlaced outbox payload")
                 .hasMessageContaining("userEmail");
         verifyNoInteractions(notificationService);
@@ -121,9 +123,32 @@ class OrderPlacedNotificationHandlerTest {
                 "not-json");
 
         assertThatThrownBy(() -> handler.handle(event))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(NonRetryableOutboxEventException.class)
                 .hasMessage("Unsupported OrderPlaced event version: 2. Supported version: 1.");
         verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    void handle_shouldPropagateNotificationServiceFailureAsRetryableException() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        OutboxEvent event = orderPlacedEvent(eventId, """
+                {
+                  "orderId": "%s",
+                  "userEmail": "customer@example.com",
+                  "totalAmount": 42.50
+                }
+                """.formatted(orderId));
+        IllegalStateException failure = new IllegalStateException("notification store unavailable");
+        doThrow(failure).when(notificationService).createOrderPlacedNotification(
+                eq(orderId),
+                eq("customer@example.com"),
+                argThat(amount -> amount.compareTo(new BigDecimal("42.50")) == 0),
+                eq(eventId));
+
+        assertThatThrownBy(() -> handler.handle(event))
+                .isSameAs(failure)
+                .isNotInstanceOf(NonRetryableOutboxEventException.class);
     }
 
     private OutboxEvent orderPlacedEvent(UUID eventId, String payload) throws Exception {

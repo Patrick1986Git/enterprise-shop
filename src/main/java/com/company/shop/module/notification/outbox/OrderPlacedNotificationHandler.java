@@ -6,6 +6,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import com.company.shop.module.notification.service.NotificationService;
+import com.company.shop.module.order.outbox.NonRetryableOutboxEventException;
 import com.company.shop.module.order.outbox.OrderOutboxEventTypes;
 import com.company.shop.module.order.outbox.OrderOutboxEventVersions;
 import com.company.shop.module.order.outbox.OrderPlacedEventPayload;
@@ -41,7 +42,7 @@ public class OrderPlacedNotificationHandler implements OutboxEventHandler {
 
     private void validateSupportedVersion(OutboxEvent event) {
         if (event.getEventVersion() != OrderOutboxEventVersions.ORDER_PLACED_V1) {
-            throw new IllegalArgumentException(
+            throw new NonRetryableOutboxEventException(
                     "Unsupported OrderPlaced event version: " + event.getEventVersion()
                             + ". Supported version: " + OrderOutboxEventVersions.ORDER_PLACED_V1 + ".");
         }
@@ -53,7 +54,7 @@ public class OrderPlacedNotificationHandler implements OutboxEventHandler {
             validateRequiredPayloadData(eventPayload);
             return eventPayload;
         } catch (JacksonException | IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Invalid OrderPlaced outbox payload: " + ex.getMessage(), ex);
+            throw new NonRetryableOutboxEventException("Invalid OrderPlaced outbox payload: " + ex.getMessage(), ex);
         }
     }
 
