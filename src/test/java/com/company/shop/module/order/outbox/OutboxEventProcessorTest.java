@@ -64,6 +64,25 @@ class OutboxEventProcessorTest {
     }
 
     @Test
+    void processPendingBatch_shouldDeadLetterImmediatelyWhenHandlerThrowsNonRetryableException() {
+        OutboxEvent event = pendingEvent("OrderPlaced");
+        when(outboxEventRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(event));
+        doThrow(new NonRetryableOutboxEventException("deterministic contract failure")).when(handler).handle(event);
+
+        OutboxEventProcessingResult result = processor.processPendingBatch(BATCH_SIZE);
+
+        assertThat(result.processedCount()).isZero();
+        assertThat(result.failedCount()).isEqualTo(1);
+        assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.DEAD_LETTER);
+        assertThat(event.getAttempts()).isEqualTo(1);
+        assertThat(event.getLastError()).isEqualTo("deterministic contract failure");
+        assertThat(event.getLastAttemptAt()).isNotNull();
+        assertThat(event.getDeadLetterReason()).isEqualTo("Non-retryable processing failure");
+        assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getProcessedAt()).isNull();
+    }
+
+    @Test
     void processPendingBatch_shouldScheduleRetryAndStoreLastErrorWhenHandlerThrowsBeforeMaxAttempts() {
         OutboxEvent event = pendingEvent("OrderPlaced");
         when(outboxEventRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(event));

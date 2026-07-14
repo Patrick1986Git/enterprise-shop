@@ -94,7 +94,7 @@ Use `nextAttemptFrom` and `nextAttemptTo` to inspect pending events scheduled fo
 GET /api/v1/admin/outbox-events?problemType=DEAD_LETTER&sort=lastAttemptAt,desc&size=20
 ```
 
-Use this to review terminal outbox events. `DEAD_LETTER` means retry handling exhausted the configured policy and the event is no longer eligible for scheduled retry processing. Inspect the detail response for `deadLetterReason` before planning follow-up remediation. After remediation, administrators can manually requeue `DEAD_LETTER` events through the existing requeue endpoint.
+Use this to review terminal outbox events. `DEAD_LETTER` means retry handling exhausted the configured policy or a handler identified a deterministic non-retryable contract failure. Inspect the detail response for `eventType`, `eventVersion`, `lastError`, and `deadLetterReason` before planning follow-up remediation. After remediation, administrators can manually requeue `DEAD_LETTER` events through the existing requeue endpoint.
 
 ### Search failures by error text
 
@@ -118,7 +118,7 @@ Use `processedFrom` and `processedTo` to inspect events completed during a deplo
 GET /api/v1/admin/outbox-events?eventType=OrderPlaced&eventVersion=2
 ```
 
-Use the exact positive `eventVersion` filter with `eventType`, `status`, `problemType`, or `lastErrorContains` to find unsupported-version failures or dead-lettered events without changing routing or payload shape.
+Use the exact positive `eventVersion` filter with `eventType`, `status`, `problemType`, or `lastErrorContains` to find unsupported-version failures or dead-lettered events without changing routing or payload shape. For deterministic handler failures, combine `status=DEAD_LETTER`, `eventType=OrderPlaced`, `eventVersion`, `lastErrorContains`, and the detail response `deadLetterReason` to identify malformed payloads or unsupported versions.
 
 ### List requeued events
 
@@ -148,7 +148,7 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 
 - These endpoints are admin-only.
 - Requeue is available for `FAILED` and `DEAD_LETTER` outbox events through `POST /api/v1/admin/outbox-events/{id}/requeue`; `PENDING` and `PROCESSED` events are rejected.
-- Manual requeue changes the event back to `PENDING`, clears `lastError`, `nextAttemptAt`, and `deadLetterReason`, increments `requeueCount`, and records `lastRequeuedAt` and `lastRequeuedBy`.
+- Manual requeue changes the event back to `PENDING`, clears `lastError`, `nextAttemptAt`, and `deadLetterReason`, increments `requeueCount`, and records `lastRequeuedAt` and `lastRequeuedBy`. Requeue remains available after the underlying deterministic contract issue or transient failure has been corrected.
 - Requeue records admin action log entries for auditability.
 - Action log `details` is informational and makes audit entries self-descriptive for admins and admin UI consumers.
 - The documented `REQUEUE` details value does not change outbox processing, retry, requeue eligibility, scheduling, persistence behavior, endpoint paths, DTO shape, or security.
