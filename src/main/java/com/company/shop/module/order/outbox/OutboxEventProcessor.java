@@ -70,9 +70,30 @@ public class OutboxEventProcessor {
     private Map<String, OutboxEventHandler> buildHandlersByEventType(List<OutboxEventHandler> handlers) {
         Map<String, OutboxEventHandler> result = new HashMap<>();
         for (OutboxEventHandler handler : handlers) {
-            result.put(handler.eventType(), handler);
+            String eventType = handler.eventType();
+            validateEventType(handler, eventType);
+
+            OutboxEventHandler existingHandler = result.putIfAbsent(eventType, handler);
+            if (existingHandler != null) {
+                throw new IllegalStateException(
+                        "Duplicate outbox handler registration for event type '" + eventType + "': "
+                                + existingHandler.getClass().getName() + " and "
+                                + handler.getClass().getName() + ".");
+            }
         }
         return Map.copyOf(result);
+    }
+
+    private void validateEventType(OutboxEventHandler handler, String eventType) {
+        if (eventType == null || eventType.isBlank()) {
+            throw new IllegalStateException(
+                    "Outbox handler " + handler.getClass().getName() + " must declare a nonblank event type.");
+        }
+        if (!eventType.equals(eventType.strip())) {
+            throw new IllegalStateException(
+                    "Outbox handler " + handler.getClass().getName()
+                            + " must declare an event type without leading or trailing whitespace.");
+        }
     }
 
     private String errorMessage(Exception ex) {

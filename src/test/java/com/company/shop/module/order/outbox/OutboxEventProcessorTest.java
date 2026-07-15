@@ -1,6 +1,7 @@
 package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,6 +50,88 @@ class OutboxEventProcessorTest {
         verify(handler).handle(event);
         assertThat(result.processedCount()).isEqualTo(1);
         assertThat(result.failedCount()).isZero();
+    }
+
+    @Test
+    void constructor_shouldAcceptMultipleHandlersWithDifferentEventTypes() {
+        RecordingHandler orderPlacedHandler = new RecordingHandler("OrderPlaced");
+        RecordingHandler orderPaidHandler = new RecordingHandler("OrderPaid");
+        OutboxEvent orderPlacedEvent = pendingEvent("OrderPlaced");
+        OutboxEvent orderPaidEvent = pendingEvent("OrderPaid");
+        OutboxEventProcessor processorWithMultipleHandlers = new OutboxEventProcessor(
+                outboxEventRepository,
+                List.of(orderPlacedHandler, orderPaidHandler),
+                properties);
+        when(outboxEventRepository.findPendingBatchForUpdate(BATCH_SIZE))
+                .thenReturn(List.of(orderPlacedEvent, orderPaidEvent));
+
+        OutboxEventProcessingResult result = processorWithMultipleHandlers.processPendingBatch(BATCH_SIZE);
+
+        assertThat(result.processedCount()).isEqualTo(2);
+        assertThat(result.failedCount()).isZero();
+        assertThat(orderPlacedHandler.handledEvents).containsExactly(orderPlacedEvent);
+        assertThat(orderPaidHandler.handledEvents).containsExactly(orderPaidEvent);
+    }
+
+    @Test
+    void constructor_shouldFailWhenDuplicateEventTypesAreRegistered() {
+        OutboxEventHandler existingHandler = new ExistingOrderPlacedHandler();
+        OutboxEventHandler conflictingHandler = new ConflictingOrderPlacedHandler();
+
+        assertThatThrownBy(() -> new OutboxEventProcessor(
+                outboxEventRepository,
+                List.of(existingHandler, conflictingHandler),
+                properties))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Duplicate outbox handler registration for event type 'OrderPlaced'")
+                .hasMessageContaining(ExistingOrderPlacedHandler.class.getName())
+                .hasMessageContaining(ConflictingOrderPlacedHandler.class.getName());
+    }
+
+    @Test
+    void constructor_shouldRejectNullEventType() {
+        assertInvalidEventType(new RecordingHandler(null), "must declare a nonblank event type");
+    }
+
+    @Test
+    void constructor_shouldRejectEmptyEventType() {
+        assertInvalidEventType(new RecordingHandler(""), "must declare a nonblank event type");
+    }
+
+    @Test
+    void constructor_shouldRejectBlankEventType() {
+        assertInvalidEventType(new RecordingHandler("   "), "must declare a nonblank event type");
+    }
+
+    @Test
+    void constructor_shouldRejectEventTypeWithLeadingWhitespace() {
+        assertInvalidEventType(new RecordingHandler(" OrderPlaced"), "without leading or trailing whitespace");
+    }
+
+    @Test
+    void constructor_shouldRejectEventTypeWithTrailingWhitespace() {
+        assertInvalidEventType(new RecordingHandler("OrderPlaced "), "without leading or trailing whitespace");
+    }
+
+    @Test
+    void constructor_shouldKeepRoutingImmutableAfterSuccessfulRegistration() {
+        RecordingHandler orderPlacedHandler = new RecordingHandler("OrderPlaced");
+        List<OutboxEventHandler> handlers = new ArrayList<>();
+        handlers.add(orderPlacedHandler);
+        OutboxEventProcessor processorWithMutableHandlerSource = new OutboxEventProcessor(
+                outboxEventRepository,
+                handlers,
+                properties);
+        handlers.clear();
+        handlers.add(new RecordingHandler("OrderPaid"));
+        OutboxEvent event = pendingEvent("OrderPlaced");
+        when(outboxEventRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(event));
+
+        OutboxEventProcessingResult result = processorWithMutableHandlerSource.processPendingBatch(BATCH_SIZE);
+
+        assertThat(result.processedCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isZero();
+        assertThat(orderPlacedHandler.handledEvents).containsExactly(event);
     }
 
     @Test
@@ -192,7 +276,48 @@ class OutboxEventProcessorTest {
         verify(outboxEventRepository).findPendingBatchForUpdate(batchSize);
     }
 
+    private void assertInvalidEventType(OutboxEventHandler invalidHandler, String expectedMessage) {
+        assertThatThrownBy(() -> new OutboxEventProcessor(outboxEventRepository, List.of(invalidHandler), properties))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(invalidHandler.getClass().getName())
+                .hasMessageContaining(expectedMessage);
+    }
+
     private OutboxEvent pendingEvent(String eventType) {
         return OutboxEvent.pending("Order", UUID.randomUUID(), eventType, "{}");
+    }
+
+    private static class RecordingHandler implements OutboxEventHandler {
+
+        private final String eventType;
+        private final List<OutboxEvent> handledEvents = new ArrayList<>();
+
+        private RecordingHandler(String eventType) {
+            this.eventType = eventType;
+        }
+
+        @Override
+        public String eventType() {
+            return eventType;
+        }
+
+        @Override
+        public void handle(OutboxEvent event) {
+            handledEvents.add(event);
+        }
+    }
+
+    private static class ExistingOrderPlacedHandler extends RecordingHandler {
+
+        private ExistingOrderPlacedHandler() {
+            super("OrderPlaced");
+        }
+    }
+
+    private static class ConflictingOrderPlacedHandler extends RecordingHandler {
+
+        private ConflictingOrderPlacedHandler() {
+            super("OrderPlaced");
+        }
     }
 }
