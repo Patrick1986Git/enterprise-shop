@@ -152,7 +152,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void findPendingBatchForUpdate_shouldReturnDuePendingEventsInDeterministicOrder() {
+    void findDuePendingCandidateIds_shouldReturnDuePendingEventsInDeterministicOrder() {
         UUID firstNullPendingId = UUID.randomUUID();
         UUID secondNullPendingId = UUID.randomUUID();
         UUID earliestScheduledPendingId = UUID.randomUUID();
@@ -165,10 +165,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEventWithNextAttemptAt(latestScheduledPendingId, OutboxEventStatus.PENDING,
                 Instant.parse("2026-01-01T10:02:00Z"), Instant.parse("2026-01-01T10:05:00Z"));
 
-        List<OutboxEvent> pendingEvents = outboxEventRepository.findPendingBatchForUpdate(10);
+        List<UUID> pendingEventIds = outboxEventRepository.findDuePendingCandidateIds(10);
 
-        assertThat(pendingEvents)
-                .extracting(OutboxEvent::getId)
+        assertThat(pendingEventIds)
                 .containsExactly(
                         firstNullPendingId,
                         secondNullPendingId,
@@ -177,7 +176,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void findPendingBatchForUpdate_shouldSkipFutureScheduledAndNonPendingEvents() {
+    void findDuePendingCandidateIds_shouldSkipFutureScheduledAndNonPendingEvents() {
         UUID duePendingId = UUID.randomUUID();
         UUID nullPendingId = UUID.randomUUID();
         UUID futurePendingId = UUID.randomUUID();
@@ -197,29 +196,24 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEventWithNextAttemptAt(deadLetterId, OutboxEventStatus.DEAD_LETTER,
                 Instant.parse("2026-01-01T10:05:00Z"), Instant.parse("2026-01-01T10:00:00Z"));
 
-        List<OutboxEvent> pendingEvents = outboxEventRepository.findPendingBatchForUpdate(10);
+        List<UUID> pendingEventIds = outboxEventRepository.findDuePendingCandidateIds(10);
 
-        assertThat(pendingEvents)
-                .extracting(OutboxEvent::getId)
+        assertThat(pendingEventIds)
                 .containsExactly(nullPendingId, duePendingId)
                 .doesNotContain(futurePendingId, failedId, processedId, deadLetterId);
-        assertThat(pendingEvents)
-                .extracting(OutboxEvent::getStatus)
-                .containsOnly(OutboxEventStatus.PENDING);
     }
 
     @Test
-    void findPendingBatchForUpdate_shouldRespectBatchSize() {
+    void findDuePendingCandidateIds_shouldRespectBatchSize() {
         UUID firstPendingId = UUID.randomUUID();
         UUID secondPendingId = UUID.randomUUID();
 
         insertOutboxEvent(firstPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"));
         insertOutboxEvent(secondPendingId, OutboxEventStatus.PENDING, Instant.parse("2026-01-01T10:01:00Z"));
 
-        List<OutboxEvent> pendingEvents = outboxEventRepository.findPendingBatchForUpdate(1);
+        List<UUID> pendingEventIds = outboxEventRepository.findDuePendingCandidateIds(1);
 
-        assertThat(pendingEvents)
-                .extracting(OutboxEvent::getId)
+        assertThat(pendingEventIds)
                 .containsExactly(firstPendingId);
     }
 

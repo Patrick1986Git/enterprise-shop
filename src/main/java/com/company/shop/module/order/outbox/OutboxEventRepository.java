@@ -38,13 +38,22 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
     Optional<Instant> findNewestAttemptAtByStatus(@Param("status") OutboxEventStatus status);
 
     @Query(value = """
-            SELECT *
+            SELECT id
             FROM outbox_events
             WHERE status = 'PENDING'
               AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
             ORDER BY next_attempt_at ASC NULLS FIRST, created_at ASC, id ASC
             LIMIT :batchSize
+            """, nativeQuery = true)
+    List<UUID> findDuePendingCandidateIds(@Param("batchSize") int batchSize);
+
+    @Query(value = """
+            SELECT *
+            FROM outbox_events
+            WHERE id = :eventId
+              AND status = 'PENDING'
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    List<OutboxEvent> findPendingBatchForUpdate(@Param("batchSize") int batchSize);
+    Optional<OutboxEvent> findDuePendingByIdForUpdateSkipLocked(@Param("eventId") UUID eventId);
 }
