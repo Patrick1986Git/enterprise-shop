@@ -38,7 +38,7 @@ class OutboxEventProcessorTransactionIT extends PostgresContainerSupport {
 
     @BeforeEach
     void cleanOutboxEvents() {
-        jdbcTemplate.update("DELETE FROM outbox_event_action_logs");
+        jdbcTemplate.update("DELETE FROM outbox_event_admin_action_logs");
         jdbcTemplate.update("DELETE FROM outbox_events");
     }
 
