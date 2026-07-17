@@ -46,8 +46,10 @@ import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.outbox.OutboxEventAdminActionLogQueryService;
 import com.company.shop.module.order.outbox.OutboxEventAdminCommandService;
+import com.company.shop.module.order.outbox.OutboxEventFailureRecorder;
 import com.company.shop.module.order.outbox.OutboxEventProcessor;
 import com.company.shop.module.order.outbox.OutboxEventQueryService;
+import com.company.shop.module.order.outbox.OutboxEventTransactionalWorker;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
@@ -175,6 +177,12 @@ class OpenApiDocsSmokeTest {
 
     @MockitoBean
     private OutboxEventProcessor outboxEventProcessor;
+
+    @MockitoBean
+    private OutboxEventTransactionalWorker outboxEventTransactionalWorker;
+
+    @MockitoBean
+    private OutboxEventFailureRecorder outboxEventFailureRecorder;
 
     @MockitoBean
     private OutboxEventQueryService outboxEventQueryService;

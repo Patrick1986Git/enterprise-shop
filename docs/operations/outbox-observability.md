@@ -153,4 +153,4 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 - Action log `details` is informational and makes audit entries self-descriptive for admins and admin UI consumers.
 - The documented `REQUEUE` details value does not change outbox processing, retry, requeue eligibility, scheduling, persistence behavior, endpoint paths, DTO shape, or security.
 - Delete endpoints, manual status mutation, and retry-now operations are intentionally not part of this API.
-- This remains a modular monolith transactional outbox. It does not introduce Kafka, RabbitMQ, external brokers, or microservices.
+- This remains a modular monolith transactional outbox. The poller coordinates batches without a batch-wide transaction; each event attempt commits or rolls back in its own transaction, and retry/dead-letter state is recorded in a separate transaction after failed attempts. It does not introduce Kafka, RabbitMQ, external brokers, or microservices.
