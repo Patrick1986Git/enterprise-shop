@@ -7,8 +7,11 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>, JpaSpecificationExecutor<OutboxEvent> {
 
@@ -36,6 +39,10 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
 
     @Query("select max(e.lastAttemptAt) from OutboxEvent e where e.status = :status")
     Optional<Instant> findNewestAttemptAtByStatus(@Param("status") OutboxEventStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from OutboxEvent e where e.id = :eventId")
+    Optional<OutboxEvent> findByIdForManualRequeueUpdate(@Param("eventId") UUID eventId);
 
     @Query(value = """
             SELECT id
