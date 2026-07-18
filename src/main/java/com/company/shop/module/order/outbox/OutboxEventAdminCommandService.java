@@ -31,7 +31,7 @@ public class OutboxEventAdminCommandService {
 
     @Transactional
     public OutboxEventResponseDTO requeueFailedEvent(UUID id) {
-        OutboxEvent event = outboxEventRepository.findById(id)
+        OutboxEvent event = outboxEventRepository.findByIdForManualRequeueUpdate(id)
                 .orElseThrow(() -> new OutboxEventNotFoundException(id));
 
         if (!canBeManuallyRequeued(event)) {

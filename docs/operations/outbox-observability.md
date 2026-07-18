@@ -148,7 +148,7 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 
 - These endpoints are admin-only.
 - Requeue is available for `FAILED` and `DEAD_LETTER` outbox events through `POST /api/v1/admin/outbox-events/{id}/requeue`; `PENDING` and `PROCESSED` events are rejected.
-- Manual requeue changes the event back to `PENDING`, clears `lastError`, `nextAttemptAt`, and `deadLetterReason`, increments `requeueCount`, and records `lastRequeuedAt` and `lastRequeuedBy`. Requeue remains available after the underlying deterministic contract issue or transient failure has been corrected.
+- Manual requeue locks the single selected outbox row by event id, then rechecks the current locked status before changing the event back to `PENDING`. This prevents a stale administrative request from overwriting a newer transition performed by another requeue operation, the transactional worker, or the failure recorder. On a successful requeue, it clears `lastError`, `nextAttemptAt`, and `deadLetterReason`, increments `requeueCount`, and records `lastRequeuedAt` and `lastRequeuedBy`. Requeue remains available after the underlying deterministic contract issue or transient failure has been corrected.
 - Requeue records admin action log entries for auditability.
 - Action log `details` is informational and makes audit entries self-descriptive for admins and admin UI consumers.
 - The documented `REQUEUE` details value does not change outbox processing, retry, requeue eligibility, scheduling, persistence behavior, endpoint paths, DTO shape, or security.

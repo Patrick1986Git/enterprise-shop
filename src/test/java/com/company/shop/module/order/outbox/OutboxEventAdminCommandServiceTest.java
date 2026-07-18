@@ -58,7 +58,7 @@ class OutboxEventAdminCommandServiceTest {
         setId(event, eventId);
         event.markFailed("boom");
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
         when(outboxEventMapper.toDto(event)).thenReturn(response);
 
@@ -74,7 +74,7 @@ class OutboxEventAdminCommandServiceTest {
         assertThat(event.getRequeueCount()).isEqualTo(1);
         assertThat(event.getLastRequeuedAt()).isNotNull();
         assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
-        verify(outboxEventRepository).findById(eventId);
+        verify(outboxEventRepository).findByIdForManualRequeueUpdate(eventId);
         verify(currentUserProvider).getCurrentUserEmail();
         verify(outboxEventAdminActionLogRepository).save(any(OutboxEventAdminActionLog.class));
         verify(outboxEventMapper).toDto(event);
@@ -91,7 +91,7 @@ class OutboxEventAdminCommandServiceTest {
         event.markDeadLetter("boom", "attempt limit reached");
         setInstantField(event, "nextAttemptAt", Instant.parse("2026-01-01T10:06:30Z"));
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
         when(outboxEventMapper.toDto(event)).thenReturn(response);
 
@@ -106,7 +106,7 @@ class OutboxEventAdminCommandServiceTest {
         assertThat(event.getRequeueCount()).isEqualTo(1);
         assertThat(event.getLastRequeuedAt()).isNotNull();
         assertThat(event.getLastRequeuedBy()).isEqualTo("admin@example.com");
-        verify(outboxEventRepository).findById(eventId);
+        verify(outboxEventRepository).findByIdForManualRequeueUpdate(eventId);
         verify(currentUserProvider).getCurrentUserEmail();
         verify(outboxEventAdminActionLogRepository).save(argThat(log ->
                 eventId.equals(log.getOutboxEventId())
@@ -122,14 +122,14 @@ class OutboxEventAdminCommandServiceTest {
     @Test
     void requeueFailedEvent_shouldThrowWhenEventIsMissing() {
         UUID eventId = UUID.randomUUID();
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.empty());
+        when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> outboxEventAdminCommandService.requeueFailedEvent(eventId))
                 .isInstanceOf(OutboxEventNotFoundException.class)
                 .extracting("errorCode")
                 .isEqualTo("OUTBOX_EVENT_NOT_FOUND");
 
-        verify(outboxEventRepository).findById(eventId);
+        verify(outboxEventRepository).findByIdForManualRequeueUpdate(eventId);
         verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor,
                 outboxEventAdminActionLogRepository);
         verifyNoMoreInteractions(outboxEventRepository);
@@ -139,14 +139,14 @@ class OutboxEventAdminCommandServiceTest {
     void requeueFailedEvent_shouldThrowWhenEventIsPending() {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
 
         assertThatThrownBy(() -> outboxEventAdminCommandService.requeueFailedEvent(eventId))
                 .isInstanceOf(OutboxEventRequeueNotAllowedException.class)
                 .extracting("errorCode")
                 .isEqualTo("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED");
 
-        verify(outboxEventRepository).findById(eventId);
+        verify(outboxEventRepository).findByIdForManualRequeueUpdate(eventId);
         verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor,
                 outboxEventAdminActionLogRepository);
     }
@@ -156,14 +156,14 @@ class OutboxEventAdminCommandServiceTest {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
         event.markProcessed();
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
 
         assertThatThrownBy(() -> outboxEventAdminCommandService.requeueFailedEvent(eventId))
                 .isInstanceOf(OutboxEventRequeueNotAllowedException.class)
                 .extracting("errorCode")
                 .isEqualTo("OUTBOX_EVENT_REQUEUE_NOT_ALLOWED");
 
-        verify(outboxEventRepository).findById(eventId);
+        verify(outboxEventRepository).findByIdForManualRequeueUpdate(eventId);
         verifyNoInteractions(currentUserProvider, outboxEventMapper, outboxEventProcessor,
                 outboxEventAdminActionLogRepository);
     }
@@ -175,7 +175,7 @@ class OutboxEventAdminCommandServiceTest {
         setId(event, eventId);
         event.markFailed("boom");
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
-        when(outboxEventRepository.findById(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
         when(outboxEventMapper.toDto(event)).thenReturn(response);
 
