@@ -1,0 +1,39 @@
+.git/
+.github/
+target/
+**/target/
+
+# IDE/editor metadata
+.idea/
+.vscode/
+.eclipse/
+.project
+.classpath
+.settings/
+*.iml
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Logs and reports
+logs/
+*.log
+**/surefire-reports/
+**/failsafe-reports/
+
+# Documentation and generated docs not required to build the image
+docs/
+README.md
+target/generated-docs/
+
+# Temporary files
+.tmp/
+tmp/
+*.tmp
+*.swp
+.DS_Store

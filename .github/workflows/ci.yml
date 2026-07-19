@@ -59,6 +59,37 @@ jobs:
             target/failsafe-reports/**
           if-no-files-found: ignore
 
+  docker-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate Compose configuration
+        run: docker compose config
+
+      - name: Build PostgreSQL image
+        run: docker compose build postgres
+
+      - name: Build application image
+        run: docker compose build app
+
+      - name: Start full Compose stack
+        run: docker compose --profile full up -d --build --wait
+
+      - name: Verify application health endpoint
+        run: curl --fail --show-error http://127.0.0.1:8080/actuator/health
+
+      - name: Collect Compose logs on failure
+        if: failure()
+        run: docker compose --profile full logs
+
+      - name: Shut down Compose stack
+        if: always()
+        run: docker compose --profile full down --volumes --remove-orphans
+
   deploy-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: build
