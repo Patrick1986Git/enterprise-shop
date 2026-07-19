@@ -3,6 +3,8 @@ set -eu
 
 : "${POSTGRES_DB:=enterprise_shop_dev}"
 : "${POSTGRES_USER:=postgres}"
+: "${POSTGRES_HOST:=postgres}"
+: "${POSTGRES_PORT:=5432}"
 : "${APP_DB_USER:=shop_dev}"
 : "${APP_DB_PASSWORD:=shop_dev}"
 
@@ -13,7 +15,11 @@ case "$APP_DB_USER" in
     ;;
 esac
 
+echo "Bootstrapping PostgreSQL runtime role ${APP_DB_USER} on ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+
 psql --set=ON_ERROR_STOP=1 \
+  --host "$POSTGRES_HOST" \
+  --port "$POSTGRES_PORT" \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
   --set=postgres_db="$POSTGRES_DB" \

@@ -15,7 +15,7 @@ Host-run Spring Boot defaults to `jdbc:postgresql://localhost:5433/enterprise_sh
 
 ```bash
 docker compose up -d --wait postgres
-docker compose up --wait database-role-bootstrap
+docker compose up --wait --force-recreate database-role-bootstrap
 ```
 
 After those commands complete, start Spring Boot from Eclipse or Maven with the `dev` profile. No YAML edits are required for the default host port and credentials.
@@ -30,7 +30,7 @@ The app service waits for PostgreSQL to become healthy and for `database-role-bo
 
 ## Bootstrap behavior and existing volumes
 
-`database-role-bootstrap` is a one-shot service. It connects with the PostgreSQL admin account, creates the runtime role if missing, updates the local development password, grants runtime table, sequence, function, schema, and database privileges, and configures default privileges for future objects created by local Flyway. It is idempotent and can be rerun against fresh or existing `enterprise_shop_postgres_volume` data.
+`database-role-bootstrap` is a one-shot service. It connects to `postgres:5432` with the PostgreSQL admin account, creates the runtime role if missing, updates the local development password, grants runtime table, sequence, function, schema, and database privileges, and configures default privileges for future objects created by local Flyway. It is idempotent and can be rerun against fresh or existing `enterprise_shop_postgres_volume` data.
 
 Existing named-volume users should run the database-only startup commands once after pulling this change. Do not delete or recreate the volume; no existing volume migration requires data deletion. Warning: `docker compose down -v` still removes Compose volumes, including `enterprise_shop_postgres_volume`, and deletes local Docker database data.
 

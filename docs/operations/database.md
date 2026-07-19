@@ -24,7 +24,7 @@ Run the idempotent bootstrap whenever local role grants need refreshing:
 
 ```bash
 docker compose up -d --wait postgres
-docker compose up --wait database-role-bootstrap
+docker compose up --wait --force-recreate database-role-bootstrap
 ```
 
 For the full stack:

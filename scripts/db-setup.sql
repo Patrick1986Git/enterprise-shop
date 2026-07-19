@@ -1,5 +1,5 @@
 -- Optional manual bootstrap for local PostgreSQL development.
--- Prefer `docker compose up --wait database-role-bootstrap` for Docker Compose.
+-- Prefer `docker compose up --wait --force-recreate database-role-bootstrap` for Docker Compose.
 -- Run as a PostgreSQL administrative user (for example: postgres).
 -- Keep credentials aligned with local-only .env values; never commit real secrets.
 

@@ -26,13 +26,14 @@ services:
         max-file: "3"
 
   database-role-bootstrap:
-    image: enterprise-shop-postgres-bootstrap
     build:
       context: ./docker/postgres
     restart: "no"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-enterprise_shop_dev}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
       APP_DB_USER: ${APP_DB_USER:-shop_dev}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-shop_dev}

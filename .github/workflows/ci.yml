@@ -80,7 +80,10 @@ jobs:
         run: docker compose up -d --wait postgres
 
       - name: Bootstrap runtime database role
-        run: docker compose up --wait database-role-bootstrap
+        run: docker compose up --wait --force-recreate database-role-bootstrap
+
+      - name: Re-run runtime database role bootstrap
+        run: docker compose up --wait --force-recreate database-role-bootstrap
 
       - name: Verify runtime database role attributes
         run: |
@@ -101,9 +104,17 @@ jobs:
       - name: Verify application health endpoint
         run: curl --fail --show-error http://127.0.0.1:8080/actuator/health
 
-      - name: Collect Compose logs on failure
+      - name: Collect PostgreSQL logs on failure
         if: failure()
-        run: docker compose --profile full logs
+        run: docker compose logs postgres
+
+      - name: Collect bootstrap logs on failure
+        if: failure()
+        run: docker compose logs database-role-bootstrap
+
+      - name: Collect app logs on failure
+        if: failure()
+        run: docker compose --profile full logs app
 
       - name: Shut down Compose stack
         if: always()
