@@ -20,11 +20,11 @@ The `dev` profile keeps Hibernate in `ddl-auto: validate`. Schema changes must c
 
 The runtime role has `LOGIN`, `CONNECT` on `enterprise_shop_dev`, `USAGE` on schema `public`, DML privileges on existing application tables, sequence privileges needed by generated IDs, and function execution where required. It is explicitly kept as `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` and does not own the PostgreSQL server.
 
-Run the idempotent bootstrap whenever local role grants need refreshing:
+Run the idempotent bootstrap whenever local role grants need refreshing. PostgreSQL is long-running and uses `up --wait`; the bootstrap is a one-shot administrative task and uses `run`, where exit code 0 is success and `--rm` removes the temporary one-off container:
 
 ```bash
 docker compose up -d --wait postgres
-docker compose up --wait --force-recreate database-role-bootstrap
+docker compose run --rm --no-deps --build database-role-bootstrap
 ```
 
 For the full stack:

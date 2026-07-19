@@ -73,6 +73,9 @@ jobs:
       - name: Build PostgreSQL image
         run: docker compose build postgres
 
+      - name: Build bootstrap image
+        run: docker compose build database-role-bootstrap
+
       - name: Build application image
         run: docker compose build app
 
@@ -80,10 +83,10 @@ jobs:
         run: docker compose up -d --wait postgres
 
       - name: Bootstrap runtime database role
-        run: docker compose up --wait --force-recreate database-role-bootstrap
+        run: docker compose run --rm --no-deps database-role-bootstrap
 
       - name: Re-run runtime database role bootstrap
-        run: docker compose up --wait --force-recreate database-role-bootstrap
+        run: docker compose run --rm --no-deps database-role-bootstrap
 
       - name: Verify runtime database role attributes
         run: |
@@ -104,13 +107,13 @@ jobs:
       - name: Verify application health endpoint
         run: curl --fail --show-error http://127.0.0.1:8080/actuator/health
 
+      - name: Collect Compose status on failure
+        if: failure()
+        run: docker compose --profile full ps -a
+
       - name: Collect PostgreSQL logs on failure
         if: failure()
         run: docker compose logs postgres
-
-      - name: Collect bootstrap logs on failure
-        if: failure()
-        run: docker compose logs database-role-bootstrap
 
       - name: Collect app logs on failure
         if: failure()

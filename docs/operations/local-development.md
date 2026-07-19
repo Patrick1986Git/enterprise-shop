@@ -15,10 +15,10 @@ Host-run Spring Boot defaults to `jdbc:postgresql://localhost:5433/enterprise_sh
 
 ```bash
 docker compose up -d --wait postgres
-docker compose up --wait --force-recreate database-role-bootstrap
+docker compose run --rm --no-deps --build database-role-bootstrap
 ```
 
-After those commands complete, start Spring Boot from Eclipse or Maven with the `dev` profile. No YAML edits are required for the default host port and credentials.
+PostgreSQL is a long-running service, so it uses `up --wait`. `database-role-bootstrap` is a one-shot administrative task, so it uses `run`; successful termination with exit code 0 is expected, and `--rm` removes the temporary one-off container. After those commands complete, start Spring Boot from Eclipse or Maven with the `dev` profile. No YAML edits are required for the default host port and credentials.
 
 ## Full Compose startup
 
@@ -48,7 +48,7 @@ docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTG
 
 - If `5433` is busy, set `POSTGRES_HOST_PORT` in `.env` or the shell and override host-run `DATABASE_URL` accordingly.
 - If `8080` is busy, set `APP_HOST_PORT`, for example `APP_HOST_PORT=18080 docker compose --profile full up -d --build --wait`.
-- Check readiness with `docker compose ps`, `docker compose logs postgres`, `docker compose logs database-role-bootstrap`, and `docker compose exec -T postgres pg_isready -U postgres -d enterprise_shop_dev`.
+- Check readiness with `docker compose ps`, `docker compose logs postgres`, the streamed bootstrap command output, and `docker compose exec -T postgres pg_isready -U postgres -d enterprise_shop_dev`.
 - Docker and Testcontainers may create temporary overlay mounts named `merged`. These are not disk partitions and must not be edited manually.
 
 ## Useful local URLs
