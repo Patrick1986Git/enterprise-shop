@@ -7,9 +7,9 @@
 spring:
   # Persistence Layer: PostgreSQL Connectivity
   datasource:
-    url: jdbc:postgresql://localhost:5433/enterprise_shop_dev
-    username: postgres
-    password: postgres
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/enterprise_shop_dev}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
   # JPA & Hibernate: ORM Strategy

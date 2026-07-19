@@ -1,35 +1,73 @@
-###############################################################################
-# ENTERPRISE SHOP - DOCKER INFRASTRUCTURE CONFIGURATION
-# This file manages local development services (PostgreSQL, Redis, etc.)
-# Usage: docker-compose up -d
-###############################################################################
-
 services:
-  # Database Service: PostgreSQL with Polish FTS support
-  # Note: The custom build context is used to include Polish dictionaries
   postgres:
-    build: ./docker/postgres
-    container_name: enterprise-shop-db
+    build:
+      context: ./docker/postgres
     restart: unless-stopped
     ports:
-      - "5433:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     environment:
-      # Standard dev credentials - DO NOT use these in production environments
-      - POSTGRES_DB=enterprise_shop_dev
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      POSTGRES_DB: ${POSTGRES_DB:-enterprise_shop_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d enterprise_shop_dev"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - shop-network
+      - enterprise-shop-network
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_HOST_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-enterprise_shop_dev}
+      DATABASE_USERNAME: ${POSTGRES_USER:-postgres}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-that-should-not-be-used-in-production-at-least-256-bits}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-pk_test_placeholder}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    networks:
+      - enterprise-shop-network
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
-  shop-network:
+  enterprise-shop-network:
     driver: bridge
 
 volumes:
