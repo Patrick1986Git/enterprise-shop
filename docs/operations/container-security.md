@@ -30,6 +30,18 @@ docker run --rm \
   hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 ```
 
+Validate that Trivy itself can load the repository ignore policy before expensive image builds:
+
+```bash
+mkdir -p .tmp/container-security/trivy-cache
+
+docker run --rm \
+  -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
+  -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+  -w /workspace \
+  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml alpine:3.20
+```
+
 ## Vulnerability scanning policy
 
 Trivy scans both final images with the `vuln` scanner. The policy is:
@@ -39,7 +51,7 @@ Trivy scans both final images with the `vuln` scanner. The policy is:
 - Unfixed vulnerabilities are not ignored by default.
 - Individual CVEs must not be silently suppressed.
 - Raw scanner reports are evidence of everything Trivy detected; policy scans are the actionable gate after documented applicability analysis.
-- Exceptions are not vulnerability fixes. An expired exception must be removed, renewed with fresh evidence, or replaced by a remediation before the expiry date.
+- Exceptions are not vulnerability fixes. An expired exception must be removed, renewed with fresh evidence, or replaced by a remediation before the expiry date. Trivy `0.72.0` requires `expired_at` in `.trivyignore.yaml` to be an RFC 3339 timestamp, so the configuration uses the end of the UTC calendar day.
 
 Local reproduction:
 
@@ -97,7 +109,7 @@ The repository-level `.trivyignore.yaml` contains one path-scoped exception:
 
 - ID: `CVE-2025-68121`
 - Path: `usr/local/bin/gosu`
-- Expiry: `2026-10-31`
+- Expiry: `2026-10-31` (`expired_at: "2026-10-31T23:59:59Z"`)
 - Reason: upstream gosu govulncheck analysis classifies the affected `crypto/tls` TLS session-resumption certificate-validation path as unreachable from gosu `1.19`.
 
 No package-wide, image-wide, wildcard, unfixed, or blanket Go standard-library suppression is configured. A different CRITICAL finding in gosu, PostgreSQL, Alpine, the Java runtime, or the application remains outside this exception and fails CI.

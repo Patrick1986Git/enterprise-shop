@@ -2,7 +2,7 @@ vulnerabilities:
   - id: CVE-2025-68121
     paths:
       - "usr/local/bin/gosu"
-    expired_at: "2026-10-31"
+    expired_at: "2026-10-31T23:59:59Z"
     statement: >-
       Upstream gosu 1.19 govulncheck analysis reports the affected crypto/tls
       TLS session-resumption certificate-validation path as unreachable from

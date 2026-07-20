@@ -226,6 +226,23 @@ jobs:
             "${HADOLINT_IMAGE}" \
             hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 
+      - name: Cache Trivy database
+        uses: actions/cache@v4
+        with:
+          path: .tmp/container-security/trivy-cache
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      - name: Validate Trivy policy configuration
+        run: |
+          mkdir -p .tmp/container-security/trivy-cache
+          docker run --rm \
+            -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -w /workspace \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml alpine:3.20
+
       - name: Build CI-local images from fresh bases
         run: |
           docker build --pull --tag enterprise-shop/app:ci .
@@ -242,14 +259,6 @@ jobs:
           git clone --depth 1 --branch 1.19 https://github.com/tianon/gosu.git .tmp/gosu-source
           cd .tmp/gosu-source
           GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" ./govulncheck-with-excludes.sh ./...
-
-      - name: Cache Trivy database
-        uses: actions/cache@v4
-        with:
-          path: .tmp/container-security/trivy-cache
-          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            trivy-db-${{ runner.os }}-
 
       - name: Prepare container security artifact directories
         run: mkdir -p .tmp/container-security/trivy-cache .tmp/container-security/reports .tmp/container-security/sbom
