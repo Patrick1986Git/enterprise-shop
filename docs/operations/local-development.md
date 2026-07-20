@@ -1,83 +1,54 @@
 # Local development
 
-## Prerequisites
+The local Docker stack keeps PostgreSQL separate from any system PostgreSQL that may already listen on `localhost:5432`. Docker PostgreSQL remains loopback-bound on `127.0.0.1:${POSTGRES_HOST_PORT:-5433}` and continues to use the named volume `enterprise_shop_postgres_volume`.
 
-- Java 21.
-- Maven Wrapper from this repository (`./mvnw` preferred).
-- Docker and Docker Compose for local PostgreSQL or the optional full stack.
+## Local database identities
 
-## PostgreSQL port model
+| Identity | Default variables | Purpose |
+| --- | --- | --- |
+| PostgreSQL admin/bootstrap | `POSTGRES_USER=postgres`, `POSTGRES_PASSWORD=postgres` | Owns the local database, provisions roles, and is used by local Flyway migrations that need schema privileges. |
+| Application runtime | `APP_DB_USER=shop_dev`, `APP_DB_PASSWORD=shop_dev` | Used by the Spring datasource for normal application queries and transactions. It is `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`. |
 
-The host may already run a system PostgreSQL server on `localhost:5432`. The Docker PostgreSQL service therefore binds only to loopback on `localhost:5433` by default and keeps using the named volume `enterprise_shop_postgres_volume`.
+Host-run Spring Boot defaults to `jdbc:postgresql://localhost:5433/enterprise_shop_dev`. The full Compose app uses `jdbc:postgresql://postgres:5432/enterprise_shop_dev` for container-to-container networking. In the `dev` profile, the Spring datasource uses the runtime role while Flyway uses explicit `FLYWAY_URL`, `FLYWAY_USER`, and `FLYWAY_PASSWORD` settings that default to the local PostgreSQL admin identity.
 
-| Client | JDBC URL |
-| --- | --- |
-| Spring Boot running on the host/Eclipse | `jdbc:postgresql://localhost:5433/enterprise_shop_dev` |
-| Spring Boot running inside Compose | `jdbc:postgresql://postgres:5432/enterprise_shop_dev` |
-
-Do not use `localhost` for container-to-container database traffic; inside Compose, `localhost` means the application container itself.
-
-## Database-only workflow
-
-Use this when running the Spring Boot application from Eclipse or Maven on the host:
+## Database-only startup for Eclipse or Maven
 
 ```bash
 docker compose up -d --wait postgres
-SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+docker compose run --rm --no-deps --build database-role-bootstrap
 ```
 
-Default local database settings remain:
+PostgreSQL is a long-running service, so it uses `up --wait`. `database-role-bootstrap` is a one-shot administrative task, so it uses `run`; successful termination with exit code 0 is expected, and `--rm` removes the temporary one-off container. After those commands complete, start Spring Boot from Eclipse or Maven with the `dev` profile. No YAML edits are required for the default host port and credentials.
 
-| Setting | Value |
-| --- | --- |
-| Host | `localhost` |
-| Port | `5433` |
-| Database | `enterprise_shop_dev` |
-| Username | `postgres` |
-| Password | `postgres` |
-
-The `dev` profile uses Flyway migrations and Hibernate schema validation. `application-dev.yml` keeps these defaults but allows `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD` environment overrides.
-
-## Optional full-stack Compose workflow
-
-Use this to run both PostgreSQL and the Spring Boot application in containers:
+## Full Compose startup
 
 ```bash
 docker compose --profile full up -d --build --wait
-curl -i http://127.0.0.1:8080/actuator/health
 ```
 
-The app service is profile-gated with `full`, publishes only to `127.0.0.1:${APP_HOST_PORT:-8080}`, activates the `dev` Spring profile, and connects to PostgreSQL through `jdbc:postgresql://postgres:5432/enterprise_shop_dev`.
+The app service waits for PostgreSQL to become healthy and for `database-role-bootstrap` to complete successfully before starting.
 
-## Local overrides
+## Bootstrap behavior and existing volumes
 
-Copy `.env.example` to `.env` only for local overrides. `.env` is ignored by Git. The example contains development placeholders only; do not put production credentials in this repository.
+`database-role-bootstrap` is a one-shot service. It connects to `postgres:5432` with the PostgreSQL admin account, creates the runtime role if missing, updates the local development password, grants runtime table, sequence, function, schema, and database privileges, and configures default privileges for future objects created by local Flyway. It is idempotent and can be rerun against fresh or existing `enterprise_shop_postgres_volume` data.
 
-## Useful Docker commands
+Existing named-volume users should run the database-only startup commands once after pulling this change. Do not delete or recreate the volume; no existing volume migration requires data deletion. Warning: `docker compose down -v` still removes Compose volumes, including `enterprise_shop_postgres_volume`, and deletes local Docker database data.
+
+## Inspect roles and grants
 
 ```bash
-docker compose config
-docker compose ps
-docker compose logs postgres
-docker compose --profile full logs app
-docker compose port postgres 5432
-docker network inspect enterprise-shop_enterprise-shop-network
-docker volume inspect enterprise_shop_postgres_volume
+docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-enterprise_shop_dev}" \
+  -c "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = 'shop_dev';"
+
+docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-enterprise_shop_dev}" \
+  -c "SELECT grantee, privilege_type FROM information_schema.role_table_grants WHERE grantee = 'shop_dev' ORDER BY privilege_type;"
 ```
-
-Stop containers without deleting database data:
-
-```bash
-docker compose --profile full down
-```
-
-Warning: `docker compose down -v` removes Compose volumes, including `enterprise_shop_postgres_volume`, and deletes the local Docker database data.
 
 ## Troubleshooting
 
-- If `5433` is busy, set `POSTGRES_HOST_PORT` in `.env` or the shell, for example `POSTGRES_HOST_PORT=15433 docker compose up -d --wait postgres`, and override the host-run `DATABASE_URL` accordingly.
+- If `5433` is busy, set `POSTGRES_HOST_PORT` in `.env` or the shell and override host-run `DATABASE_URL` accordingly.
 - If `8080` is busy, set `APP_HOST_PORT`, for example `APP_HOST_PORT=18080 docker compose --profile full up -d --build --wait`.
-- Check readiness with `docker compose ps`, `docker compose logs postgres`, and `docker compose exec -T postgres pg_isready -U postgres -d enterprise_shop_dev`.
+- Check readiness with `docker compose ps`, `docker compose logs postgres`, the streamed bootstrap command output, and `docker compose exec -T postgres pg_isready -U postgres -d enterprise_shop_dev`.
 - Docker and Testcontainers may create temporary overlay mounts named `merged`. These are not disk partitions and must not be edited manually.
 
 ## Useful local URLs

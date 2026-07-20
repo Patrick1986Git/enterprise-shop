@@ -8,8 +8,8 @@ spring:
   # Persistence Layer: PostgreSQL Connectivity
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/enterprise_shop_dev}
-    username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:postgres}
+    username: ${DATABASE_USERNAME:${APP_DB_USER:shop_dev}}
+    password: ${DATABASE_PASSWORD:${APP_DB_PASSWORD:shop_dev}}
     driver-class-name: org.postgresql.Driver
 
   # JPA & Hibernate: ORM Strategy
@@ -27,6 +27,9 @@ spring:
   # Ensures that the database schema is evolved version-by-version in a repeatable way.
   flyway:
     enabled: true
+    url: ${FLYWAY_URL:${DATABASE_URL:jdbc:postgresql://localhost:5433/enterprise_shop_dev}}
+    user: ${FLYWAY_USER:${POSTGRES_USER:postgres}}
+    password: ${FLYWAY_PASSWORD:${POSTGRES_PASSWORD:postgres}}
     baseline-on-migrate: true
     locations: classpath:db/migration
     schemas: public

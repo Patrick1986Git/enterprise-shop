@@ -73,8 +73,33 @@ jobs:
       - name: Build PostgreSQL image
         run: docker compose build postgres
 
+      - name: Build bootstrap image
+        run: docker compose build database-role-bootstrap
+
       - name: Build application image
         run: docker compose build app
+
+      - name: Start PostgreSQL
+        run: docker compose up -d --wait postgres
+
+      - name: Bootstrap runtime database role
+        run: docker compose run --rm --no-deps database-role-bootstrap
+
+      - name: Re-run runtime database role bootstrap
+        run: docker compose run --rm --no-deps database-role-bootstrap
+
+      - name: Verify runtime database role attributes
+        run: |
+          docker compose exec -T postgres psql \
+            -U "${POSTGRES_USER:-postgres}" \
+            -d "${POSTGRES_DB:-enterprise_shop_dev}" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}';"
+          docker compose exec -T postgres psql \
+            -U "${POSTGRES_USER:-postgres}" \
+            -d "${POSTGRES_DB:-enterprise_shop_dev}" \
+            -v ON_ERROR_STOP=1 \
+            -tAc "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}' AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication) THEN 'ok' ELSE 'invalid' END;" | grep -qx ok
 
       - name: Start full Compose stack
         run: docker compose --profile full up -d --build --wait
@@ -82,9 +107,17 @@ jobs:
       - name: Verify application health endpoint
         run: curl --fail --show-error http://127.0.0.1:8080/actuator/health
 
-      - name: Collect Compose logs on failure
+      - name: Collect Compose status on failure
         if: failure()
-        run: docker compose --profile full logs
+        run: docker compose --profile full ps -a
+
+      - name: Collect PostgreSQL logs on failure
+        if: failure()
+        run: docker compose logs postgres
+
+      - name: Collect app logs on failure
+        if: failure()
+        run: docker compose --profile full logs app
 
       - name: Shut down Compose stack
         if: always()

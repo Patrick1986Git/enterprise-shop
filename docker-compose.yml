@@ -25,6 +25,39 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  database-role-bootstrap:
+    build:
+      context: ./docker/postgres
+    restart: "no"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-enterprise_shop_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      APP_DB_USER: ${APP_DB_USER:-shop_dev}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-shop_dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["/bootstrap/bootstrap-app-role.sh"]
+    volumes:
+      - ./scripts/bootstrap-app-role.sh:/bootstrap/bootstrap-app-role.sh:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    networks:
+      - enterprise-shop-network
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   app:
     profiles: ["full"]
     build:
@@ -36,8 +69,11 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-enterprise_shop_dev}
-      DATABASE_USERNAME: ${POSTGRES_USER:-postgres}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATABASE_USERNAME: ${APP_DB_USER:-shop_dev}
+      DATABASE_PASSWORD: ${APP_DB_PASSWORD:-shop_dev}
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-enterprise_shop_dev}
+      FLYWAY_USER: ${POSTGRES_USER:-postgres}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-that-should-not-be-used-in-production-at-least-256-bits}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
@@ -45,6 +81,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      database-role-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health >/dev/null"]
       interval: 10s
