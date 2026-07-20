@@ -11,7 +11,21 @@ The local Docker stack keeps PostgreSQL separate from any system PostgreSQL that
 
 Host-run Spring Boot defaults to `jdbc:postgresql://localhost:5433/enterprise_shop_dev`. The full Compose app uses `jdbc:postgresql://postgres:5432/enterprise_shop_dev` for container-to-container networking. In the `dev` profile, the Spring datasource uses the runtime role while Flyway uses explicit `FLYWAY_URL`, `FLYWAY_USER`, and `FLYWAY_PASSWORD` settings that default to the local PostgreSQL admin identity.
 
-## Database-only startup for Eclipse or Maven
+## One-command host startup
+
+Run the local development environment with Spring Boot on the host:
+
+```bash
+./scripts/run-dev.sh
+```
+
+The script starts PostgreSQL with `docker compose up -d --wait postgres`, checks whether the application role `${APP_DB_USER:-shop_dev}` can authenticate and has the required runtime database privileges, and runs `database-role-bootstrap` only when the role is missing, authentication fails, or required privileges are unavailable. It then starts the app with `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run` and uses `exec` for Maven so `Ctrl+C` is delivered directly to Spring Boot.
+
+The script reads default values from the shell and from a local `.env` file without sourcing or executing `.env` content. Shell environment variables take precedence over `.env`, and defaults remain aligned with Docker Compose: PostgreSQL on `localhost:${POSTGRES_HOST_PORT:-5433}`, Flyway through the admin/bootstrap identity, and the application datasource through `${APP_DB_USER:-shop_dev}`. The script does not delete or recreate `enterprise_shop_postgres_volume` and never starts the host application as the PostgreSQL administrator.
+
+Manual bootstrap is normally required only for a new `enterprise_shop_postgres_volume`, changed local credentials, or changed role privileges. For day-to-day startup, prefer `./scripts/run-dev.sh`; it decides whether the bootstrap one-shot task is necessary.
+
+## Database-only startup for Eclipse or manual Maven runs
 
 ```bash
 docker compose up -d --wait postgres

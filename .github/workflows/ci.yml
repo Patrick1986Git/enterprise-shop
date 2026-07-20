@@ -67,6 +67,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Validate development scripts
+        run: sh -n scripts/run-dev.sh
+
       - name: Validate Compose configuration
         run: docker compose config
 
