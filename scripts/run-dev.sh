@@ -1,12 +1,71 @@
 #!/bin/sh
 set -eu
 
+usage() {
+  cat <<'USAGE'
+Usage: ./scripts/run-dev.sh [--prepare-only]
+
+Starts local PostgreSQL, verifies or repairs the least-privilege application
+runtime role, and starts Spring Boot on the host. Use --prepare-only to prepare
+only PostgreSQL and the runtime role without starting Maven/Spring Boot.
+USAGE
+}
+
 log() {
   printf '%s\n' "==> $*"
 }
 
-warn() {
-  printf '%s\n' "WARN: $*" >&2
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+script_path=$0
+case "$script_path" in
+  */*) ;;
+  *)
+    script_path=$(command -v -- "$script_path") || fail "Cannot resolve script path: $0"
+    ;;
+esac
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$script_path")" && pwd -P) || fail "Cannot resolve script directory"
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P) || fail "Cannot resolve repository root"
+cd "$repo_root" || fail "Cannot enter repository root: $repo_root"
+
+prepare_only=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prepare-only)
+      prepare_only=true
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      fail "Unknown argument: $1"
+      ;;
+  esac
+  shift
+done
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    fail "Required command not found: $1"
+  fi
+}
+
+is_env_set() {
+  env | grep -q "^$1="
+}
+
+assign_env_if_unset() {
+  key=$1
+  value=$2
+  if ! is_env_set "$key"; then
+    export "$key=$value"
+  fi
 }
 
 load_env_file() {
@@ -14,7 +73,28 @@ load_env_file() {
   [ -f "$env_file" ] || return 0
 
   log "Loading local environment defaults from $env_file"
+  line_number=0
   while IFS= read -r line || [ -n "$line" ]; do
+    line_number=$((line_number + 1))
+    line=${line%$(printf '\r')}
+
+    tab=$(printf '\t')
+    while :; do
+      case "$line" in
+        ' '*) line=${line#' '} ;;
+        "$tab"*) line=${line#"$tab"} ;;
+        *) break ;;
+      esac
+    done
+
+    while :; do
+      case "$line" in
+        *' ') line=${line%' '} ;;
+        *"$tab") line=${line%"$tab"} ;;
+        *) break ;;
+      esac
+    done
+
     case "$line" in
       ''|'#'*) continue ;;
       export\ *) line=${line#export } ;;
@@ -22,50 +102,73 @@ load_env_file() {
 
     case "$line" in
       *=*) ;;
-      *) continue ;;
+      *) fail "$env_file:$line_number uses unsupported dotenv syntax; expected KEY=VALUE" ;;
     esac
 
     key=${line%%=*}
     value=${line#*=}
 
     case "$key" in
-      ''|*[!A-Za-z0-9_]*)
-        warn "Ignoring invalid .env key: $key"
-        continue
-        ;;
-      [0-9]*)
-        warn "Ignoring invalid .env key: $key"
-        continue
+      ''|*[!A-Za-z0-9_]*|[0-9]*)
+        fail "$env_file:$line_number contains invalid variable name: $key"
         ;;
     esac
 
+    if [ "${value#*\`}" != "$value" ] || [ "${value#*\$\(}" != "$value" ]; then
+      fail "$env_file:$line_number contains command substitution, which is not allowed"
+    fi
+
     case "$value" in
       \"*\")
+        case "$value" in
+          *\") ;;
+          *) fail "$env_file:$line_number has an unterminated double-quoted value" ;;
+        esac
         value=${value#\"}
         value=${value%\"}
         ;;
       \'*\')
+        case "$value" in
+          *\') ;;
+          *) fail "$env_file:$line_number has an unterminated single-quoted value" ;;
+        esac
         value=${value#\'}
         value=${value%\'}
         ;;
     esac
 
-    if [ "${value#*\`}" != "$value" ] || [ "${value#*\$\(}" != "$value" ]; then
-      warn "Ignoring $key because command substitution syntax is not allowed in .env"
-      continue
-    fi
-
-    eval "current=\${$key+x}"
-    if [ -z "$current" ]; then
-      export "$key=$value"
-    fi
+    assign_env_if_unset "$key" "$value"
   done < "$env_file"
 }
 
-require_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    printf 'Required command not found: %s\n' "$1" >&2
-    exit 1
+validate_identifier() {
+  name=$1
+  value=$2
+  case "$value" in
+    ''|*[!A-Za-z0-9_]*)
+      fail "$name must contain only letters, numbers, and underscores and cannot be empty"
+      ;;
+  esac
+}
+
+validate_runtime_identity() {
+  validate_identifier APP_DB_USER "$APP_DB_USER"
+  validate_identifier POSTGRES_USER "$POSTGRES_USER"
+
+  if [ "$APP_DB_USER" = "$POSTGRES_USER" ]; then
+    fail "APP_DB_USER must differ from POSTGRES_USER; the host application must not run as the PostgreSQL admin user"
+  fi
+
+  if [ "${DATABASE_USERNAME+x}" ]; then
+    if [ "$DATABASE_USERNAME" != "$APP_DB_USER" ]; then
+      fail "DATABASE_USERNAME conflicts with APP_DB_USER; run-dev.sh always starts the host application as APP_DB_USER"
+    fi
+  fi
+
+  if [ "${DATABASE_PASSWORD+x}" ]; then
+    if [ "$DATABASE_PASSWORD" != "$APP_DB_PASSWORD" ]; then
+      fail "DATABASE_PASSWORD conflicts with APP_DB_PASSWORD; run-dev.sh always starts the host application with APP_DB_PASSWORD"
+    fi
   fi
 }
 
@@ -82,7 +185,11 @@ psql_as_app() {
 }
 
 app_role_check_sql=$(cat <<'SQL'
-WITH table_privileges AS (
+WITH role_attributes AS (
+  SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication
+  FROM pg_roles
+  WHERE rolname = current_user
+), table_privileges AS (
   SELECT bool_and(
     has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'SELECT,INSERT,UPDATE,DELETE')
   ) AS ok
@@ -101,12 +208,21 @@ WITH table_privileges AS (
   WHERE n.nspname = 'public'
 )
 SELECT CASE WHEN
-  has_database_privilege(current_user, current_database(), 'CONNECT')
+  EXISTS (
+    SELECT 1
+    FROM role_attributes
+    WHERE rolcanlogin
+      AND NOT rolsuper
+      AND NOT rolcreatedb
+      AND NOT rolcreaterole
+      AND NOT rolreplication
+  )
+  AND has_database_privilege(current_user, current_database(), 'CONNECT')
   AND has_schema_privilege(current_user, 'public', 'USAGE')
   AND COALESCE((SELECT ok FROM table_privileges), true)
   AND COALESCE((SELECT ok FROM sequence_privileges), true)
   AND COALESCE((SELECT ok FROM function_privileges), true)
-THEN 'ok' ELSE 'missing_required_privileges' END;
+THEN 'ok' ELSE 'invalid_runtime_role' END;
 SQL
 )
 
@@ -115,7 +231,7 @@ check_app_role() {
   [ "$result" = "ok" ]
 }
 
-load_env_file .env
+load_env_file "$repo_root/.env"
 
 : "${POSTGRES_DB:=enterprise_shop_dev}"
 : "${POSTGRES_USER:=postgres}"
@@ -124,32 +240,38 @@ load_env_file .env
 : "${APP_DB_USER:=shop_dev}"
 : "${APP_DB_PASSWORD:=shop_dev}"
 
+validate_runtime_identity
+
 export POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD POSTGRES_HOST_PORT APP_DB_USER APP_DB_PASSWORD
 export DATABASE_URL="${DATABASE_URL:-jdbc:postgresql://localhost:${POSTGRES_HOST_PORT}/${POSTGRES_DB}}"
-export DATABASE_USERNAME="${DATABASE_USERNAME:-$APP_DB_USER}"
-export DATABASE_PASSWORD="${DATABASE_PASSWORD:-$APP_DB_PASSWORD}"
 export FLYWAY_URL="${FLYWAY_URL:-$DATABASE_URL}"
 export FLYWAY_USER="${FLYWAY_USER:-$POSTGRES_USER}"
 export FLYWAY_PASSWORD="${FLYWAY_PASSWORD:-$POSTGRES_PASSWORD}"
+export DATABASE_USERNAME="$APP_DB_USER"
+export DATABASE_PASSWORD="$APP_DB_PASSWORD"
 
 require_command docker
 
-log "Starting PostgreSQL with Docker Compose"
+log "Starting PostgreSQL with Docker Compose from $repo_root"
 docker compose up -d --wait postgres
 
-log "Checking whether application role $APP_DB_USER can authenticate and has required privileges"
+log "Checking whether application role $APP_DB_USER can authenticate, has least-privilege attributes, and has required grants"
 if check_app_role; then
   log "Application role $APP_DB_USER is ready; bootstrap is not needed"
 else
-  log "Application role $APP_DB_USER is missing, cannot authenticate, or lacks required privileges"
+  log "Application role $APP_DB_USER is missing, cannot authenticate, has unsafe attributes, or lacks required privileges"
   log "Running one-shot database-role-bootstrap without deleting or recreating the PostgreSQL volume"
   docker compose run --rm --no-deps --build database-role-bootstrap
 
   log "Rechecking application role $APP_DB_USER"
   if ! check_app_role; then
-    printf 'Application role %s still cannot authenticate or lacks required privileges after bootstrap.\n' "$APP_DB_USER" >&2
-    exit 1
+    fail "Application role $APP_DB_USER still cannot authenticate, has unsafe attributes, or lacks required privileges after bootstrap"
   fi
+fi
+
+if [ "$prepare_only" = true ]; then
+  log "Local database is prepared; --prepare-only requested, so Spring Boot will not be started"
+  exit 0
 fi
 
 log "Starting Enterprise Shop on the host with Spring profile dev"

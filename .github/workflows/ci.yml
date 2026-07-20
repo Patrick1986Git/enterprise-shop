@@ -67,8 +67,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Validate development scripts
+      - name: Validate development script syntax
         run: sh -n scripts/run-dev.sh
+
+      - name: Lint development script when ShellCheck is available
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck scripts/run-dev.sh
+          else
+            echo "ShellCheck is not installed; skipping shellcheck lint."
+          fi
+
+      - name: Validate dotenv safety checks
+        run: |
+          trap 'rm -f .env' EXIT
+          cat > .env <<'EOF'
+          BAD-NAME=value
+          EOF
+          if ./scripts/run-dev.sh --prepare-only; then
+            echo "Expected invalid .env variable name to fail" >&2
+            exit 1
+          fi
+
+          cat > .env <<'EOF'
+          APP_DB_PASSWORD=$(echo unsafe)
+          EOF
+          if ./scripts/run-dev.sh --prepare-only; then
+            echo "Expected .env command substitution to fail" >&2
+            exit 1
+          fi
+
+          cat > .env <<'EOF'
+          DATABASE_USERNAME=postgres
+          EOF
+          if ./scripts/run-dev.sh --prepare-only; then
+            echo "Expected conflicting runtime/admin datasource user to fail" >&2
+            exit 1
+          fi
 
       - name: Validate Compose configuration
         run: docker compose config
@@ -79,17 +114,8 @@ jobs:
       - name: Build bootstrap image
         run: docker compose build database-role-bootstrap
 
-      - name: Build application image
-        run: docker compose build app
-
-      - name: Start PostgreSQL
-        run: docker compose up -d --wait postgres
-
-      - name: Bootstrap runtime database role
-        run: docker compose run --rm --no-deps database-role-bootstrap
-
-      - name: Re-run runtime database role bootstrap
-        run: docker compose run --rm --no-deps database-role-bootstrap
+      - name: Prepare fresh local database with run-dev
+        run: ./scripts/run-dev.sh --prepare-only
 
       - name: Verify runtime database role attributes
         run: |
@@ -97,12 +123,47 @@ jobs:
             -U "${POSTGRES_USER:-postgres}" \
             -d "${POSTGRES_DB:-enterprise_shop_dev}" \
             -v ON_ERROR_STOP=1 \
-            -c "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}';"
+            -c "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}';"
           docker compose exec -T postgres psql \
             -U "${POSTGRES_USER:-postgres}" \
             -d "${POSTGRES_DB:-enterprise_shop_dev}" \
             -v ON_ERROR_STOP=1 \
-            -tAc "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}' AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication) THEN 'ok' ELSE 'invalid' END;" | grep -qx ok
+            -tAc "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}' AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication) THEN 'ok' ELSE 'invalid' END;" | grep -qx ok
+
+      - name: Re-run prepare-only without unnecessary bootstrap
+        run: |
+          ./scripts/run-dev.sh --prepare-only | tee /tmp/run-dev-idempotent.log
+          grep -q "bootstrap is not needed" /tmp/run-dev-idempotent.log
+
+      - name: Verify changed APP_DB_PASSWORD is repaired
+        run: |
+          APP_DB_PASSWORD=shop_dev_changed ./scripts/run-dev.sh --prepare-only
+          docker compose exec -T \
+            -e PGPASSWORD=shop_dev_changed \
+            postgres psql \
+              --host 127.0.0.1 \
+              --port 5432 \
+              --username "${APP_DB_USER:-shop_dev}" \
+              --dbname "${POSTGRES_DB:-enterprise_shop_dev}" \
+              -v ON_ERROR_STOP=1 \
+              -tAc "SELECT current_user;" | grep -qx "${APP_DB_USER:-shop_dev}"
+
+      - name: Verify excessive role attributes are repaired
+        run: |
+          docker compose exec -T postgres psql \
+            -U "${POSTGRES_USER:-postgres}" \
+            -d "${POSTGRES_DB:-enterprise_shop_dev}" \
+            -v ON_ERROR_STOP=1 \
+            -c "ALTER ROLE \"${APP_DB_USER:-shop_dev}\" CREATEDB;"
+          ./scripts/run-dev.sh --prepare-only
+          docker compose exec -T postgres psql \
+            -U "${POSTGRES_USER:-postgres}" \
+            -d "${POSTGRES_DB:-enterprise_shop_dev}" \
+            -v ON_ERROR_STOP=1 \
+            -tAc "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_DB_USER:-shop_dev}' AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication) THEN 'ok' ELSE 'invalid' END;" | grep -qx ok
+
+      - name: Build application image
+        run: docker compose build app
 
       - name: Start full Compose stack
         run: docker compose --profile full up -d --build --wait
