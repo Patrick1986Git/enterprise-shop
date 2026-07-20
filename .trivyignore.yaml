@@ -1,0 +1,12 @@
+vulnerabilities:
+  - id: CVE-2025-68121
+    paths:
+      - "usr/local/bin/gosu"
+    expired_at: "2026-10-31T23:59:59Z"
+    statement: >-
+      Upstream gosu 1.19 govulncheck analysis reports the affected crypto/tls
+      TLS session-resumption certificate-validation path as unreachable from
+      gosu. Generic Go binary version detection still reports the Go stdlib CVE
+      from usr/local/bin/gosu, so this policy exception is scoped to only that
+      emitted file path and must be reviewed when gosu or the PostgreSQL base
+      image changes, or before expiration.

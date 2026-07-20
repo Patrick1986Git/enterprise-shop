@@ -54,3 +54,6 @@ desktop.ini
 .env
 .env.local
 docker-compose.override.yml
+
+# --- Generated security reports ---
+.tmp/

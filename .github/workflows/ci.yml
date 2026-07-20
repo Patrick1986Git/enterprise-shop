@@ -203,6 +203,144 @@ jobs:
         if: always()
         run: docker compose --profile full down --volumes --remove-orphans
 
+  container-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Hadolint v2.12.0.
+      HADOLINT_IMAGE: hadolint/hadolint:v2.12.0-debian
+      # Trivy v0.72.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.72.0 image digest.
+      TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+      # gosu upstream govulncheck wrapper runs inside a pinned Go image, not golang:latest.
+      GOSU_GOVULNCHECK_IMAGE: golang:1.25.7-bookworm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Lint Dockerfiles with Hadolint
+        run: |
+          docker run --rm \
+            -v "${PWD}:/workspace:ro" \
+            -w /workspace \
+            "${HADOLINT_IMAGE}" \
+            hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
+
+      - name: Cache Trivy database
+        uses: actions/cache@v4
+        with:
+          path: .tmp/container-security/trivy-cache
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      - name: Validate Trivy policy configuration
+        run: |
+          mkdir -p .tmp/container-security/trivy-cache
+          docker run --rm \
+            -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -w /workspace \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml alpine:3.20
+
+      - name: Build CI-local images from fresh bases
+        run: |
+          docker build --pull --tag enterprise-shop/app:ci .
+          docker build --pull --tag enterprise-shop/postgres:ci docker/postgres
+
+      - name: Record PostgreSQL image metadata
+        run: |
+          docker image inspect enterprise-shop/postgres:ci --format '{{json .Id}} {{json .RepoTags}} {{json .RepoDigests}} {{json .Created}}'
+          docker run --rm --entrypoint gosu enterprise-shop/postgres:ci --version
+
+      - name: Verify gosu CVE applicability with upstream govulncheck
+        run: |
+          rm -rf .tmp/gosu-source
+          git clone --depth 1 --branch 1.19 https://github.com/tianon/gosu.git .tmp/gosu-source
+          cd .tmp/gosu-source
+          GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" ./govulncheck-with-excludes.sh ./...
+
+      - name: Prepare container security artifact directories
+        run: mkdir -p .tmp/container-security/trivy-cache .tmp/container-security/reports .tmp/container-security/sbom
+
+      - name: Generate raw vulnerability reports
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format table enterprise-shop/app:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/reports:/reports" \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-app-trivy-raw.json enterprise-shop/app:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format table enterprise-shop/postgres:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/reports:/reports" \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy-raw.json enterprise-shop/postgres:ci
+
+      - name: Generate CycloneDX SBOMs
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/sbom:/sbom" \
+            "${TRIVY_IMAGE}" image --format cyclonedx --output /sbom/enterprise-shop-app.cdx.json enterprise-shop/app:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/sbom:/sbom" \
+            "${TRIVY_IMAGE}" image --format cyclonedx --output /sbom/enterprise-shop-postgres.cdx.json enterprise-shop/postgres:ci
+          python -m json.tool .tmp/container-security/sbom/enterprise-shop-app.cdx.json >/dev/null
+          python -m json.tool .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json >/dev/null
+          grep -q 'enterprise-shop/app:ci' .tmp/container-security/sbom/enterprise-shop-app.cdx.json
+          grep -q 'enterprise-shop/postgres:ci' .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
+
+      - name: Upload vulnerability scan reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-vulnerability-reports
+          path: .tmp/container-security/reports/*.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload application SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: enterprise-shop-app-sbom
+          path: .tmp/container-security/sbom/enterprise-shop-app.cdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload PostgreSQL SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: enterprise-shop-postgres-sbom
+          path: .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce application CRITICAL vulnerability policy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
+
+      - name: Enforce PostgreSQL CRITICAL vulnerability policy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
+            -w /workspace \
+            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 1 --format table --ignorefile .trivyignore.yaml --show-suppressed enterprise-shop/postgres:ci
+
   deploy-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: build
