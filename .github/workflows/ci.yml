@@ -203,6 +203,114 @@ jobs:
         if: always()
         run: docker compose --profile full down --volumes --remove-orphans
 
+  container-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Lint Dockerfiles with Hadolint
+        run: |
+          docker run --rm \
+            -v "${PWD}:/workspace:ro" \
+            -w /workspace \
+            hadolint/hadolint:v2.12.0-debian \
+            hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
+
+      - name: Build CI-local images
+        run: |
+          docker build --tag enterprise-shop/app:ci .
+          docker build --tag enterprise-shop/postgres:ci docker/postgres
+
+      - name: Cache Trivy database
+        uses: actions/cache@v4
+        with:
+          path: .tmp/container-security/trivy-cache
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      - name: Prepare container security artifact directories
+        run: mkdir -p .tmp/container-security/trivy-cache .tmp/container-security/reports .tmp/container-security/sbom
+
+      - name: Scan application image vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/reports:/reports" \
+            aquasec/trivy:0.53.0 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format table enterprise-shop/app:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/reports:/reports" \
+            aquasec/trivy:0.53.0 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-app-trivy.json enterprise-shop/app:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            aquasec/trivy:0.53.0 image --scanners vuln --severity CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
+
+      - name: Scan PostgreSQL image vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/reports:/reports" \
+            aquasec/trivy:0.53.0 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format table enterprise-shop/postgres:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/reports:/reports" \
+            aquasec/trivy:0.53.0 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy.json enterprise-shop/postgres:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            aquasec/trivy:0.53.0 image --scanners vuln --severity CRITICAL --exit-code 1 --format table enterprise-shop/postgres:ci
+
+      - name: Generate CycloneDX SBOMs
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/sbom:/sbom" \
+            aquasec/trivy:0.53.0 image --format cyclonedx --output /sbom/enterprise-shop-app.cdx.json enterprise-shop/app:ci
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
+            -v "${PWD}/.tmp/container-security/sbom:/sbom" \
+            aquasec/trivy:0.53.0 image --format cyclonedx --output /sbom/enterprise-shop-postgres.cdx.json enterprise-shop/postgres:ci
+          python -m json.tool .tmp/container-security/sbom/enterprise-shop-app.cdx.json >/dev/null
+          python -m json.tool .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json >/dev/null
+          grep -q 'enterprise-shop/app:ci' .tmp/container-security/sbom/enterprise-shop-app.cdx.json
+          grep -q 'enterprise-shop/postgres:ci' .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
+
+      - name: Upload application SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: enterprise-shop-app-sbom
+          path: .tmp/container-security/sbom/enterprise-shop-app.cdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload PostgreSQL SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: enterprise-shop-postgres-sbom
+          path: .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload vulnerability scan reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-vulnerability-reports
+          path: .tmp/container-security/reports/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   deploy-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: build
