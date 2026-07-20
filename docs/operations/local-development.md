@@ -11,7 +11,35 @@ The local Docker stack keeps PostgreSQL separate from any system PostgreSQL that
 
 Host-run Spring Boot defaults to `jdbc:postgresql://localhost:5433/enterprise_shop_dev`. The full Compose app uses `jdbc:postgresql://postgres:5432/enterprise_shop_dev` for container-to-container networking. In the `dev` profile, the Spring datasource uses the runtime role while Flyway uses explicit `FLYWAY_URL`, `FLYWAY_USER`, and `FLYWAY_PASSWORD` settings that default to the local PostgreSQL admin identity.
 
-## Database-only startup for Eclipse or Maven
+## One-command host startup
+
+Run the local development environment with Spring Boot on the host:
+
+```bash
+./scripts/run-dev.sh
+```
+
+You can invoke the script from the repository root or by absolute/relative path from another directory; it resolves the repository root and runs `.env` loading, Docker Compose, and Maven from that root.
+
+To prepare only PostgreSQL and the runtime role without starting Maven or Spring Boot, run:
+
+```bash
+./scripts/run-dev.sh --prepare-only
+```
+
+The script starts PostgreSQL with `docker compose up -d --wait postgres`, checks whether the application role `${APP_DB_USER:-shop_dev}` can authenticate, has least-privilege role attributes, and has the required runtime database grants, and runs `database-role-bootstrap` only when the role is missing, authentication fails, attributes are unsafe, or required privileges are unavailable. Normal startup then uses `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run` through `exec` so `Ctrl+C` is delivered directly to Spring Boot. `--prepare-only` performs the same database preparation and final validation, then exits successfully without starting Spring Boot.
+
+The host application started by `run-dev.sh` always uses `APP_DB_USER` and `APP_DB_PASSWORD` for the datasource. `DATABASE_USERNAME` and `DATABASE_PASSWORD` must either be unset or match those runtime values; conflicting overrides fail fast instead of being ignored. `APP_DB_USER` must differ from `POSTGRES_USER`, so the host application cannot run as the PostgreSQL administrator. Flyway remains separate and continues to use `FLYWAY_USER` and `FLYWAY_PASSWORD`, which default to the local admin/bootstrap identity.
+
+The script reads default values from the shell and from a local `.env` file without sourcing or executing `.env` content. Shell environment variables take precedence over `.env`, and `.env` takes precedence over built-in defaults. The supported `.env` subset is intentionally small: blank lines, full-line comments starting with `#` after optional leading whitespace, optional `export KEY=VALUE`, unquoted values, single-quoted values, double-quoted values, and empty values. Invalid variable names, unsupported lines, unterminated quotes, and command substitution syntax such as backticks or `$(` are rejected with a clear error.
+
+On a fresh `enterprise_shop_postgres_volume`, `run-dev.sh --prepare-only` creates `shop_dev`, sets its password, applies runtime grants, and configures default privileges for objects created by local Flyway. On an existing volume, the same command validates the persisted role and grants and skips bootstrap when everything is already correct. If local credentials change or the role temporarily receives unsafe attributes such as `CREATEDB`, the script runs the idempotent bootstrap to repair the password and restore `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` before rechecking.
+
+Role definitions, passwords, grants, and local data are stored in `enterprise_shop_postgres_volume`. `docker compose down` stops and removes containers and networks while keeping that named volume. `docker compose down -v` removes the volume as well and deletes the local database state; use it only when you intentionally want a fresh local database.
+
+Manual bootstrap is normally required only for a new `enterprise_shop_postgres_volume`, changed local credentials, or changed role privileges. For day-to-day startup, prefer `./scripts/run-dev.sh`; it decides whether the bootstrap one-shot task is necessary.
+
+## Database-only startup for Eclipse or manual Maven runs
 
 ```bash
 docker compose up -d --wait postgres
@@ -32,13 +60,13 @@ The app service waits for PostgreSQL to become healthy and for `database-role-bo
 
 `database-role-bootstrap` is a one-shot service. It connects to `postgres:5432` with the PostgreSQL admin account, creates the runtime role if missing, updates the local development password, grants runtime table, sequence, function, schema, and database privileges, and configures default privileges for future objects created by local Flyway. It is idempotent and can be rerun against fresh or existing `enterprise_shop_postgres_volume` data.
 
-Existing named-volume users should run the database-only startup commands once after pulling this change. Do not delete or recreate the volume; no existing volume migration requires data deletion. Warning: `docker compose down -v` still removes Compose volumes, including `enterprise_shop_postgres_volume`, and deletes local Docker database data.
+Existing named-volume users should run `./scripts/run-dev.sh --prepare-only` once after pulling this change, or let the normal `./scripts/run-dev.sh` startup perform the same check. Do not delete or recreate the volume; no existing volume migration requires data deletion. Warning: `docker compose down -v` still removes Compose volumes, including `enterprise_shop_postgres_volume`, and deletes local Docker database data.
 
 ## Inspect roles and grants
 
 ```bash
 docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-enterprise_shop_dev}" \
-  -c "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = 'shop_dev';"
+  -c "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = 'shop_dev';"
 
 docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-enterprise_shop_dev}" \
   -c "SELECT grantee, privilege_type FROM information_schema.role_table_grants WHERE grantee = 'shop_dev' ORDER BY privilege_type;"
