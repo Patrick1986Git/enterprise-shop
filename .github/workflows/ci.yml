@@ -98,6 +98,22 @@ jobs:
           fi
 
           cat > .env <<'EOF'
+          APP_DB_PASSWORD="unterminated
+          EOF
+          if ./scripts/run-dev.sh --prepare-only; then
+            echo "Expected unterminated double-quoted .env value to fail" >&2
+            exit 1
+          fi
+
+          cat > .env <<'EOF'
+          APP_DB_PASSWORD='unterminated
+          EOF
+          if ./scripts/run-dev.sh --prepare-only; then
+            echo "Expected unterminated single-quoted .env value to fail" >&2
+            exit 1
+          fi
+
+          cat > .env <<'EOF'
           DATABASE_USERNAME=postgres
           EOF
           if ./scripts/run-dev.sh --prepare-only; then

@@ -28,8 +28,8 @@ case "$script_path" in
     ;;
 esac
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$script_path")" && pwd -P) || fail "Cannot resolve script directory"
-repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P) || fail "Cannot resolve repository root"
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$script_path")" && pwd -P) || fail "Cannot resolve script directory"
+repo_root=$(CDPATH='' cd -- "$script_dir/.." && pwd -P) || fail "Cannot resolve repository root"
 cd "$repo_root" || fail "Cannot enter repository root: $repo_root"
 
 prepare_only=false
@@ -74,11 +74,11 @@ load_env_file() {
 
   log "Loading local environment defaults from $env_file"
   line_number=0
+  carriage_return=$(printf '\r')
+  tab=$(printf '\t')
   while IFS= read -r line || [ -n "$line" ]; do
     line_number=$((line_number + 1))
-    line=${line%$(printf '\r')}
-
-    tab=$(printf '\t')
+    line=${line%"$carriage_return"}
     while :; do
       case "$line" in
         ' '*) line=${line#' '} ;;
@@ -120,20 +120,18 @@ load_env_file() {
 
     case "$value" in
       \"*\")
-        case "$value" in
-          *\") ;;
-          *) fail "$env_file:$line_number has an unterminated double-quoted value" ;;
-        esac
         value=${value#\"}
         value=${value%\"}
         ;;
+      \"*)
+        fail "$env_file:$line_number has an unterminated double-quoted value"
+        ;;
       \'*\')
-        case "$value" in
-          *\') ;;
-          *) fail "$env_file:$line_number has an unterminated single-quoted value" ;;
-        esac
         value=${value#\'}
         value=${value%\'}
+        ;;
+      \'*)
+        fail "$env_file:$line_number has an unterminated single-quoted value"
         ;;
     esac
 
