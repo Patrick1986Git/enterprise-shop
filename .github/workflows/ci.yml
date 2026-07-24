@@ -227,7 +227,7 @@ jobs:
             hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 
       - name: Cache Trivy database
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .tmp/container-security/trivy-cache
           key: trivy-db-${{ runner.os }}-${{ github.run_id }}
