@@ -212,14 +212,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      # Official Hadolint v2.12.0 Debian image published on GHCR; the index includes linux/amd64.
-      HADOLINT_IMAGE: ghcr.io/hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0
+      # Official Docker Hub Hadolint v2.14.0 Alpine multi-platform OCI index; linux/amd64 child: sha256:be27962427a85de242820cb710a374478cce9bfb534a2c07e4fa54741d98908f.
+      HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0-alpine@sha256:7aba693c1442eb31c0b015c129697cb3b6cb7da589d85c7562f9deb435a6657c
       # Trivy v0.72.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.72.0 image digest.
       TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
-      # Official Go 1.25.7 Bookworm image; the manifest includes linux/amd64.
-      GOSU_GOVULNCHECK_IMAGE: golang:1.25.7-bookworm@sha256:903a5c4789afee266d1cb616e98b214a8ad7a1b5eece8d422f5c6207d1d8e63f
-      # Official Alpine 3.20 image; the manifest includes linux/amd64.
-      TRIVY_POLICY_TEST_IMAGE: alpine:3.20@sha256:1e42bbe2508154c9126cf75e4a6ddc0189516c9f452523a3c721f91954a8d017
+      # Official Docker Hub Go 1.25.7 Bookworm multi-platform OCI index; linux/amd64 child: sha256:58259daf0a27c150118663ef7452aa94d66a86d55e73b3443386146623f5364d.
+      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1
+      # Official Docker Hub Alpine 3.20 multi-platform OCI index.
+      TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
       # Exact commit referenced by the official gosu 1.19 tag.
       GOSU_SOURCE_COMMIT: 9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172
 
@@ -233,25 +233,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          for image in \
-            "${HADOLINT_IMAGE}" \
-            "${TRIVY_IMAGE}" \
-            "${GOSU_GOVULNCHECK_IMAGE}" \
-            "${TRIVY_POLICY_TEST_IMAGE}"
-          do
-            docker buildx imagetools inspect "${image}" | grep -F 'linux/amd64'
-          done
+          validate_linux_amd64_image() {
+            local image="$1"
 
-          docker pull --platform linux/amd64 "${HADOLINT_IMAGE}"
-          docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.12.0'
+            echo "Validating ${image}"
+            docker buildx imagetools inspect "${image}" >/dev/null
+            docker pull --platform linux/amd64 "${image}"
 
-          docker pull --platform linux/amd64 "${TRIVY_IMAGE}"
+            local platform
+            platform="$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "${image}")"
+            if [ "${platform}" != "linux/amd64" ]; then
+              echo "Expected linux/amd64 but resolved ${platform} for ${image}" >&2
+              exit 1
+            fi
+          }
+
+          validate_linux_amd64_image "${HADOLINT_IMAGE}"
+          validate_linux_amd64_image "${TRIVY_IMAGE}"
+          validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
+          validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
+
+          docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
           docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.72.0'
-
-          docker pull --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}"
           docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.25.7 linux/amd64'
-
-          docker pull --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}"
           docker run --rm --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}" cat /etc/alpine-release | grep -E '^3\.20\.'
 
       - name: Lint Dockerfiles with Hadolint
