@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - master
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,6 +18,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -60,6 +64,7 @@ jobs:
           if-no-files-found: ignore
 
   docker-validation:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -207,16 +212,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      # Hadolint v2.12.0.
-      HADOLINT_IMAGE: hadolint/hadolint:v2.12.0-debian
+      # Official Hadolint v2.12.0 Debian image; the manifest includes linux/amd64.
+      HADOLINT_IMAGE: hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0
       # Trivy v0.72.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.72.0 image digest.
       TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
-      # gosu upstream govulncheck wrapper runs inside a pinned Go image, not golang:latest.
-      GOSU_GOVULNCHECK_IMAGE: golang:1.25.7-bookworm
+      # Official Go 1.25.7 Bookworm image; the manifest includes linux/amd64.
+      GOSU_GOVULNCHECK_IMAGE: golang:1.25.7-bookworm@sha256:903a5c4789afee266d1cb616e98b214a8ad7a1b5eece8d422f5c6207d1d8e63f
+      # Official Alpine 3.20 image; the manifest includes linux/amd64.
+      TRIVY_POLICY_TEST_IMAGE: alpine:3.20@sha256:1e42bbe2508154c9126cf75e4a6ddc0189516c9f452523a3c721f91954a8d017
+      # Exact commit referenced by the official gosu 1.19 tag.
+      GOSU_SOURCE_COMMIT: 9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'master' || github.ref }}
 
       - name: Lint Dockerfiles with Hadolint
         run: |
@@ -237,11 +248,21 @@ jobs:
       - name: Validate Trivy policy configuration
         run: |
           mkdir -p .tmp/container-security/trivy-cache
+          ruby -r yaml -r time -e '
+            entries = YAML.load_file(".trivyignore.yaml").fetch("vulnerabilities")
+            abort "expected one exact vulnerability exception" unless entries.length == 1
+            exception = entries.first
+            abort "unexpected exception ID" unless exception["id"] == "CVE-2025-68121"
+            abort "unexpected exception path" unless exception["paths"] == ["usr/local/bin/gosu"]
+            abort "missing exception statement" unless exception["statement"].is_a?(String) && !exception["statement"].strip.empty?
+            value = exception["expired_at"]
+            abort "expired_at must be RFC 3339" unless value.is_a?(String) && Time.iso8601(value).iso8601 == value
+          '
           docker run --rm \
             -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
             -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
             -w /workspace \
-            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml alpine:3.20
+            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml "${TRIVY_POLICY_TEST_IMAGE}"
 
       - name: Build CI-local images from fresh bases
         run: |
@@ -256,8 +277,12 @@ jobs:
       - name: Verify gosu CVE applicability with upstream govulncheck
         run: |
           rm -rf .tmp/gosu-source
-          git clone --depth 1 --branch 1.19 https://github.com/tianon/gosu.git .tmp/gosu-source
+          git init .tmp/gosu-source
           cd .tmp/gosu-source
+          git remote add origin https://github.com/tianon/gosu.git
+          git fetch --depth 1 origin "${GOSU_SOURCE_COMMIT}"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${GOSU_SOURCE_COMMIT}"
           GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" ./govulncheck-with-excludes.sh ./...
 
       - name: Prepare container security artifact directories

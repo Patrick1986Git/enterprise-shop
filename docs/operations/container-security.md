@@ -16,6 +16,29 @@ The `container-security` job is separate from Maven verification and functional 
 
 The existing `docker-validation` job remains responsible for Compose configuration checks, PostgreSQL/bootstrap behavior, the full Compose stack, and the health endpoint smoke check. A passing Compose healthcheck proves the services started successfully; it does not prove the images have no known vulnerabilities.
 
+
+The workflow event matrix is intentionally narrow:
+
+| Event | `build` | `docker-validation` | `container-security` | `deploy-pages` |
+| --- | --- | --- | --- | --- |
+| Pull request | Yes | Yes | Yes | No |
+| Push to `master` | Yes | Yes | Yes | Yes, after `build` |
+| Weekly schedule | No | No | Yes | No |
+| Manual `workflow_dispatch` | No | No | Yes | No |
+
+The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; scheduled and manual runs explicitly check out `master`. These runs rebuild both CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new non-excepted CRITICAL finding is therefore detected by the next run.
+
+The external container tools and scan input are immutable while retaining readable source versions:
+
+- Hadolint `v2.12.0-debian`: `hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0`
+- Trivy `0.72.0`: `ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f`
+- Go `1.25.7-bookworm`: `golang:1.25.7-bookworm@sha256:903a5c4789afee266d1cb616e98b214a8ad7a1b5eece8d422f5c6207d1d8e63f`
+- Alpine `3.20` policy-validation target: `alpine:3.20@sha256:1e42bbe2508154c9126cf75e4a6ddc0189516c9f452523a3c721f91954a8d017`
+
+All four manifests are official upstream releases and include `linux/amd64`, the GitHub-hosted runner architecture. The gosu source is separately pinned to commit `9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172`, the commit referenced by the official `1.19` tag; CI fetches that commit directly and verifies `HEAD` before invoking the upstream wrapper.
+
+Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 16 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically.
+
 ## Dockerfile linting policy
 
 Hadolint enforces Dockerfile correctness and maintainability rules for both Dockerfiles. The CI command ignores only `DL3008` because the application runtime image intentionally receives security fixes from the maintained Ubuntu package repositories during image rebuilds instead of pinning a stale exact `apt` package version in source.
@@ -26,7 +49,7 @@ Local reproduction:
 docker run --rm \
   -v "${PWD}:/workspace:ro" \
   -w /workspace \
-  hadolint/hadolint:v2.12.0-debian \
+  hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0 \
   hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 ```
 
@@ -39,7 +62,7 @@ docker run --rm \
   -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -w /workspace \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml alpine:3.20
+  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml alpine:3.20@sha256:1e42bbe2508154c9126cf75e4a6ddc0189516c9f452523a3c721f91954a8d017
 ```
 
 ## Vulnerability scanning policy
@@ -112,15 +135,19 @@ The repository-level `.trivyignore.yaml` contains one path-scoped exception:
 - Expiry: `2026-10-31` (`expired_at: "2026-10-31T23:59:59Z"`)
 - Reason: upstream gosu govulncheck analysis classifies the affected `crypto/tls` TLS session-resumption certificate-validation path as unreachable from gosu `1.19`.
 
-No package-wide, image-wide, wildcard, unfixed, or blanket Go standard-library suppression is configured. A different CRITICAL finding in gosu, PostgreSQL, Alpine, the Java runtime, or the application remains outside this exception and fails CI.
+No package-wide, image-wide, wildcard, unfixed, or blanket Go standard-library suppression is configured. A different CRITICAL finding in gosu, PostgreSQL, Alpine, the Java runtime, or the application remains outside this exception and fails CI. Scheduled scans keep the CVE visible in the unfiltered raw report, and the policy gate fails once the exception expires. The `2026-10-31` deadline is not automatically extended; changing it requires a reviewed source change supported by fresh evidence.
 
 To reproduce the upstream gosu applicability check locally:
 
 ```bash
 rm -rf .tmp/gosu-source
-git clone --depth 1 --branch 1.19 https://github.com/tianon/gosu.git .tmp/gosu-source
+git init .tmp/gosu-source
 cd .tmp/gosu-source
-GOLANG_IMAGE=golang:1.25.7-bookworm ./govulncheck-with-excludes.sh ./...
+git remote add origin https://github.com/tianon/gosu.git
+git fetch --depth 1 origin 9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172
+git checkout --detach FETCH_HEAD
+test "$(git rev-parse HEAD)" = "9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172"
+GOLANG_IMAGE=golang:1.25.7-bookworm@sha256:903a5c4789afee266d1cb616e98b214a8ad7a1b5eece8d422f5c6207d1d8e63f ./govulncheck-with-excludes.sh ./...
 ```
 
 ## SBOM artifacts
@@ -132,7 +159,7 @@ An SBOM is a machine-readable inventory of image operating-system packages and a
 | `enterprise-shop/app:ci` | `enterprise-shop-app-sbom` | `enterprise-shop-app.cdx.json` |
 | `enterprise-shop/postgres:ci` | `enterprise-shop-postgres-sbom` | `enterprise-shop-postgres.cdx.json` |
 
-Raw vulnerability scan JSON reports are uploaded as the `container-vulnerability-reports` artifact. Artifacts are retained for 14 days and can be downloaded from the completed workflow run page. Generated SBOMs and scan reports are temporary evidence and must not be committed.
+Raw vulnerability scan JSON reports are uploaded as the `container-vulnerability-reports` artifact. Artifacts are retained for 14 days and can be downloaded from the **Artifacts** section of the completed pull request, push, scheduled, or manual workflow run page. Generated SBOMs and scan reports are temporary evidence and must not be committed.
 
 Local SBOM generation and validation:
 
