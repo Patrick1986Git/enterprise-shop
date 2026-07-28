@@ -30,12 +30,12 @@ The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers
 
 The external container tools and scan input are immutable while retaining readable source versions:
 
-- Hadolint `v2.12.0-debian`: `hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0`
-- Trivy `0.72.0`: `ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f`
-- Go `1.25.7-bookworm`: `golang:1.25.7-bookworm@sha256:903a5c4789afee266d1cb616e98b214a8ad7a1b5eece8d422f5c6207d1d8e63f`
-- Alpine `3.20` policy-validation target: `alpine:3.20@sha256:1e42bbe2508154c9126cf75e4a6ddc0189516c9f452523a3c721f91954a8d017`
+- GHCR, Hadolint `v2.12.0-debian`: `ghcr.io/hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0` (`linux/amd64`)
+- GHCR, Trivy `0.72.0`: `ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f` (`linux/amd64`)
+- Docker Hub, Go `1.25.7-bookworm`: `golang:1.25.7-bookworm@sha256:903a5c4789afee266d1cb616e98b214a8ad7a1b5eece8d422f5c6207d1d8e63f` (`linux/amd64`)
+- Docker Hub, Alpine `3.20`: `alpine:3.20@sha256:1e42bbe2508154c9126cf75e4a6ddc0189516c9f452523a3c721f91954a8d017` (`linux/amd64`)
 
-All four manifests are official upstream releases and include `linux/amd64`, the GitHub-hosted runner architecture. The gosu source is separately pinned to commit `9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172`, the commit referenced by the official `1.19` tag; CI fetches that commit directly and verifies `HEAD` before invoking the upstream wrapper.
+Before linting or scanning, CI pulls every exact reference for `linux/amd64` and runs a version or release identity check. This separates a missing or wrong-platform OCI reference from a tool finding in this repository. The gosu source is separately pinned to commit `9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172`, the commit referenced by the official `1.19` tag; CI fetches that commit directly and verifies `HEAD` before invoking the upstream wrapper.
 
 Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 16 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically.
 
@@ -46,10 +46,10 @@ Hadolint enforces Dockerfile correctness and maintainability rules for both Dock
 Local reproduction:
 
 ```bash
-docker run --rm \
+docker run --rm --platform linux/amd64 \
   -v "${PWD}:/workspace:ro" \
   -w /workspace \
-  hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0 \
+  ghcr.io/hadolint/hadolint:v2.12.0-debian@sha256:6c4b7c23b39e25e4738b7cb37ed0b89f421830a3c7be5d79d0ec4a27f0fefee0 \
   hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 ```
 
