@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM eclipse-temurin:21-jdk-jammy AS builder
+FROM eclipse-temurin:25-jdk-jammy AS builder
 WORKDIR /workspace
 
 COPY .mvn/ .mvn/
@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -DskipTests dependency:go-offl
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -DskipTests package
 
-FROM eclipse-temurin:21-jre-jammy AS runtime
+FROM eclipse-temurin:25-jre-jammy AS runtime
 
 LABEL org.opencontainers.image.title="Enterprise Shop" \
       org.opencontainers.image.description="Spring Boot application for the Enterprise Shop backend" \
