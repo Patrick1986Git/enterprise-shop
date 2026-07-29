@@ -220,8 +220,9 @@ jobs:
       GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
-      # Exact commit referenced by the official gosu 1.19 tag.
-      GOSU_SOURCE_COMMIT: 9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172
+      # Human-readable gosu release tag; CI verifies that it resolves to the pinned immutable commit before govulncheck.
+      GOSU_SOURCE_TAG: "1.19"
+      GOSU_SOURCE_COMMIT: 6456aaa0f3c854d199d0f037f068eb97515b7513
 
     steps:
       - name: Checkout
@@ -305,14 +306,34 @@ jobs:
 
       - name: Verify gosu CVE applicability with upstream govulncheck
         run: |
+          set -euo pipefail
+
           rm -rf .tmp/gosu-source
-          git init .tmp/gosu-source
+          git clone \
+            --depth 1 \
+            --branch "${GOSU_SOURCE_TAG}" \
+            --single-branch \
+            https://github.com/tianon/gosu.git \
+            .tmp/gosu-source
           cd .tmp/gosu-source
-          git remote add origin https://github.com/tianon/gosu.git
-          git fetch --depth 1 origin "${GOSU_SOURCE_COMMIT}"
-          git checkout --detach FETCH_HEAD
-          test "$(git rev-parse HEAD)" = "${GOSU_SOURCE_COMMIT}"
-          GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" ./govulncheck-with-excludes.sh ./...
+
+          resolved_tag_commit="$(git rev-parse "refs/tags/${GOSU_SOURCE_TAG}^{commit}")"
+          if [ "${resolved_tag_commit}" != "${GOSU_SOURCE_COMMIT}" ]; then
+            echo "Expected gosu ${GOSU_SOURCE_TAG} to resolve to ${GOSU_SOURCE_COMMIT}, but resolved ${resolved_tag_commit}" >&2
+            exit 1
+          fi
+
+          if [ "$(git rev-parse HEAD)" != "${GOSU_SOURCE_COMMIT}" ]; then
+            echo "Checked-out gosu commit does not match the pinned source commit" >&2
+            exit 1
+          fi
+
+          test -x govulncheck-with-excludes.sh
+          test -f version.go
+          grep -F 'const Version = "1.19"' version.go
+
+          GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" \
+            ./govulncheck-with-excludes.sh ./...
 
       - name: Prepare container security artifact directories
         run: mkdir -p .tmp/container-security/trivy-cache .tmp/container-security/reports .tmp/container-security/sbom

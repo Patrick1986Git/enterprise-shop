@@ -35,7 +35,7 @@ The external container tools and scan input are immutable while retaining readab
 - Docker Hub, Go `1.25.7-bookworm`: `docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1` (`linux/amd64` child manifest `sha256:58259daf0a27c150118663ef7452aa94d66a86d55e73b3443386146623f5364d`)
 - Docker Hub, Alpine `3.20`: `docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc` (`linux/amd64`)
 
-The supplied Docker Hub references are multi-platform OCI index digests, and CI explicitly pulls and inspects their `linux/amd64` images. OCI digests are registry- and repository-scoped, so changing only the registry while reusing a digest does not produce a valid reference. Before linting or scanning, CI verifies manifest availability, the locally resolved platform, and each tool's version or release identity. The gosu source is separately pinned to commit `9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172`, the commit referenced by the official `1.19` tag; CI fetches that commit directly and verifies `HEAD` before invoking the upstream wrapper.
+The supplied Docker Hub references are multi-platform OCI index digests, and CI explicitly pulls and inspects their `linux/amd64` images. OCI digests are registry- and repository-scoped, so changing only the registry while reusing a digest does not produce a valid reference. Before linting or scanning, CI verifies manifest availability, the locally resolved platform, and each tool's version or release identity. For gosu source, tag `1.19` is the human-readable upstream release identity and full commit `6456aaa0f3c854d199d0f037f068eb97515b7513` (`Update to 1.19`) is the immutable security identity. CI shallow-clones the tag, verifies its peeled commit and `HEAD`, and fails before govulncheck and policy enforcement if either differs.
 
 Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 16 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically.
 
@@ -141,12 +141,25 @@ To reproduce the upstream gosu applicability check locally:
 
 ```bash
 rm -rf .tmp/gosu-source
-git init .tmp/gosu-source
+
+GOSU_SOURCE_TAG=1.19
+GOSU_SOURCE_COMMIT=6456aaa0f3c854d199d0f037f068eb97515b7513
+
+git clone \
+  --depth 1 \
+  --branch "${GOSU_SOURCE_TAG}" \
+  --single-branch \
+  https://github.com/tianon/gosu.git \
+  .tmp/gosu-source
 cd .tmp/gosu-source
-git remote add origin https://github.com/tianon/gosu.git
-git fetch --depth 1 origin 9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172
-git checkout --detach FETCH_HEAD
-test "$(git rev-parse HEAD)" = "9f7cd138a1edb3be0f95f6a8f0a3cf865e1f3172"
+
+resolved_tag_commit="$(git rev-parse "refs/tags/${GOSU_SOURCE_TAG}^{commit}")"
+test "${resolved_tag_commit}" = "${GOSU_SOURCE_COMMIT}"
+test "$(git rev-parse HEAD)" = "${GOSU_SOURCE_COMMIT}"
+test -x govulncheck-with-excludes.sh
+test -f version.go
+grep -F 'const Version = "1.19"' version.go
+
 GOLANG_IMAGE=docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1 ./govulncheck-with-excludes.sh ./...
 ```
 
