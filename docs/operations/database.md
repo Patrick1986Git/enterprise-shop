@@ -5,12 +5,12 @@
 | Setting | Default |
 | --- | --- |
 | Container service | `postgres` |
-| PostgreSQL version | `16` |
+| PostgreSQL version | `18` |
 | Database | `enterprise_shop_dev` |
 | Host binding | `127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432` |
 | Admin user | `${POSTGRES_USER:-postgres}` |
 | Runtime application user | `${APP_DB_USER:-shop_dev}` |
-| Volume | `enterprise_shop_postgres_volume` |
+| Volume | `enterprise_shop_postgres18_volume` |
 
 The host may separately run a system PostgreSQL instance on `localhost:5432`; Docker PostgreSQL intentionally uses port `5433` by default. The custom PostgreSQL image preserves the Polish full-text-search dictionary files required by Flyway migration V5.
 
@@ -39,7 +39,7 @@ docker compose --profile full up -d --build --wait
 docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-enterprise_shop_dev}"
 docker compose exec -T postgres psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-enterprise_shop_dev}" \
   -c "SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication FROM pg_roles WHERE rolname = 'shop_dev';"
-docker volume inspect enterprise_shop_postgres_volume
+docker volume inspect enterprise_shop_postgres18_volume
 ```
 
 Do not run `docker compose down -v` unless you intentionally want to delete local database data.

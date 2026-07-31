@@ -37,7 +37,7 @@ The external container tools and scan input are immutable while retaining readab
 
 The supplied Docker Hub references are multi-platform OCI index digests, and CI explicitly pulls and inspects their `linux/amd64` images. OCI digests are registry- and repository-scoped, so changing only the registry while reusing a digest does not produce a valid reference. Before linting or scanning, CI verifies manifest availability, the locally resolved platform, and each tool's version or release identity. For gosu source, tag `1.19` is the human-readable upstream release identity and full commit `6456aaa0f3c854d199d0f037f068eb97515b7513` (`Update to 1.19`) is the immutable security identity. CI shallow-clones the tag, verifies its peeled commit and `HEAD`, and fails before govulncheck and policy enforcement if either differs.
 
-Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 16 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically.
+Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 18 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically.
 
 ## Dockerfile linting policy
 
@@ -134,9 +134,13 @@ CI run #490 detected `CVE-2026-54291` in `postgresql-42.7.11.jar`. The pgJDBC ad
 
 Spring Boot 4.1.0 dependency management supplied pgJDBC 42.7.11 through its `postgresql.version` property. Enterprise Shop overrides that supported property to 42.7.12; it retains the existing runtime dependency declaration and does not add a duplicate dependency or change the Spring Boot line. This patch-only remediation does not change JDBC URLs, database identities, PostgreSQL server behavior, Flyway, or persistence mappings.
 
+## PostgreSQL c-ares CVE-2026-33630 remediation
+
+CI run #496 found HIGH `CVE-2026-33630` in `c-ares 1.34.5-r0`, inherited by the PostgreSQL 18 Alpine image. Because Alpine provided the fixed `1.34.6-r0` package, the PostgreSQL Dockerfile applies a targeted `apk upgrade --no-cache c-ares` to the final image. No policy exception was added; CI rebuilds and rescans the final image through the existing raw-report, SBOM, and blocking-policy workflow.
+
 ## gosu CVE-2025-68121 triage
 
-CI run #481 failed only at PostgreSQL CRITICAL policy enforcement because Trivy detected `CVE-2025-68121` in the Go standard library metadata for `usr/local/bin/gosu`, inherited from the official `postgres:16-alpine` image. The Enterprise Shop PostgreSQL Dockerfile only copies Polish full-text-search dictionary files into that base image.
+CI run #481 failed only at PostgreSQL CRITICAL policy enforcement because Trivy detected `CVE-2025-68121` in the Go standard library metadata for `usr/local/bin/gosu`, inherited from the official PostgreSQL Alpine image then in use. The Enterprise Shop PostgreSQL Dockerfile only copies Polish full-text-search dictionary files into that base image.
 
 The official gosu security policy says generic binary scanners can report Go CVEs for packages that gosu never invokes and asks reporters to validate reachability with `govulncheck-with-excludes.sh`. gosu `1.19` source imports `os`, `os/exec`, `runtime`, `syscall`, `github.com/moby/sys/user`, and `golang.org/x/sys/unix`; it does not import or call `crypto/tls`. The CI job therefore runs the upstream gosu `1.19` govulncheck wrapper before applying the exception.
 

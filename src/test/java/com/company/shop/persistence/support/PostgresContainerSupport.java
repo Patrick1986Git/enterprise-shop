@@ -15,7 +15,7 @@ import org.testcontainers.utility.MountableFile;
  */
 public abstract class PostgresContainerSupport {
 
-    private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:16-alpine");
+    private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:18-alpine");
 
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(POSTGRES_IMAGE)
             .withDatabaseName("enterprise_shop_test")
