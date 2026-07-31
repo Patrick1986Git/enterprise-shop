@@ -304,37 +304,6 @@ jobs:
           docker image inspect enterprise-shop/postgres:ci --format '{{json .Id}} {{json .RepoTags}} {{json .RepoDigests}} {{json .Created}}'
           docker run --rm --entrypoint gosu enterprise-shop/postgres:ci --version
 
-      - name: Verify gosu CVE applicability with upstream govulncheck
-        run: |
-          set -euo pipefail
-
-          rm -rf .tmp/gosu-source
-          git clone \
-            --depth 1 \
-            --branch "${GOSU_SOURCE_TAG}" \
-            --single-branch \
-            https://github.com/tianon/gosu.git \
-            .tmp/gosu-source
-          cd .tmp/gosu-source
-
-          resolved_tag_commit="$(git rev-parse "refs/tags/${GOSU_SOURCE_TAG}^{commit}")"
-          if [ "${resolved_tag_commit}" != "${GOSU_SOURCE_COMMIT}" ]; then
-            echo "Expected gosu ${GOSU_SOURCE_TAG} to resolve to ${GOSU_SOURCE_COMMIT}, but resolved ${resolved_tag_commit}" >&2
-            exit 1
-          fi
-
-          if [ "$(git rev-parse HEAD)" != "${GOSU_SOURCE_COMMIT}" ]; then
-            echo "Checked-out gosu commit does not match the pinned source commit" >&2
-            exit 1
-          fi
-
-          test -x govulncheck-with-excludes.sh
-          test -f version.go
-          grep -F 'const Version = "1.19"' version.go
-
-          GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" \
-            ./govulncheck-with-excludes.sh ./...
-
       - name: Prepare container security artifact directories
         run: mkdir -p .tmp/container-security/trivy-cache .tmp/container-security/reports .tmp/container-security/sbom
 
@@ -400,12 +369,51 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Enforce application CRITICAL vulnerability policy
+      - name: Verify gosu CVE applicability with upstream govulncheck
+        run: |
+          set -euo pipefail
+
+          rm -rf .tmp/gosu-source
+          git clone \
+            --depth 1 \
+            --branch "${GOSU_SOURCE_TAG}" \
+            --single-branch \
+            https://github.com/tianon/gosu.git \
+            .tmp/gosu-source
+          cd .tmp/gosu-source
+
+          resolved_tag_commit="$(git rev-parse "refs/tags/${GOSU_SOURCE_TAG}^{commit}")"
+          if [ "${resolved_tag_commit}" != "${GOSU_SOURCE_COMMIT}" ]; then
+            echo "Expected gosu ${GOSU_SOURCE_TAG} to resolve to ${GOSU_SOURCE_COMMIT}, but resolved ${resolved_tag_commit}" >&2
+            exit 1
+          fi
+
+          if [ "$(git rev-parse HEAD)" != "${GOSU_SOURCE_COMMIT}" ]; then
+            echo "Checked-out gosu commit does not match the pinned source commit" >&2
+            exit 1
+          fi
+
+          test -x govulncheck-with-excludes.sh
+          test -f version.go
+          grep -F 'const Version = "1.19"' version.go
+
+          GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" \
+            ./govulncheck-with-excludes.sh ./...
+
+      - name: Test component-aware vulnerability policy
+        run: python -m unittest discover -s scripts/tests -p 'test_*.py'
+
+      - name: Validate raw reports against component-aware HIGH policy
+        run: |
+          python scripts/validate-container-vulnerability-policy.py application .tmp/container-security/reports/enterprise-shop-app-trivy-raw.json
+          python scripts/validate-container-vulnerability-policy.py postgres .tmp/container-security/reports/enterprise-shop-postgres-trivy-raw.json
+
+      - name: Enforce application HIGH and CRITICAL vulnerability policy
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
-            "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
+            "${TRIVY_IMAGE}" image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
 
       - name: Enforce PostgreSQL CRITICAL vulnerability policy
         run: |
