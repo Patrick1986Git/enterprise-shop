@@ -26,6 +26,7 @@
 			<stripe.version>33.1.1</stripe.version>
 			<springdoc.version>3.0.3</springdoc.version>
 			<hibernate-processor.version>7.4.5.Final</hibernate-processor.version>
+			<postgresql.version>42.7.12</postgresql.version>
 			<argLine></argLine>
 		</properties>
 

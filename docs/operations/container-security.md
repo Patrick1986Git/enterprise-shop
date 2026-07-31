@@ -12,7 +12,7 @@ The `container-security` job is separate from Maven verification and functional 
 - Raw Trivy JSON reports are generated without policy filtering before any blocking vulnerability gate runs.
 - Trivy generates CycloneDX JSON SBOMs for both images before policy enforcement.
 - JSON vulnerability reports and SBOM files are uploaded as temporary GitHub Actions artifacts.
-- Final CRITICAL policy scans run after evidence upload.
+- Component-aware HIGH validation and final blocking policy scans run after evidence upload.
 
 The existing `docker-validation` job remains responsible for Compose configuration checks, PostgreSQL/bootstrap behavior, the full Compose stack, and the health endpoint smoke check. A passing Compose healthcheck proves the services started successfully; it does not prove the images have no known vulnerabilities.
 
@@ -26,7 +26,7 @@ The workflow event matrix is intentionally narrow:
 | Weekly schedule | No | No | Yes | No |
 | Manual `workflow_dispatch` | No | No | Yes | No |
 
-The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; scheduled and manual runs explicitly check out `master`. These runs rebuild both CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new non-excepted CRITICAL finding is therefore detected by the next run.
+The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; scheduled and manual runs explicitly check out `master`. These runs rebuild both CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new policy-violating HIGH or CRITICAL finding is therefore detected by the next run.
 
 The external container tools and scan input are immutable while retaining readable source versions:
 
@@ -69,8 +69,10 @@ docker run --rm \
 
 Trivy scans both final images with the `vuln` scanner. The policy is:
 
-- `CRITICAL` vulnerabilities fail CI after raw reports and SBOMs are uploaded.
-- `HIGH` vulnerabilities are reported in CI and JSON artifacts but do not fail CI initially, keeping remediation reviewable.
+- Every application-image `HIGH` or `CRITICAL` vulnerability fails CI after raw reports and SBOMs are uploaded.
+- PostgreSQL-image `HIGH` findings pass only when every finding is the `stdlib` component at `usr/local/bin/gosu`. Any HIGH in Alpine, PostgreSQL, another package, or another target fails CI.
+- The gosu source identity and upstream `govulncheck` steps are blocking and run before the component-aware PostgreSQL check. The path/package allowance is therefore valid only while that reachability check succeeds.
+- PostgreSQL `CRITICAL` vulnerabilities remain subject to the exact, time-bounded `.trivyignore.yaml` exception described below; all other CRITICAL findings fail CI.
 - Unfixed vulnerabilities are not ignored by default.
 - Individual CVEs must not be silently suppressed.
 - Raw scanner reports are evidence of everything Trivy detected; policy scans are the actionable gate after documented applicability analysis.
@@ -104,13 +106,17 @@ docker run --rm \
   ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy-raw.json enterprise-shop/postgres:ci
 ```
 
-Final CRITICAL policy scans:
+Validate the unfiltered JSON evidence and run the final policy scans:
 
 ```bash
+python -m unittest discover -s scripts/tests -p 'test_*.py'
+python scripts/validate-container-vulnerability-policy.py application .tmp/container-security/reports/enterprise-shop-app-trivy-raw.json
+python scripts/validate-container-vulnerability-policy.py postgres .tmp/container-security/reports/enterprise-shop-postgres-trivy-raw.json
+
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
+  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
@@ -121,6 +127,12 @@ docker run --rm \
 ```
 
 Use `--show-suppressed` on the PostgreSQL policy scan so reviewers can see when the scoped gosu exception was applied.
+
+## pgJDBC CVE-2026-54291 remediation
+
+CI run #490 detected `CVE-2026-54291` in `postgresql-42.7.11.jar`. The pgJDBC advisory identifies 42.7.11 as affected and 42.7.12 as the first fixed release for the SCRAM-SHA-256-PLUS channel-binding downgrade when `channelBinding=require` is used. Enterprise Shop's repository-controlled JDBC URLs do not set `channelBinding=require` (or another explicit channel-binding mode), so the vulnerable option is not enabled by the checked-in runtime configuration. Deployment operators can supply `DATABASE_URL`, however, and version-only scanners cannot establish the effective runtime connection options. The driver is therefore updated rather than suppressed.
+
+Spring Boot 4.1.0 dependency management supplied pgJDBC 42.7.11 through its `postgresql.version` property. Enterprise Shop overrides that supported property to 42.7.12; it retains the existing runtime dependency declaration and does not add a duplicate dependency or change the Spring Boot line. This patch-only remediation does not change JDBC URLs, database identities, PostgreSQL server behavior, Flyway, or persistence mappings.
 
 ## gosu CVE-2025-68121 triage
 
@@ -136,6 +148,8 @@ The repository-level `.trivyignore.yaml` contains one path-scoped exception:
 - Reason: upstream gosu govulncheck analysis classifies the affected `crypto/tls` TLS session-resumption certificate-validation path as unreachable from gosu `1.19`.
 
 No package-wide, image-wide, wildcard, unfixed, or blanket Go standard-library suppression is configured. A different CRITICAL finding in gosu, PostgreSQL, Alpine, the Java runtime, or the application remains outside this exception and fails CI. Scheduled scans keep the CVE visible in the unfiltered raw report, and the policy gate fails once the exception expires. The `2026-10-31` deadline is not automatically extended; changing it requires a reviewed source change supported by fresh evidence.
+
+The same evidence-first rule applies to gosu HIGH findings: Trivy reports vulnerabilities from the Go version and package metadata embedded in the inherited binary, while `govulncheck` analyzes whether vulnerable symbols are reachable from gosu. The raw findings remain visible because a successful reachability analysis is contextual risk evidence, not a patched binary. A newly reachable result, changed source identity, non-`stdlib` package, or target other than `usr/local/bin/gosu` fails the workflow instead of being ignored.
 
 To reproduce the upstream gosu applicability check locally:
 
