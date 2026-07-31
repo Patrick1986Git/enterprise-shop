@@ -1,7 +1,7 @@
-FROM postgres:16-alpine
+FROM postgres:18-alpine
 
 LABEL org.opencontainers.image.title="Enterprise Shop PostgreSQL" \
-      org.opencontainers.image.description="PostgreSQL 16 image with Polish full-text search dictionary files" \
+      org.opencontainers.image.description="PostgreSQL 18 image with Polish full-text search dictionary files" \
       org.opencontainers.image.source="https://github.com/Patrick1986Git/enterprise-shop"
 
 ARG TSEARCH_DIR=/usr/local/share/postgresql/tsearch_data
