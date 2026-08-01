@@ -232,6 +232,8 @@ python scripts/validate-github-actions-policy.py
 python -m unittest scripts.tests.test_validate_github_actions_policy
 ```
 
+The local validator enforces reference shape and checkout policy only; it cannot prove that a commit exists in the named repository or matches the adjacent release comment. Verify the official tag-to-commit mapping separately. Successful GitHub job preparation confirms that the repository can resolve the referenced commit, but does not independently validate the version comment.
+
 Before accepting an action update, resolve the intended release in the official repository and verify both the tag and commit object, for example:
 
 ```bash

@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93123c134953950bc5b08e23342f8b5a05289030 # v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -35,7 +35,7 @@ jobs:
         run: python scripts/validate-github-actions-policy.py
 
       - name: Set up Java 21
-        uses: actions/setup-java@43e41a01b6f65dd392e309366dd6b8b574a9cb88 # v5.0.0
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
         with:
           distribution: temurin
           java-version: '21'
@@ -48,14 +48,14 @@ jobs:
         run: ./mvnw -B clean verify
 
       - name: Upload OpenAPI docs
-        uses: actions/upload-artifact@66b5f09172bdc1f9fd8c1e69b080183efb80f17e # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: openapi-docs
           path: target/generated-docs/openapi/**
           if-no-files-found: error
 
       - name: Upload static API docs site
-        uses: actions/upload-artifact@66b5f09172bdc1f9fd8c1e69b080183efb80f17e # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: api-docs-site
           path: target/generated-docs/site/**
@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@66b5f09172bdc1f9fd8c1e69b080183efb80f17e # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: test-reports
           path: |
@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93123c134953950bc5b08e23342f8b5a05289030 # v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -236,7 +236,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93123c134953950bc5b08e23342f8b5a05289030 # v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
           ref: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'master' || github.ref }}
@@ -279,7 +279,7 @@ jobs:
             hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 
       - name: Cache Trivy database
-        uses: actions/cache@3bd65938e64a01b4f37b5fd91244da01e139ff82 # v6.0.0
+        uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v6.0.0
         with:
           path: .tmp/container-security/trivy-cache
           key: trivy-db-${{ runner.os }}-${{ github.run_id }}
@@ -368,7 +368,7 @@ jobs:
           grep -q 'enterprise-shop/postgres:ci' .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
 
       - name: Upload vulnerability scan reports
-        uses: actions/upload-artifact@66b5f09172bdc1f9fd8c1e69b080183efb80f17e # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: container-vulnerability-reports
           path: .tmp/container-security/reports/*.json
@@ -376,7 +376,7 @@ jobs:
           retention-days: 14
 
       - name: Upload application SBOM
-        uses: actions/upload-artifact@66b5f09172bdc1f9fd8c1e69b080183efb80f17e # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: enterprise-shop-app-sbom
           path: .tmp/container-security/sbom/enterprise-shop-app.cdx.json
@@ -384,7 +384,7 @@ jobs:
           retention-days: 14
 
       - name: Upload PostgreSQL SBOM
-        uses: actions/upload-artifact@66b5f09172bdc1f9fd8c1e69b080183efb80f17e # v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: enterprise-shop-postgres-sbom
           path: .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
@@ -461,19 +461,19 @@ jobs:
 
     steps:
       - name: Download static API docs site
-        uses: actions/download-artifact@4c8c4e6a144434b9678ef93fda390cf5ef61fb42 # v8.0.0
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: api-docs-site
           path: target/generated-docs/site
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@f43cd18255e26da9ebe9c2701f17ad68a8edace5 # v6.0.0
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@3a06ca460fa9e6d72301c8a907afb97291822073 # v5.0.0
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: target/generated-docs/site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@2da53b7e573bc9cbf9dd27ae035cc82e78736de8 # v5.0.0
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
