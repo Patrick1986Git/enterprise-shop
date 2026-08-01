@@ -299,6 +299,17 @@ jobs:
           docker build --pull --tag enterprise-shop/app:ci .
           docker build --pull --tag enterprise-shop/postgres:ci docker/postgres
 
+      - name: Verify application runtime Java version
+        run: |
+          java_properties="$(docker run --rm --entrypoint java enterprise-shop/app:ci -XshowSettings:properties -version 2>&1)"
+          printf '%s\n' "${java_properties}"
+          java_specification_version="$(printf '%s\n' "${java_properties}" | awk -F ' = ' '$1 ~ /^[[:space:]]*java\.specification\.version$/ { print $2 }')"
+          if [ "${java_specification_version}" != "21" ]; then
+            echo "Expected java.specification.version = 21, got: ${java_specification_version:-<missing>}" >&2
+            exit 1
+          fi
+          echo "Verified java.specification.version = ${java_specification_version}"
+
       - name: Record PostgreSQL image metadata
         run: |
           docker image inspect enterprise-shop/postgres:ci --format '{{json .Id}} {{json .RepoTags}} {{json .RepoDigests}} {{json .Created}}'

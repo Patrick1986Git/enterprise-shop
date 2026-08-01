@@ -37,7 +37,15 @@ The external container tools and scan input are immutable while retaining readab
 
 The supplied Docker Hub references are multi-platform OCI index digests, and CI explicitly pulls and inspects their `linux/amd64` images. OCI digests are registry- and repository-scoped, so changing only the registry while reusing a digest does not produce a valid reference. Before linting or scanning, CI verifies manifest availability, the locally resolved platform, and each tool's version or release identity. For gosu source, tag `1.19` is the human-readable upstream release identity and full commit `6456aaa0f3c854d199d0f037f068eb97515b7513` (`Update to 1.19`) is the immutable security identity. CI shallow-clones the tag, verifies its peeled commit and `HEAD`, and fails before govulncheck and policy enforcement if either differs.
 
-Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 18 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically.
+Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 18 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically. The root Docker configuration ignores only semantic-major updates of `eclipse-temurin`; it does not affect the separate PostgreSQL image, Maven dependencies, or GitHub Actions.
+
+## Java platform baseline
+
+Java 21 LTS is the application compilation and runtime baseline. Maven compiles Java 21 source to Java 21 bytecode, GitHub Actions installs Temurin 21, and the application Dockerfile uses a Temurin 21 JDK builder and Temurin 21 JRE runtime. Maven Enforcer admits only JDK versions in `[21,22)`, so a build fails early if any build environment drifts to another Java feature release. After the security job builds the final application image, CI also runs `java` inside that image, prints its version information, and requires `java.specification.version` to equal `21` before scanning it.
+
+Dependabot semantic-major updates for the root `eclipse-temurin` dependency are ignored to prevent an automated Docker-only change from breaking this deliberately aligned platform. This rule does not freeze the image: fresh builds still pull the current Java 21 tags, supported updates within the Java 21 line remain eligible for Dependabot, and the existing Trivy pipeline continues to inspect the resulting runtime image.
+
+A future Java feature-release upgrade, including Java 25, is not permanently rejected. It must instead be proposed in an ADR or dedicated migration pull request that updates the whole platform coherently. Before adoption, that change must demonstrate application and dependency compatibility, run the full automated test and container-security suites, evaluate performance against the Java 21 baseline, and document a rollback to the previous Java 21 build and runtime images. A Java migration must not be accepted as an automatic two-line base-image update.
 
 ## Dockerfile linting policy
 
