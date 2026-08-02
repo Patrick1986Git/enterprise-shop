@@ -218,3 +218,28 @@ docker run --rm \
 python -m json.tool .tmp/container-security/sbom/enterprise-shop-app.cdx.json >/dev/null
 python -m json.tool .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json >/dev/null
 ```
+
+## GitHub Actions provenance
+
+GitHub Action release tags and major-version aliases can be moved by their repository owner, so CI executes external actions by their immutable full commit SHA. An adjacent release-version comment keeps each dependency reviewable and gives Dependabot's existing `github-actions` updater the release identity it needs to propose SHA and comment updates; updates remain subject to normal review and are not auto-merged.
+
+All repository checkouts are read-only and explicitly set `persist-credentials: false`, preventing the workflow token from remaining in Git configuration after checkout. The Pages deployment continues to use only its narrowly scoped job permissions and does not require a Git push.
+
+Run the provenance policy and its tests locally before changing a workflow:
+
+```bash
+python scripts/validate-github-actions-policy.py
+python -m unittest scripts.tests.test_validate_github_actions_policy
+```
+
+The local validator enforces reference shape and checkout policy only; it cannot prove that a commit exists in the named repository or matches the adjacent release comment. Verify the official tag-to-commit mapping separately. Successful GitHub job preparation confirms that the repository can resolve the referenced commit, but does not independently validate the version comment.
+
+Before accepting an action update, resolve the intended release in the official repository and verify both the tag and commit object, for example:
+
+```bash
+git ls-remote https://github.com/actions/checkout.git refs/tags/v7.0.0
+# Clone the official repository when the tag is annotated, then compare its peeled commit:
+git rev-parse 'refs/tags/v7.0.0^{commit}'
+```
+
+Use the resulting 40-character lowercase commit SHA in `uses:` and retain the exact release tag in the comment. Never copy a commit from a fork.
