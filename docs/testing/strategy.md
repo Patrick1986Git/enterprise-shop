@@ -33,6 +33,23 @@ Run from the repository root:
 ./mvnw clean verify
 ```
 
+## CodeQL source analysis
+
+The dedicated `CodeQL` workflow analyzes the repository's Java/Kotlin production source separately from application CI and container supply-chain validation. It runs for pull requests targeting `master`, pushes to `master`, manual dispatches, and every Wednesday at `03:37 UTC` (`37 3 * * 3`). Per-PR/ref concurrency cancels only a superseded analysis of the same change. The workflow initializes CodeQL in manual build mode, compiles and tests with Temurin 21 and `./mvnw -B clean verify`, and uses the official `security-extended` Java query suite for security-relevant data-flow and code-quality findings.
+
+The workflow defaults to `contents: read`; only its analysis job adds `security-events: write` for the code-scanning upload. It uses the ordinary `pull_request` event, including for fork contributions, so untrusted changes never run in the privileged `pull_request_target` context and receive no repository secrets or write-capable checkout credentials. GitHub downgrades write permissions for fork pull requests while supporting CodeQL result processing for the pull-request event.
+
+CodeQL action releases are full-SHA pinned with adjacent exact-version comments. Maintain them through the existing weekly GitHub Actions Dependabot configuration and review each proposed official tag-to-commit mapping; updates are not auto-merged. Findings are available under the repository's **Security > Code scanning** view and as pull-request annotations when GitHub can associate a result with changed code.
+
+CodeQL examines source-level data flow and code patterns. Maven tests verify application behavior, Trivy reports vulnerabilities in the built application and PostgreSQL container contents, and `govulncheck` verifies the narrowly reviewed gosu source exception. None substitutes for another. Run the local build inputs with:
+
+```bash
+./mvnw -B validate
+./mvnw -B clean verify
+```
+
+The official CodeQL database extraction, query execution, GitHub code-scanning history, pull-request annotations, and SARIF upload require the GitHub-hosted workflow and cannot be reproduced fully by these Maven commands alone.
+
 Targeted examples:
 
 ```bash
