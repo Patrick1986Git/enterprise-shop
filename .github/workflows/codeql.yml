@@ -41,7 +41,7 @@ jobs:
           cache: maven
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@b374143c1149a911584921ded9a8f9d308c72393 # v3.30.5
+        uses: github/codeql-action/init@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.30.5
         with:
           languages: java-kotlin
           build-mode: manual
@@ -54,4 +54,4 @@ jobs:
         run: ./mvnw -B clean verify
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@b374143c1149a911584921ded9a8f9d308c72393 # v3.30.5
+        uses: github/codeql-action/analyze@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.30.5
