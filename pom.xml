@@ -27,6 +27,7 @@
 			<springdoc.version>3.0.3</springdoc.version>
 			<hibernate-processor.version>7.4.5.Final</hibernate-processor.version>
 			<postgresql.version>42.7.12</postgresql.version>
+			<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
 			<argLine></argLine>
 		</properties>
 
@@ -251,6 +252,30 @@
 						<goals>
 							<goal>integration-test</goal>
 							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco-maven-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>prepare-jacoco-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+						<configuration>
+							<append>true</append>
+						</configuration>
+					</execution>
+					<execution>
+						<id>report-full-test-suite-coverage</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
 						</goals>
 					</execution>
 				</executions>

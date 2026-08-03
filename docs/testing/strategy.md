@@ -9,6 +9,23 @@
 
 Mockito static mocking is used in service tests, including Stripe SDK entry points. The build config starts tests with Mockito as an explicit `-javaagent` to avoid JDK 21+ dynamic self-attach warnings and keep execution compatible with stricter future JDK defaults.
 
+## Coverage reporting
+
+JaCoCo measures which production bytecode instructions, lines, and branches execute during the Maven test lifecycle. Both the Surefire unit/service/WebMvc/repository test phase and the Failsafe `*IT.java` integration-test phase, including Testcontainers PostgreSQL paths, contribute to one `target/jacoco.exec` execution-data file. The agent uses append mode, so a later fork or test phase adds its probes instead of replacing coverage recorded by the first phase. No project-specific coverage exclusions are configured.
+
+JaCoCo's `prepare-agent` goal populates the existing `argLine` property. Surefire and Failsafe resolve that value with Maven's late `@{argLine}` syntax and then add the existing explicit Mockito `-javaagent`; consequently both agents are present without replacing or duplicating the Mockito agent.
+
+Run the complete suite and validate the report locally with:
+
+```bash
+./mvnw -B clean verify
+python scripts/validate-jacoco-report.py
+```
+
+The Maven `verify` lifecycle generates the reviewable HTML report at `target/site/jacoco/index.html`, machine-readable XML at `target/site/jacoco/jacoco.xml`, and CSV at `target/site/jacoco/jacoco.csv`. CI validates their identity and structure, prints deterministic line and branch totals to the workflow log and job summary, and publishes only these three files as the `jacoco-coverage-report` artifact for 14 days.
+
+This initial measurement intentionally has no blocking percentage threshold: the GitHub-hosted run establishes evidence for a measured baseline rather than introducing an arbitrary target. Coverage shows which code executed, but does not prove assertion quality, behavior correctness, or adequate edge-case testing. A focused follow-up can use the confirmed line and branch counts, normal run-to-run variability, and reviewable tolerance to define a modest non-regression gate.
+
 ## Current test categories
 
 | Category | Current coverage examples |
