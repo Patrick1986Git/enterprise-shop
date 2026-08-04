@@ -47,6 +47,20 @@ jobs:
           SPRING_PROFILES_ACTIVE: test
         run: ./mvnw -B clean verify
 
+      - name: Validate JaCoCo report and summarize baseline
+        run: python scripts/validate-jacoco-report.py --github-summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: jacoco-coverage-report
+          path: |
+            target/site/jacoco/index.html
+            target/site/jacoco/jacoco.xml
+            target/site/jacoco/jacoco.csv
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload OpenAPI docs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
