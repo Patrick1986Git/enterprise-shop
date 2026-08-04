@@ -61,6 +61,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Enforce JaCoCo coverage non-regression policy
+        run: python scripts/validate-jacoco-report.py --policy .github/coverage/jacoco-baseline.json
+
       - name: Upload OpenAPI docs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

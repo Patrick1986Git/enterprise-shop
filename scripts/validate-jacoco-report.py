@@ -2,6 +2,7 @@
 """Validate a JaCoCo report and print its measured line and branch baseline."""
 
 import argparse
+import json
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -14,6 +15,10 @@ EXPECTED_PROJECT_NAME = "Enterprise Shop"
 
 class ReportValidationError(ValueError):
     """Raised when the expected JaCoCo report is missing or invalid."""
+
+
+class PolicyValidationError(ValueError):
+    """Raised when the coverage policy is missing, invalid, or not satisfied."""
 
 
 @dataclass(frozen=True)
@@ -113,6 +118,66 @@ def validate_companion_reports(report_directory):
             raise ReportValidationError(f"report file is missing or empty: {path}")
 
 
+def parse_policy(path):
+    if not path.is_file():
+        raise PolicyValidationError(f"policy file does not exist: {path}")
+    try:
+        policy = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise PolicyValidationError(f"policy is malformed JSON: {error}") from error
+    if not isinstance(policy, dict):
+        raise PolicyValidationError("policy must be a JSON object")
+    if policy.get("schema_version") != 1:
+        raise PolicyValidationError("policy schema_version must be 1")
+    metrics = policy.get("metrics")
+    if not isinstance(metrics, dict):
+        raise PolicyValidationError("policy metrics must be a JSON object")
+
+    baselines = {}
+    for metric in ("LINE", "BRANCH"):
+        configured = metrics.get(metric)
+        if not isinstance(configured, dict):
+            raise PolicyValidationError(f"policy must contain a {metric} metric")
+        values = []
+        for field in ("covered", "missed"):
+            value = configured.get(field)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise PolicyValidationError(
+                    f"policy {metric} {field} value must be an integer"
+                )
+            if value < 0:
+                raise PolicyValidationError(
+                    f"policy {metric} {field} value must be non-negative"
+                )
+            values.append(value)
+        baseline = Counter(covered=values[0], missed=values[1])
+        if baseline.total == 0:
+            raise PolicyValidationError(f"policy {metric} total must be greater than zero")
+        baselines[metric] = baseline
+    return baselines
+
+
+def enforce_policy(lines, branches, baselines):
+    failures = []
+    for metric, current in (("LINE", lines), ("BRANCH", branches)):
+        baseline = baselines[metric]
+        left = current.covered * baseline.total
+        right = baseline.covered * current.total
+        if current.total == 0 or left < right:
+            failures.append(
+                f"{metric} coverage regression: current covered={current.covered}, "
+                f"missed={current.missed}, total={current.total}, "
+                f"coverage={percentage(current)}; baseline covered={baseline.covered}, "
+                f"missed={baseline.missed}, total={baseline.total}, "
+                f"coverage={percentage(baseline)}; exact comparison "
+                f"{current.covered} * {baseline.total} = {left} >= "
+                f"{baseline.covered} * {current.total} = {right} is false. "
+                "Baseline changes require an explicit reviewed policy update."
+            )
+    if failures:
+        raise PolicyValidationError("\n".join(failures))
+
+
 def summary(lines, branches):
     return "\n".join(
         (
@@ -135,6 +200,7 @@ def main():
         default=Path("target/site/jacoco/jacoco.xml"),
     )
     parser.add_argument("--github-summary", type=Path)
+    parser.add_argument("--policy", type=Path)
     args = parser.parse_args()
     try:
         validate_companion_reports(args.report.parent)
@@ -147,6 +213,14 @@ def main():
     if args.github_summary:
         with args.github_summary.open("a", encoding="utf-8") as output:
             output.write(rendered + "\n")
+    if args.policy:
+        try:
+            baselines = parse_policy(args.policy)
+            enforce_policy(lines, branches, baselines)
+        except PolicyValidationError as error:
+            print(f"JaCoCo coverage policy failed: {error}", file=sys.stderr)
+            return 1
+        print(f"JaCoCo coverage policy passed: {args.policy}")
     return 0
 
 
