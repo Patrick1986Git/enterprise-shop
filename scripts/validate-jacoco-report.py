@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -11,6 +12,11 @@ from pathlib import Path
 
 
 EXPECTED_PROJECT_NAME = "Enterprise Shop"
+POLICY_TOP_LEVEL_KEYS = frozenset(("schema_version", "source", "metrics"))
+POLICY_SOURCE_KEYS = frozenset(("pull_request", "workflow", "run_number", "head_sha"))
+POLICY_METRIC_KEYS = frozenset(("LINE", "BRANCH"))
+POLICY_COUNTER_KEYS = frozenset(("covered", "missed"))
+FULL_LOWERCASE_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 class ReportValidationError(ValueError):
@@ -127,17 +133,49 @@ def parse_policy(path):
         raise PolicyValidationError(f"policy is malformed JSON: {error}") from error
     if not isinstance(policy, dict):
         raise PolicyValidationError("policy must be a JSON object")
-    if policy.get("schema_version") != 1:
+    validate_exact_keys(policy, POLICY_TOP_LEVEL_KEYS, "policy")
+    schema_version = policy["schema_version"]
+    if isinstance(schema_version, bool) or not isinstance(schema_version, int):
+        raise PolicyValidationError("policy schema_version must be the integer 1")
+    if schema_version != 1:
         raise PolicyValidationError("policy schema_version must be 1")
+
+    source = policy["source"]
+    if not isinstance(source, dict):
+        raise PolicyValidationError("policy source must be a JSON object")
+    validate_exact_keys(source, POLICY_SOURCE_KEYS, "policy source")
+    for field in ("pull_request", "run_number"):
+        value = source[field]
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise PolicyValidationError(f"policy source {field} must be an integer")
+        if value <= 0:
+            raise PolicyValidationError(
+                f"policy source {field} must be greater than zero"
+            )
+    workflow = source["workflow"]
+    if not isinstance(workflow, str):
+        raise PolicyValidationError("policy source workflow must be a string")
+    if not workflow.strip():
+        raise PolicyValidationError("policy source workflow must not be empty")
+    head_sha = source["head_sha"]
+    if not isinstance(head_sha, str):
+        raise PolicyValidationError("policy source head_sha must be a string")
+    if not FULL_LOWERCASE_SHA.fullmatch(head_sha):
+        raise PolicyValidationError(
+            "policy source head_sha must be exactly 40 lowercase hexadecimal characters"
+        )
+
     metrics = policy.get("metrics")
     if not isinstance(metrics, dict):
         raise PolicyValidationError("policy metrics must be a JSON object")
+    validate_exact_keys(metrics, POLICY_METRIC_KEYS, "policy metrics")
 
     baselines = {}
     for metric in ("LINE", "BRANCH"):
         configured = metrics.get(metric)
         if not isinstance(configured, dict):
-            raise PolicyValidationError(f"policy must contain a {metric} metric")
+            raise PolicyValidationError(f"policy metric {metric} must be a JSON object")
+        validate_exact_keys(configured, POLICY_COUNTER_KEYS, f"policy metric {metric}")
         values = []
         for field in ("covered", "missed"):
             value = configured.get(field)
@@ -155,6 +193,19 @@ def parse_policy(path):
             raise PolicyValidationError(f"policy {metric} total must be greater than zero")
         baselines[metric] = baseline
     return baselines
+
+
+def validate_exact_keys(value, expected, location):
+    missing = sorted(expected - value.keys())
+    if missing:
+        raise PolicyValidationError(
+            f"{location} is missing required key: {missing[0]}"
+        )
+    unexpected = sorted(value.keys() - expected)
+    if unexpected:
+        raise PolicyValidationError(
+            f"{location} contains unexpected key: {unexpected[0]}"
+        )
 
 
 def enforce_policy(lines, branches, baselines):

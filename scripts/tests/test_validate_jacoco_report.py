@@ -35,6 +35,12 @@ class JaCoCoReportTest(unittest.TestCase):
     def policy(self, lines=(8, 2), branches=(7, 3)):
         return {
             "schema_version": 1,
+            "source": {
+                "pull_request": 236,
+                "workflow": "CI",
+                "run_number": 511,
+                "head_sha": "24d5d19e6e19c35a4e74d5f251d6c9e9bd6970e8",
+            },
             "metrics": {
                 "LINE": {"covered": lines[0], "missed": lines[1]},
                 "BRANCH": {"covered": branches[0], "missed": branches[1]},
@@ -169,16 +175,164 @@ class JaCoCoReportTest(unittest.TestCase):
         with self.assertRaisesRegex(REPORT.PolicyValidationError, "schema_version"):
             self.parse_policy(policy)
 
+    def test_accepts_integer_one_policy_schema(self):
+        self.parse_policy(self.policy())
+
+    def test_rejects_boolean_true_policy_schema(self):
+        policy = self.policy()
+        policy["schema_version"] = True
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "integer 1"):
+            self.parse_policy(policy)
+
+    def test_rejects_boolean_false_policy_schema(self):
+        policy = self.policy()
+        policy["schema_version"] = False
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "integer 1"):
+            self.parse_policy(policy)
+
+    def test_rejects_float_policy_schema(self):
+        policy = self.policy()
+        policy["schema_version"] = 1.0
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "integer 1"):
+            self.parse_policy(policy)
+
+    def test_rejects_string_policy_schema(self):
+        policy = self.policy()
+        policy["schema_version"] = "1"
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "integer 1"):
+            self.parse_policy(policy)
+
+    def test_rejects_null_policy_schema(self):
+        policy = self.policy()
+        policy["schema_version"] = None
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "integer 1"):
+            self.parse_policy(policy)
+
+    def test_rejects_missing_policy_schema(self):
+        policy = self.policy()
+        del policy["schema_version"]
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "schema_version"):
+            self.parse_policy(policy)
+
+    def test_rejects_missing_source(self):
+        policy = self.policy()
+        del policy["source"]
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "source"):
+            self.parse_policy(policy)
+
+    def test_rejects_missing_metrics(self):
+        policy = self.policy()
+        del policy["metrics"]
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "metrics"):
+            self.parse_policy(policy)
+
+    def test_rejects_unknown_top_level_field(self):
+        policy = self.policy()
+        policy["unexpected"] = True
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "unexpected key: unexpected"):
+            self.parse_policy(policy)
+
+    def test_accepts_valid_source(self):
+        self.parse_policy(self.policy())
+
+    def test_rejects_null_source(self):
+        policy = self.policy()
+        policy["source"] = None
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "JSON object"):
+            self.parse_policy(policy)
+
+    def test_rejects_array_source(self):
+        policy = self.policy()
+        policy["source"] = []
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "JSON object"):
+            self.parse_policy(policy)
+
+    def test_rejects_missing_source_fields(self):
+        for field in ("pull_request", "workflow", "run_number", "head_sha"):
+            with self.subTest(field=field):
+                policy = self.policy()
+                del policy["source"][field]
+                with self.assertRaisesRegex(REPORT.PolicyValidationError, field):
+                    self.parse_policy(policy)
+
+    def test_rejects_unknown_source_field(self):
+        policy = self.policy()
+        policy["source"]["repository"] = "example/repository"
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "unexpected key: repository"):
+            self.parse_policy(policy)
+
+    def test_rejects_invalid_pull_request(self):
+        for value in (True, 0, -1):
+            with self.subTest(value=value):
+                policy = self.policy()
+                policy["source"]["pull_request"] = value
+                with self.assertRaisesRegex(REPORT.PolicyValidationError, "pull_request"):
+                    self.parse_policy(policy)
+
+    def test_rejects_invalid_run_number(self):
+        for value in (True, 0, -1):
+            with self.subTest(value=value):
+                policy = self.policy()
+                policy["source"]["run_number"] = value
+                with self.assertRaisesRegex(REPORT.PolicyValidationError, "run_number"):
+                    self.parse_policy(policy)
+
+    def test_rejects_invalid_workflow(self):
+        for value in ("", "   ", 1):
+            with self.subTest(value=value):
+                policy = self.policy()
+                policy["source"]["workflow"] = value
+                with self.assertRaisesRegex(REPORT.PolicyValidationError, "workflow"):
+                    self.parse_policy(policy)
+
+    def test_rejects_invalid_head_sha(self):
+        for value in (
+            "24d5d19",
+            "24D5D19E6E19C35A4E74D5F251D6C9E9BD6970E8",
+            "g" * 40,
+            " 24d5d19e6e19c35a4e74d5f251d6c9e9bd6970e8",
+            "24d5d19e6e19c35a4e74d5f251d6c9e9bd6970e8 ",
+        ):
+            with self.subTest(value=value):
+                policy = self.policy()
+                policy["source"]["head_sha"] = value
+                with self.assertRaisesRegex(REPORT.PolicyValidationError, "head_sha"):
+                    self.parse_policy(policy)
+
+    def test_rejects_non_string_head_sha(self):
+        policy = self.policy()
+        policy["source"]["head_sha"] = 1
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "head_sha"):
+            self.parse_policy(policy)
+
     def test_rejects_missing_line_policy_metric(self):
         policy = self.policy()
         del policy["metrics"]["LINE"]
-        with self.assertRaisesRegex(REPORT.PolicyValidationError, "LINE metric"):
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "LINE"):
             self.parse_policy(policy)
 
     def test_rejects_missing_branch_policy_metric(self):
         policy = self.policy()
         del policy["metrics"]["BRANCH"]
-        with self.assertRaisesRegex(REPORT.PolicyValidationError, "BRANCH metric"):
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "BRANCH"):
+            self.parse_policy(policy)
+
+    def test_rejects_unknown_metric(self):
+        policy = self.policy()
+        policy["metrics"]["INSTRUCTION"] = {"covered": 1, "missed": 1}
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "unexpected key: INSTRUCTION"):
+            self.parse_policy(policy)
+
+    def test_rejects_unknown_line_field(self):
+        policy = self.policy()
+        policy["metrics"]["LINE"]["total"] = 10
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "unexpected key: total"):
+            self.parse_policy(policy)
+
+    def test_rejects_unknown_branch_field(self):
+        policy = self.policy()
+        policy["metrics"]["BRANCH"]["total"] = 10
+        with self.assertRaisesRegex(REPORT.PolicyValidationError, "unexpected key: total"):
             self.parse_policy(policy)
 
     def test_rejects_negative_policy_value(self):

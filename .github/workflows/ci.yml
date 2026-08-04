@@ -28,8 +28,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test GitHub Actions policy
-        run: python -m unittest scripts.tests.test_validate_github_actions_policy
+      - name: Test CI policy tooling
+        run: python -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: Validate GitHub Actions policy
         run: python scripts/validate-github-actions-policy.py

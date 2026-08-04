@@ -30,6 +30,14 @@ python scripts/validate-jacoco-report.py \
   --policy .github/coverage/jacoco-baseline.json
 ```
 
+Run all dependency-free policy-tool unit tests locally with:
+
+```bash
+python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+Hosted CI runs this suite after checkout and before Java setup and Maven verification. The unit tests exercise malformed policy/report inputs and exact-regression scenarios, while the later end-to-end steps exercise the real generated JaCoCo report against the checked-in policy. Both layers are necessary and neither replaces the other. Schema validation enforces an auditable shape for the policy's `source` provenance block without making a runtime GitHub API call to verify the referenced run.
+
 The Maven `verify` lifecycle generates the reviewable HTML report at `target/site/jacoco/index.html`, machine-readable XML at `target/site/jacoco/jacoco.xml`, and CSV at `target/site/jacoco/jacoco.csv`. CI validates their identity and structure, prints deterministic line and branch totals to the workflow log and job summary, and publishes only these three files as the `jacoco-coverage-report` artifact for 14 days. The artifact upload precedes the blocking policy step, so after a gate failure a reviewer can download `jacoco-coverage-report` from the failed workflow run's **Artifacts** section and inspect all three reports.
 
 The authoritative baseline is the successful post-merge `master` CI run #511 at commit `24d5d19e6e19c35a4e74d5f251d6c9e9bd6970e8`, the squash merge of pull request #236. Its aggregate project counters are 2,545 covered and 562 missed lines (3,107 total), and 526 covered and 259 missed branches (785 total), with 245 analyzed classes. These values match pull-request CI #510. The exact counters and their source are versioned in `.github/coverage/jacoco-baseline.json`, making any policy change explicit and reviewable rather than allowing the current report to regenerate its own threshold.
