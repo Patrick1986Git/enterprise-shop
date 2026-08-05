@@ -15,16 +15,36 @@ JaCoCo measures which production bytecode instructions, lines, and branches exec
 
 JaCoCo's `prepare-agent` goal populates the existing `argLine` property. Surefire and Failsafe resolve that value with Maven's late `@{argLine}` syntax and then add the existing explicit Mockito `-javaagent`; consequently both agents are present without replacing or duplicating the Mockito agent.
 
-Run the complete suite and validate the report locally with:
+Run the complete suite and structural report validation locally with:
 
 ```bash
 ./mvnw -B clean verify
-python scripts/validate-jacoco-report.py
+python scripts/validate-jacoco-report.py \
+  --github-summary /tmp/jacoco-summary.md
 ```
 
-The Maven `verify` lifecycle generates the reviewable HTML report at `target/site/jacoco/index.html`, machine-readable XML at `target/site/jacoco/jacoco.xml`, and CSV at `target/site/jacoco/jacoco.csv`. CI validates their identity and structure, prints deterministic line and branch totals to the workflow log and job summary, and publishes only these three files as the `jacoco-coverage-report` artifact for 14 days.
+Enforce the checked-in non-regression policy locally with:
 
-This initial measurement intentionally has no blocking percentage threshold: the GitHub-hosted run establishes evidence for a measured baseline rather than introducing an arbitrary target. Coverage shows which code executed, but does not prove assertion quality, behavior correctness, or adequate edge-case testing. A focused follow-up can use the confirmed line and branch counts, normal run-to-run variability, and reviewable tolerance to define a modest non-regression gate.
+```bash
+python scripts/validate-jacoco-report.py \
+  --policy .github/coverage/jacoco-baseline.json
+```
+
+Run all dependency-free policy-tool unit tests locally with:
+
+```bash
+python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+Hosted CI runs this suite after checkout and before Java setup and Maven verification. The unit tests exercise malformed policy/report inputs and exact-regression scenarios, while the later end-to-end steps exercise the real generated JaCoCo report against the checked-in policy. Both layers are necessary and neither replaces the other. Schema validation enforces an auditable shape for the policy's `source` provenance block without making a runtime GitHub API call to verify the referenced run.
+
+The Maven `verify` lifecycle generates the reviewable HTML report at `target/site/jacoco/index.html`, machine-readable XML at `target/site/jacoco/jacoco.xml`, and CSV at `target/site/jacoco/jacoco.csv`. CI validates their identity and structure, prints deterministic line and branch totals to the workflow log and job summary, and publishes only these three files as the `jacoco-coverage-report` artifact for 14 days. The artifact upload precedes the blocking policy step, so after a gate failure a reviewer can download `jacoco-coverage-report` from the failed workflow run's **Artifacts** section and inspect all three reports.
+
+The authoritative baseline is the successful post-merge `master` CI run #511 at commit `24d5d19e6e19c35a4e74d5f251d6c9e9bd6970e8`, the squash merge of pull request #236. Its aggregate project counters are 2,545 covered and 562 missed lines (3,107 total), and 526 covered and 259 missed branches (785 total), with 245 analyzed classes. These values match pull-request CI #510. The exact counters and their source are versioned in `.github/coverage/jacoco-baseline.json`, making any policy change explicit and reviewable rather than allowing the current report to regenerate its own threshold.
+
+For each metric, the gate requires `current_covered / current_total >= baseline_covered / baseline_total`. It evaluates that fraction exactly as `current_covered * baseline_total >= baseline_covered * current_total`, using integer cross multiplication rather than binary floating point, rounded strings, or truncated basis points. The percentages shown in logs and summaries use deterministic `ROUND_HALF_UP` formatting and are display-only: two distinct exact fractions can display the same percentage, so a below-baseline fraction still fails even when both display identically to two decimals.
+
+An intentional baseline change requires a focused reviewed pull request. The contributor must obtain a successful hosted full-suite report, inspect its HTML/XML/CSV artifact, explain the reason for the changed counters, and manually update the source metadata plus exact covered and missed values in the policy file. The validator never rewrites the policy. No project-specific exclusions, package thresholds, or external coverage service are introduced. Coverage remains supporting execution evidence; it does not prove assertion quality, behavior correctness, or adequate edge-case testing.
 
 ## Current test categories
 

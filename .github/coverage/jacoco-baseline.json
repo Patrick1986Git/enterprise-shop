@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": {
+    "pull_request": 236,
+    "workflow": "CI",
+    "run_number": 511,
+    "head_sha": "24d5d19e6e19c35a4e74d5f251d6c9e9bd6970e8"
+  },
+  "metrics": {
+    "LINE": {
+      "covered": 2545,
+      "missed": 562
+    },
+    "BRANCH": {
+      "covered": 526,
+      "missed": 259
+    }
+  }
+}

@@ -28,8 +28,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test GitHub Actions policy
-        run: python -m unittest scripts.tests.test_validate_github_actions_policy
+      - name: Test CI policy tooling
+        run: python -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: Validate GitHub Actions policy
         run: python scripts/validate-github-actions-policy.py
@@ -60,6 +60,9 @@ jobs:
             target/site/jacoco/jacoco.csv
           if-no-files-found: error
           retention-days: 14
+
+      - name: Enforce JaCoCo coverage non-regression policy
+        run: python scripts/validate-jacoco-report.py --policy .github/coverage/jacoco-baseline.json
 
       - name: Upload OpenAPI docs
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
