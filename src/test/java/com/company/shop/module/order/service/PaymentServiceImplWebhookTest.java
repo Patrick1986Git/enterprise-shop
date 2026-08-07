@@ -521,6 +521,104 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
+    void handleWebhook_shouldThrowWhenPaymentAmountIsMissing() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        PaymentIntent intent = paymentIntentWithMetadata(order.getId());
+        Event event = succeededEvent("evt_amount_missing", intent);
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("payment amount");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            assertWebhookMetricCount("failed", 1);
+            verify(orderRepository, never()).save(order);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldUseAmountWhenAmountReceivedIsNotPositive() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        PaymentIntent intent = paymentIntentWithMetadata(order.getId());
+        when(intent.getAmountReceived()).thenReturn(0L);
+        when(intent.getAmount()).thenReturn(1999L);
+        when(intent.getCurrency()).thenReturn("pln");
+        Event event = succeededEvent("evt_amount_fallback", intent);
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+            assertWebhookMetricCount("processed", 1);
+            verify(cartCheckoutFacade).clearCartAfterSuccessfulPayment(order.getUserId());
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldThrowWhenCurrencyIsMissing() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Event event = succeededEvent("evt_currency_missing",
+                paymentIntentWithMetadataAndAmountReceivedAndCurrency(order.getId(), 1999L, null));
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("currency does not match");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            verify(orderRepository, never()).save(order);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+        }
+    }
+
+    @Test
+    void handleWebhook_shouldRejectNonPositiveOrderTotalWithoutMutation() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.ONE);
+        setField(order, "totalAmount", BigDecimal.ZERO);
+        PaymentIntent intent = paymentIntentWithMetadata(order.getId());
+        when(intent.getAmountReceived()).thenReturn(0L);
+        when(intent.getAmount()).thenReturn(0L);
+        when(intent.getCurrency()).thenReturn("pln");
+        Event event = succeededEvent("evt_invalid_order_total", intent);
+
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookProcessingException.class)
+                    .hasMessageContaining("Unable to process Stripe webhook event");
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            assertWebhookMetricCount("failed", 1);
+            verify(orderRepository, never()).save(order);
+            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+        }
+    }
+
+    @Test
     void handleWebhook_shouldThrowWhenCurrencyIsNotPln() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
