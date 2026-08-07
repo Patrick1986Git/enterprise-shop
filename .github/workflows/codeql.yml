@@ -54,4 +54,4 @@ jobs:
         run: ./mvnw -B clean verify
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@3599b3baa15b485a2e49ef411a7a4bb2452e7f93 # v3.30.5
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
