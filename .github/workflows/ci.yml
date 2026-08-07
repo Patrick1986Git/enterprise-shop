@@ -51,7 +51,7 @@ jobs:
         run: python scripts/validate-jacoco-report.py --github-summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload JaCoCo coverage report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jacoco-coverage-report
           path: |
@@ -65,14 +65,14 @@ jobs:
         run: python scripts/validate-jacoco-report.py --policy .github/coverage/jacoco-baseline.json
 
       - name: Upload OpenAPI docs
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: openapi-docs
           path: target/generated-docs/openapi/**
           if-no-files-found: error
 
       - name: Upload static API docs site
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: api-docs-site
           path: target/generated-docs/site/**
@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload test reports on failure
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-reports
           path: |
@@ -385,7 +385,7 @@ jobs:
           grep -q 'enterprise-shop/postgres:ci' .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
 
       - name: Upload vulnerability scan reports
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: container-vulnerability-reports
           path: .tmp/container-security/reports/*.json
@@ -393,7 +393,7 @@ jobs:
           retention-days: 14
 
       - name: Upload application SBOM
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: enterprise-shop-app-sbom
           path: .tmp/container-security/sbom/enterprise-shop-app.cdx.json
@@ -401,7 +401,7 @@ jobs:
           retention-days: 14
 
       - name: Upload PostgreSQL SBOM
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: enterprise-shop-postgres-sbom
           path: .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json
