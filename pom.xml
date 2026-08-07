@@ -24,7 +24,7 @@
 			<mapstruct.version>1.6.3</mapstruct.version>
 			<jjwt.version>0.13.0</jjwt.version>
 			<stripe.version>33.1.1</stripe.version>
-			<springdoc.version>3.0.3</springdoc.version>
+			<springdoc.version>3.1.0</springdoc.version>
 			<hibernate-processor.version>7.4.5.Final</hibernate-processor.version>
 			<postgresql.version>42.7.12</postgresql.version>
 			<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
