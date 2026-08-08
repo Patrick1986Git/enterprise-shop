@@ -2,6 +2,8 @@ package com.company.shop.module.product.service;
 
 import java.util.UUID;
 
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,8 @@ import com.company.shop.module.user.service.UserService;
 @Transactional
 public class ProductReviewServiceImpl implements ProductReviewService {
 
+    private static final String USER_PRODUCT_REVIEW_UNIQUE_CONSTRAINT = "uk_user_product_review";
+
     private final ProductReviewRepository reviewRepo;
     private final ProductRepository productRepo;
     private final UserService userService;
@@ -45,7 +49,15 @@ public class ProductReviewServiceImpl implements ProductReviewService {
         }
 
         Product product = getProductOrThrow(dto.productId());
-        ProductReview saved = reviewRepo.save(new ProductReview(product, user, dto.rating(), dto.comment()));
+        ProductReview saved;
+        try {
+            saved = reviewRepo.saveAndFlush(new ProductReview(product, user, dto.rating(), dto.comment()));
+        } catch (DataIntegrityViolationException ex) {
+            if (isUserProductReviewUniqueConstraintViolation(ex)) {
+                throw new ProductReviewAlreadyExistsException(dto.productId());
+            }
+            throw ex;
+        }
 
         updateProductRatingStats(product);
         return mapToResponse(saved);
@@ -79,6 +91,18 @@ public class ProductReviewServiceImpl implements ProductReviewService {
     private Product getProductOrThrow(UUID productId) {
         return productRepo.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
+    }
+
+    private boolean isUserProductReviewUniqueConstraintViolation(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraintViolation
+                    && USER_PRODUCT_REVIEW_UNIQUE_CONSTRAINT.equals(constraintViolation.getConstraintName())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private void updateProductRatingStats(Product product) {
