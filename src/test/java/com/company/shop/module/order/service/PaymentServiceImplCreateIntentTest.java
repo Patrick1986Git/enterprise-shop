@@ -13,6 +13,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -147,10 +148,16 @@ class PaymentServiceImplCreateIntentTest {
 		when(stripeIntent.getId()).thenReturn("pi_123");
 		when(stripeIntent.getClientSecret()).thenReturn("cs_123");
 
+		AtomicReference<PaymentIntentCreateParams> capturedParams = new AtomicReference<>();
+		AtomicReference<RequestOptions> capturedOptions = new AtomicReference<>();
 		try (MockedStatic<PaymentIntent> paymentIntentStatic = mockStatic(PaymentIntent.class)) {
 			paymentIntentStatic
 					.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)))
-					.thenReturn(stripeIntent);
+					.thenAnswer(invocation -> {
+						capturedParams.set(invocation.getArgument(0));
+						capturedOptions.set(invocation.getArgument(1));
+						return stripeIntent;
+					});
 
 			PaymentIntentResponseDTO result = service.createPaymentIntent(order);
 
@@ -163,11 +170,51 @@ class PaymentServiceImplCreateIntentTest {
 			assertThat(savedPayment.getProviderPaymentId()).isEqualTo("pi_123");
 			assertThat(savedPayment.getClientSecret()).isEqualTo("cs_123");
 			assertThat(savedPayment.getAmount()).isEqualByComparingTo("24.50");
+			assertThat(capturedParams.get().getAmount()).isEqualTo(2450L);
+			assertThat(capturedParams.get().getCurrency()).isEqualTo("pln");
+			assertThat(capturedParams.get().getMetadata()).containsEntry("orderId", order.getId().toString());
+			assertThat(capturedOptions.get().getIdempotencyKey())
+					.isEqualTo("order-payment-intent-" + order.getId());
 			assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "created").counter().count()).isEqualTo(1);
 
 			verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 			paymentIntentStatic.verify(
 					() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)));
+		}
+	}
+
+	@Test
+	void createPaymentIntent_shouldCreateNewIntentWhenOnlyProviderPaymentIdIsPresent() {
+		assertIncompleteProviderStateCreatesNewIntent("pi_incomplete", " ");
+	}
+
+	@Test
+	void createPaymentIntent_shouldCreateNewIntentWhenOnlyClientSecretIsPresent() {
+		assertIncompleteProviderStateCreatesNewIntent(" ", "cs_incomplete");
+	}
+
+	private void assertIncompleteProviderStateCreatesNewIntent(String providerPaymentId, String clientSecret) {
+		Order order = orderWithTotal(BigDecimal.valueOf(10));
+		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+		payment.attachProviderPayment(providerPaymentId, clientSecret);
+		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+		PaymentIntent stripeIntent = mock(PaymentIntent.class);
+		when(stripeIntent.getId()).thenReturn("pi_fresh");
+		when(stripeIntent.getClientSecret()).thenReturn("cs_fresh");
+		try (MockedStatic<PaymentIntent> paymentIntentStatic = mockStatic(PaymentIntent.class)) {
+			paymentIntentStatic
+					.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)))
+					.thenReturn(stripeIntent);
+
+			PaymentIntentResponseDTO result = service.createPaymentIntent(order);
+
+			assertThat(result.clientSecret()).isEqualTo("cs_fresh");
+			assertThat(payment.getProviderPaymentId()).isEqualTo("pi_fresh");
+			assertThat(payment.getClientSecret()).isEqualTo("cs_fresh");
+			assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "created").counter().count())
+					.isEqualTo(1);
+			verify(paymentRepository).save(payment);
 		}
 	}
 
