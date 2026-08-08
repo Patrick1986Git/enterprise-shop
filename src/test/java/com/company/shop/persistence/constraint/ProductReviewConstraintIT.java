@@ -1,8 +1,10 @@
 package com.company.shop.persistence.constraint;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -57,8 +59,12 @@ class ProductReviewConstraintIT extends PostgresContainerSupport {
         assertThatThrownBy(() -> {
             entityManager.persist(duplicateReview);
             entityManager.flush();
-        }).isInstanceOf(ConstraintViolationException.class)
-                .hasRootCauseInstanceOf(PSQLException.class);
+        }).hasRootCauseInstanceOf(PSQLException.class)
+                .satisfies(failure -> assertThat(findHibernateConstraintViolation(failure))
+                        .isPresent()
+                        .get()
+                        .extracting(ConstraintViolationException::getConstraintName)
+                        .isEqualTo("uk_user_product_review"));
     }
 
     @Test
@@ -87,5 +93,16 @@ class ProductReviewConstraintIT extends PostgresContainerSupport {
                 "Invalid rating"
         )).isInstanceOf(DataIntegrityViolationException.class)
                 .hasRootCauseInstanceOf(PSQLException.class);
+    }
+
+    private Optional<ConstraintViolationException> findHibernateConstraintViolation(Throwable failure) {
+        Throwable cause = failure;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraintViolation) {
+                return Optional.of(constraintViolation);
+            }
+            cause = cause.getCause();
+        }
+        return Optional.empty();
     }
 }
