@@ -15,7 +15,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.dto.ProductReviewRequestDTO;
 import com.company.shop.module.product.entity.Product;
-import com.company.shop.module.product.repository.ProductReviewRepository;
+import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.module.user.service.UserService;
@@ -63,7 +62,7 @@ class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
     private JdbcTemplate jdbcTemplate;
 
     @MockitoSpyBean
-    private ProductReviewRepository productReviewRepository;
+    private ProductRepository productRepository;
 
     @MockitoBean
     private UserService userService;
@@ -75,14 +74,11 @@ class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
         when(userService.getCurrentUserEntity()).thenAnswer(invocation -> userRepository.findById(currentUserId.get())
                 .orElseThrow());
 
-        CyclicBarrier bothTransactionsUpdatingAggregate = new CyclicBarrier(2);
-        AtomicInteger aggregateQueries = new AtomicInteger();
+        CyclicBarrier bothTransactionsAttemptingProductLock = new CyclicBarrier(2);
         doAnswer(invocation -> {
-            if (aggregateQueries.incrementAndGet() <= 2) {
-                awaitBarrier(bothTransactionsUpdatingAggregate);
-            }
+            awaitBarrier(bothTransactionsAttemptingProductLock);
             return invocation.callRealMethod();
-        }).when(productReviewRepository).getRatingStatsByProductId(any(UUID.class));
+        }).when(productRepository).findByIdWithLock(any(UUID.class));
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         Attempt firstAttempt;
@@ -179,9 +175,9 @@ class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
             barrier.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while coordinating concurrent aggregate queries", ex);
+            throw new AssertionError("interrupted while coordinating concurrent product lock attempts", ex);
         } catch (BrokenBarrierException | TimeoutException ex) {
-            throw new AssertionError("both review transactions did not reach the aggregate query within "
+            throw new AssertionError("both review transactions did not attempt the product lock within "
                     + TIMEOUT_SECONDS + " seconds", ex);
         }
     }
