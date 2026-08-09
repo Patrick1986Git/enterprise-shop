@@ -1,8 +1,6 @@
 package com.company.shop.module.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -21,10 +19,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.company.shop.module.category.entity.Category;
@@ -42,6 +44,7 @@ import jakarta.persistence.EntityManager;
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
+@Import(ProductReviewAggregateConcurrencyIT.LockCoordinationConfiguration.class)
 class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
 
     private static final long TIMEOUT_SECONDS = 10L;
@@ -61,8 +64,8 @@ class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @MockitoSpyBean
-    private ProductRepository productRepository;
+    @Autowired
+    private ProductLockCoordinator productLockCoordinator;
 
     @MockitoBean
     private UserService userService;
@@ -74,11 +77,7 @@ class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
         when(userService.getCurrentUserEntity()).thenAnswer(invocation -> userRepository.findById(currentUserId.get())
                 .orElseThrow());
 
-        CyclicBarrier bothTransactionsAttemptingProductLock = new CyclicBarrier(2);
-        doAnswer(invocation -> {
-            awaitBarrier(bothTransactionsAttemptingProductLock);
-            return invocation.callRealMethod();
-        }).when(productRepository).findByIdWithLock(any(UUID.class));
+        productLockCoordinator.coordinateNextTwoAttempts();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         Attempt firstAttempt;
@@ -170,15 +169,71 @@ class ProductReviewAggregateConcurrencyIT extends PostgresContainerSupport {
         });
     }
 
-    private void awaitBarrier(CyclicBarrier barrier) {
-        try {
-            barrier.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("interrupted while coordinating concurrent product lock attempts", ex);
-        } catch (BrokenBarrierException | TimeoutException ex) {
-            throw new AssertionError("both review transactions did not attempt the product lock within "
-                    + TIMEOUT_SECONDS + " seconds", ex);
+    @TestConfiguration(proxyBeanMethods = false)
+    static class LockCoordinationConfiguration {
+
+        @Bean
+        ProductLockCoordinator productLockCoordinator() {
+            return new ProductLockCoordinator();
+        }
+
+        @Bean
+        static BeanPostProcessor productRepositoryLockCoordinator(ProductLockCoordinator coordinator) {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (!(bean instanceof ProductRepository)) {
+                        return bean;
+                    }
+                    ProxyFactory proxyFactory = new ProxyFactory(bean);
+                    proxyFactory.setInterfaces(ProductRepository.class);
+                    proxyFactory.addAdvice((org.aopalliance.intercept.MethodInterceptor) invocation -> {
+                        if (invocation.getMethod().getName().equals("findByIdWithLock")) {
+                            coordinator.beforeLockAttempt();
+                        }
+                        return invocation.proceed();
+                    });
+                    return proxyFactory.getProxy();
+                }
+            };
+        }
+    }
+
+    static class ProductLockCoordinator {
+
+        private CyclicBarrier barrier;
+        private int remainingArrivals;
+
+        synchronized void coordinateNextTwoAttempts() {
+            barrier = new CyclicBarrier(2);
+            remainingArrivals = 2;
+        }
+
+        void beforeLockAttempt() {
+            CyclicBarrier currentBarrier;
+            synchronized (this) {
+                if (remainingArrivals == 0) {
+                    return;
+                }
+                currentBarrier = barrier;
+                remainingArrivals--;
+                if (remainingArrivals == 0) {
+                    barrier = null;
+                }
+            }
+            awaitBarrier(currentBarrier);
+        }
+
+        private void awaitBarrier(CyclicBarrier currentBarrier) {
+            try {
+                currentBarrier.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted while coordinating concurrent product lock attempts", ex);
+            } catch (BrokenBarrierException | TimeoutException ex) {
+                throw new AssertionError("both review transactions did not attempt the product lock within "
+                        + TIMEOUT_SECONDS + " seconds", ex);
+            }
         }
     }
 
