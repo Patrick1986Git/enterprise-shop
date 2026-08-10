@@ -48,7 +48,7 @@ public class ProductReviewServiceImpl implements ProductReviewService {
             throw new ProductReviewAlreadyExistsException(dto.productId());
         }
 
-        Product product = getProductOrThrow(dto.productId());
+        Product product = getProductWithLockOrThrow(dto.productId());
         ProductReview saved;
         try {
             saved = reviewRepo.saveAndFlush(new ProductReview(product, user, dto.rating(), dto.comment()));
@@ -83,13 +83,18 @@ public class ProductReviewServiceImpl implements ProductReviewService {
             throw new ProductReviewAccessDeniedException();
         }
 
-        Product product = review.getProduct();
+        Product product = getProductWithLockOrThrow(review.getProduct().getId());
         review.delete();
         updateProductRatingStats(product);
     }
 
     private Product getProductOrThrow(UUID productId) {
         return productRepo.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+    }
+
+    private Product getProductWithLockOrThrow(UUID productId) {
+        return productRepo.findByIdWithLock(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
     }
 

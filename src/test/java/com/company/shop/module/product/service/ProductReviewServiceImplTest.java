@@ -76,7 +76,7 @@ class ProductReviewServiceImplTest {
 
         when(userService.getCurrentUserEntity()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, userId)).thenReturn(false);
-        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
         when(reviewRepository.saveAndFlush(any(ProductReview.class))).thenAnswer(invocation -> {
             ProductReview review = invocation.getArgument(0);
             setEntityField(review, "id", reviewId);
@@ -115,7 +115,7 @@ class ProductReviewServiceImplTest {
                 .isInstanceOf(ProductReviewAlreadyExistsException.class)
                 .hasMessageContaining(productId.toString());
 
-        verify(productRepository, never()).findById(any(UUID.class));
+        verify(productRepository, never()).findByIdWithLock(any(UUID.class));
         verify(reviewRepository, never()).saveAndFlush(any(ProductReview.class));
         verify(reviewRepository, never()).getRatingStatsByProductId(any(UUID.class));
         verify(productRepository, never()).save(any(Product.class));
@@ -127,7 +127,7 @@ class ProductReviewServiceImplTest {
         User user = user(UUID.randomUUID(), "Alex", "Morgan");
         when(userService.getCurrentUserEntity()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(false);
-        when(productRepository.findById(productId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.addReview(new ProductReviewRequestDTO(productId, 4, "Good")))
                 .isInstanceOf(ProductNotFoundException.class)
@@ -303,6 +303,7 @@ class ProductReviewServiceImplTest {
                 .isInstanceOf(ProductReviewAccessDeniedException.class);
 
         assertThat(review.isDeleted()).isFalse();
+        verify(productRepository, never()).findByIdWithLock(any(UUID.class));
         verify(reviewRepository, never()).getRatingStatsByProductId(any(UUID.class));
         verify(productRepository, never()).save(any(Product.class));
     }
@@ -334,7 +335,7 @@ class ProductReviewServiceImplTest {
         Product product = product(productId);
         when(userService.getCurrentUserEntity()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(false);
-        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
         when(reviewRepository.saveAndFlush(any(ProductReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
         return product;
     }
@@ -343,7 +344,7 @@ class ProductReviewServiceImplTest {
         User user = user(UUID.randomUUID(), "Alex", "Morgan");
         when(userService.getCurrentUserEntity()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(false);
-        when(productRepository.findById(productId)).thenReturn(Optional.of(product(productId)));
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product(productId)));
         when(reviewRepository.saveAndFlush(any(ProductReview.class))).thenThrow(failure);
     }
 
@@ -369,6 +370,7 @@ class ProductReviewServiceImplTest {
         when(userService.getCurrentUserEntity()).thenReturn(currentUser);
         when(userService.isAdmin(currentUser)).thenReturn(admin);
         if (owner.getId().equals(currentUser.getId()) || admin) {
+            when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
             when(reviewRepository.getRatingStatsByProductId(product.getId())).thenReturn(stats);
         }
         return review;
