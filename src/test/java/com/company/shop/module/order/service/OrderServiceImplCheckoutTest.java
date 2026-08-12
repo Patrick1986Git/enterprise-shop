@@ -266,6 +266,7 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = new CartCheckoutSnapshot(UUID.randomUUID(), java.util.List.of());
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 
 			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null)))
@@ -275,7 +276,9 @@ class OrderServiceImplCheckoutTest {
 
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
-			verifyNoInteractions(productCatalogFacade, discountCodeRepository, orderRepository, paymentRepository,
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(productCatalogFacade, discountCodeRepository, paymentRepository,
 					paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 
@@ -286,6 +289,7 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = cart(user, missingProduct, 1);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(missingProduct.getId(), 1))
 					.thenThrow(new ProductNotFoundException(missingProduct.getId()));
@@ -296,7 +300,9 @@ class OrderServiceImplCheckoutTest {
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(missingProduct.getId(), 1);
-			verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(discountCodeRepository, paymentRepository, paymentService,
 					orderMapper, orderOutboxEventRecorder);
 		}
 
@@ -307,6 +313,7 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = cart(user, product, 2);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
@@ -317,7 +324,9 @@ class OrderServiceImplCheckoutTest {
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
-						verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(discountCodeRepository, paymentRepository, paymentService,
 					orderMapper, orderOutboxEventRecorder);
 		}
 
@@ -328,6 +337,7 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = cart(user, product, 1);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 						when(productCatalogFacade.reserveProductForCheckout(product.getId(), 1))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getSku(), product.getPrice()));
@@ -340,7 +350,9 @@ class OrderServiceImplCheckoutTest {
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 1);
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE20");
-			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 
 		@Test
@@ -352,6 +364,7 @@ class OrderServiceImplCheckoutTest {
 			when(discountCode.canBeUsed()).thenReturn(false);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 						when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getSku(), product.getPrice()));
@@ -365,8 +378,20 @@ class OrderServiceImplCheckoutTest {
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 			verify(discountCodeRepository).findByCodeIgnoreCase("EXPIRED10");
-			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
 		}
+	}
+
+	private void stubUnseenCheckoutKey(User user) {
+		when(orderRepository.findByUserIdAndCheckoutIdempotencyKey(user.getId(), "checkout-key"))
+				.thenReturn(Optional.empty());
+	}
+
+	private void verifyIdempotencyPreamble(User user) {
+		verify(orderRepository).acquireCheckoutIdempotencyLock(user.getId(), "checkout-key");
+		verify(orderRepository).findByUserIdAndCheckoutIdempotencyKey(user.getId(), "checkout-key");
 	}
 
 	@Nested

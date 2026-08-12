@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -161,6 +162,7 @@ class CurrentUserOrderControllerWebMvcTest {
 
         mockMvc.perform(post(CURRENT_USER_ORDERS_URL + "/checkout")
                         .with(user("john").roles("USER"))
+                        .with(csrf())
                         .header("Idempotency-Key", "checkout-key")
                         .contentType(APPLICATION_JSON)
                         .content("{}"))
@@ -173,6 +175,7 @@ class CurrentUserOrderControllerWebMvcTest {
     void checkout_shouldRejectMissingIdempotencyKey() throws Exception {
         mockMvc.perform(post(CURRENT_USER_ORDERS_URL + "/checkout")
                         .with(user("john").roles("USER"))
+                        .with(csrf())
                         .contentType(APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
@@ -184,6 +187,7 @@ class CurrentUserOrderControllerWebMvcTest {
     void checkout_shouldRejectBlankIdempotencyKey() throws Exception {
         mockMvc.perform(post(CURRENT_USER_ORDERS_URL + "/checkout")
                         .with(user("john").roles("USER"))
+                        .with(csrf())
                         .header("Idempotency-Key", "   ")
                         .contentType(APPLICATION_JSON)
                         .content("{}"))

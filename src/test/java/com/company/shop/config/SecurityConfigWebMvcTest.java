@@ -302,6 +302,7 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(post("/api/v1/me/orders/checkout")
                         .with(user("user").roles("USER"))
                         .with(csrf())
+                        .header("Idempotency-Key", "checkout-key")
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isCreated());
