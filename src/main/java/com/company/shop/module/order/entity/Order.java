@@ -54,6 +54,9 @@ public class Order extends SoftDeleteEntity {
     @Column(name = "user_email", nullable = false)
     private String userEmail;
 
+    @Column(name = "checkout_idempotency_key", length = 128)
+    private String checkoutIdempotencyKey;
+
     /**
      * Current business status of the order.
      */
@@ -87,8 +90,13 @@ public class Order extends SoftDeleteEntity {
      * @param userEmail the email snapshot of the user who placed the order.
      */
     public Order(UUID userId, String userEmail) {
+        this(userId, userEmail, null);
+    }
+
+    public Order(UUID userId, String userEmail, String checkoutIdempotencyKey) {
         this.userId = userId;
         this.userEmail = userEmail;
+        this.checkoutIdempotencyKey = checkoutIdempotencyKey;
         this.status = OrderStatus.NEW;
         this.totalAmount = BigDecimal.ZERO;
     }
@@ -165,6 +173,10 @@ public class Order extends SoftDeleteEntity {
 
     public String getUserEmail() {
         return userEmail;
+    }
+
+    public String getCheckoutIdempotencyKey() {
+        return checkoutIdempotencyKey;
     }
 
     public OrderStatus getStatus() {

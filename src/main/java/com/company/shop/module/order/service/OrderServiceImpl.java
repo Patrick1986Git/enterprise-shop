@@ -33,8 +33,8 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public OrderResponseDTO placeOrderFromCart(OrderCheckoutRequestDTO request) {
-        return checkoutProcessor.placeOrderFromCart(request);
+    public OrderResponseDTO placeOrderFromCart(String idempotencyKey, OrderCheckoutRequestDTO request) {
+        return checkoutProcessor.placeOrderFromCart(idempotencyKey, request);
     }
 
     @Override

@@ -121,8 +121,8 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
         createCartWithSingleItem(user, product, 2);
         currentUser.set(user);
 
-        orderService.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
-        orderService.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+        orderService.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null));
+        orderService.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null));
 
         PersistedCheckoutState persistedState = new PersistedCheckoutState(
                 jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id = ?", Long.class, user.getId()),
@@ -131,11 +131,65 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
                 jdbcTemplate.queryForObject(
                         "SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE product_id = ?",
                         Long.class,
-                        product.getId()));
+                        product.getId()),
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'OrderPlaced'",
+                        Long.class));
 
         assertThat(persistedState)
                 .as("an unchanged cart retry must not create a second durable checkout reservation")
-                .isEqualTo(new PersistedCheckoutState(1L, 1L, 8L, 2L));
+                .isEqualTo(new PersistedCheckoutState(1L, 1L, 8L, 2L, 1L));
+    }
+
+    @Test
+    void placeOrderFromCart_shouldAllowDistinctKeysForTheSameUnchangedCart() {
+        Category category = categoryRepository.saveAndFlush(new Category("Distinct Phones", "distinct-phones",
+                "Phones category for distinct checkout keys"));
+        Product product = productRepository.saveAndFlush(new Product(
+                "Distinct Phone", "distinct-phone", "DISTINCT-1", "Phone for distinct checkout keys",
+                BigDecimal.valueOf(1999), 10, category));
+        User user = userRepository.saveAndFlush(new User("distinct-user@example.com", "encoded", "Distinct", "User"));
+        createCartWithSingleItem(user, product, 2);
+        currentUser.set(user);
+
+        orderService.placeOrderFromCart("checkout-key-one", new OrderCheckoutRequestDTO(null, null));
+        orderService.placeOrderFromCart("checkout-key-two", new OrderCheckoutRequestDTO(null, null));
+
+        assertThat(readPersistedCheckoutState(user, product))
+                .as("different keys represent distinct logical checkouts even when the cart is unchanged")
+                .isEqualTo(new PersistedCheckoutState(2L, 2L, 6L, 4L, 2L));
+    }
+
+    @Test
+    void placeOrderFromCart_shouldCreateOneDurableReservationForConcurrentSameKeyRetries() throws Exception {
+        Category category = categoryRepository.saveAndFlush(new Category("Concurrent Retry Phones",
+                "concurrent-retry-phones", "Phones category for concurrent checkout retries"));
+        Product product = productRepository.saveAndFlush(new Product(
+                "Concurrent Retry Phone", "concurrent-retry-phone", "CONCURRENT-RETRY-1",
+                "Phone for concurrent checkout retries", BigDecimal.valueOf(1999), 10, category));
+        User user = userRepository.saveAndFlush(new User(
+                "concurrent-retry-user@example.com", "encoded", "Concurrent", "Retry"));
+        createCartWithSingleItem(user, product, 2);
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        Future<CheckoutAttempt> firstFuture = executorService.submit(
+                checkoutTask(user, "concurrent-checkout-key", ready, start));
+        Future<CheckoutAttempt> secondFuture = executorService.submit(
+                checkoutTask(user, "concurrent-checkout-key", ready, start));
+
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        start.countDown();
+        List<CheckoutAttempt> attempts = List.of(
+                firstFuture.get(10, TimeUnit.SECONDS),
+                secondFuture.get(10, TimeUnit.SECONDS));
+        executorService.shutdown();
+        assertThat(executorService.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(attempts).allMatch(CheckoutAttempt::success);
+        assertThat(readPersistedCheckoutState(user, product))
+                .isEqualTo(new PersistedCheckoutState(1L, 1L, 8L, 2L, 1L));
     }
 
     @Test
@@ -160,8 +214,8 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executorService = Executors.newFixedThreadPool(2);
 
-        Callable<CheckoutAttempt> firstCheckout = checkoutTask(firstUser, ready, start);
-        Callable<CheckoutAttempt> secondCheckout = checkoutTask(secondUser, ready, start);
+        Callable<CheckoutAttempt> firstCheckout = checkoutTask(firstUser, "checkout-key", ready, start);
+        Callable<CheckoutAttempt> secondCheckout = checkoutTask(secondUser, "checkout-key", ready, start);
 
         Future<CheckoutAttempt> firstFuture = executorService.submit(firstCheckout);
         Future<CheckoutAttempt> secondFuture = executorService.submit(secondCheckout);
@@ -245,6 +299,7 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
                     payments,
                     order_items,
                     orders,
+                    outbox_events,
                     cart_items,
                     carts,
                     products,
@@ -256,6 +311,7 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
 
     private Callable<CheckoutAttempt> checkoutTask(
             User user,
+            String idempotencyKey,
             CountDownLatch ready,
             CountDownLatch start) {
         return () -> {
@@ -265,7 +321,7 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
                 return CheckoutAttempt.failed(new IllegalStateException("Timed out waiting for concurrent checkout start"));
             }
             try {
-                orderService.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+                orderService.placeOrderFromCart(idempotencyKey, new OrderCheckoutRequestDTO(null, null));
                 return CheckoutAttempt.succeeded();
             } catch (Throwable throwable) {
                 return CheckoutAttempt.failed(throwable);
@@ -290,7 +346,22 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
             long orderCount,
             long paymentCount,
             long productStock,
-            long orderedQuantity) {
+            long orderedQuantity,
+            long orderPlacedEventCount) {
+    }
+
+    private PersistedCheckoutState readPersistedCheckoutState(User user, Product product) {
+        return new PersistedCheckoutState(
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id = ?", Long.class, user.getId()),
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM payments", Long.class),
+                jdbcTemplate.queryForObject("SELECT stock FROM products WHERE id = ?", Long.class, product.getId()),
+                jdbcTemplate.queryForObject(
+                        "SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE product_id = ?",
+                        Long.class,
+                        product.getId()),
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'OrderPlaced'",
+                        Long.class));
     }
 
     private boolean isExpectedConcurrencyFailure(Throwable failure) {

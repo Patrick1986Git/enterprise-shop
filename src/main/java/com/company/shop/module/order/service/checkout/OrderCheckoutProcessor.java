@@ -80,10 +80,16 @@ public class OrderCheckoutProcessor {
     }
 
     @Transactional
-    public OrderResponseDTO placeOrderFromCart(OrderCheckoutRequestDTO request) {
+    public OrderResponseDTO placeOrderFromCart(String idempotencyKey, OrderCheckoutRequestDTO request) {
         incrementCheckoutMetric("attempt");
         try {
-            Order savedOrder = createPendingOrder(request);
+            CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+            String normalizedIdempotencyKey = idempotencyKey.trim();
+            orderRepo.acquireCheckoutIdempotencyLock(currentUser.id(), normalizedIdempotencyKey);
+
+            Order savedOrder = orderRepo.findByUserIdAndCheckoutIdempotencyKey(
+                    currentUser.id(), normalizedIdempotencyKey)
+                    .orElseGet(() -> createPendingOrder(currentUser, normalizedIdempotencyKey, request));
             log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
                     savedOrder.getId(), savedOrder.getUserId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
                     savedOrder.getItems().size());
@@ -107,8 +113,8 @@ public class OrderCheckoutProcessor {
         meterRegistry.counter(CHECKOUT_METRIC, RESULT_TAG, result).increment();
     }
 
-    private Order createPendingOrder(OrderCheckoutRequestDTO request) {
-        CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+    private Order createPendingOrder(CurrentUserSnapshot currentUser, String idempotencyKey,
+            OrderCheckoutRequestDTO request) {
         log.info("Checkout started for userId={}", currentUser.id());
         CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(currentUser.id());
 
@@ -116,7 +122,7 @@ public class OrderCheckoutProcessor {
             throw new EmptyCartCheckoutException();
         }
 
-        Order order = new Order(currentUser.id(), currentUser.email());
+        Order order = new Order(currentUser.id(), currentUser.email(), idempotencyKey);
 
         for (CartCheckoutItem cartItem : cart.items()) {
             try {
