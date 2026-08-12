@@ -106,6 +106,39 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
     }
 
     @Test
+    void placeOrderFromCart_shouldCreateOnlyOneDurableReservationWhenUnchangedCartIsRetried() {
+        Category category = categoryRepository.saveAndFlush(new Category("Retry Phones", "retry-phones",
+                "Phones category for checkout retry diagnostic"));
+        Product product = productRepository.saveAndFlush(new Product(
+                "Retry Phone",
+                "retry-phone",
+                "RETRY-1",
+                "Phone for checkout retry diagnostic",
+                BigDecimal.valueOf(1999),
+                10,
+                category));
+        User user = userRepository.saveAndFlush(new User("retry-user@example.com", "encoded", "Retry", "User"));
+        createCartWithSingleItem(user, product, 2);
+        currentUser.set(user);
+
+        orderService.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+        orderService.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+
+        PersistedCheckoutState persistedState = new PersistedCheckoutState(
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders WHERE user_id = ?", Long.class, user.getId()),
+                jdbcTemplate.queryForObject("SELECT COUNT(*) FROM payments", Long.class),
+                jdbcTemplate.queryForObject("SELECT stock FROM products WHERE id = ?", Long.class, product.getId()),
+                jdbcTemplate.queryForObject(
+                        "SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE product_id = ?",
+                        Long.class,
+                        product.getId()));
+
+        assertThat(persistedState)
+                .as("an unchanged cart retry must not create a second durable checkout reservation")
+                .isEqualTo(new PersistedCheckoutState(1L, 1L, 8L, 2L));
+    }
+
+    @Test
     void placeOrderFromCart_shouldAllowOnlyOneCheckoutWhenTwoUsersCompeteForLastStock() throws Exception {
         Category category = categoryRepository.saveAndFlush(new Category("Phones", "phones", "Phones category"));
         Product product = productRepository.saveAndFlush(new Product(
@@ -251,6 +284,13 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
         private static CheckoutAttempt failed(Throwable failure) {
             return new CheckoutAttempt(false, failure);
         }
+    }
+
+    private record PersistedCheckoutState(
+            long orderCount,
+            long paymentCount,
+            long productStock,
+            long orderedQuantity) {
     }
 
     private boolean isExpectedConcurrencyFailure(Throwable failure) {
