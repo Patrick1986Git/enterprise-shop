@@ -57,6 +57,19 @@ Before writing or modifying code:
 4. Avoid touching unrelated files, tests, or modules.
 5. If the requested change touches security, persistence, transactions, migrations, or public API behavior, treat it as high risk and validate carefully.
 
+### Capability preflight and handoff
+
+Before work that depends on the execution environment or a hosted service, check only the capabilities required by that task. Depending on scope, these may include Java 21, Docker/Testcontainers, hosted GitHub read access, authenticated push/PR access, or Actions artifact download access. Do not preflight unrelated capabilities.
+
+If a required capability is unavailable:
+
+- Treat the limitation as an environment issue, not a repository defect. Do not weaken Java or Maven Enforcer requirements, tests, PostgreSQL/Testcontainers coverage, security, CI/CodeQL, or coverage governance to accommodate it. In particular, do not replace PostgreSQL with H2, disable Testcontainers tests, or reduce hosted CI expectations because Docker is unavailable.
+- After establishing the failure, do not retry the same unavailable operation or introduce/request a PAT unless the repository owner explicitly authorizes it. Use native authenticated GitHub capabilities when present.
+- Continue every independent task step and legitimate non-Docker check that can be completed safely. If publication alone is blocked, preserve the correct working-tree diff. Hand off required PostgreSQL execution to hosted CI when Docker is unavailable.
+- Never invent hosted check results, artifact contents, review/comment state, or publication status. Distinguish completed work, checks actually run, capability-blocked checks, hosted evidence still required, and publication still required.
+
+When a missing external capability prevents completion, end the report with a compact `HANDOFF_REQUIRED` section. State the missing capability, exact failed operation, completed work, repository/worktree state, exact remaining operation, and evidence or identifiers the authenticated reviewer needs. Include applicable identifiers such as repository, branch, base and local commit SHAs, PR number, workflow run/ID, artifact ID, and expected diff scope. Omit this section when no external-capability handoff is required.
+
 ---
 
 ## Package organization rules
@@ -496,12 +509,12 @@ Only change real source files and relevant top-level project files when necessar
 
 ## Commands for verification
 
-Use Maven directly unless the repository explicitly provides and uses a wrapper.
+Use the checked-in Maven Wrapper. The complete verification lifecycle requires Java 21 and Docker for PostgreSQL Testcontainers tests.
 
 Typical verification commands include:
 
 ```bash
-mvn test
-mvn clean test
-mvn -q -DskipTests compile
-mvn clean package
+./mvnw test
+./mvnw -B clean verify
+./mvnw -q -DskipTests compile
+```
