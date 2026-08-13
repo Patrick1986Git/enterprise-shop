@@ -31,7 +31,7 @@ public class CartCheckoutFacadeImpl implements CartCheckoutFacade {
     }
 
     @Override
-    public void clearCartAfterSuccessfulPayment(UUID userId) {
-        cartService.clearCartForUser(userId);
+    public void reconcileCartAfterSuccessfulPayment(UUID userId, List<CartCheckoutItem> checkedOutItems) {
+        cartService.reconcileCartForUser(userId, checkedOutItems);
     }
 }

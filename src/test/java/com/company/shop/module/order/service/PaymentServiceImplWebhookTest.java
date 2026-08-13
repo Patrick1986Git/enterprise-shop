@@ -3,6 +3,8 @@ package com.company.shop.module.order.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -386,7 +388,7 @@ class PaymentServiceImplWebhookTest {
             verify(orderRepository, never()).save(order);
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             verify(paymentRepository, never()).save(any(Payment.class));
-            verify(cartCheckoutFacade, never()).clearCartAfterSuccessfulPayment(order.getUserId());
+            verify(cartCheckoutFacade, never()).reconcileCartAfterSuccessfulPayment(eq(order.getUserId()), anyList());
         }
     }
 
@@ -416,7 +418,7 @@ class PaymentServiceImplWebhookTest {
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
             verify(paymentRepository, never()).save(payment);
-            verify(cartCheckoutFacade, never()).clearCartAfterSuccessfulPayment(order.getUserId());
+            verify(cartCheckoutFacade, never()).reconcileCartAfterSuccessfulPayment(eq(order.getUserId()), anyList());
         }
     }
 
@@ -565,7 +567,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
             assertWebhookMetricCount("processed", 1);
-            verify(cartCheckoutFacade).clearCartAfterSuccessfulPayment(order.getUserId());
+            verify(cartCheckoutFacade).reconcileCartAfterSuccessfulPayment(eq(order.getUserId()), anyList());
         }
     }
 
@@ -666,12 +668,12 @@ class PaymentServiceImplWebhookTest {
             assertWebhookMetricCount("failed", 1);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
-            verify(cartCheckoutFacade, never()).clearCartAfterSuccessfulPayment(order.getUserId());
+            verify(cartCheckoutFacade, never()).reconcileCartAfterSuccessfulPayment(eq(order.getUserId()), anyList());
         }
     }
 
     @Test
-    void handleWebhook_shouldMarkOrderPaidPaymentCompletedAndClearCartWhenSucceededEventValid() {
+    void handleWebhook_shouldMarkOrderPaidPaymentCompletedAndReconcileCartWhenSucceededEventValid() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
         Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
@@ -696,7 +698,7 @@ class PaymentServiceImplWebhookTest {
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
             verify(orderRepository).save(order);
             verify(paymentRepository).save(payment);
-            verify(cartCheckoutFacade).clearCartAfterSuccessfulPayment(order.getUserId());
+            verify(cartCheckoutFacade).reconcileCartAfterSuccessfulPayment(eq(order.getUserId()), anyList());
         }
     }
 

@@ -113,6 +113,19 @@ public class Cart extends AuditableEntity {
 		items.clear();
 	}
 
+	public void reconcileItem(UUID productId, int checkedOutQuantity) {
+		items.stream()
+				.filter(item -> item.getProduct().getId().equals(productId))
+				.findFirst()
+				.ifPresent(item -> {
+					if (item.getQuantity() <= checkedOutQuantity) {
+						items.remove(item);
+					} else {
+						item.updateQuantity(item.getQuantity() - checkedOutQuantity);
+					}
+				});
+	}
+
 	/**
 	 * Calculates the total monetary value of all items in the cart.
 	 *

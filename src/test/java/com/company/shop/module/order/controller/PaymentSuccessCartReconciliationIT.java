@@ -109,7 +109,7 @@ class PaymentSuccessCartReconciliationIT extends PostgresContainerSupport {
                 .as("product B must be durable before the delayed payment-success webhook")
                 .isEqualTo(1);
 
-        Event event = succeededEvent(savedOrder);
+        Event event = succeededEvent(savedOrder, "evt_payment_reconciliation", "pi_payment_reconciliation");
         try (var webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_placeholder"))
                     .thenReturn(event);
@@ -131,21 +131,67 @@ class PaymentSuccessCartReconciliationIT extends PostgresContainerSupport {
                 .isEqualTo(1);
     }
 
-    private Event succeededEvent(Order order) {
+    @Test
+    void handleStripeWebhook_shouldReconcileCheckedOutQuantityOnlyOnceWhenSucceededEventIsRepeated() throws Exception {
+        Category category = categoryRepository.saveAndFlush(new Category(
+                "Payment quantity reconciliation", "payment-quantity-reconciliation", "Quantity diagnostic"));
+        Product product = productRepository.saveAndFlush(new Product(
+                "Quantity product", "quantity-product", "QUANTITY-A", "Quantity reconciliation product",
+                BigDecimal.valueOf(20), 10, category));
+        User user = userRepository.saveAndFlush(new User(
+                "payment-quantity-reconciliation@example.com", "encoded", "Payment", "Quantity"));
+
+        Cart cart = new Cart(user);
+        cart.addItem(product, 3);
+        cartRepository.saveAndFlush(cart);
+
+        Order order = new Order(user.getId(), user.getEmail(), "payment-quantity-checkout");
+        order.addItem(new OrderItem(product.getId(), product.getName(), product.getSku(), 1, product.getPrice()));
+        Order savedOrder = orderRepository.saveAndFlush(order);
+        Payment payment = new Payment(savedOrder, "STRIPE", savedOrder.getTotalAmount());
+        payment.attachProviderPayment("pi_payment_quantity", "cs_payment_quantity");
+        paymentRepository.saveAndFlush(payment);
+
+        Event event = succeededEvent(savedOrder, "evt_payment_quantity", "pi_payment_quantity");
+        try (var webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_placeholder"))
+                    .thenReturn(event);
+
+            performWebhook();
+            performWebhook();
+        }
+
+        assertThat(orderRepository.findById(savedOrder.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(paymentRepository.findByOrderId(savedOrder.getId()).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.COMPLETED);
+        assertThat(persistedCartQuantity(user, product))
+                .as("a duplicate success webhook must not subtract the paid quantity twice")
+                .isEqualTo(2);
+    }
+
+    private Event succeededEvent(Order order, String eventId, String paymentIntentId) {
         Event event = mock(Event.class);
         EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
         PaymentIntent paymentIntent = mock(PaymentIntent.class);
 
-        when(event.getId()).thenReturn("evt_payment_reconciliation");
+        when(event.getId()).thenReturn(eventId);
         when(event.getType()).thenReturn("payment_intent.succeeded");
         when(event.getDataObjectDeserializer()).thenReturn(deserializer);
         when(deserializer.getObject()).thenReturn(java.util.Optional.of(paymentIntent));
         when(paymentIntent.getMetadata()).thenReturn(Map.of("orderId", order.getId().toString()));
-        when(paymentIntent.getId()).thenReturn("pi_payment_reconciliation");
+        when(paymentIntent.getId()).thenReturn(paymentIntentId);
         when(paymentIntent.getAmountReceived()).thenReturn(order.getTotalAmount().movePointRight(2).longValueExact());
         when(paymentIntent.getCurrency()).thenReturn("pln");
 
         return event;
+    }
+
+    private void performWebhook() throws Exception {
+        mockMvc.perform(post(WEBHOOK_URL)
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Stripe-Signature", "sig")
+                .content("payload"))
+                .andExpect(status().isOk());
     }
 
     private int persistedCartQuantity(User user, Product product) {
