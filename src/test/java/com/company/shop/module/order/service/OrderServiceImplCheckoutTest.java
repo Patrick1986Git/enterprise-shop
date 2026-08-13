@@ -131,7 +131,7 @@ class OrderServiceImplCheckoutTest {
 			when(orderMapper.toDto(any(Order.class))).thenReturn(
 					new OrderResponseDTO(savedOrderId, OrderStatus.NEW, BigDecimal.valueOf(35), createdAt, null));
 
-			OrderResponseDTO result = service.placeOrderFromCart(request);
+			OrderResponseDTO result = service.placeOrderFromCart("checkout-key", request);
 
 			assertThat(result.id()).isEqualTo(savedOrderId);
 			assertThat(result.status()).isEqualTo(OrderStatus.NEW);
@@ -201,7 +201,7 @@ class OrderServiceImplCheckoutTest {
 			when(orderMapper.toDto(any(Order.class))).thenReturn(new OrderResponseDTO(savedOrderId, OrderStatus.NEW,
 					BigDecimal.valueOf(90), LocalDateTime.now(), null));
 
-			OrderResponseDTO result = service.placeOrderFromCart(request);
+			OrderResponseDTO result = service.placeOrderFromCart("checkout-key", request);
 
 			assertThat(result.totalAmount()).isEqualByComparingTo("90.00");
 			assertThat(result.paymentInfo()).isEqualTo(paymentIntent);
@@ -243,7 +243,7 @@ class OrderServiceImplCheckoutTest {
 			when(orderMapper.toDto(any(Order.class))).thenReturn(new OrderResponseDTO(savedOrderId, OrderStatus.NEW,
 					BigDecimal.valueOf(40), LocalDateTime.now(), null));
 
-			OrderResponseDTO result = service.placeOrderFromCart(request);
+			OrderResponseDTO result = service.placeOrderFromCart("checkout-key", request);
 
 			assertThat(result.totalAmount()).isEqualByComparingTo("40.00");
 						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
@@ -266,16 +266,19 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = new CartCheckoutSnapshot(UUID.randomUUID(), java.util.List.of());
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 
-			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
+			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(EmptyCartCheckoutException.class);
 			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "attempt").counter().count()).isEqualTo(1);
 			assertThat(meterRegistry.get("shop.checkout.total").tag("result", "failure").counter().count()).isEqualTo(1);
 
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
-			verifyNoInteractions(productCatalogFacade, discountCodeRepository, orderRepository, paymentRepository,
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(productCatalogFacade, discountCodeRepository, paymentRepository,
 					paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 
@@ -286,17 +289,20 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = cart(user, missingProduct, 1);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(missingProduct.getId(), 1))
 					.thenThrow(new ProductNotFoundException(missingProduct.getId()));
 
-			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
+			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(ProductNotFoundException.class);
 
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(missingProduct.getId(), 1);
-			verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(discountCodeRepository, paymentRepository, paymentService,
 					orderMapper, orderOutboxEventRecorder);
 		}
 
@@ -307,17 +313,20 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = cart(user, product, 2);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenThrow(new ProductInsufficientStockException(product.getName(), 2, 1));
 
-			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null)))
+			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null)))
 					.isInstanceOf(OrderInsufficientStockException.class);
 
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
-						verifyNoInteractions(discountCodeRepository, orderRepository, paymentRepository, paymentService,
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(discountCodeRepository, paymentRepository, paymentService,
 					orderMapper, orderOutboxEventRecorder);
 		}
 
@@ -328,19 +337,22 @@ class OrderServiceImplCheckoutTest {
 			CartCheckoutSnapshot cart = cart(user, product, 1);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 						when(productCatalogFacade.reserveProductForCheckout(product.getId(), 1))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getSku(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("SAVE20")).thenReturn(Optional.empty());
 
-			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO(" SAVE20 ", null)))
+			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(" SAVE20 ", null)))
 					.isInstanceOf(DiscountCodeInvalidException.class).hasMessageContaining("SAVE20");
 
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 1);
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE20");
-			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
 		}
 
 		@Test
@@ -352,21 +364,34 @@ class OrderServiceImplCheckoutTest {
 			when(discountCode.canBeUsed()).thenReturn(false);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
 			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
 						when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
 					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getSku(), product.getPrice()));
 			when(discountCodeRepository.findByCodeIgnoreCase("EXPIRED10"))
 					.thenReturn(Optional.of(discountCode));
 
-			assertThatThrownBy(() -> service.placeOrderFromCart(new OrderCheckoutRequestDTO("EXPIRED10", null)))
+			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO("EXPIRED10", null)))
 					.isInstanceOf(DiscountCodeInvalidException.class).hasMessageContaining("EXPIRED10");
 
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartCheckoutFacade).getCartForCheckout(user.getId());
 			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
 			verify(discountCodeRepository).findByCodeIgnoreCase("EXPIRED10");
-			verifyNoInteractions(orderRepository, paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
+			verifyIdempotencyPreamble(user);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
 		}
+	}
+
+	private void stubUnseenCheckoutKey(User user) {
+		when(orderRepository.findByUserIdAndCheckoutIdempotencyKey(user.getId(), "checkout-key"))
+				.thenReturn(Optional.empty());
+	}
+
+	private void verifyIdempotencyPreamble(User user) {
+		verify(orderRepository).acquireCheckoutIdempotencyLock(user.getId(), "checkout-key");
+		verify(orderRepository).findByUserIdAndCheckoutIdempotencyKey(user.getId(), "checkout-key");
 	}
 
 	@Nested
@@ -392,7 +417,7 @@ class OrderServiceImplCheckoutTest {
 			when(orderMapper.toDto(any(Order.class))).thenReturn(new OrderResponseDTO(UUID.randomUUID(),
 					OrderStatus.NEW, BigDecimal.valueOf(17), LocalDateTime.now(), null));
 
-			service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+			service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null));
 
 			verify(productCatalogFacade).reserveProductForCheckout(firstProduct.getId(), 1);
 			verify(productCatalogFacade).reserveProductForCheckout(secondProduct.getId(), 2);
@@ -418,7 +443,7 @@ class OrderServiceImplCheckoutTest {
 			when(orderMapper.toDto(any(Order.class))).thenReturn(new OrderResponseDTO(UUID.randomUUID(),
 					OrderStatus.NEW, BigDecimal.valueOf(24), LocalDateTime.now(), null));
 
-			service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+			service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null));
 
 						ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());
@@ -460,7 +485,7 @@ class OrderServiceImplCheckoutTest {
 			when(orderMapper.toDto(any(Order.class))).thenReturn(new OrderResponseDTO(UUID.randomUUID(),
 					OrderStatus.NEW, BigDecimal.valueOf(25), LocalDateTime.now(), null));
 
-			service.placeOrderFromCart(new OrderCheckoutRequestDTO(null, null));
+			service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null));
 
 			ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
 			verify(orderRepository).save(orderCaptor.capture());

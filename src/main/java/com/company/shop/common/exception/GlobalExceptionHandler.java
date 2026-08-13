@@ -24,6 +24,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import com.company.shop.common.i18n.MessageService;
@@ -174,6 +175,15 @@ public class GlobalExceptionHandler {
 				messageService.getMessage("error.validation.failed"),
 				"VALIDATION_FAILED",
 				errors);
+
+		return new ResponseEntity<>(apiError, HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(HandlerMethodValidationException.class)
+	public ResponseEntity<ApiError> handleHandlerMethodValidationException(HandlerMethodValidationException ex) {
+		ApiError apiError = new ApiError(HttpStatus.BAD_REQUEST.value(),
+				messageService.getMessage("error.validation.failed"),
+				"VALIDATION_FAILED");
 
 		return new ResponseEntity<>(apiError, HttpStatus.BAD_REQUEST);
 	}

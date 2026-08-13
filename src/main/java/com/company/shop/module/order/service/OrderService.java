@@ -40,7 +40,7 @@ public interface OrderService {
      * @return a summary of the newly created order.
      * @throws com.company.shop.common.exception.BusinessException when checkout constraints are violated.
      */
-    OrderResponseDTO placeOrderFromCart(OrderCheckoutRequestDTO request);
+    OrderResponseDTO placeOrderFromCart(String idempotencyKey, OrderCheckoutRequestDTO request);
 
     /**
      * Retrieves full details of a specific order.

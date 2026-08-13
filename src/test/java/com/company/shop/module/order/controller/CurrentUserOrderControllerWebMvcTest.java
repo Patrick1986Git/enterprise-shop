@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.support.WebMvcSliceTestConfig;
 import com.company.shop.module.order.dto.OrderResponseDTO;
+import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
 import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.security.UserDetailsServiceImpl;
@@ -145,5 +148,51 @@ class CurrentUserOrderControllerWebMvcTest {
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(0);
         assertThat(pageable.getPageSize()).isEqualTo(10);
+    }
+
+    @Test
+    void checkout_shouldForwardIdempotencyKeyForAuthenticatedUser() throws Exception {
+        OrderResponseDTO response = new OrderResponseDTO(
+                UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                OrderStatus.NEW,
+                new BigDecimal("59.90"),
+                LocalDateTime.of(2026, 2, 1, 8, 15),
+                new PaymentIntentResponseDTO("secret", "public-key"));
+        when(orderService.placeOrderFromCart(anyString(), any())).thenReturn(response);
+
+        mockMvc.perform(post(CURRENT_USER_ORDERS_URL + "/checkout")
+                        .with(user("john").roles("USER"))
+                        .with(csrf())
+                        .header("Idempotency-Key", "checkout-key")
+                        .contentType(APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isCreated());
+
+        verify(orderService).placeOrderFromCart("checkout-key", new com.company.shop.module.order.dto.OrderCheckoutRequestDTO(null, null));
+    }
+
+    @Test
+    void checkout_shouldRejectMissingIdempotencyKey() throws Exception {
+        mockMvc.perform(post(CURRENT_USER_ORDERS_URL + "/checkout")
+                        .with(user("john").roles("USER"))
+                        .with(csrf())
+                        .contentType(APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void checkout_shouldRejectBlankIdempotencyKey() throws Exception {
+        mockMvc.perform(post(CURRENT_USER_ORDERS_URL + "/checkout")
+                        .with(user("john").roles("USER"))
+                        .with(csrf())
+                        .header("Idempotency-Key", "   ")
+                        .contentType(APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(orderService);
     }
 }

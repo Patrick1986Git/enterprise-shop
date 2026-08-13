@@ -222,9 +222,10 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(options("/api/v1/products")
                         .header("Origin", "http://localhost:3000")
                         .header("Access-Control-Request-Method", "GET")
-                        .header("Access-Control-Request-Headers", "X-Request-Id"))
+                        .header("Access-Control-Request-Headers", "X-Request-Id, Idempotency-Key"))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-Request-Id")));
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-Request-Id")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Idempotency-Key")));
     }
 
     @Test
@@ -301,6 +302,7 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(post("/api/v1/me/orders/checkout")
                         .with(user("user").roles("USER"))
                         .with(csrf())
+                        .header("Idempotency-Key", "checkout-key")
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isCreated());
