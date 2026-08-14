@@ -69,10 +69,11 @@ class PaymentServiceImplCreateIntentTest {
 	}
 
 	@Test
-	void createPaymentIntent_shouldReturnExistingClientSecretWhenProviderPaymentAlreadyAttached() {
+	void createPaymentIntent_shouldReuseExistingProviderIntentAfterRetryablePaymentFailure() {
 		Order order = orderWithTotal(BigDecimal.valueOf(39.98));
 		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
 		payment.attachProviderPayment("pi_existing", "cs_existing");
+		payment.markAsFailed();
 
 		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
