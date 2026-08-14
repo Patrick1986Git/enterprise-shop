@@ -6,11 +6,13 @@
 
 package com.company.shop.module.cart.service;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.cart.dto.AddToCartRequestDTO;
 import com.company.shop.module.cart.dto.CartResponseDTO;
 import com.company.shop.module.cart.dto.UpdateCartItemRequestDTO;
@@ -71,7 +73,7 @@ public class CartServiceImpl implements CartService {
     public CartResponseDTO addToCart(AddToCartRequestDTO request) {
 
         User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCart(user);
+        Cart cart = getOrCreateCartForUpdate(user);
 
         Product product = productRepository.findById(request.productId())
                 .orElseThrow(() -> new ProductNotFoundException(request.productId()));
@@ -97,7 +99,7 @@ public class CartServiceImpl implements CartService {
     public CartResponseDTO updateItemQuantity(UUID productId, UpdateCartItemRequestDTO request) {
 
         User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCart(user);
+        Cart cart = getOrCreateCartForUpdate(user);
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
@@ -115,7 +117,7 @@ public class CartServiceImpl implements CartService {
     public CartResponseDTO removeItem(UUID productId) {
 
         User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCart(user);
+        Cart cart = getOrCreateCartForUpdate(user);
 
         cart.removeItem(productId);
 
@@ -132,9 +134,18 @@ public class CartServiceImpl implements CartService {
     @Override
     public void clearCartForUser(UUID userId) {
 
-        cartRepository.findByUserId(userId)
+        cartRepository.findByUserIdWithItemsForUpdate(userId)
                 .ifPresent(cart -> {
                     cart.clear();
+                    cartRepository.save(cart);
+                });
+    }
+
+    @Override
+    public void reconcileCartForUser(UUID userId, List<CartCheckoutItem> checkedOutItems) {
+        cartRepository.findByUserIdWithItemsForUpdate(userId)
+                .ifPresent(cart -> {
+                    checkedOutItems.forEach(item -> cart.reconcileItem(item.productId(), item.quantity()));
                     cartRepository.save(cart);
                 });
     }
@@ -156,6 +167,11 @@ public class CartServiceImpl implements CartService {
     private Cart getOrCreateCart(User user) {
 
         return cartRepository.findByUserIdWithItems(user.getId())
+                .orElseGet(() -> cartRepository.save(new Cart(user)));
+    }
+
+    private Cart getOrCreateCartForUpdate(User user) {
+        return cartRepository.findByUserIdWithItemsForUpdate(user.getId())
                 .orElseGet(() -> cartRepository.save(new Cart(user)));
     }
 }

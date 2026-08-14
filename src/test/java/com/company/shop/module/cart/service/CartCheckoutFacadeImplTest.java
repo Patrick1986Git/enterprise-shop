@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.cart.api.internal.CartCheckoutSnapshot;
+import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.cart.entity.Cart;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.entity.Product;
@@ -69,13 +71,14 @@ class CartCheckoutFacadeImplTest {
 
 
     @Test
-    void clearCartAfterSuccessfulPayment_shouldDelegateToCartService() {
+    void reconcileCartAfterSuccessfulPayment_shouldDelegateToCartService() {
         CartCheckoutFacadeImpl facade = new CartCheckoutFacadeImpl(cartService);
         UUID userId = UUID.randomUUID();
+        List<CartCheckoutItem> checkedOutItems = List.of(new CartCheckoutItem(UUID.randomUUID(), 2));
 
-        facade.clearCartAfterSuccessfulPayment(userId);
+        facade.reconcileCartAfterSuccessfulPayment(userId, checkedOutItems);
 
-        verify(cartService).clearCartForUser(userId);
+        verify(cartService).reconcileCartForUser(userId, checkedOutItems);
     }
 
     private Product product(String suffix, BigDecimal price, int stock) throws Exception {

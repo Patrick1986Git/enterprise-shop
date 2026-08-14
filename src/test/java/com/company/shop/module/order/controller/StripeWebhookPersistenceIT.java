@@ -15,6 +15,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,7 +103,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(updatedOrder.getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(updatedPayment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertStripeWebhookEventPersisted("evt_persistence_success", SUCCEEDED_EVENT_TYPE);
-		verify(cartCheckoutFacade).clearCartAfterSuccessfulPayment(seededOrder.user().getId());
+        verify(cartCheckoutFacade).reconcileCartAfterSuccessfulPayment(seededOrder.user().getId(), List.of());
 	}
 
 	@Test
@@ -189,7 +190,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(orderAfterRequests.getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(paymentAfterRequests.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
 		assertStripeWebhookEventPersisted("evt_persistence_duplicate", SUCCEEDED_EVENT_TYPE);
-		verify(cartCheckoutFacade, times(1)).clearCartAfterSuccessfulPayment(seededOrder.user().getId());
+        verify(cartCheckoutFacade, times(1)).reconcileCartAfterSuccessfulPayment(seededOrder.user().getId(), List.of());
 	}
 
 	@Test

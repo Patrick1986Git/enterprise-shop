@@ -8,11 +8,13 @@
 
 package com.company.shop.module.cart.service;
 
+import java.util.List;
 import java.util.UUID;
 
 import com.company.shop.module.cart.dto.AddToCartRequestDTO;
 import com.company.shop.module.cart.dto.CartResponseDTO;
 import com.company.shop.module.cart.dto.UpdateCartItemRequestDTO;
+import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.cart.entity.Cart;
 
 /**
@@ -73,6 +75,8 @@ public interface CartService {
      * @param userId unique identifier of cart owner.
      */
     void clearCartForUser(UUID userId);
+
+    void reconcileCartForUser(UUID userId, List<CartCheckoutItem> checkedOutItems);
 
     /**
      * Retrieves the raw {@link Cart} entity associated with a specific user.

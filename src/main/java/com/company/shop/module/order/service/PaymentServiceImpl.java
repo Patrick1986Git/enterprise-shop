@@ -22,6 +22,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 
 import com.company.shop.common.exception.BusinessException;
 import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
+import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderStatus;
@@ -239,7 +240,10 @@ public class PaymentServiceImpl implements PaymentService {
                 order.getId(), payment.getId(), order.getUserId(), intent.getId(), order.getStatus(),
                 payment.getStatus());
 
-        cartCheckoutFacade.clearCartAfterSuccessfulPayment(order.getUserId());
+        var checkedOutItems = order.getItems().stream()
+                .map(item -> new CartCheckoutItem(item.getProductId(), item.getQuantity()))
+                .toList();
+        cartCheckoutFacade.reconcileCartAfterSuccessfulPayment(order.getUserId(), checkedOutItems);
         return true;
     }
 
