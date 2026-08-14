@@ -148,24 +148,47 @@ class TerminalPaymentCancellationInventoryIT extends PostgresContainerSupport {
                     assertThat(event.getStripeEventId()).isEqualTo(EVENT_ID);
                     assertThat(event.getEventType()).isEqualTo(EVENT_TYPE);
                 });
-        assertThat(orderAfterCancellation.getStatus()).isEqualTo(OrderStatus.NEW);
-        assertThat(paymentAfterCancellation.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(orderAfterCancellation.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(paymentAfterCancellation.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(persistedStock(product))
                 .as("a terminally canceled checkout must release its durable inventory reservation")
+                .isEqualTo(5);
+
+        deliverCanceledWebhook(canceledEvent);
+        deliverCanceledWebhook(canceledEvent(order, "evt_terminal_inventory_cancellation_distinct"));
+
+        assertThat(persistedStock(product))
+                .as("duplicate and distinct cancellation events must not restore an already-canceled order twice")
                 .isEqualTo(5);
     }
 
     private Event canceledEvent(Order order) {
+        return canceledEvent(order, EVENT_ID);
+    }
+
+    private Event canceledEvent(Order order, String eventId) {
         Event event = mock(Event.class);
         EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
         PaymentIntent paymentIntent = mock(PaymentIntent.class);
-        when(event.getId()).thenReturn(EVENT_ID);
+        when(event.getId()).thenReturn(eventId);
         when(event.getType()).thenReturn(EVENT_TYPE);
         when(event.getDataObjectDeserializer()).thenReturn(deserializer);
         when(deserializer.getObject()).thenReturn(Optional.of(paymentIntent));
         when(paymentIntent.getId()).thenReturn(PAYMENT_INTENT_ID);
         when(paymentIntent.getMetadata()).thenReturn(Map.of("orderId", order.getId().toString()));
         return event;
+    }
+
+    private void deliverCanceledWebhook(Event event) throws Exception {
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_placeholder"))
+                    .thenReturn(event);
+            mockMvc.perform(post(WEBHOOK_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("Stripe-Signature", "sig")
+                    .content("payload"))
+                    .andExpect(status().isOk());
+        }
     }
 
     private int persistedStock(Product product) {

@@ -171,6 +171,17 @@ public class Product extends SoftDeleteEntity {
 		this.stock -= quantityToDecrease;
 	}
 
+	public void restoreReservedStock(int quantityToRestore) {
+		if (quantityToRestore <= 0) {
+			throw new ProductStockInvalidException("restore", quantityToRestore);
+		}
+		try {
+			this.stock = Math.addExact(this.stock, quantityToRestore);
+		} catch (ArithmeticException ex) {
+			throw new ProductStockInvalidException("Restored product stock exceeds the supported range");
+		}
+	}
+
 	private void validateRequiredText(String value, String message) {
 		if (value == null || value.isBlank()) {
 			throw new ProductDataInvalidException(message);

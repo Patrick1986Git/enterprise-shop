@@ -56,6 +56,8 @@ class PaymentServiceImplCreateIntentTest {
 
 	@Mock
 	private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
+	@Mock
+	private com.company.shop.module.product.api.internal.ProductCatalogFacade productCatalogFacade;
 
 	private SimpleMeterRegistry meterRegistry;
 	private PaymentServiceImpl service;
@@ -64,7 +66,7 @@ class PaymentServiceImplCreateIntentTest {
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
 		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartCheckoutFacade, stripeWebhookEventRegistrar,
-				meterRegistry);
+				productCatalogFacade, meterRegistry);
 		setField(service, "publicKey", "pk_test_123");
 	}
 
@@ -98,6 +100,17 @@ class PaymentServiceImplCreateIntentTest {
 
 		verify(paymentRepository).findByOrderIdForUpdate(order.getId());
 		verify(paymentRepository, never()).save(any(Payment.class));
+	}
+
+	@Test
+	void createPaymentIntent_shouldRejectCanceledOrderBeforeReusingProviderIntent() {
+		Order order = orderWithTotal(BigDecimal.valueOf(20));
+		order.cancelIfNew();
+
+		assertThatThrownBy(() -> service.createPaymentIntent(order))
+				.isInstanceOf(com.company.shop.module.order.exception.OrderPaymentNotAllowedException.class)
+				.hasMessageContaining(order.getId().toString());
+		verify(paymentRepository, never()).findByOrderIdForUpdate(order.getId());
 	}
 
 	@Test

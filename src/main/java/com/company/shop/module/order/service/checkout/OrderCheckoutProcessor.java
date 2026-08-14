@@ -8,6 +8,11 @@
 
 package com.company.shop.module.order.service.checkout;
 
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -124,22 +129,29 @@ public class OrderCheckoutProcessor {
 
         Order order = new Order(currentUser.id(), currentUser.email(), idempotencyKey);
 
-        for (CartCheckoutItem cartItem : cart.items()) {
+        Map<UUID, CheckoutProduct> reservedProducts = new HashMap<>();
+        for (CartCheckoutItem cartItem : cart.items().stream()
+                .sorted(Comparator.comparing(CartCheckoutItem::productId))
+                .toList()) {
             try {
                 CheckoutProduct product = productCatalogFacade.reserveProductForCheckout(
                         cartItem.productId(),
                         cartItem.quantity());
-
-                order.addItem(new OrderItem(
-                        product.id(),
-                        product.name(),
-                        product.sku(),
-                        cartItem.quantity(),
-                        product.price()));
+                reservedProducts.put(cartItem.productId(), product);
             } catch (com.company.shop.module.product.exception.ProductInsufficientStockException ex) {
                 throw new OrderInsufficientStockException(cartItem.productId(), cartItem.quantity(),
                         ex.getAvailableQuantity());
             }
+        }
+
+        for (CartCheckoutItem cartItem : cart.items()) {
+            CheckoutProduct product = reservedProducts.get(cartItem.productId());
+            order.addItem(new OrderItem(
+                    product.id(),
+                    product.name(),
+                    product.sku(),
+                    cartItem.quantity(),
+                    product.price()));
         }
 
         if (request.discountCode() != null && !request.discountCode().isBlank()) {
