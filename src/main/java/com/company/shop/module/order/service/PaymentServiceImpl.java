@@ -8,9 +8,7 @@
 
 package com.company.shop.module.order.service;
 
-import java.math.BigDecimal;
 import java.util.Map;
-import java.util.Locale;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -21,8 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import io.micrometer.core.instrument.MeterRegistry;
 
 import com.company.shop.common.exception.BusinessException;
-import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
-import com.company.shop.module.cart.api.internal.CartCheckoutItem;
 import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderStatus;
@@ -38,8 +34,6 @@ import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
-import com.company.shop.module.product.api.internal.ProductCatalogFacade;
-import com.company.shop.module.product.api.internal.ReservedInventoryItem;
 import com.stripe.Stripe;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.RequestOptions;
@@ -72,20 +66,18 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final OrderRepository orderRepo;
     private final PaymentRepository paymentRepo;
-    private final CartCheckoutFacade cartCheckoutFacade;
     private final StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
-    private final ProductCatalogFacade productCatalogFacade;
     private final MeterRegistry meterRegistry;
+    private final PaymentTerminalTransitionService terminalTransitions;
 
-    public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo, CartCheckoutFacade cartCheckoutFacade,
-            StripeWebhookEventRegistrar stripeWebhookEventRegistrar, ProductCatalogFacade productCatalogFacade,
-            MeterRegistry meterRegistry) {
+    public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo,
+            StripeWebhookEventRegistrar stripeWebhookEventRegistrar,
+            MeterRegistry meterRegistry, PaymentTerminalTransitionService terminalTransitions) {
         this.orderRepo = orderRepo;
         this.paymentRepo = paymentRepo;
-        this.cartCheckoutFacade = cartCheckoutFacade;
         this.stripeWebhookEventRegistrar = stripeWebhookEventRegistrar;
-        this.productCatalogFacade = productCatalogFacade;
         this.meterRegistry = meterRegistry;
+        this.terminalTransitions = terminalTransitions;
     }
 
     @PostConstruct
@@ -232,34 +224,7 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
-        Order order = findOrderByWebhookMetadata(intent);
-        if (order.getStatus() != OrderStatus.NEW) {
-            log.info("Ignoring payment success for terminal order orderId={} orderStatus={}",
-                    order.getId(), order.getStatus());
-            return false;
-        }
-
-        validatePaymentIntentMatchesOrder(intent, order);
-
-        Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
-                .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
-
-        validateProviderPaymentId(intent, payment);
-
-        order.markAsPaid();
-        orderRepo.save(order);
-
-        payment.markAsCompleted();
-        paymentRepo.save(payment);
-        log.info("Order marked as paid orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
-                order.getId(), payment.getId(), order.getUserId(), intent.getId(), order.getStatus(),
-                payment.getStatus());
-
-        var checkedOutItems = order.getItems().stream()
-                .map(item -> new CartCheckoutItem(item.getProductId(), item.getQuantity()))
-                .toList();
-        cartCheckoutFacade.reconcileCartAfterSuccessfulPayment(order.getUserId(), checkedOutItems);
-        return true;
+        return terminalTransitions.convergeSucceeded(orderIdFromMetadata(intent), intent);
     }
 
     private boolean handlePaymentIntentFailed(com.stripe.model.Event event) {
@@ -299,28 +264,7 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
-        Order order = findOrderByWebhookMetadata(intent);
-        Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
-                .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
-        validateAttachedProviderPaymentId(intent, payment);
-
-        if (order.getStatus() != OrderStatus.NEW) {
-            log.info("Ignoring payment cancellation for terminal order orderId={} orderStatus={}",
-                    order.getId(), order.getStatus());
-            return false;
-        }
-
-        var reservedItems = order.getItems().stream()
-                .map(item -> new ReservedInventoryItem(item.getProductId(), item.getQuantity()))
-                .toList();
-        productCatalogFacade.releaseReservedInventory(reservedItems);
-        order.cancelIfNew();
-        payment.markAsFailed();
-        orderRepo.save(order);
-        paymentRepo.save(payment);
-        log.info("Order canceled and inventory released orderId={} paymentId={} providerPaymentId={} itemsCount={}",
-                order.getId(), payment.getId(), intent.getId(), reservedItems.size());
-        return true;
+        return terminalTransitions.convergeCanceled(orderIdFromMetadata(intent), intent) > 0;
     }
 
     private Order findOrderByWebhookMetadata(PaymentIntent intent) {
@@ -336,6 +280,13 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new OrderNotFoundException(parsedOrderId));
     }
 
+    private UUID orderIdFromMetadata(PaymentIntent intent) {
+        Map<String, String> metadata = intent.getMetadata();
+        String orderId = metadata != null ? metadata.get("orderId") : null;
+        if (orderId == null || orderId.isBlank()) throw new WebhookSignatureInvalidException("Missing orderId metadata in Stripe webhook.");
+        return UUID.fromString(orderId);
+    }
+
     private void validateProviderPaymentId(PaymentIntent intent, Payment payment) {
         if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
                 && !payment.getProviderPaymentId().equals(intent.getId())) {
@@ -346,42 +297,4 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    private void validateAttachedProviderPaymentId(PaymentIntent intent, Payment payment) {
-        if (payment.getProviderPaymentId() == null || payment.getProviderPaymentId().isBlank()
-                || !payment.getProviderPaymentId().equals(intent.getId())) {
-            log.warn("Canceled Stripe providerPaymentId mismatch orderId={} paymentId={} storedProviderPaymentId={} incomingProviderPaymentId={}",
-                    payment.getOrder().getId(), payment.getId(), payment.getProviderPaymentId(), intent.getId());
-            throw new WebhookSignatureInvalidException(
-                    "Canceled webhook paymentIntent id does not match an attached provider payment id.");
-        }
-    }
-
-    private void validatePaymentIntentMatchesOrder(PaymentIntent intent, Order order) {
-        Long amount = intent.getAmountReceived() != null && intent.getAmountReceived() > 0
-                ? intent.getAmountReceived()
-                : intent.getAmount();
-
-        if (amount == null) {
-            throw new WebhookSignatureInvalidException("Stripe webhook does not contain payment amount.");
-        }
-
-        long expectedAmount = order.getTotalAmount().movePointRight(2).longValue();
-        if (amount.longValue() != expectedAmount) {
-            log.warn("Stripe amount mismatch orderId={} providerPaymentId={} expectedAmount={} actualAmount={}",
-                    order.getId(), intent.getId(), expectedAmount, amount);
-            throw new WebhookSignatureInvalidException(
-                    "Stripe webhook payment amount does not match order total.");
-        }
-
-        String currency = intent.getCurrency();
-        if (currency == null || !"pln".equals(currency.toLowerCase(Locale.ROOT))) {
-            log.warn("Stripe currency mismatch orderId={} providerPaymentId={} expectedCurrency=pln actualCurrency={}",
-                    order.getId(), intent.getId(), currency);
-            throw new WebhookSignatureInvalidException("Stripe webhook currency does not match expected currency.");
-        }
-
-        if (order.getTotalAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new WebhookProcessingException("Order amount is invalid for payment reconciliation.");
-        }
-    }
 }

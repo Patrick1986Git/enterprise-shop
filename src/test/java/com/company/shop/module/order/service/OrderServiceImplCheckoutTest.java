@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +61,7 @@ import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplCheckoutTest {
+	private static final Instant CHECKOUT_NOW = Instant.parse("2026-08-15T12:00:00Z");
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -95,7 +98,10 @@ class OrderServiceImplCheckoutTest {
 		meterRegistry = new SimpleMeterRegistry();
 		OrderCheckoutProcessor checkoutProcessor = new OrderCheckoutProcessor(orderRepository, productCatalogFacade,
 				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
-				paymentService, orderOutboxEventRecorder, meterRegistry);
+				paymentService, orderOutboxEventRecorder, meterRegistry,
+				new com.company.shop.module.order.expiration.ReservationExpirationProperties(),
+				mock(com.company.shop.module.order.expiration.ReservationExpirationWorkRepository.class),
+				java.time.Clock.fixed(CHECKOUT_NOW, ZoneOffset.UTC));
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}
@@ -156,6 +162,7 @@ class OrderServiceImplCheckoutTest {
 			assertThat(savedOrder.getItems().get(1).getQuantity()).isEqualTo(3);
 			assertThat(savedOrder.getItems().get(1).getPrice()).isEqualByComparingTo("5.00");
 			assertThat(savedOrder.getTotalAmount()).isEqualByComparingTo("35.00");
+			assertThat(savedOrder.getReservationExpiresAt()).isEqualTo(CHECKOUT_NOW.plusSeconds(30 * 60));
 
 			ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
 			verify(paymentRepository).save(paymentCaptor.capture());

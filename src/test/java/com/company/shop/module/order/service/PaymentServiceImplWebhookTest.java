@@ -70,8 +70,9 @@ class PaymentServiceImplWebhookTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new PaymentServiceImpl(orderRepository, paymentRepository, cartCheckoutFacade, stripeWebhookEventRegistrar,
-                productCatalogFacade, meterRegistry);
+        service = new PaymentServiceImpl(orderRepository, paymentRepository, stripeWebhookEventRegistrar,
+                meterRegistry, new PaymentTerminalTransitionService(orderRepository,
+                        paymentRepository, cartCheckoutFacade, productCatalogFacade));
         setField(service, "webhookSecret", "whsec_test_123");
     }
 

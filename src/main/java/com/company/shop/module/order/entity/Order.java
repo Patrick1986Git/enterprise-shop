@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 
 import org.hibernate.annotations.SQLRestriction;
 
@@ -57,6 +58,9 @@ public class Order extends SoftDeleteEntity {
     @Column(name = "checkout_idempotency_key", length = 128)
     private String checkoutIdempotencyKey;
 
+    @Column(name = "reservation_expires_at")
+    private Instant reservationExpiresAt;
+
     /**
      * Current business status of the order.
      */
@@ -99,6 +103,11 @@ public class Order extends SoftDeleteEntity {
         this.checkoutIdempotencyKey = checkoutIdempotencyKey;
         this.status = OrderStatus.NEW;
         this.totalAmount = BigDecimal.ZERO;
+    }
+
+    public Order(UUID userId, String userEmail, String checkoutIdempotencyKey, Instant reservationExpiresAt) {
+        this(userId, userEmail, checkoutIdempotencyKey);
+        this.reservationExpiresAt = reservationExpiresAt;
     }
 
     /**
@@ -185,6 +194,10 @@ public class Order extends SoftDeleteEntity {
 
     public String getCheckoutIdempotencyKey() {
         return checkoutIdempotencyKey;
+    }
+
+    public Instant getReservationExpiresAt() {
+        return reservationExpiresAt;
     }
 
     public OrderStatus getStatus() {

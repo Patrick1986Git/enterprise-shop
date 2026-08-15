@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Clock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,9 @@ import com.company.shop.module.order.exception.DiscountCodeInvalidException;
 import com.company.shop.module.order.exception.EmptyCartCheckoutException;
 import com.company.shop.module.order.exception.OrderInsufficientStockException;
 import com.company.shop.module.order.mapper.OrderMapper;
+import com.company.shop.module.order.expiration.ReservationExpirationProperties;
+import com.company.shop.module.order.expiration.ReservationExpirationWork;
+import com.company.shop.module.order.expiration.ReservationExpirationWorkRepository;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
 import com.company.shop.module.order.repository.OrderRepository;
@@ -61,6 +65,9 @@ public class OrderCheckoutProcessor {
     private final PaymentService paymentService;
     private final OrderOutboxEventRecorder orderOutboxEventRecorder;
     private final MeterRegistry meterRegistry;
+    private final ReservationExpirationProperties expirationProperties;
+    private final ReservationExpirationWorkRepository expirationWorkRepository;
+    private final Clock clock;
 
     public OrderCheckoutProcessor(OrderRepository orderRepo,
             ProductCatalogFacade productCatalogFacade,
@@ -71,7 +78,8 @@ public class OrderCheckoutProcessor {
             OrderMapper mapper,
             PaymentService paymentService,
             OrderOutboxEventRecorder orderOutboxEventRecorder,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry, ReservationExpirationProperties expirationProperties,
+            ReservationExpirationWorkRepository expirationWorkRepository, Clock clock) {
         this.orderRepo = orderRepo;
         this.productCatalogFacade = productCatalogFacade;
         this.paymentRepo = paymentRepo;
@@ -82,6 +90,9 @@ public class OrderCheckoutProcessor {
         this.paymentService = paymentService;
         this.orderOutboxEventRecorder = orderOutboxEventRecorder;
         this.meterRegistry = meterRegistry;
+        this.expirationProperties = expirationProperties;
+        this.expirationWorkRepository = expirationWorkRepository;
+        this.clock = clock;
     }
 
     @Transactional
@@ -127,7 +138,8 @@ public class OrderCheckoutProcessor {
             throw new EmptyCartCheckoutException();
         }
 
-        Order order = new Order(currentUser.id(), currentUser.email(), idempotencyKey);
+        Order order = new Order(currentUser.id(), currentUser.email(), idempotencyKey,
+                clock.instant().plus(expirationProperties.duration()));
 
         Map<UUID, CheckoutProduct> reservedProducts = new HashMap<>();
         for (CartCheckoutItem cartItem : cart.items().stream()
@@ -168,6 +180,7 @@ public class OrderCheckoutProcessor {
 
         Order savedOrder = orderRepo.save(order);
         paymentRepo.save(new Payment(savedOrder, "STRIPE", savedOrder.getTotalAmount()));
+        expirationWorkRepository.save(new ReservationExpirationWork(savedOrder.getId(), savedOrder.getReservationExpiresAt()));
         orderOutboxEventRecorder.recordOrderPlaced(savedOrder);
 
         return savedOrder;
