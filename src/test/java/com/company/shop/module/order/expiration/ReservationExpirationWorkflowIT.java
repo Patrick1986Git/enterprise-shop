@@ -36,6 +36,7 @@ import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.product.service.ProductService;
 import com.company.shop.module.user.api.internal.CurrentUserFacade;
 import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.module.user.entity.User;
@@ -53,6 +54,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Autowired ReservationExpirationProcessor processor;
     @Autowired CategoryRepository categoryRepository;
     @Autowired ProductRepository productRepository;
+    @Autowired ProductService productService;
     @Autowired UserRepository userRepository;
     @Autowired CartRepository cartRepository;
     @Autowired OrderRepository orderRepository;
@@ -86,15 +88,20 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Test
     void expiration_shouldRestoreSoftDeletedProductWithoutMakingItCatalogVisible() throws Exception {
         Fixture fixture = checkout("soft-delete-expiration", 2);
-        fixture.product().delete();
-        productRepository.saveAndFlush(fixture.product());
+        assertThat(stock(fixture.product().getId())).isZero();
+        productService.delete(fixture.product().getId());
         assertThat(productRepository.findById(fixture.product().getId())).isEmpty();
+        assertThat(stock(fixture.product().getId())).isZero();
         makeDue(fixture.order());
         PaymentIntent canceled = providerIntent("pi_soft-delete-expiration", "canceled");
         when(stripeGateway.retrieve("pi_soft-delete-expiration")).thenReturn(canceled);
 
         processor.processDueBatch();
 
+        assertThat(orderRepository.findById(fixture.order().getId()).orElseThrow().getStatus())
+                .isEqualTo(OrderStatus.CANCELLED);
+        assertThat(paymentRepository.findByOrderId(fixture.order().getId()).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.FAILED);
         assertThat(stock(fixture.product().getId())).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject("SELECT deleted FROM products WHERE id = ?", Boolean.class,
                 fixture.product().getId())).isTrue();
