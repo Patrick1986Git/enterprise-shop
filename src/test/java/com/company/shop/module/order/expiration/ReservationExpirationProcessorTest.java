@@ -110,6 +110,48 @@ class ReservationExpirationProcessorTest {
     }
 
     @Test
+    void processDueBatch_shouldRetryWithoutMutationWhenProviderIdentityMismatches() throws Exception {
+        when(stripeGateway.retrieve("pi_expire")).thenReturn(intent);
+        when(intent.getId()).thenReturn("pi_different");
+
+        processor.processDueBatch();
+
+        verify(claimService).retry(eq(claim), contains("identity mismatch"));
+        verifyNoInteractions(transitions);
+        verify(claimService, never()).complete(claim);
+    }
+
+    @Test
+    void processDueBatch_shouldRetryWithoutMutationWhenCancellationIsNotTerminal() throws Exception {
+        when(stripeGateway.retrieve("pi_expire")).thenReturn(intent);
+        when(intent.getStatus()).thenReturn("requires_confirmation");
+        PaymentIntent stillPending = mock(PaymentIntent.class);
+        when(stillPending.getStatus()).thenReturn("requires_confirmation");
+        when(stripeGateway.cancelAsAbandoned(intent, "order-reservation-expiration-" + ORDER_ID))
+                .thenReturn(stillPending);
+
+        processor.processDueBatch();
+
+        verify(claimService).retry(eq(claim), contains("cancellation was not terminal"));
+        verifyNoInteractions(transitions);
+        verify(claimService, never()).complete(claim);
+    }
+
+    @Test
+    void processDueBatch_shouldConvergeAlreadyCanceledIntentWithoutCancelingAgain() throws Exception {
+        when(stripeGateway.retrieve("pi_expire")).thenReturn(intent);
+        when(intent.getStatus()).thenReturn("canceled");
+        when(transitions.convergeCanceled(ORDER_ID, intent)).thenReturn(2);
+
+        processor.processDueBatch();
+
+        verify(transitions).convergeCanceled(ORDER_ID, intent);
+        verify(stripeGateway, never()).cancelAsAbandoned(any(), any());
+        verify(claimService).complete(claim);
+        verify(claimService, never()).retry(any(), any());
+    }
+
+    @Test
     void processDueBatch_shouldRetryWhenPersistedProviderIdIsMissing() {
         Payment missing = new Payment(orderRepository.findById(ORDER_ID).orElseThrow(), "STRIPE", BigDecimal.TEN);
         when(paymentRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.of(missing));
