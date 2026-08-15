@@ -158,6 +158,14 @@ public class Order extends SoftDeleteEntity {
         this.status = OrderStatus.PAID;
     }
 
+    public boolean cancelIfNew() {
+        if (this.status != OrderStatus.NEW) {
+            return false;
+        }
+        this.status = OrderStatus.CANCELLED;
+        return true;
+    }
+
     /**
      * Internally recalculates the sum of all item prices multiplied by their quantities.
      */

@@ -3,11 +3,13 @@ package com.company.shop.module.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.company.shop.common.model.BaseEntity;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.api.internal.CheckoutProduct;
+import com.company.shop.module.product.api.internal.ReservedInventoryItem;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductInsufficientStockException;
 import com.company.shop.module.product.exception.ProductNotFoundException;
@@ -66,6 +69,26 @@ class ProductCatalogFacadeImplTest {
 
         assertThatThrownBy(() -> facade.reserveProductForCheckout(productId, 2))
                 .isInstanceOf(ProductInsufficientStockException.class);
+    }
+
+    @Test
+    void releaseReservedInventory_shouldLockInProductIdOrderAndRestoreExactQuantities() {
+        UUID lowerId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID higherId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        Product lower = product(lowerId, 3, BigDecimal.TEN);
+        Product higher = product(higherId, 7, BigDecimal.TEN);
+        when(productRepository.findByIdWithLock(lowerId)).thenReturn(Optional.of(lower));
+        when(productRepository.findByIdWithLock(higherId)).thenReturn(Optional.of(higher));
+
+        new ProductCatalogFacadeImpl(productRepository).releaseReservedInventory(List.of(
+                new ReservedInventoryItem(higherId, 3),
+                new ReservedInventoryItem(lowerId, 2)));
+
+        assertThat(lower.getStock()).isEqualTo(5);
+        assertThat(higher.getStock()).isEqualTo(10);
+        var ordered = inOrder(productRepository);
+        ordered.verify(productRepository).findByIdWithLock(lowerId);
+        ordered.verify(productRepository).findByIdWithLock(higherId);
     }
 
     private Product product(UUID id, int stock, BigDecimal price) {

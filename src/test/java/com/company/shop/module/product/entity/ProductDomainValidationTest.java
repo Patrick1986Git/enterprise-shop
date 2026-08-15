@@ -10,9 +10,22 @@ import org.junit.jupiter.api.Test;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.exception.ProductDataInvalidException;
 import com.company.shop.module.product.exception.ProductReviewRatingInvalidException;
+import com.company.shop.module.product.exception.ProductStockInvalidException;
 import com.company.shop.module.user.entity.User;
 
 class ProductDomainValidationTest {
+
+    @Test
+    void restoreReservedStock_shouldAddExactQuantityAndRejectInvalidInput() {
+        Category category = new Category("Name", "slug", "desc");
+        Product product = new Product("Prod", "prod", "SKU", "desc", BigDecimal.ONE, 3, category);
+
+        product.restoreReservedStock(2);
+
+        assertThat(product.getStock()).isEqualTo(5);
+        assertThatThrownBy(() -> product.restoreReservedStock(0))
+                .isInstanceOf(ProductStockInvalidException.class);
+    }
 
     @Test
     void updateRatings_shouldDefaultToZeroWhenAverageIsNull() {

@@ -61,6 +61,8 @@ class PaymentServiceImplWebhookTest {
 
     @Mock
     private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
+    @Mock
+    private com.company.shop.module.product.api.internal.ProductCatalogFacade productCatalogFacade;
 
     private PaymentServiceImpl service;
     private SimpleMeterRegistry meterRegistry;
@@ -69,7 +71,7 @@ class PaymentServiceImplWebhookTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         service = new PaymentServiceImpl(orderRepository, paymentRepository, cartCheckoutFacade, stripeWebhookEventRegistrar,
-                meterRegistry);
+                productCatalogFacade, meterRegistry);
         setField(service, "webhookSecret", "whsec_test_123");
     }
 
@@ -702,6 +704,143 @@ class PaymentServiceImplWebhookTest {
         }
     }
 
+    @Test
+    void handleWebhook_shouldCancelOrderFailPaymentAndReleaseInventoryOnceAcrossDistinctEvents() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        payment.attachProviderPayment("pi_cancel", "cs_cancel");
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+        Event firstEvent = canceledEvent("evt_cancel_first",
+                paymentIntentWithMetadataAndId(order.getId(), "pi_cancel"));
+        Event secondEvent = canceledEvent("evt_cancel_second",
+                paymentIntentWithMetadataAndId(order.getId(), "pi_cancel"));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("first", "sig", "whsec_test_123"))
+                    .thenReturn(firstEvent);
+            webhookStatic.when(() -> Webhook.constructEvent("second", "sig", "whsec_test_123"))
+                    .thenReturn(secondEvent);
+
+            service.handleWebhook("first", "sig");
+            service.handleWebhook("second", "sig");
+        }
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(productCatalogFacade).releaseReservedInventory(anyList());
+        verify(orderRepository).save(order);
+        verify(paymentRepository).save(payment);
+        verifyNoInteractions(cartCheckoutFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldIgnoreCancellationAfterPaymentSuccessWithoutReleasingInventory() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        order.markAsPaid();
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        payment.attachProviderPayment("pi_paid", "cs_paid");
+        payment.markAsCompleted();
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+        Event event = canceledEvent("evt_cancel_after_paid",
+                paymentIntentWithMetadataAndId(order.getId(), "pi_paid"));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+            service.handleWebhook("payload", "sig");
+        }
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        verifyNoInteractions(productCatalogFacade, cartCheckoutFacade);
+        verify(orderRepository, never()).save(order);
+        verify(paymentRepository, never()).save(payment);
+    }
+
+    @Test
+    void handleWebhook_shouldIgnoreSuccessAfterCancellationWithoutCompletingPaymentOrReconcilingCart() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        order.cancelIfNew();
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        payment.attachProviderPayment("pi_canceled", "cs_canceled");
+        payment.markAsFailed();
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        Event event = succeededEvent("evt_success_after_cancel",
+                paymentIntentWithMetadata(order.getId()));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+            service.handleWebhook("payload", "sig");
+        }
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(paymentRepository, never()).findByOrderIdForUpdate(order.getId());
+        verifyNoInteractions(productCatalogFacade, cartCheckoutFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldRejectCancellationWhenProviderPaymentIdDoesNotMatch() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        payment.attachProviderPayment("pi_attached", "cs_attached");
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+        Event event = canceledEvent("evt_cancel_mismatch",
+                paymentIntentWithMetadataAndId(order.getId(), "pi_other"));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(com.company.shop.module.order.exception.WebhookSignatureInvalidException.class);
+        }
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        verifyNoInteractions(productCatalogFacade, cartCheckoutFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldRejectCancellationWithoutOrderMetadataBeforeMutation() {
+        givenWebhookEventRegistrationSucceeds();
+        Event event = canceledEvent("evt_cancel_missing_order", paymentIntentWithEmptyMetadata());
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class);
+        }
+
+        verifyNoInteractions(orderRepository, paymentRepository, productCatalogFacade, cartCheckoutFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldFailCancellationWhenPaymentRecordIsMissingBeforeInventoryRelease() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.empty());
+        Event event = canceledEvent("evt_cancel_payment_missing",
+                paymentIntentWithMetadata(order.getId()));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookProcessingException.class);
+        }
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+        verifyNoInteractions(productCatalogFacade, cartCheckoutFacade);
+    }
+
     private void givenWebhookEventRegistrationSucceeds() {
         when(stripeWebhookEventRegistrar.register(any(), any())).thenReturn(true);
     }
@@ -738,6 +877,14 @@ class PaymentServiceImplWebhookTest {
 
     private Event failedEvent(String eventId, PaymentIntent intent) {
         Event event = event(eventId, "payment_intent.payment_failed");
+        EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+        when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+        when(deserializer.getObject()).thenReturn(Optional.ofNullable(intent));
+        return event;
+    }
+
+    private Event canceledEvent(String eventId, PaymentIntent intent) {
+        Event event = event(eventId, "payment_intent.canceled");
         EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
         when(event.getDataObjectDeserializer()).thenReturn(deserializer);
         when(deserializer.getObject()).thenReturn(Optional.ofNullable(intent));

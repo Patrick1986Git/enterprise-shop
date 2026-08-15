@@ -70,7 +70,8 @@ class PaymentServiceImplConfigurationTest {
 
     private PaymentServiceImpl serviceWithConfiguration(String apiKey, String webhookSecret, String publicKey) {
         PaymentServiceImpl service = new PaymentServiceImpl(mock(OrderRepository.class), mock(PaymentRepository.class),
-                mock(CartCheckoutFacade.class), mock(StripeWebhookEventRegistrar.class), new SimpleMeterRegistry());
+                mock(CartCheckoutFacade.class), mock(StripeWebhookEventRegistrar.class),
+                mock(com.company.shop.module.product.api.internal.ProductCatalogFacade.class), new SimpleMeterRegistry());
         setField(service, "secretKey", apiKey);
         setField(service, "webhookSecret", webhookSecret);
         setField(service, "publicKey", publicKey);
