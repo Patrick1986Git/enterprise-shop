@@ -102,9 +102,11 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     }
 
     private Fixture checkout(String suffix, int stock) throws Exception {
-        String unique = suffix + "-" + UUID.randomUUID();
+        String token = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String unique = suffix + "-" + token;
+        String sku = "expiry-" + token;
         Category category = categoryRepository.saveAndFlush(new Category(unique, unique, "expiration test"));
-        Product product = productRepository.saveAndFlush(new Product(unique, unique, unique, "expiration test",
+        Product product = productRepository.saveAndFlush(new Product(unique, unique, sku, "expiration test",
                 BigDecimal.TEN, stock, category));
         User user = userRepository.saveAndFlush(new User(unique + "@example.com", "encoded", "Expiry", "User"));
         Cart cart = new Cart(user); cart.addItem(product, stock); cartRepository.saveAndFlush(cart);

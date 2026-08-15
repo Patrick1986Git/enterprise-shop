@@ -4,12 +4,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
+@SpringBootTest(
+        classes = ReservationExpirationMigrationIT.TestConfig.class,
+        webEnvironment = SpringBootTest.WebEnvironment.NONE
+)
+@ActiveProfiles("test")
 class ReservationExpirationMigrationIT extends PostgresContainerSupport {
-    @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void migration_shouldCreateNullableDeadlineAndDurableWorkIndexes() {
@@ -32,5 +45,14 @@ class ReservationExpirationMigrationIT extends PostgresContainerSupport {
                 JOIN orders o ON o.id = w.order_id WHERE o.reservation_expires_at IS NULL
                 """, Integer.class);
         assertThat(count).isZero();
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ImportAutoConfiguration({
+            DataSourceAutoConfiguration.class,
+            JdbcTemplateAutoConfiguration.class,
+            FlywayAutoConfiguration.class
+    })
+    static class TestConfig {
     }
 }
