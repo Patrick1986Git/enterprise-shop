@@ -65,8 +65,8 @@ class PaymentServiceImplCreateIntentTest {
 	@BeforeEach
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
-		service = new PaymentServiceImpl(orderRepository, paymentRepository, cartCheckoutFacade, stripeWebhookEventRegistrar,
-				productCatalogFacade, meterRegistry);
+		service = new PaymentServiceImpl(orderRepository, paymentRepository, stripeWebhookEventRegistrar,
+				meterRegistry, mock(PaymentTerminalTransitionService.class));
 		setField(service, "publicKey", "pk_test_123");
 	}
 

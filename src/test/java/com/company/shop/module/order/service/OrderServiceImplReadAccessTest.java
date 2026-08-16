@@ -84,7 +84,10 @@ class OrderServiceImplReadAccessTest {
 		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 		OrderCheckoutProcessor checkoutProcessor = new OrderCheckoutProcessor(orderRepository, productCatalogFacade,
 				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
-				paymentService, orderOutboxEventRecorder, meterRegistry);
+				paymentService, orderOutboxEventRecorder, meterRegistry,
+				new com.company.shop.module.order.expiration.ReservationExpirationProperties(),
+				org.mockito.Mockito.mock(com.company.shop.module.order.expiration.ReservationExpirationWorkRepository.class),
+				java.time.Clock.systemUTC());
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}

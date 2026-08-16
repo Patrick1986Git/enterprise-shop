@@ -15,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.company.shop.common.model.BaseEntity;
@@ -31,12 +32,14 @@ class ProductCatalogFacadeImplTest {
 
     @Mock
     private ProductRepository productRepository;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void reserveProductForCheckout_shouldReserveAndReturnSnapshotWhenStockIsSufficient() {
         UUID productId = UUID.randomUUID();
         Product product = product(productId, 5, BigDecimal.valueOf(19.99));
-        ProductCatalogFacadeImpl facade = new ProductCatalogFacadeImpl(productRepository);
+        ProductCatalogFacadeImpl facade = new ProductCatalogFacadeImpl(productRepository, jdbcTemplate);
 
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
 
@@ -52,7 +55,7 @@ class ProductCatalogFacadeImplTest {
     @Test
     void reserveProductForCheckout_shouldThrowWhenProductDoesNotExist() {
         UUID productId = UUID.randomUUID();
-        ProductCatalogFacadeImpl facade = new ProductCatalogFacadeImpl(productRepository);
+        ProductCatalogFacadeImpl facade = new ProductCatalogFacadeImpl(productRepository, jdbcTemplate);
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> facade.reserveProductForCheckout(productId, 1))
@@ -63,7 +66,7 @@ class ProductCatalogFacadeImplTest {
     void reserveProductForCheckout_shouldThrowWhenStockIsInsufficient() {
         UUID productId = UUID.randomUUID();
         Product product = product(productId, 1, BigDecimal.valueOf(19.99));
-        ProductCatalogFacadeImpl facade = new ProductCatalogFacadeImpl(productRepository);
+        ProductCatalogFacadeImpl facade = new ProductCatalogFacadeImpl(productRepository, jdbcTemplate);
 
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
 
@@ -80,7 +83,7 @@ class ProductCatalogFacadeImplTest {
         when(productRepository.findByIdWithLock(lowerId)).thenReturn(Optional.of(lower));
         when(productRepository.findByIdWithLock(higherId)).thenReturn(Optional.of(higher));
 
-        new ProductCatalogFacadeImpl(productRepository).releaseReservedInventory(List.of(
+        new ProductCatalogFacadeImpl(productRepository, jdbcTemplate).releaseReservedInventory(List.of(
                 new ReservedInventoryItem(higherId, 3),
                 new ReservedInventoryItem(lowerId, 2)));
 

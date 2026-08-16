@@ -56,6 +56,16 @@ stripe:
   webhook-secret: ${STRIPE_WEBHOOK_SECRET}
   public-key: ${STRIPE_PUBLIC_KEY}
 
+app:
+  order:
+    reservation-expiration:
+      duration: ${ORDER_RESERVATION_DURATION:PT30M}
+      fixed-delay: ${ORDER_RESERVATION_FIXED_DELAY:PT10S}
+      retry-delay: ${ORDER_RESERVATION_RETRY_DELAY:PT1M}
+      claim-lease: ${ORDER_RESERVATION_CLAIM_LEASE:PT5M}
+      batch-size: ${ORDER_RESERVATION_BATCH_SIZE:25}
+      max-attempts: ${ORDER_RESERVATION_MAX_ATTEMPTS:10}
+
 # #############################################################################
 # OBSERVABILITY: PRODUCTION LOGGING
 # Minimalistic logging to focus on system health and critical failures.
