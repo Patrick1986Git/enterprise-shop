@@ -8,7 +8,8 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.time.Duration;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -60,16 +61,21 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Autowired OrderRepository orderRepository;
     @Autowired PaymentRepository paymentRepository;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired ReservationExpirationProperties expirationProperties;
+    @Autowired Clock clock;
     @MockitoBean CurrentUserFacade currentUserFacade;
     @MockitoBean StripePaymentIntentGateway stripeGateway;
 
     @Test
     void expiration_shouldCancelProviderThenRestoreInventoryAndRejectSameCheckoutKey() throws Exception {
+        Instant beforeCheckout = clock.instant();
         Fixture fixture = checkout("expiration", 1);
+        Instant afterCheckout = clock.instant();
         Order order = fixture.order();
         assertThat(order.getReservationExpiresAt()).isNotNull();
-        assertThat(Duration.between(order.getCreatedAt().atZone(java.time.ZoneOffset.UTC).toInstant(),
-                order.getReservationExpiresAt())).isBetween(Duration.ofMinutes(29), Duration.ofMinutes(31));
+        assertThat(order.getReservationExpiresAt()).isBetween(
+                beforeCheckout.plus(expirationProperties.duration()),
+                afterCheckout.plus(expirationProperties.duration()));
         assertThat(stock(fixture.product().getId())).isZero();
 
         makeDue(order);
