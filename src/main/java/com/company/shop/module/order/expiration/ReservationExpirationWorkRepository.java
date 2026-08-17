@@ -29,4 +29,9 @@ public interface ReservationExpirationWorkRepository extends JpaRepository<Reser
     @Query(value = "SELECT * FROM reservation_expiration_work WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<ReservationExpirationWork> findByIdForUpdate(@Param("id") UUID id);
     Optional<ReservationExpirationWork> findByOrderId(UUID orderId);
+
+    long countByStatus(ReservationExpirationWorkStatus status);
+
+    @Query("SELECT MIN(w.failedAt) FROM ReservationExpirationWork w WHERE w.status = 'FAILED'")
+    Optional<Instant> findOldestFailedAt();
 }

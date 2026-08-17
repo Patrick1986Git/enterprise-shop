@@ -31,8 +31,11 @@ public class ReservationExpirationClaimService {
         repository.findByIdForUpdate(claim.workId()).ifPresent(work -> work.complete(claim.claimToken(), clock.instant()));
     }
     @Transactional
-    public void retry(ReservationExpirationClaim claim, String error) {
-        repository.findByIdForUpdate(claim.workId()).ifPresent(work -> work.retry(claim.claimToken(),
-                clock.instant().plus(properties.retryDelay()), error, properties.maxAttempts()));
+    public boolean retry(ReservationExpirationClaim claim, String error) {
+        Instant now = clock.instant();
+        return repository.findByIdForUpdate(claim.workId()).map(work -> {
+            work.retry(claim.claimToken(), now, now.plus(properties.retryDelay()), error, properties.maxAttempts());
+            return work.getStatus() == ReservationExpirationWorkStatus.FAILED;
+        }).orElse(false);
     }
 }

@@ -43,6 +43,7 @@ import com.company.shop.module.order.controller.CurrentUserOrderController;
 import com.company.shop.module.order.controller.OrderController;
 import com.company.shop.module.order.controller.StripeWebhookController;
 import com.company.shop.module.order.service.OrderService;
+import com.company.shop.module.order.expiration.ReservationExpirationRecoveryService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.product.controller.AdminProductController;
 import com.company.shop.module.product.controller.ProductController;
@@ -106,6 +107,8 @@ class SecurityConfigWebMvcTest {
     private UserService userService;
     @MockitoBean
     private OrderService orderService;
+    @MockitoBean
+    private ReservationExpirationRecoveryService reservationExpirationRecoveryService;
     @MockitoBean
     private PaymentService paymentService;
 

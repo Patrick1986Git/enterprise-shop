@@ -70,7 +70,13 @@ public class ReservationExpirationProcessor {
             log.warn("Reservation expiration reconciliation failed orderId={} workId={}", claim.orderId(), claim.workId(), ex);
         }
     }
-    private void retry(ReservationExpirationClaim claim, String error, String outcome) { claimService.retry(claim, error); metric(outcome); metric("retry"); }
+    private void retry(ReservationExpirationClaim claim, String error, String outcome) {
+        boolean exhausted = claimService.retry(claim, error);
+        metric(outcome);
+        metric(exhausted ? "retry_exhausted" : "retry");
+        if (exhausted) log.error("Reservation expiration retry budget exhausted orderId={} workId={}",
+                claim.orderId(), claim.workId());
+    }
     private void metric(String outcome) { meters.counter("shop.order.reservation_expiration.total", "outcome", outcome).increment(); }
     private void released(int units) { meters.counter("shop.order.reservation_expiration.inventory_units_released").increment(units); }
 }
