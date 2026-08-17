@@ -37,6 +37,7 @@ class ReservationExpirationProcessorTest {
     @Mock OrderRepository orderRepository;
     @Mock PaymentTerminalTransitionService transitions;
     private ReservationExpirationProcessor processor;
+    private SimpleMeterRegistry meters;
     private ReservationExpirationClaim claim;
     private PaymentIntent intent;
 
@@ -44,8 +45,9 @@ class ReservationExpirationProcessorTest {
     void setUp() {
         var properties = new ReservationExpirationProperties();
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        meters = new SimpleMeterRegistry();
         processor = new ReservationExpirationProcessor(workRepository, claimService, properties, stripeGateway,
-                paymentRepository, orderRepository, transitions, new SimpleMeterRegistry(), clock);
+                paymentRepository, orderRepository, transitions, meters, clock);
         claim = new ReservationExpirationClaim(WORK_ID, ORDER_ID, UUID.randomUUID());
         when(workRepository.findDueCandidateIds(NOW, 25)).thenReturn(List.of(WORK_ID));
         when(claimService.claim(WORK_ID)).thenReturn(Optional.of(claim));
@@ -106,6 +108,20 @@ class ReservationExpirationProcessorTest {
         processor.processDueBatch();
 
         verify(claimService).retry(eq(claim), contains("provider unavailable"));
+        verifyNoInteractions(transitions);
+    }
+
+    @Test
+    void processDueBatch_shouldExposeRetryExhaustionWhenClaimServicePersistsFailedState() throws Exception {
+        when(stripeGateway.retrieve("pi_expire")).thenThrow(new IllegalStateException("provider unavailable"));
+        when(claimService.retry(eq(claim), contains("provider unavailable"))).thenReturn(true);
+
+        processor.processDueBatch();
+
+        assertThat(meters.counter("shop.order.reservation_expiration.total", "outcome", "retry_exhausted").count())
+                .isEqualTo(1);
+        assertThat(meters.counter("shop.order.reservation_expiration.total", "outcome", "retry").count())
+                .isZero();
         verifyNoInteractions(transitions);
     }
 

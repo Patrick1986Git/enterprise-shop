@@ -35,7 +35,7 @@ class ReservationExpirationRecoveryServiceTest {
         meters = new SimpleMeterRegistry();
         service = new ReservationExpirationRecoveryService(workRepository, orderRepository, currentUserProvider,
                 meters, Clock.fixed(NOW, ZoneOffset.UTC));
-        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
+        lenient().when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
     }
 
     @Test
@@ -81,6 +81,54 @@ class ReservationExpirationRecoveryServiceTest {
         assertThatThrownBy(() -> service.recover(WORK_ID))
                 .isInstanceOf(ReservationExpirationRecoveryNotAllowedException.class);
         verify(orderRepository, times(1)).findByIdForUpdate(ORDER_ID);
+    }
+
+    @Test
+    void recover_shouldRejectMissingWorkWithoutLockingOrder() {
+        when(workRepository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.recover(WORK_ID))
+                .isInstanceOf(ReservationExpirationWorkNotFoundException.class)
+                .hasMessageContaining(WORK_ID.toString());
+
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void recover_shouldRejectWorkThatIsNotFailedWithoutLockingOrder() {
+        ReservationExpirationWork work = new ReservationExpirationWork(ORDER_ID, NOW);
+        when(workRepository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.of(work));
+
+        assertThatThrownBy(() -> service.recover(WORK_ID))
+                .isInstanceOf(ReservationExpirationRecoveryNotAllowedException.class);
+
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void recover_shouldRejectMissingAdminIdentityWithoutChangingFailedWork() {
+        ReservationExpirationWork work = failedWork();
+        when(workRepository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.of(work));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("  ");
+
+        assertThatThrownBy(() -> service.recover(WORK_ID))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("current admin email must not be blank");
+
+        assertThat(work.getStatus()).isEqualTo(ReservationExpirationWorkStatus.FAILED);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void recover_shouldCompleteFailedWorkWhenOrderNoLongerExists() {
+        ReservationExpirationWork work = failedWork();
+        when(workRepository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.of(work));
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.empty());
+
+        ReservationExpirationRecoveryResult result = service.recover(WORK_ID);
+
+        assertThat(result.status()).isEqualTo(ReservationExpirationWorkStatus.COMPLETED);
+        assertThat(result.lastRecoveredAt()).isEqualTo(NOW);
     }
 
     private ReservationExpirationWork failedWork() {
