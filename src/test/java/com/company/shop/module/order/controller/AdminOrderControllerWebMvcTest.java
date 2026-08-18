@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +38,10 @@ import com.company.shop.support.WebMvcSliceTestConfig;
 import com.company.shop.module.order.dto.OrderResponseDTO;
 import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.service.OrderService;
+import com.company.shop.module.order.expiration.ReservationExpirationRecoveryService;
+import com.company.shop.module.order.expiration.ReservationExpirationRecoveryResult;
+import com.company.shop.module.order.expiration.ReservationExpirationWorkStatus;
+import java.time.Instant;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.security.jwt.JwtTokenProvider;
@@ -54,6 +60,9 @@ class AdminOrderControllerWebMvcTest {
     private OrderService orderService;
 
     @MockitoBean
+    private ReservationExpirationRecoveryService reservationExpirationRecoveryService;
+
+    @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
@@ -70,6 +79,38 @@ class AdminOrderControllerWebMvcTest {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void recoverReservationExpirationWork_shouldRequireAdminAndReturnSafeOperationalContract() throws Exception {
+        UUID workId = UUID.fromString("00000000-0000-0000-0000-000000000061");
+        UUID orderId = UUID.fromString("00000000-0000-0000-0000-000000000062");
+        Instant recoveredAt = Instant.parse("2026-08-17T12:00:00Z");
+        when(reservationExpirationRecoveryService.recover(workId)).thenReturn(new ReservationExpirationRecoveryResult(
+                workId, orderId, ReservationExpirationWorkStatus.PENDING, 10, 1, recoveredAt));
+
+        mockMvc.perform(post(ADMIN_ORDERS_URL + "/reservation-expiration-work/{workId}/recover", workId)
+                        .with(csrf())
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workId").value(workId.toString()))
+                .andExpect(jsonPath("$.orderId").value(orderId.toString()))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.attempts").value(10))
+                .andExpect(jsonPath("$.recoveryCount").value(1))
+                .andExpect(jsonPath("$.lastError").doesNotExist());
+
+        verify(reservationExpirationRecoveryService).recover(workId);
+    }
+
+    @Test
+    void recoverReservationExpirationWork_shouldRejectNonAdmin() throws Exception {
+        mockMvc.perform(post(ADMIN_ORDERS_URL + "/reservation-expiration-work/{workId}/recover", UUID.randomUUID())
+                        .with(csrf())
+                        .with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(reservationExpirationRecoveryService);
     }
 
     @Test

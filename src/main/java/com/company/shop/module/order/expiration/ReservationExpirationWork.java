@@ -32,6 +32,14 @@ public class ReservationExpirationWork extends BaseEntity {
     private String lastError;
     @Column(name = "completed_at")
     private Instant completedAt;
+    @Column(name = "failed_at")
+    private Instant failedAt;
+    @Column(name = "recovery_count", nullable = false)
+    private int recoveryCount;
+    @Column(name = "last_recovered_at")
+    private Instant lastRecoveredAt;
+    @Column(name = "last_recovered_by", length = 255)
+    private String lastRecoveredBy;
 
     protected ReservationExpirationWork() {}
     public ReservationExpirationWork(UUID orderId, Instant dueAt) {
@@ -49,9 +57,30 @@ public class ReservationExpirationWork extends BaseEntity {
         return claimToken;
     }
     public void complete(UUID token, Instant now) { requireClaim(token); status = ReservationExpirationWorkStatus.COMPLETED; completedAt = now; clearClaim(); }
-    public void retry(UUID token, Instant next, String error, int maxAttempts) {
+    public void retry(UUID token, Instant now, Instant next, String error, int maxAttempts) {
         requireClaim(token); status = attempts >= maxAttempts ? ReservationExpirationWorkStatus.FAILED : ReservationExpirationWorkStatus.PENDING;
         nextAttemptAt = next; lastError = truncate(error); clearClaim();
+        if (status == ReservationExpirationWorkStatus.FAILED) failedAt = now;
+    }
+    public void requeueFailed(Instant now, String recoveredBy) {
+        if (status != ReservationExpirationWorkStatus.FAILED) {
+            throw new IllegalStateException("Only failed reservation expiration work can be recovered");
+        }
+        status = ReservationExpirationWorkStatus.PENDING;
+        nextAttemptAt = now;
+        recoveryCount++;
+        lastRecoveredAt = now;
+        lastRecoveredBy = recoveredBy;
+    }
+    public void completeFailedForTerminalOrder(Instant now, String recoveredBy) {
+        if (status != ReservationExpirationWorkStatus.FAILED) {
+            throw new IllegalStateException("Only failed reservation expiration work can be recovered");
+        }
+        status = ReservationExpirationWorkStatus.COMPLETED;
+        completedAt = now;
+        recoveryCount++;
+        lastRecoveredAt = now;
+        lastRecoveredBy = recoveredBy;
     }
     private void requireClaim(UUID token) { if (claimToken == null || !claimToken.equals(token)) throw new IllegalStateException("Expiration claim is no longer owned"); }
     private void clearClaim() { claimToken = null; claimUntil = null; }
@@ -64,4 +93,8 @@ public class ReservationExpirationWork extends BaseEntity {
     public Instant getClaimUntil() { return claimUntil; }
     public int getAttempts() { return attempts; }
     public String getLastError() { return lastError; }
+    public Instant getFailedAt() { return failedAt; }
+    public int getRecoveryCount() { return recoveryCount; }
+    public Instant getLastRecoveredAt() { return lastRecoveredAt; }
+    public String getLastRecoveredBy() { return lastRecoveredBy; }
 }
