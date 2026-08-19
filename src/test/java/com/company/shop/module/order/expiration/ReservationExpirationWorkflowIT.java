@@ -75,7 +75,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(stock(fixture.product().getId())).isZero();
 
         makeDue(order);
-        PaymentIntent canceled = providerIntent("pi_expiration", "canceled");
+        PaymentIntent canceled = canceledProviderIntent("pi_expiration", order);
         when(stripeGateway.retrieve("pi_expiration")).thenReturn(canceled);
         processor.processDueBatch();
 
@@ -95,7 +95,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(productRepository.findById(fixture.product().getId())).isEmpty();
         assertThat(stock(fixture.product().getId())).isZero();
         makeDue(fixture.order());
-        PaymentIntent canceled = providerIntent("pi_soft-delete-expiration", "canceled");
+        PaymentIntent canceled = canceledProviderIntent("pi_soft-delete-expiration", fixture.order());
         when(stripeGateway.retrieve("pi_soft-delete-expiration")).thenReturn(canceled);
 
         processor.processDueBatch();
@@ -128,6 +128,12 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     }
     private PaymentIntent providerIntent(String id, String status) {
         PaymentIntent intent = mock(PaymentIntent.class); when(intent.getId()).thenReturn(id); when(intent.getStatus()).thenReturn(status); return intent;
+    }
+    private PaymentIntent canceledProviderIntent(String id, Order order) {
+        PaymentIntent intent = providerIntent(id, "canceled");
+        when(intent.getAmount()).thenReturn(order.getTotalAmount().movePointRight(2).longValueExact());
+        when(intent.getCurrency()).thenReturn("pln");
+        return intent;
     }
     private void makeDue(Order order) {
         jdbcTemplate.update("UPDATE orders SET reservation_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE id = ?", order.getId());
