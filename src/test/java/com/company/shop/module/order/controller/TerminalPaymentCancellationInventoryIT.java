@@ -1,6 +1,7 @@
 package com.company.shop.module.order.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -39,6 +40,8 @@ import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.repository.StripeWebhookEventRepository;
 import com.company.shop.module.order.service.OrderService;
+import com.company.shop.module.order.service.PaymentInitializationTransactionService;
+import com.company.shop.module.order.exception.OrderPaymentNotAllowedException;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.user.api.internal.CurrentUserFacade;
@@ -91,6 +94,9 @@ class TerminalPaymentCancellationInventoryIT extends PostgresContainerSupport {
     @Autowired
     private StripeWebhookEventRepository stripeWebhookEventRepository;
 
+    @Autowired
+    private PaymentInitializationTransactionService paymentInitialization;
+
     @MockitoBean
     private CurrentUserFacade currentUserFacade;
 
@@ -142,6 +148,7 @@ class TerminalPaymentCancellationInventoryIT extends PostgresContainerSupport {
         }
 
         Order orderAfterCancellation = orderRepository.findById(order.getId()).orElseThrow();
+        paymentInitialization.attach(order.getId(), PAYMENT_INTENT_ID, "cs_terminal_inventory_cancellation");
         Payment paymentAfterCancellation = paymentRepository.findByOrderId(order.getId()).orElseThrow();
         assertThat(stripeWebhookEventRepository.findAll())
                 .anySatisfy(event -> {
@@ -150,12 +157,19 @@ class TerminalPaymentCancellationInventoryIT extends PostgresContainerSupport {
                 });
         assertThat(orderAfterCancellation.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(paymentAfterCancellation.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(paymentAfterCancellation.getProviderPaymentId()).isEqualTo(PAYMENT_INTENT_ID);
         assertThat(persistedStock(product))
                 .as("a terminally canceled checkout must release its durable inventory reservation")
                 .isEqualTo(5);
 
         deliverCanceledWebhook(canceledEvent);
         deliverCanceledWebhook(canceledEvent(order, "evt_terminal_inventory_cancellation_distinct"));
+
+        assertThatThrownBy(() -> orderService.placeOrderFromCart(
+                "terminal-cancellation-checkout", new OrderCheckoutRequestDTO(null, null)))
+                .isInstanceOf(OrderPaymentNotAllowedException.class);
+        assertThat(orderRepository.findAll()).filteredOn(candidate -> candidate.getUserId().equals(user.getId())).hasSize(1);
+        assertThat(paymentRepository.findAll()).filteredOn(candidate -> candidate.getOrder().getId().equals(order.getId())).hasSize(1);
 
         assertThat(persistedStock(product))
                 .as("duplicate and distinct cancellation events must not restore an already-canceled order twice")

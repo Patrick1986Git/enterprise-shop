@@ -33,12 +33,15 @@ public class PaymentInitializationTransactionService {
     }
     @Transactional
     public void attach(UUID orderId, String providerId, String clientSecret) {
+        Order order = orders.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
         Payment payment = payments.findByOrderIdForUpdate(orderId)
                 .orElseThrow(() -> new PaymentRecordNotFoundException(orderId));
         if (hasText(payment.getProviderPaymentId()) && !payment.getProviderPaymentId().equals(providerId)) {
             throw new PaymentProcessingException("Provider payment identity mismatch for order: " + orderId);
         }
         payment.attachProviderPayment(providerId, clientSecret);
+        if (order.getStatus() == OrderStatus.NEW) payment.markAsPending();
         payments.save(payment);
     }
     private boolean hasText(String value) { return value != null && !value.isBlank(); }
