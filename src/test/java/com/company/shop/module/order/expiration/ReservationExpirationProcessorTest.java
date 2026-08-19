@@ -47,7 +47,7 @@ class ReservationExpirationProcessorTest {
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         meters = new SimpleMeterRegistry();
         processor = new ReservationExpirationProcessor(workRepository, claimService, properties, stripeGateway,
-                paymentRepository, orderRepository, transitions, meters, clock);
+                paymentRepository, orderRepository, transitions, meters, clock, mock(com.company.shop.module.order.service.PaymentService.class));
         claim = new ReservationExpirationClaim(WORK_ID, ORDER_ID, UUID.randomUUID());
         when(workRepository.findDueCandidateIds(NOW, 25)).thenReturn(List.of(WORK_ID));
         when(claimService.claim(WORK_ID)).thenReturn(Optional.of(claim));

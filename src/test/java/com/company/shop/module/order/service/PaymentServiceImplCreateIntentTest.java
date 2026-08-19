@@ -66,7 +66,9 @@ class PaymentServiceImplCreateIntentTest {
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
 		service = new PaymentServiceImpl(orderRepository, paymentRepository, stripeWebhookEventRegistrar,
-				meterRegistry, mock(PaymentTerminalTransitionService.class));
+				meterRegistry, mock(PaymentTerminalTransitionService.class),
+                new PaymentInitializationTransactionService(orderRepository, paymentRepository),
+                new com.company.shop.module.order.expiration.StripePaymentIntentGatewayImpl());
 		setField(service, "publicKey", "pk_test_123");
 	}
 
@@ -191,15 +193,16 @@ class PaymentServiceImplCreateIntentTest {
 					.isEqualTo("order-payment-intent-" + order.getId());
 			assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "created").counter().count()).isEqualTo(1);
 
-			verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+			verify(paymentRepository, org.mockito.Mockito.times(2)).findByOrderIdForUpdate(order.getId());
 			paymentIntentStatic.verify(
 					() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)));
 		}
 	}
 
 	@Test
-	void createPaymentIntent_shouldCreateNewIntentWhenOnlyProviderPaymentIdIsPresent() {
-		assertIncompleteProviderStateCreatesNewIntent("pi_incomplete", " ");
+	void createPaymentIntent_shouldRejectDifferentProviderIdentityWhenOnlyProviderIdWasStored() {
+		assertThatThrownBy(() -> assertIncompleteProviderStateCreatesNewIntent("pi_incomplete", " "))
+				.isInstanceOf(PaymentProcessingException.class).hasMessageContaining("identity mismatch");
 	}
 
 	@Test

@@ -34,6 +34,7 @@ import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
+import com.company.shop.module.order.expiration.StripePaymentIntentGateway;
 import com.stripe.Stripe;
 import com.stripe.model.PaymentIntent;
 import com.stripe.net.RequestOptions;
@@ -69,15 +70,21 @@ public class PaymentServiceImpl implements PaymentService {
     private final StripeWebhookEventRegistrar stripeWebhookEventRegistrar;
     private final MeterRegistry meterRegistry;
     private final PaymentTerminalTransitionService terminalTransitions;
+    private final PaymentInitializationTransactionService paymentInitialization;
+    private final StripePaymentIntentGateway stripeGateway;
 
     public PaymentServiceImpl(OrderRepository orderRepo, PaymentRepository paymentRepo,
             StripeWebhookEventRegistrar stripeWebhookEventRegistrar,
-            MeterRegistry meterRegistry, PaymentTerminalTransitionService terminalTransitions) {
+            MeterRegistry meterRegistry, PaymentTerminalTransitionService terminalTransitions,
+            PaymentInitializationTransactionService paymentInitialization,
+            StripePaymentIntentGateway stripeGateway) {
         this.orderRepo = orderRepo;
         this.paymentRepo = paymentRepo;
         this.stripeWebhookEventRegistrar = stripeWebhookEventRegistrar;
         this.meterRegistry = meterRegistry;
         this.terminalTransitions = terminalTransitions;
+        this.paymentInitialization = paymentInitialization;
+        this.stripeGateway = stripeGateway;
     }
 
     @PostConstruct
@@ -98,45 +105,22 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
     public PaymentIntentResponseDTO createPaymentIntent(Order order) {
         try {
             log.info("Payment intent initialization started for orderId={} userId={}", order.getId(),
                     order.getUserId());
-            if (order.getStatus() != OrderStatus.NEW) {
-                throw new OrderPaymentNotAllowedException(order.getId(), order.getStatus());
-            }
-
-            Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
-                    .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
-
-            if (payment.getStatus() == PaymentStatus.COMPLETED) {
-                throw new PaymentAlreadyCompletedException(order.getId());
-            }
-
-            if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
-                    && payment.getClientSecret() != null && !payment.getClientSecret().isBlank()) {
+            PaymentInitialization initialization = paymentInitialization.prepare(order);
+            if (initialization.isAttached()) {
                 log.info("Reusing existing payment intent for orderId={} paymentId={} providerPaymentId={} paymentStatus={}",
-                        order.getId(), payment.getId(), payment.getProviderPaymentId(), payment.getStatus());
+                        order.getId(), null, null, "attached");
                 incrementPaymentIntentMetric("reused");
-                return new PaymentIntentResponseDTO(payment.getClientSecret(), publicKey);
+                return new PaymentIntentResponseDTO(initialization.existingClientSecret(), publicKey);
             }
-
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount(order.getTotalAmount().movePointRight(2).longValue())
-                    .setCurrency("pln")
-                    .putMetadata("orderId", order.getId().toString())
-                    .build();
-
-            RequestOptions requestOptions = RequestOptions.builder()
-                    .setIdempotencyKey("order-payment-intent-" + order.getId())
-                    .build();
-
-            PaymentIntent intent = PaymentIntent.create(params, requestOptions);
-            payment.attachProviderPayment(intent.getId(), intent.getClientSecret());
-            paymentRepo.save(payment);
+            PaymentIntent intent = stripeGateway.create(order.getId(), initialization.amount(),
+                    "order-payment-intent-" + order.getId());
+            paymentInitialization.attach(order.getId(), intent.getId(), intent.getClientSecret());
             log.info("Payment intent created for orderId={} paymentId={} providerPaymentId={} paymentStatus={}",
-                    order.getId(), payment.getId(), intent.getId(), payment.getStatus());
+                    order.getId(), null, intent.getId(), "attached");
             incrementPaymentIntentMetric("created");
 
             return new PaymentIntentResponseDTO(intent.getClientSecret(), publicKey);
