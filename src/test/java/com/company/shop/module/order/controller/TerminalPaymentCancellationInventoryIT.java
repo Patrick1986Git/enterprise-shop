@@ -176,6 +176,8 @@ class TerminalPaymentCancellationInventoryIT extends PostgresContainerSupport {
         when(deserializer.getObject()).thenReturn(Optional.of(paymentIntent));
         when(paymentIntent.getId()).thenReturn(PAYMENT_INTENT_ID);
         when(paymentIntent.getMetadata()).thenReturn(Map.of("orderId", order.getId().toString()));
+        when(paymentIntent.getAmount()).thenReturn(order.getTotalAmount().movePointRight(2).longValueExact());
+        when(paymentIntent.getCurrency()).thenReturn("pln");
         return event;
     }
 

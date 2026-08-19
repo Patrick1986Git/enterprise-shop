@@ -109,7 +109,7 @@ public class OrderCheckoutProcessor {
             Order savedOrder = prepared.order();
             log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
                     savedOrder.getId(), savedOrder.getUserId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
-                    savedOrder.getItems().size());
+                    prepared.itemCount());
             PaymentIntentResponseDTO stripeInfo = paymentService.createPaymentIntent(savedOrder);
 
             OrderResponseDTO baseDto = prepared.response();
@@ -132,10 +132,10 @@ public class OrderCheckoutProcessor {
         orderRepo.acquireCheckoutIdempotencyLock(currentUser.id(), normalizedIdempotencyKey);
         Order order = orderRepo.findByUserIdAndCheckoutIdempotencyKey(currentUser.id(), normalizedIdempotencyKey)
                 .orElseGet(() -> createPendingOrder(currentUser, normalizedIdempotencyKey, request));
-        return new PreparedOrder(order, mapper.toDto(order));
+        return new PreparedOrder(order, mapper.toDto(order), order.getItems().size());
     }
 
-    private record PreparedOrder(Order order, OrderResponseDTO response) { }
+    private record PreparedOrder(Order order, OrderResponseDTO response, int itemCount) { }
 
     private void incrementCheckoutMetric(String result) {
         meterRegistry.counter(CHECKOUT_METRIC, RESULT_TAG, result).increment();
