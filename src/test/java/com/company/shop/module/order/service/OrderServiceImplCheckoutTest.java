@@ -96,13 +96,16 @@ class OrderServiceImplCheckoutTest {
 	@BeforeEach
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
+		@SuppressWarnings("unchecked")
+		org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager>
+				transactionManagers = mock(org.springframework.beans.factory.ObjectProvider.class);
+		when(transactionManagers.getObject()).thenReturn(mock(org.springframework.transaction.PlatformTransactionManager.class));
 		OrderCheckoutProcessor checkoutProcessor = new OrderCheckoutProcessor(orderRepository, productCatalogFacade,
 				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
 				paymentService, orderOutboxEventRecorder, meterRegistry,
 				new com.company.shop.module.order.expiration.ReservationExpirationProperties(),
 				mock(com.company.shop.module.order.expiration.ReservationExpirationWorkRepository.class),
-				java.time.Clock.fixed(CHECKOUT_NOW, ZoneOffset.UTC),
-                org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class, org.mockito.Mockito.RETURNS_DEEP_STUBS));
+				java.time.Clock.fixed(CHECKOUT_NOW, ZoneOffset.UTC), transactionManagers);
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}
