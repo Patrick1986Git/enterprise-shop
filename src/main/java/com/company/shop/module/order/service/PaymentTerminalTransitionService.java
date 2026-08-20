@@ -60,7 +60,8 @@ public class PaymentTerminalTransitionService {
     public int convergeCanceled(UUID orderId, PaymentIntent intent) {
         Order order = lockOrder(orderId);
         Payment payment = lockPayment(orderId);
-        validateAttachedProviderPaymentId(intent, payment);
+        validatePaymentIntentMatchesOrder(intent, order);
+        attachOrValidateProviderPayment(intent, payment);
         if (order.getStatus() != OrderStatus.NEW) return 0;
         var reservedItems = order.getItems().stream()
                 .map(item -> new ReservedInventoryItem(item.getProductId(), item.getQuantity())).toList();
@@ -79,16 +80,22 @@ public class PaymentTerminalTransitionService {
         return paymentRepository.findByOrderIdForUpdate(orderId)
                 .orElseThrow(() -> new PaymentRecordNotFoundException(orderId));
     }
-    private void validateAttachedProviderPaymentId(PaymentIntent intent, Payment payment) {
-        if (payment.getProviderPaymentId() == null || payment.getProviderPaymentId().isBlank()
-                || !payment.getProviderPaymentId().equals(intent.getId())) {
+    private void attachOrValidateProviderPayment(PaymentIntent intent, Payment payment) {
+        if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
+                && !payment.getProviderPaymentId().equals(intent.getId())) {
             throw new WebhookSignatureInvalidException("PaymentIntent id does not match the attached provider payment id.");
+        }
+        if (payment.getProviderPaymentId() == null || payment.getProviderPaymentId().isBlank()) {
+            payment.attachProviderPayment(intent.getId(), intent.getClientSecret());
         }
     }
     private void validateProviderPaymentId(PaymentIntent intent, Payment payment) {
         if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
                 && !payment.getProviderPaymentId().equals(intent.getId())) {
             throw new WebhookSignatureInvalidException("PaymentIntent id does not match the attached provider payment id.");
+        }
+        if (payment.getProviderPaymentId() == null || payment.getProviderPaymentId().isBlank()) {
+            payment.attachProviderPayment(intent.getId(), intent.getClientSecret());
         }
     }
     private void validatePaymentIntentMatchesOrder(PaymentIntent intent, Order order) {

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -14,7 +13,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
@@ -44,8 +42,6 @@ import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 import com.stripe.model.PaymentIntent;
-import com.stripe.net.RequestOptions;
-import com.stripe.param.PaymentIntentCreateParams;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -79,7 +75,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(stock(fixture.product().getId())).isZero();
 
         makeDue(order);
-        PaymentIntent canceled = providerIntent("pi_expiration", "canceled");
+        PaymentIntent canceled = canceledProviderIntent("pi_expiration", order);
         when(stripeGateway.retrieve("pi_expiration")).thenReturn(canceled);
         processor.processDueBatch();
 
@@ -99,7 +95,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(productRepository.findById(fixture.product().getId())).isEmpty();
         assertThat(stock(fixture.product().getId())).isZero();
         makeDue(fixture.order());
-        PaymentIntent canceled = providerIntent("pi_soft-delete-expiration", "canceled");
+        PaymentIntent canceled = canceledProviderIntent("pi_soft-delete-expiration", fixture.order());
         when(stripeGateway.retrieve("pi_soft-delete-expiration")).thenReturn(canceled);
 
         processor.processDueBatch();
@@ -126,15 +122,18 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         when(currentUserFacade.getCurrentUser()).thenReturn(new CurrentUserSnapshot(user.getId(), user.getEmail(), Set.of()));
         PaymentIntent provider = providerIntent("pi_" + suffix, "requires_payment_method");
         when(provider.getClientSecret()).thenReturn("cs_" + suffix);
-        try (MockedStatic<PaymentIntent> mocked = mockStatic(PaymentIntent.class)) {
-            mocked.when(() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)))
-                    .thenReturn(provider);
-            var response = orderService.placeOrderFromCart(suffix + "-key", new OrderCheckoutRequestDTO(null, null));
-            return new Fixture(user, product, orderRepository.findById(response.id()).orElseThrow());
-        }
+        when(stripeGateway.create(any(UUID.class), any(BigDecimal.class), any(String.class))).thenReturn(provider);
+        var response = orderService.placeOrderFromCart(suffix + "-key", new OrderCheckoutRequestDTO(null, null));
+        return new Fixture(user, product, orderRepository.findById(response.id()).orElseThrow());
     }
     private PaymentIntent providerIntent(String id, String status) {
         PaymentIntent intent = mock(PaymentIntent.class); when(intent.getId()).thenReturn(id); when(intent.getStatus()).thenReturn(status); return intent;
+    }
+    private PaymentIntent canceledProviderIntent(String id, Order order) {
+        PaymentIntent intent = providerIntent(id, "canceled");
+        when(intent.getAmount()).thenReturn(order.getTotalAmount().movePointRight(2).longValueExact());
+        when(intent.getCurrency()).thenReturn("pln");
+        return intent;
     }
     private void makeDue(Order order) {
         jdbcTemplate.update("UPDATE orders SET reservation_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE id = ?", order.getId());

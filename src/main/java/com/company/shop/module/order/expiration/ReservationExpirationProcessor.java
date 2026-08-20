@@ -10,6 +10,7 @@ import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.service.PaymentTerminalTransitionService;
+import com.company.shop.module.order.service.PaymentService;
 import com.stripe.model.PaymentIntent;
 import io.micrometer.core.instrument.MeterRegistry;
 
@@ -28,14 +29,17 @@ public class ReservationExpirationProcessor {
     private final PaymentTerminalTransitionService transitions;
     private final MeterRegistry meters;
     private final Clock clock;
+    private final PaymentService paymentService;
 
     public ReservationExpirationProcessor(ReservationExpirationWorkRepository workRepository,
             ReservationExpirationClaimService claimService, ReservationExpirationProperties properties,
             StripePaymentIntentGateway stripeGateway, PaymentRepository paymentRepository, OrderRepository orderRepository,
-            PaymentTerminalTransitionService transitions, MeterRegistry meters, Clock clock) {
+            PaymentTerminalTransitionService transitions, MeterRegistry meters, Clock clock,
+            PaymentService paymentService) {
         this.workRepository = workRepository; this.claimService = claimService; this.properties = properties;
         this.stripeGateway = stripeGateway; this.paymentRepository = paymentRepository; this.orderRepository = orderRepository;
         this.transitions = transitions; this.meters = meters; this.clock = clock;
+        this.paymentService = paymentService;
     }
     public void processDueBatch() {
         workRepository.findDueCandidateIds(clock.instant(), properties.batchSize()).forEach(id ->
@@ -49,6 +53,12 @@ public class ReservationExpirationProcessor {
             var payment = paymentRepository.findByOrderId(claim.orderId()).orElseThrow(
                     () -> new IllegalStateException("Expiration payment record is missing"));
             String providerId = payment.getProviderPaymentId();
+            if (providerId == null || providerId.isBlank()) {
+                paymentService.createPaymentIntent(order);
+                payment = paymentRepository.findByOrderId(claim.orderId()).orElseThrow(
+                        () -> new IllegalStateException("Expiration payment record is missing after initialization"));
+                providerId = payment.getProviderPaymentId();
+            }
             if (providerId == null || providerId.isBlank()) throw new IllegalStateException("Expiration PaymentIntent id is missing");
             PaymentIntent intent = stripeGateway.retrieve(providerId);
             if (!providerId.equals(intent.getId())) throw new IllegalStateException("Expiration PaymentIntent identity mismatch");

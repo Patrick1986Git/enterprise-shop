@@ -69,9 +69,13 @@ class PaymentServiceImplConfigurationTest {
     }
 
     private PaymentServiceImpl serviceWithConfiguration(String apiKey, String webhookSecret, String publicKey) {
-        PaymentServiceImpl service = new PaymentServiceImpl(mock(OrderRepository.class), mock(PaymentRepository.class),
+        OrderRepository orders = mock(OrderRepository.class);
+        PaymentRepository payments = mock(PaymentRepository.class);
+        PaymentServiceImpl service = new PaymentServiceImpl(orders, payments,
                 mock(StripeWebhookEventRegistrar.class), new SimpleMeterRegistry(),
-                mock(PaymentTerminalTransitionService.class));
+                mock(PaymentTerminalTransitionService.class),
+                new PaymentInitializationTransactionService(orders, payments),
+                new com.company.shop.module.order.expiration.StripePaymentIntentGatewayImpl());
         setField(service, "secretKey", apiKey);
         setField(service, "webhookSecret", webhookSecret);
         setField(service, "publicKey", publicKey);

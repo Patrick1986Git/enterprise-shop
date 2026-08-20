@@ -66,7 +66,9 @@ class PaymentServiceImplCreateIntentTest {
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
 		service = new PaymentServiceImpl(orderRepository, paymentRepository, stripeWebhookEventRegistrar,
-				meterRegistry, mock(PaymentTerminalTransitionService.class));
+				meterRegistry, mock(PaymentTerminalTransitionService.class),
+                new PaymentInitializationTransactionService(orderRepository, paymentRepository),
+                new com.company.shop.module.order.expiration.StripePaymentIntentGatewayImpl());
 		setField(service, "publicKey", "pk_test_123");
 	}
 
@@ -156,6 +158,7 @@ class PaymentServiceImplCreateIntentTest {
 		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
 
 		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+		when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
 		when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		PaymentIntent stripeIntent = mock(PaymentIntent.class);
@@ -191,15 +194,16 @@ class PaymentServiceImplCreateIntentTest {
 					.isEqualTo("order-payment-intent-" + order.getId());
 			assertThat(meterRegistry.get("shop.payment_intent.total").tag("result", "created").counter().count()).isEqualTo(1);
 
-			verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+			verify(paymentRepository, org.mockito.Mockito.times(2)).findByOrderIdForUpdate(order.getId());
 			paymentIntentStatic.verify(
 					() -> PaymentIntent.create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)));
 		}
 	}
 
 	@Test
-	void createPaymentIntent_shouldCreateNewIntentWhenOnlyProviderPaymentIdIsPresent() {
-		assertIncompleteProviderStateCreatesNewIntent("pi_incomplete", " ");
+	void createPaymentIntent_shouldRejectDifferentProviderIdentityWhenOnlyProviderIdWasStored() {
+		assertThatThrownBy(() -> assertIncompleteProviderStateCreatesNewIntent("pi_incomplete", " "))
+				.isInstanceOf(PaymentProcessingException.class).hasMessageContaining("identity mismatch");
 	}
 
 	@Test
@@ -212,6 +216,7 @@ class PaymentServiceImplCreateIntentTest {
 		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
 		payment.attachProviderPayment(providerPaymentId, clientSecret);
 		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+		when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
 
 		PaymentIntent stripeIntent = mock(PaymentIntent.class);
 		when(stripeIntent.getId()).thenReturn("pi_fresh");
@@ -230,6 +235,51 @@ class PaymentServiceImplCreateIntentTest {
 					.isEqualTo(1);
 			verify(paymentRepository).save(payment);
 		}
+	}
+
+	@Test
+	void attach_shouldNotReopenTerminallyCanceledPayment() {
+		Order order = orderWithTotal(BigDecimal.TEN);
+		order.cancelIfNew();
+		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+		payment.markAsFailed();
+		when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+		new PaymentInitializationTransactionService(orderRepository, paymentRepository)
+				.attach(order.getId(), "pi_terminal", "cs_terminal");
+
+		assertThat(payment.getStatus()).isEqualTo(com.company.shop.module.order.entity.PaymentStatus.FAILED);
+		assertThat(payment.getProviderPaymentId()).isEqualTo("pi_terminal");
+	}
+
+	@Test
+	void attach_shouldRestorePendingForRetryableFailedPaymentOnNewOrder() {
+		Order order = orderWithTotal(BigDecimal.TEN);
+		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+		payment.markAsFailed();
+		when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+		new PaymentInitializationTransactionService(orderRepository, paymentRepository)
+				.attach(order.getId(), "pi_retry", "cs_retry");
+
+		assertThat(payment.getStatus()).isEqualTo(com.company.shop.module.order.entity.PaymentStatus.PENDING);
+	}
+
+	@Test
+	void attach_shouldPreserveCompletedPaymentOnPaidOrder() {
+		Order order = orderWithTotal(BigDecimal.TEN);
+		order.markAsPaid();
+		Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+		payment.markAsCompleted();
+		when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+		when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+		new PaymentInitializationTransactionService(orderRepository, paymentRepository)
+				.attach(order.getId(), "pi_completed", "cs_completed");
+
+		assertThat(payment.getStatus()).isEqualTo(com.company.shop.module.order.entity.PaymentStatus.COMPLETED);
 	}
 
 	private Order orderWithTotal(BigDecimal unitPrice) {

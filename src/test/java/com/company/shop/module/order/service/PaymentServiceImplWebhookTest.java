@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,7 +73,9 @@ class PaymentServiceImplWebhookTest {
         meterRegistry = new SimpleMeterRegistry();
         service = new PaymentServiceImpl(orderRepository, paymentRepository, stripeWebhookEventRegistrar,
                 meterRegistry, new PaymentTerminalTransitionService(orderRepository,
-                        paymentRepository, cartCheckoutFacade, productCatalogFacade));
+                        paymentRepository, cartCheckoutFacade, productCatalogFacade),
+                new PaymentInitializationTransactionService(orderRepository, paymentRepository),
+                new com.company.shop.module.order.expiration.StripePaymentIntentGatewayImpl());
         setField(service, "webhookSecret", "whsec_test_123");
     }
 
@@ -555,8 +558,8 @@ class PaymentServiceImplWebhookTest {
         Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         PaymentIntent intent = paymentIntentWithMetadata(order.getId());
         when(intent.getAmountReceived()).thenReturn(0L);
-        when(intent.getAmount()).thenReturn(1999L);
-        when(intent.getCurrency()).thenReturn("pln");
+        lenient().when(intent.getAmount()).thenReturn(1999L);
+        lenient().when(intent.getCurrency()).thenReturn("pln");
         Event event = succeededEvent("evt_amount_fallback", intent);
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
@@ -604,7 +607,7 @@ class PaymentServiceImplWebhookTest {
         PaymentIntent intent = paymentIntentWithMetadata(order.getId());
         when(intent.getAmountReceived()).thenReturn(0L);
         when(intent.getAmount()).thenReturn(0L);
-        when(intent.getCurrency()).thenReturn("pln");
+        lenient().when(intent.getCurrency()).thenReturn("pln");
         Event event = succeededEvent("evt_invalid_order_total", intent);
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
@@ -907,6 +910,8 @@ class PaymentServiceImplWebhookTest {
     private PaymentIntent paymentIntentWithMetadataAndId(UUID orderId, String intentId) {
         PaymentIntent intent = paymentIntentWithMetadata(orderId);
         when(intent.getId()).thenReturn(intentId);
+        lenient().when(intent.getAmount()).thenReturn(1999L);
+        lenient().when(intent.getCurrency()).thenReturn("pln");
         return intent;
     }
 

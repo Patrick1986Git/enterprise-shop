@@ -18,6 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.beans.factory.ObjectProvider;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
@@ -68,6 +71,7 @@ public class OrderCheckoutProcessor {
     private final ReservationExpirationProperties expirationProperties;
     private final ReservationExpirationWorkRepository expirationWorkRepository;
     private final Clock clock;
+    private final ObjectProvider<PlatformTransactionManager> transactionManagers;
 
     public OrderCheckoutProcessor(OrderRepository orderRepo,
             ProductCatalogFacade productCatalogFacade,
@@ -79,7 +83,8 @@ public class OrderCheckoutProcessor {
             PaymentService paymentService,
             OrderOutboxEventRecorder orderOutboxEventRecorder,
             MeterRegistry meterRegistry, ReservationExpirationProperties expirationProperties,
-            ReservationExpirationWorkRepository expirationWorkRepository, Clock clock) {
+            ReservationExpirationWorkRepository expirationWorkRepository, Clock clock,
+            ObjectProvider<PlatformTransactionManager> transactionManagers) {
         this.orderRepo = orderRepo;
         this.productCatalogFacade = productCatalogFacade;
         this.paymentRepo = paymentRepo;
@@ -93,25 +98,21 @@ public class OrderCheckoutProcessor {
         this.expirationProperties = expirationProperties;
         this.expirationWorkRepository = expirationWorkRepository;
         this.clock = clock;
+        this.transactionManagers = transactionManagers;
     }
 
-    @Transactional
     public OrderResponseDTO placeOrderFromCart(String idempotencyKey, OrderCheckoutRequestDTO request) {
         incrementCheckoutMetric("attempt");
         try {
-            CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
-            String normalizedIdempotencyKey = idempotencyKey.trim();
-            orderRepo.acquireCheckoutIdempotencyLock(currentUser.id(), normalizedIdempotencyKey);
-
-            Order savedOrder = orderRepo.findByUserIdAndCheckoutIdempotencyKey(
-                    currentUser.id(), normalizedIdempotencyKey)
-                    .orElseGet(() -> createPendingOrder(currentUser, normalizedIdempotencyKey, request));
+            PreparedOrder prepared = new TransactionTemplate(transactionManagers.getObject())
+                    .execute(status -> prepareOrder(idempotencyKey, request));
+            Order savedOrder = prepared.order();
             log.info("Order created during checkout orderId={} userId={} status={} totalAmount={} itemsCount={}",
                     savedOrder.getId(), savedOrder.getUserId(), savedOrder.getStatus(), savedOrder.getTotalAmount(),
-                    savedOrder.getItems().size());
+                    prepared.itemCount());
             PaymentIntentResponseDTO stripeInfo = paymentService.createPaymentIntent(savedOrder);
 
-            OrderResponseDTO baseDto = mapper.toDto(savedOrder);
+            OrderResponseDTO baseDto = prepared.response();
             incrementCheckoutMetric("success");
             return new OrderResponseDTO(
                     baseDto.id(),
@@ -124,6 +125,17 @@ public class OrderCheckoutProcessor {
             throw ex;
         }
     }
+
+    private PreparedOrder prepareOrder(String idempotencyKey, OrderCheckoutRequestDTO request) {
+        CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+        String normalizedIdempotencyKey = idempotencyKey.trim();
+        orderRepo.acquireCheckoutIdempotencyLock(currentUser.id(), normalizedIdempotencyKey);
+        Order order = orderRepo.findByUserIdAndCheckoutIdempotencyKey(currentUser.id(), normalizedIdempotencyKey)
+                .orElseGet(() -> createPendingOrder(currentUser, normalizedIdempotencyKey, request));
+        return new PreparedOrder(order, mapper.toDto(order), order.getItems().size());
+    }
+
+    private record PreparedOrder(Order order, OrderResponseDTO response, int itemCount) { }
 
     private void incrementCheckoutMetric(String result) {
         meterRegistry.counter(CHECKOUT_METRIC, RESULT_TAG, result).increment();
