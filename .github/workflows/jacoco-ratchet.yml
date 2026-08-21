@@ -31,7 +31,6 @@ jobs:
       BRANCH: automation/jacoco-baseline-ratchet
       GH_TOKEN: ${{ github.token }}
       RUN_ID: ${{ github.event.workflow_run.id }}
-      RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
       SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
@@ -46,8 +45,13 @@ jobs:
       - name: Reject stale or mismatched CI run
         run: |
           set -euo pipefail
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.name')" = CI
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.head_sha')" = "${SOURCE_SHA}"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" > /tmp/workflow-run.json
+          jq -e \
+            --arg repository "${GITHUB_REPOSITORY}" --arg sha "${SOURCE_SHA}" \
+            '.name == "CI" and .event == "push" and .conclusion == "success" and
+             .head_branch == "master" and .head_sha == $sha and
+             .head_repository.full_name == $repository' \
+            /tmp/workflow-run.json >/dev/null
           test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq '.sha')" = "${SOURCE_SHA}"
 
       - name: Retrieve authoritative artifact and provenance
@@ -59,16 +63,17 @@ jobs:
           artifact="$(jq -c '.artifacts[] | select(.name == "jacoco-coverage-report" and .expired == false)' <<<"${artifacts}")"
           artifact_id="$(jq -r '.id' <<<"${artifact}")"
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > /tmp/jacoco.zip
+          python scripts/prepare-jacoco-ratchet.py \
+            --verify-artifact /tmp/jacoco.zip \
+            --artifact-digest "$(jq -r '.digest' <<<"${artifact}")"
           mkdir /tmp/jacoco
           unzip -q /tmp/jacoco.zip -d /tmp/jacoco
           pulls="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${SOURCE_SHA}/pulls")"
           jq -n \
             --argjson pull_requests "${pulls}" \
             --argjson artifact "$(jq '{id, name, digest}' <<<"${artifact}")" \
-            --arg name CI --arg event push --arg conclusion success --arg head_sha "${SOURCE_SHA}" \
-            --argjson run_number "${RUN_NUMBER}" --argjson run_id "${RUN_ID}" \
-            '{pull_requests: $pull_requests, workflow: {name: $name, run_number: $run_number,
-              run_id: $run_id, head_sha: $head_sha, event: $event, conclusion: $conclusion}, artifact: $artifact}' \
+            --argjson workflow "$(jq '{name, run_number, run_id: .id, head_sha, event, conclusion}' /tmp/workflow-run.json)" \
+            '{pull_requests: $pull_requests, workflow: $workflow, artifact: $artifact}' \
             > /tmp/provenance.json
 
       - name: Prepare strict ratchet
@@ -114,7 +119,7 @@ jobs:
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${number}" \
               -f title='ci(coverage): ratchet JaCoCo baseline' -F body=@/tmp/pr-body.md >/dev/null
           fi
-          # GITHUB_TOKEN-created events do not recursively start workflows; dispatch the
-          # repository's existing verification workflows on the exact proposal head.
+          # GITHUB_TOKEN PR open/synchronize events create approval-required runs. Dispatch
+          # the existing workflows as well so exact-head required checks start immediately.
           gh workflow run ci.yml --ref "${BRANCH}"
           gh workflow run codeql.yml --ref "${BRANCH}"

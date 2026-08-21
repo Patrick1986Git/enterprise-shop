@@ -2,8 +2,10 @@
 """Prepare a deterministic JaCoCo baseline proposal from trusted CI evidence."""
 
 import argparse
+import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +18,28 @@ SPEC.loader.exec_module(VALIDATOR)
 
 class ProposalError(ValueError):
     """Raised when candidate evidence cannot safely produce a proposal."""
+
+
+ARTIFACT_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def verify_artifact_digest(path, advertised_digest):
+    if not isinstance(advertised_digest, str) or not ARTIFACT_DIGEST.fullmatch(advertised_digest):
+        raise ProposalError("artifact digest must be sha256 followed by 64 lowercase hexadecimal characters")
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as artifact:
+            for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as error:
+        raise ProposalError(f"cannot hash downloaded artifact: {error}") from error
+    actual = digest.hexdigest()
+    expected = advertised_digest.removeprefix("sha256:")
+    if actual != expected:
+        raise ProposalError(
+            f"downloaded artifact SHA-256 mismatch: expected {expected}, actual {actual}"
+        )
+    return actual
 
 
 def compare(candidate, baseline):
@@ -70,8 +94,8 @@ def validate_provenance(value, expected_sha):
     if artifact["name"] != "jacoco-coverage-report" or not isinstance(artifact["id"], int) or artifact["id"] <= 0:
         raise ProposalError("artifact provenance does not identify the JaCoCo artifact")
     digest = artifact["digest"]
-    if not isinstance(digest, str) or not digest.startswith("sha256:") or len(digest) != 71:
-        raise ProposalError("artifact digest must be a GitHub SHA-256 digest")
+    if not isinstance(digest, str) or not ARTIFACT_DIGEST.fullmatch(digest):
+        raise ProposalError("artifact digest must be sha256 followed by 64 lowercase hexadecimal characters")
     return matching[0]["number"], workflow, artifact
 
 
@@ -106,7 +130,7 @@ def render_body(sha, pull_number, workflow, artifact, baselines, candidates, com
         "It is not approved or merged automatically.", "",
         f"- Source master SHA: `{sha}`", f"- Source pull request: #{pull_number}",
         f"- CI run: #{workflow['run_number']} / ID `{workflow['run_id']}`",
-        f"- Artifact: ID `{artifact['id']}`, digest `{artifact['digest']}`", "",
+        f"- Artifact: ID `{artifact['id']}`, verified downloaded ZIP digest `{artifact['digest']}`", "",
         "| Metric | Previous covered / missed | Candidate covered / missed | Exact proof |",
         "| --- | ---: | ---: | --- |", *rows, "",
         "Exactly one file changes: `.github/coverage/jacoco-baseline.json`.", "",
@@ -134,13 +158,25 @@ def prepare(report, policy_path, provenance_path, expected_sha, output_body):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--report", type=Path, required=True)
-    parser.add_argument("--policy", type=Path, required=True)
-    parser.add_argument("--provenance", type=Path, required=True)
-    parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--output-body", type=Path, required=True)
+    parser.add_argument("--verify-artifact", type=Path)
+    parser.add_argument("--artifact-digest")
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--policy", type=Path)
+    parser.add_argument("--provenance", type=Path)
+    parser.add_argument("--expected-sha")
+    parser.add_argument("--output-body", type=Path)
     args = parser.parse_args()
     try:
+        if args.verify_artifact:
+            if not args.artifact_digest or any((args.report, args.policy, args.provenance,
+                                                args.expected_sha, args.output_body)):
+                raise ProposalError("artifact verification mode accepts only --verify-artifact and --artifact-digest")
+            actual = verify_artifact_digest(args.verify_artifact, args.artifact_digest)
+            print(f"Verified downloaded artifact SHA-256: {actual}")
+            return 0
+        if args.artifact_digest or not all((args.report, args.policy, args.provenance,
+                                            args.expected_sha, args.output_body)):
+            raise ProposalError("proposal mode requires report, policy, provenance, expected SHA, and output body")
         changed = prepare(args.report, args.policy, args.provenance, args.expected_sha, args.output_body)
     except (OSError, json.JSONDecodeError, VALIDATOR.ReportValidationError,
             VALIDATOR.PolicyValidationError, ProposalError) as error:
