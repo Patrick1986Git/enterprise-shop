@@ -1,0 +1,125 @@
+name: Propose JaCoCo baseline ratchet
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jacoco-baseline-ratchet
+  cancel-in-progress: true
+
+jobs:
+  propose:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'master' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    env:
+      BRANCH: automation/jacoco-baseline-ratchet
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      # workflow_run executes this default-branch workflow, never code from a pull request.
+      - name: Checkout authoritative master candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject stale or mismatched CI run
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" > /tmp/workflow-run.json
+          jq -e \
+            --arg repository "${GITHUB_REPOSITORY}" --arg sha "${SOURCE_SHA}" \
+            '.name == "CI" and .event == "push" and .conclusion == "success" and
+             .head_branch == "master" and .head_sha == $sha and
+             .head_repository.full_name == $repository' \
+            /tmp/workflow-run.json >/dev/null
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq '.sha')" = "${SOURCE_SHA}"
+
+      - name: Retrieve authoritative artifact and provenance
+        run: |
+          set -euo pipefail
+          artifacts="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts")"
+          count="$(jq '[.artifacts[] | select(.name == "jacoco-coverage-report" and .expired == false)] | length' <<<"${artifacts}")"
+          test "${count}" = 1
+          artifact="$(jq -c '.artifacts[] | select(.name == "jacoco-coverage-report" and .expired == false)' <<<"${artifacts}")"
+          artifact_id="$(jq -r '.id' <<<"${artifact}")"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > /tmp/jacoco.zip
+          python scripts/prepare-jacoco-ratchet.py \
+            --verify-artifact /tmp/jacoco.zip \
+            --artifact-digest "$(jq -r '.digest' <<<"${artifact}")"
+          mkdir /tmp/jacoco
+          unzip -q /tmp/jacoco.zip -d /tmp/jacoco
+          pulls="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${SOURCE_SHA}/pulls")"
+          jq -n \
+            --argjson pull_requests "${pulls}" \
+            --argjson artifact "$(jq '{id, name, digest}' <<<"${artifact}")" \
+            --argjson workflow "$(jq '{name, run_number, run_id: .id, head_sha, event, conclusion}' /tmp/workflow-run.json)" \
+            '{pull_requests: $pull_requests, workflow: $workflow, artifact: $artifact}' \
+            > /tmp/provenance.json
+
+      - name: Prepare strict ratchet
+        id: prepare
+        run: |
+          set -euo pipefail
+          result="$(python scripts/prepare-jacoco-ratchet.py \
+            --report /tmp/jacoco/jacoco.xml \
+            --policy .github/coverage/jacoco-baseline.json \
+            --provenance /tmp/provenance.json \
+            --expected-sha "${SOURCE_SHA}" \
+            --output-body /tmp/pr-body.md)"
+          echo "${result}"
+          echo "${result}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create or update the one-file proposal
+        if: steps.prepare.outputs.ratchet == 'true'
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq '.sha')" = "${SOURCE_SHA}"
+          test "$(git diff --name-only | sed '/^$/d')" = .github/coverage/jacoco-baseline.json
+          git switch -C "${BRANCH}" "${SOURCE_SHA}"
+          git add .github/coverage/jacoco-baseline.json
+          test "$(git diff --cached --name-only)" = .github/coverage/jacoco-baseline.json
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "ci(coverage): propose JaCoCo baseline ratchet"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq '.sha')" = "${SOURCE_SHA}"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          remote_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" --jq '.object.sha' 2>/dev/null || true)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push --force-with-lease="refs/heads/${BRANCH}:${remote_sha}" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+          pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=master&head=${GITHUB_REPOSITORY_OWNER}:${BRANCH}")"
+          count="$(jq 'length' <<<"${pr}")"
+          test "${count}" -le 1
+          if test "${count}" = 0; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+              -f title='ci(coverage): ratchet JaCoCo baseline' \
+              -f head="${BRANCH}" -f base=master -F body=@/tmp/pr-body.md >/dev/null
+          else
+            number="$(jq -r '.[0].number' <<<"${pr}")"
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${number}" \
+              -f title='ci(coverage): ratchet JaCoCo baseline' -F body=@/tmp/pr-body.md >/dev/null
+          fi
+          # GITHUB_TOKEN PR open/synchronize events create approval-required runs. Dispatch
+          # the existing workflows as well so exact-head required checks start immediately.
+          gh workflow run ci.yml --ref "${BRANCH}"
+          gh workflow run codeql.yml --ref "${BRANCH}"
