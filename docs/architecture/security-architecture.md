@@ -6,6 +6,8 @@
 - Sessions are configured with `SessionCreationPolicy.STATELESS`.
 - Form login and HTTP Basic are disabled.
 - `JwtAuthenticationFilter` runs before `UsernamePasswordAuthenticationFilter`.
+- A JWT's signature and expiration establish token authenticity, but do not by themselves establish current account authorization. On every bearer-authenticated request, the filter reloads the active user and current roles from PostgreSQL. Missing, soft-deleted, disabled, expired, or locked accounts remain unauthenticated.
+- Account deletion, disablement, and persisted role changes therefore take effect on the next request. Authorities in the JWT are issuance-time metadata only; request authorization uses the authoritative roles loaded from persistence.
 - Password hashing uses `BCryptPasswordEncoder`.
 - Method security is enabled and controllers use `@PreAuthorize` for authenticated/admin boundaries.
 
@@ -66,3 +68,21 @@ Current CORS configuration:
 ## Security headers
 
 The filter chain sets a referrer policy of `STRICT_ORIGIN_WHEN_CROSS_ORIGIN`.
+
+## Authorization freshness decision
+
+Immediate account and authority revocation is required because an administrator can soft-delete an account while an issued access token is still valid. Reloading `UserDetails` for each authenticated request is the narrowest design compatible with the existing repository query, disabled-account checks, stateless HTTP sessions, and lazy role mapping. The lookup runs in the existing read-only service transaction, fetches roles explicitly, and does not depend on Open Session in View.
+
+Alternatives were rejected for this lifecycle:
+
+- A persisted security or authorization version would still require an authoritative lookup to validate the version, while adding a schema migration and concurrent increment semantics without reducing database reads.
+- A dedicated revocation or session store would add operational state and infrastructure for behavior already represented by the users and roles tables.
+- Allowing stale authorization until the one-hour access-token expiration would permit deleted administrators to retain privileges and does not satisfy immediate revocation.
+
+HTTP sessions remain stateless: the database lookup validates each independent bearer request and does not create a server-side login session. The configured `refresh-expiration` property is not used by a refresh-token issuance or exchange flow.
+
+## Account and token lifecycle
+
+Login normalizes the submitted email and delegates password, enabled-state, and active-account checks to Spring Security backed by `UserDetailsServiceImpl`. Successful authentication produces an HMAC-signed bearer JWT whose subject is the normalized email, whose `roles` claim records the issuance-time authorities, and whose configured lifetime is one hour. There is no refresh-token endpoint, persisted token/session record, revocation list, authorization version, or security-stamp mechanism.
+
+The current production user-management API can update profile names and soft-delete users. Registration assigns `ROLE_USER`; there is no production endpoint or service operation that disables a user or adds/removes roles, and no production caller invokes `User.disable()`. Direct administrative persistence changes to enabled state or role membership are nevertheless enforced on the next authenticated request by the same authoritative reload.

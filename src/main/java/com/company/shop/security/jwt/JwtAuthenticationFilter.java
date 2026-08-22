@@ -1,15 +1,11 @@
 package com.company.shop.security.jwt;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -23,9 +19,11 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final UserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(JwtTokenProvider tokenProvider) {
+    public JwtAuthenticationFilter(JwtTokenProvider tokenProvider, UserDetailsService userDetailsService) {
         this.tokenProvider = tokenProvider;
+        this.userDetailsService = userDetailsService;
     }
 
     @Override
@@ -40,27 +38,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (tokenProvider.validate(token)) {
                 String username = tokenProvider.getUsername(token);
-                String rolesLabel = tokenProvider.getRoles(token);
-
-                // Odbudowujemy listę uprawnień bezpośrednio ze Stringa w tokenie
-                List<SimpleGrantedAuthority> authorities = Arrays.stream(rolesLabel.split(","))
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList());
-
-                // Tworzymy obiekt UserDetails bez dotykania bazy danych
-                UserDetails userDetails = new User(username, "", authorities);
-
-                var auth = new UsernamePasswordAuthenticationToken(
-                        userDetails, 
-                        null, 
-                        userDetails.getAuthorities()
-                );
-
-                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(auth);
+                authenticateActiveUser(request, username);
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void authenticateActiveUser(HttpServletRequest request, String username) {
+        try {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+            if (!userDetails.isEnabled() || !userDetails.isAccountNonExpired()
+                    || !userDetails.isAccountNonLocked() || !userDetails.isCredentialsNonExpired()) {
+                return;
+            }
+
+            var authentication = new UsernamePasswordAuthenticationToken(
+                    userDetails,
+                    null,
+                    userDetails.getAuthorities()
+            );
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        } catch (UsernameNotFoundException ignored) {
+            // Treat missing and soft-deleted token subjects as unauthenticated.
+        }
     }
 }
