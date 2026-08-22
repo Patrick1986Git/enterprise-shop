@@ -25,8 +25,8 @@ import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
