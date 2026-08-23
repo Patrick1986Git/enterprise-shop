@@ -169,6 +169,30 @@ class JaCoCoRatchetWorkflowPolicyTest(unittest.TestCase):
         extraction = self.workflow.index("unzip -q /tmp/jacoco.zip")
         self.assertLess(verification, extraction)
 
+    def test_branch_lookup_distinguishes_absent_and_existing_branch(self):
+        self.assertIn("git/matching-refs/heads/${BRANCH}", self.workflow)
+        self.assertIn("if test \"$(jq 'length' <<<\"${matching_refs}\")\" = 0", self.workflow)
+        self.assertIn('remote_sha=""', self.workflow)
+        self.assertIn(".object.sha", self.workflow)
+
+    def test_branch_lookup_fails_closed_on_api_error_or_ambiguous_response(self):
+        lookup = self.workflow.index('matching_refs="$(gh api')
+        push = self.workflow.index("push --force-with-lease", lookup)
+        lookup_block = self.workflow[lookup:push]
+        self.assertNotIn("|| true", lookup_block)
+        self.assertIn("type == \"array\" and length <= 1", lookup_block)
+        self.assertIn(".ref == $ref", lookup_block)
+
+    def test_branch_lookup_accepts_only_commit_object_sha(self):
+        self.assertIn('.object.type == "commit"', self.workflow)
+        self.assertIn('test("^[0-9a-f]{40}$")', self.workflow)
+
+    def test_push_uses_observed_sha_or_absence_as_exact_lease(self):
+        self.assertIn(
+            'push --force-with-lease="refs/heads/${BRANCH}:${remote_sha}"',
+            self.workflow,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -103,7 +103,15 @@ jobs:
               commit -m "ci(coverage): propose JaCoCo baseline ratchet"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/commits/master" --jq '.sha')" = "${SOURCE_SHA}"
           auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
-          remote_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BRANCH}" --jq '.object.sha' 2>/dev/null || true)"
+          matching_refs="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"
+          jq -e 'type == "array" and length <= 1' <<<"${matching_refs}" >/dev/null
+          if test "$(jq 'length' <<<"${matching_refs}")" = 0; then
+            remote_sha=""
+          else
+            remote_sha="$(jq -er --arg ref "refs/heads/${BRANCH}" \
+              '.[0] | select(.ref == $ref and .object.type == "commit") | .object.sha |
+               select(test("^[0-9a-f]{40}$"))' <<<"${matching_refs}")"
+          fi
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
             push --force-with-lease="refs/heads/${BRANCH}:${remote_sha}" \
             "https://github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
