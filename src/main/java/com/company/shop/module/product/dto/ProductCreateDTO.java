@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -47,10 +48,12 @@ public class ProductCreateDTO {
 	        description = "Unit price of the product.",
 	        example = "79.99",
 	        minimum = "0.01",
+	        maximum = "9999999999.99",
 	        requiredMode = Schema.RequiredMode.REQUIRED
 	)
 	@NotNull(message = "{validation.product.price.required}")
 	@DecimalMin(value = "0.01", message = "{validation.product.price.min}")
+	@Digits(integer = 10, fraction = 2, message = "{validation.product.price.digits}")
 	private BigDecimal price;
 
 	@Schema(

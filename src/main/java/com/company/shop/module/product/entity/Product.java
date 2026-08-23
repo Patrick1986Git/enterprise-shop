@@ -192,6 +192,14 @@ public class Product extends SoftDeleteEntity {
 		if (value == null || value.signum() <= 0) {
 			throw new ProductDataInvalidException("Product price must be greater than zero");
 		}
+		try {
+			BigDecimal persistedValue = value.setScale(2, RoundingMode.UNNECESSARY);
+			if (persistedValue.precision() - persistedValue.scale() > 10) {
+				throw new ProductDataInvalidException("Product price must have at most 10 integer digits and 2 fraction digits");
+			}
+		} catch (ArithmeticException ex) {
+			throw new ProductDataInvalidException("Product price must have at most 2 fraction digits");
+		}
 	}
 
 	private void validateStock(int value) {

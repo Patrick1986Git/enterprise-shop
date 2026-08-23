@@ -8,12 +8,13 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.PaymentIntentCancelParams;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.company.shop.module.order.service.StripeMinorUnitConverter;
 
 @Component
 public class StripePaymentIntentGatewayImpl implements StripePaymentIntentGateway {
     @Override
     public PaymentIntent create(UUID orderId, BigDecimal amount, String idempotencyKey) throws Exception {
-        var params = PaymentIntentCreateParams.builder().setAmount(amount.movePointRight(2).longValue())
+        var params = PaymentIntentCreateParams.builder().setAmount(StripeMinorUnitConverter.fromPln(amount))
                 .setCurrency("pln").putMetadata("orderId", orderId.toString()).build();
         var options = RequestOptions.builder().setIdempotencyKey(idempotencyKey).build();
         return PaymentIntent.create(params, options);
