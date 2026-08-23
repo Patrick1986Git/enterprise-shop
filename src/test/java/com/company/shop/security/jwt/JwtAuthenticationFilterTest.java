@@ -27,6 +27,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
@@ -39,12 +41,15 @@ class JwtAuthenticationFilterTest {
     @Mock
     private JwtTokenProvider jwtTokenProvider;
 
+    @Mock
+    private UserDetailsService userDetailsService;
+
     private JwtAuthenticationFilter filter;
 
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
-        filter = new JwtAuthenticationFilter(jwtTokenProvider);
+        filter = new JwtAuthenticationFilter(jwtTokenProvider, userDetailsService);
     }
 
     @AfterEach
@@ -101,7 +106,7 @@ class JwtAuthenticationFilterTest {
         MockFilterChain filterChain = new MockFilterChain();
         when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
         when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
-        when(jwtTokenProvider.getRoles(VALID_TOKEN)).thenReturn(ROLE_USER + "," + ROLE_ADMIN);
+        when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(activeUser(ROLE_USER, ROLE_ADMIN));
 
         filter.doFilter(request, response, filterChain);
 
@@ -122,13 +127,56 @@ class JwtAuthenticationFilterTest {
 
         verify(jwtTokenProvider).validate(VALID_TOKEN);
         verify(jwtTokenProvider).getUsername(VALID_TOKEN);
-        verify(jwtTokenProvider).getRoles(VALID_TOKEN);
         verifyNoMoreInteractions(jwtTokenProvider);
+        verify(userDetailsService).loadUserByUsername(USER_EMAIL);
+    }
+
+    @Test
+    void doFilter_shouldKeepAuthenticationNull_whenTokenSubjectDoesNotExist() throws Exception {
+        MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain filterChain = new MockFilterChain();
+        when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
+        when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(userDetailsService.loadUserByUsername(USER_EMAIL))
+                .thenThrow(new UsernameNotFoundException("User not found"));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertRequestPassedThroughFilterChain(filterChain, request, response);
+    }
+
+    @Test
+    void doFilter_shouldKeepAuthenticationNull_whenTokenSubjectIsDisabled() throws Exception {
+        MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain filterChain = new MockFilterChain();
+        when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
+        when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(
+                org.springframework.security.core.userdetails.User.withUsername(USER_EMAIL)
+                        .password("")
+                        .authorities(ROLE_ADMIN)
+                        .disabled(true)
+                        .build());
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertRequestPassedThroughFilterChain(filterChain, request, response);
     }
 
 
     private Set<String> authorityNames(Authentication authentication) {
         return authorityNames(authentication.getAuthorities());
+    }
+
+    private UserDetails activeUser(String... roles) {
+        return org.springframework.security.core.userdetails.User.withUsername(USER_EMAIL)
+                .password("")
+                .authorities(roles)
+                .build();
     }
 
     private Set<String> authorityNames(Collection<? extends GrantedAuthority> authorities) {
