@@ -27,6 +27,7 @@ import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.exception.OrderNotFoundException;
 import com.company.shop.module.order.exception.OrderPaymentNotAllowedException;
 import com.company.shop.module.order.exception.PaymentAlreadyCompletedException;
+import com.company.shop.module.order.exception.PaymentAmountInvalidException;
 import com.company.shop.module.order.exception.PaymentProcessingException;
 import com.company.shop.module.order.exception.PaymentRecordNotFoundException;
 import com.company.shop.module.order.exception.StripeConfigurationException;
@@ -185,7 +186,7 @@ public class PaymentServiceImpl implements PaymentService {
             incrementWebhookMetric(RESULT_FAILED);
             log.warn("Invalid Stripe webhook payload/signature", ex);
             throw new WebhookSignatureInvalidException();
-        } catch (OrderNotFoundException | WebhookSignatureInvalidException ex) {
+        } catch (OrderNotFoundException | PaymentAmountInvalidException | WebhookSignatureInvalidException ex) {
             incrementWebhookMetric(RESULT_FAILED);
             throw ex;
         } catch (Exception e) {

@@ -316,6 +316,33 @@ class AdminProductControllerWebMvcTest {
         }
 
         @Test
+        void createProduct_shouldReturnBadRequestWhenPriceContainsFractionalGrosz() throws Exception {
+            String invalidBody = """
+                    {
+                      "name": "Gaming Laptop",
+                      "sku": "SKU-200",
+                      "description": "Opis",
+                      "price": 19.999,
+                      "stock": 1,
+                      "categoryId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                      "imageUrls": []
+                    }
+                    """;
+
+            mockMvc.perform(post(ADMIN_PRODUCTS_URL)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidBody))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                    .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.price", not(empty())));
+
+            verifyNoInteractions(productService);
+        }
+
+        @Test
         void createProduct_shouldReturnBadRequestWhenDescriptionExceedsMaxLength() throws Exception {
             String invalidBody = """
                     {

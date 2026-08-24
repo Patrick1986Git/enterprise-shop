@@ -101,7 +101,7 @@ public class PaymentTerminalTransitionService {
     private void validatePaymentIntentMatchesOrder(PaymentIntent intent, Order order) {
         Long amount = intent.getAmountReceived() != null && intent.getAmountReceived() > 0
                 ? intent.getAmountReceived() : intent.getAmount();
-        long expectedAmount = order.getTotalAmount().movePointRight(2).longValue();
+        long expectedAmount = StripeMinorUnitConverter.fromPln(order.getTotalAmount());
         if (amount == null) {
             throw new WebhookSignatureInvalidException("PaymentIntent does not contain payment amount.");
         }
