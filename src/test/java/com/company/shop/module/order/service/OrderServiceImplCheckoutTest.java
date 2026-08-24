@@ -42,6 +42,7 @@ import com.company.shop.module.order.entity.Payment;
 import com.company.shop.module.order.exception.DiscountCodeInvalidException;
 import com.company.shop.module.order.exception.EmptyCartCheckoutException;
 import com.company.shop.module.order.exception.OrderInsufficientStockException;
+import com.company.shop.module.order.exception.OrderAmountInvalidException;
 import com.company.shop.module.order.mapper.OrderMapper;
 import com.company.shop.module.order.outbox.OrderOutboxEventRecorder;
 import com.company.shop.module.order.repository.DiscountCodeRepository;
@@ -270,6 +271,26 @@ class OrderServiceImplCheckoutTest {
 
 	@Nested
 	class PlaceOrderFromCartGuardClauseTests {
+
+		@Test
+		void placeOrderFromCart_shouldRejectAggregateOverflowBeforeDurableCheckoutWorkOrStripe() {
+			User user = user();
+			Product product = product(17, 2, new BigDecimal("9999999999.99"));
+			CartCheckoutSnapshot cart = cart(user, product, 2);
+
+			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
+			stubUnseenCheckoutKey(user);
+			when(cartCheckoutFacade.getCartForCheckout(user.getId())).thenReturn(cart);
+			when(productCatalogFacade.reserveProductForCheckout(product.getId(), 2))
+					.thenReturn(new CheckoutProduct(product.getId(), product.getName(), product.getSku(), product.getPrice()));
+
+			assertThatThrownBy(() -> service.placeOrderFromCart("checkout-key", new OrderCheckoutRequestDTO(null, null)))
+					.isInstanceOf(OrderAmountInvalidException.class);
+
+			verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
+			verify(orderRepository, never()).save(any(Order.class));
+			verifyNoInteractions(paymentRepository, paymentService, orderMapper, orderOutboxEventRecorder);
+		}
 
 		@Test
 		void placeOrderFromCart_shouldThrowWhenCartIsEmpty() {
