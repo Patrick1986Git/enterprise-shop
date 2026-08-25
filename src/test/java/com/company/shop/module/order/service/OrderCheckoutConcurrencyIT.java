@@ -1,7 +1,10 @@
 package com.company.shop.module.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -26,6 +29,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.UnexpectedRollbackException;
 
@@ -38,9 +42,11 @@ import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.Payment;
 import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.exception.OrderInsufficientStockException;
+import com.company.shop.module.order.exception.OrderAmountInvalidException;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.product.entity.Product;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.user.api.internal.CurrentUserFacade;
 import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
@@ -84,6 +90,9 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
 
     @MockitoBean
     private PaymentService paymentService;
+
+    @MockitoSpyBean
+    private ProductCatalogFacade productCatalogFacade;
 
     private final ThreadLocal<User> currentUser = new ThreadLocal<>();
 
@@ -158,6 +167,48 @@ class OrderCheckoutConcurrencyIT extends PostgresContainerSupport {
         assertThat(readPersistedCheckoutState(user, product))
                 .as("different keys represent distinct logical checkouts even when the cart is unchanged")
                 .isEqualTo(new PersistedCheckoutState(2L, 2L, 6L, 4L, 2L));
+    }
+
+    @Test
+    void placeOrderFromCart_shouldRollBackRealStockReservationWhenAggregateAmountIsInvalid() {
+        Category category = categoryRepository.saveAndFlush(new Category(
+                "Aggregate rollback", "aggregate-rollback", "Aggregate monetary rollback diagnostic"));
+        Product product = productRepository.saveAndFlush(new Product(
+                "Aggregate rollback product",
+                "aggregate-rollback-product",
+                "AGGREGATE-ROLLBACK-1",
+                "Product whose valid unit price overflows only after quantity multiplication",
+                new BigDecimal("9999999999.99"),
+                2,
+                category));
+        User user = userRepository.saveAndFlush(new User(
+                "aggregate-rollback@example.com", "encoded", "Aggregate", "Rollback"));
+        createCartWithSingleItem(user, product, 2);
+        currentUser.set(user);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT stock FROM products WHERE id = ?", Integer.class, product.getId())).isEqualTo(2);
+
+        assertThatThrownBy(() -> orderService.placeOrderFromCart(
+                "aggregate-rollback-key", new OrderCheckoutRequestDTO(null, null)))
+                .isInstanceOf(OrderAmountInvalidException.class);
+
+        verify(productCatalogFacade).reserveProductForCheckout(product.getId(), 2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT stock FROM products WHERE id = ?", Integer.class, product.getId()))
+                .as("the real PostgreSQL stock decrement must roll back with the rejected checkout")
+                .isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM orders WHERE user_id = ? AND checkout_idempotency_key = ?",
+                Long.class, user.getId(), "aggregate-rollback-key")).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM order_items WHERE product_id = ?", Long.class, product.getId())).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM payments", Long.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM reservation_expiration_work", Long.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'OrderPlaced'", Long.class)).isZero();
+        verifyNoInteractions(paymentService);
     }
 
     @Test

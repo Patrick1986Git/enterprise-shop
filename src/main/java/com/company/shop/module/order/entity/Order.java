@@ -19,6 +19,7 @@ import java.time.Instant;
 import org.hibernate.annotations.SQLRestriction;
 
 import com.company.shop.common.model.SoftDeleteEntity;
+import com.company.shop.module.order.exception.OrderAmountInvalidException;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -42,6 +43,9 @@ import jakarta.persistence.Table;
 @Table(name = "orders")
 @SQLRestriction("deleted = false")
 public class Order extends SoftDeleteEntity {
+
+    private static final int TOTAL_SCALE = 2;
+    private static final int TOTAL_INTEGER_DIGITS = 10;
 
     /**
      * Identifier of the customer who placed the order.
@@ -123,6 +127,8 @@ public class Order extends SoftDeleteEntity {
         if (item == null) {
             return;
         }
+        BigDecimal recalculatedTotal = calculateTotalWith(item);
+        validatePayableTotal(recalculatedTotal);
         this.items.add(item);
         item.setOrder(this);
         recalculateTotal();
@@ -150,7 +156,9 @@ public class Order extends SoftDeleteEntity {
         BigDecimal multiplier = BigDecimal.valueOf(100 - discountCode.getDiscountPercent())
                 .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
 
-        this.totalAmount = this.totalAmount.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discountedTotal = this.totalAmount.multiply(multiplier).setScale(TOTAL_SCALE, RoundingMode.HALF_UP);
+        validatePayableTotal(discountedTotal);
+        this.totalAmount = discountedTotal;
 
         discountCode.incrementUsage();
     }
@@ -179,9 +187,30 @@ public class Order extends SoftDeleteEntity {
      * Internally recalculates the sum of all item prices multiplied by their quantities.
      */
     private void recalculateTotal() {
-        this.totalAmount = items.stream()
+        BigDecimal calculatedTotal = items.stream()
                 .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        validatePayableTotal(calculatedTotal);
+        this.totalAmount = calculatedTotal.setScale(TOTAL_SCALE, RoundingMode.UNNECESSARY);
+    }
+
+    private BigDecimal calculateTotalWith(OrderItem additionalItem) {
+        return this.totalAmount.add(
+                additionalItem.getPrice().multiply(BigDecimal.valueOf(additionalItem.getQuantity())));
+    }
+
+    private void validatePayableTotal(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new OrderAmountInvalidException();
+        }
+        try {
+            BigDecimal persistedAmount = amount.setScale(TOTAL_SCALE, RoundingMode.UNNECESSARY);
+            if (persistedAmount.precision() - persistedAmount.scale() > TOTAL_INTEGER_DIGITS) {
+                throw new OrderAmountInvalidException();
+            }
+        } catch (ArithmeticException ex) {
+            throw new OrderAmountInvalidException();
+        }
     }
 
     public UUID getUserId() {
