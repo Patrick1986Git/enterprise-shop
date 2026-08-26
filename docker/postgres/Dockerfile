@@ -6,7 +6,7 @@ LABEL org.opencontainers.image.title="Enterprise Shop PostgreSQL" \
 
 ARG TSEARCH_DIR=/usr/local/share/postgresql/tsearch_data
 
-RUN apk upgrade --no-cache c-ares
+RUN apk upgrade --no-cache c-ares libcrypto3 libssl3
 
 # Polish Hunspell dictionary files required by the polish_hunspell dictionary
 # created by Flyway migration V5 and mirrored by PostgresContainerSupport tests.
