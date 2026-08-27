@@ -436,7 +436,7 @@ class PaymentServiceImplWebhookTest {
         payment.attachProviderPayment("pi_existing", "cs_any");
 
         Event event = failedEvent("evt_failed_provider_mismatch",
-                paymentIntentWithMetadataAndId(order.getId(), "pi_other"));
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(order.getId(), 2500L, "pln", "pi_other"));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
@@ -461,7 +461,8 @@ class PaymentServiceImplWebhookTest {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
         Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
-        Event event = failedEvent("evt_payment_failed", paymentIntentWithMetadata(order.getId()));
+        Event event = failedEvent("evt_payment_failed",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(order.getId(), 1999L, "pln", "pi_failed"));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
@@ -474,6 +475,7 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_payment_failed", "payment_intent.payment_failed");
             assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+            assertThat(payment.getProviderPaymentId()).isEqualTo("pi_failed");
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
             verify(paymentRepository).save(payment);
             verify(orderRepository, never()).save(order);
@@ -487,7 +489,9 @@ class PaymentServiceImplWebhookTest {
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
         Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         payment.markAsCompleted();
-        Event event = failedEvent("evt_payment_failed_late", paymentIntentWithMetadata(order.getId()));
+        payment.attachProviderPayment("pi_late", "cs_late");
+        Event event = failedEvent("evt_payment_failed_late",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(order.getId(), 1999L, "pln", "pi_late"));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
@@ -504,6 +508,56 @@ class PaymentServiceImplWebhookTest {
             verify(orderRepository, never()).save(order);
             verifyNoInteractions(cartCheckoutFacade);
         }
+    }
+
+    @Test
+    void handleWebhook_shouldRejectFailedEventWithWrongAmountBeforeAttachingProviderIdentity() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        Event event = failedEvent("evt_failed_wrong_amount",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(order.getId(), 1998L, "pln", "pi_failed"));
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("amount does not match");
+        }
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getProviderPaymentId()).isNull();
+        verify(paymentRepository, never()).save(payment);
+        verify(orderRepository, never()).save(order);
+        verifyNoInteractions(cartCheckoutFacade, productCatalogFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldRejectFailedEventWithWrongCurrencyBeforeAttachingProviderIdentity() {
+        givenWebhookEventRegistrationSucceeds();
+        Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
+        Event event = failedEvent("evt_failed_wrong_currency",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(order.getId(), 1999L, "eur", "pi_failed"));
+        when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookSignatureInvalidException.class)
+                    .hasMessageContaining("currency");
+        }
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(payment.getProviderPaymentId()).isNull();
+        verify(paymentRepository, never()).save(payment);
+        verify(orderRepository, never()).save(order);
+        verifyNoInteractions(cartCheckoutFacade, productCatalogFacade);
     }
 
     @Test
@@ -924,14 +978,14 @@ class PaymentServiceImplWebhookTest {
     private PaymentIntent paymentIntentWithMetadataAndAmountReceivedAndCurrency(UUID orderId, Long amountReceived,
             String currency) {
         PaymentIntent intent = paymentIntentWithMetadataAndAmountReceived(orderId, amountReceived);
-        when(intent.getCurrency()).thenReturn(currency);
+        lenient().when(intent.getCurrency()).thenReturn(currency);
         return intent;
     }
 
     private PaymentIntent paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(UUID orderId, Long amountReceived,
             String currency, String intentId) {
         PaymentIntent intent = paymentIntentWithMetadataAndAmountReceivedAndCurrency(orderId, amountReceived, currency);
-        when(intent.getId()).thenReturn(intentId);
+        lenient().when(intent.getId()).thenReturn(intentId);
         return intent;
     }
 

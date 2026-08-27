@@ -21,15 +21,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import com.company.shop.common.exception.BusinessException;
 import com.company.shop.module.order.dto.PaymentIntentResponseDTO;
 import com.company.shop.module.order.entity.Order;
-import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.entity.Payment;
-import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.exception.OrderNotFoundException;
 import com.company.shop.module.order.exception.OrderPaymentNotAllowedException;
 import com.company.shop.module.order.exception.PaymentAlreadyCompletedException;
 import com.company.shop.module.order.exception.PaymentAmountInvalidException;
 import com.company.shop.module.order.exception.PaymentProcessingException;
-import com.company.shop.module.order.exception.PaymentRecordNotFoundException;
 import com.company.shop.module.order.exception.StripeConfigurationException;
 import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
@@ -38,9 +35,7 @@ import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.expiration.StripePaymentIntentGateway;
 import com.stripe.Stripe;
 import com.stripe.model.PaymentIntent;
-import com.stripe.net.RequestOptions;
 import com.stripe.net.Webhook;
-import com.stripe.param.PaymentIntentCreateParams;
 
 import jakarta.annotation.PostConstruct;
 
@@ -221,23 +216,7 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
-        Order order = findOrderByWebhookMetadata(intent);
-        Payment payment = paymentRepo.findByOrderIdForUpdate(order.getId())
-                .orElseThrow(() -> new PaymentRecordNotFoundException(order.getId()));
-
-        validateProviderPaymentId(intent, payment);
-
-        if (payment.getStatus() == PaymentStatus.COMPLETED) {
-            log.info("Ignoring payment_failed webhook for already completed payment orderId={}", order.getId());
-            return false;
-        }
-
-        payment.markAsFailed();
-        paymentRepo.save(payment);
-        log.info("Payment marked as failed from webhook orderId={} paymentId={} userId={} providerPaymentId={} orderStatus={} paymentStatus={}",
-                order.getId(), payment.getId(), order.getUserId(), intent.getId(), order.getStatus(),
-                payment.getStatus());
-        return true;
+        return terminalTransitions.convergeFailed(orderIdFromMetadata(intent), intent);
     }
 
     private boolean handlePaymentIntentCanceled(com.stripe.model.Event event) {
@@ -252,34 +231,11 @@ public class PaymentServiceImpl implements PaymentService {
         return terminalTransitions.convergeCanceled(orderIdFromMetadata(intent), intent) > 0;
     }
 
-    private Order findOrderByWebhookMetadata(PaymentIntent intent) {
-        Map<String, String> metadata = intent.getMetadata();
-        String orderId = metadata != null ? metadata.get("orderId") : null;
-        if (orderId == null || orderId.isBlank()) {
-            log.warn("Stripe webhook missing orderId metadata providerPaymentId={}", intent.getId());
-            throw new WebhookSignatureInvalidException("Missing orderId metadata in Stripe webhook.");
-        }
-
-        UUID parsedOrderId = UUID.fromString(orderId);
-        return orderRepo.findByIdForUpdate(parsedOrderId)
-                .orElseThrow(() -> new OrderNotFoundException(parsedOrderId));
-    }
-
     private UUID orderIdFromMetadata(PaymentIntent intent) {
         Map<String, String> metadata = intent.getMetadata();
         String orderId = metadata != null ? metadata.get("orderId") : null;
         if (orderId == null || orderId.isBlank()) throw new WebhookSignatureInvalidException("Missing orderId metadata in Stripe webhook.");
         return UUID.fromString(orderId);
-    }
-
-    private void validateProviderPaymentId(PaymentIntent intent, Payment payment) {
-        if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
-                && !payment.getProviderPaymentId().equals(intent.getId())) {
-            log.warn("Stripe providerPaymentId mismatch orderId={} paymentId={} storedProviderPaymentId={} incomingProviderPaymentId={}",
-                    payment.getOrder().getId(), payment.getId(), payment.getProviderPaymentId(), intent.getId());
-            throw new WebhookSignatureInvalidException(
-                    "Webhook paymentIntent id does not match stored provider payment id.");
-        }
     }
 
 }

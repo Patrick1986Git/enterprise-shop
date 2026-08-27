@@ -73,6 +73,18 @@ public class PaymentTerminalTransitionService {
         return reservedItems.stream().mapToInt(ReservedInventoryItem::quantity).sum();
     }
 
+    @Transactional
+    public boolean convergeFailed(UUID orderId, PaymentIntent intent) {
+        Order order = lockOrder(orderId);
+        Payment payment = lockPayment(orderId);
+        validatePaymentIntentMatchesOrder(intent, order);
+        attachOrValidateProviderPayment(intent, payment);
+        if (payment.getStatus() == PaymentStatus.COMPLETED) return false;
+        payment.markAsFailed();
+        paymentRepository.save(payment);
+        return true;
+    }
+
     private Order lockOrder(UUID orderId) {
         return orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
     }
