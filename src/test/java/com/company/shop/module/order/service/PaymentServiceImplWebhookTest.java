@@ -135,6 +135,26 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
+    void handleWebhook_shouldIgnoreCanceledEventWhenDeserializerObjectMissing() {
+        givenWebhookEventRegistrationSucceeds();
+        Event event = event("evt_canceled_missing_intent", "payment_intent.canceled");
+        EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
+        when(event.getDataObjectDeserializer()).thenReturn(deserializer);
+        when(deserializer.getObject()).thenReturn(Optional.empty());
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+
+            verifyWebhookEventRegistered("evt_canceled_missing_intent", "payment_intent.canceled");
+            assertWebhookMetricCount("received", 1);
+            assertWebhookMetricCount("ignored", 1);
+            verifyNoInteractions(orderRepository, paymentRepository, productCatalogFacade, cartCheckoutFacade);
+        }
+    }
+
+    @Test
     void handleWebhook_shouldRegisterSupportedEventBeforeBusinessValidationFailure() {
         givenWebhookEventRegistrationSucceeds();
         Event event = event("evt_missing_order_id", "payment_intent.succeeded");
