@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -365,7 +366,9 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	}
 
 	private SeededOrder seedOrderWithPayment(BigDecimal orderAmount, String paymentIntentId) {
-		User user = userRepository.save(new User("stripe-webhook-" + paymentIntentId + "@example.com", "encoded-pass", "Test", "User"));
+		String fixtureToken = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+		User user = userRepository.save(new User("stripe-webhook-" + fixtureToken + "@example.com",
+				"encoded-pass", "Test", "User"));
 
 		Order order = new Order(user.getId(), user.getEmail());
 		setOrderTotal(order, orderAmount);
