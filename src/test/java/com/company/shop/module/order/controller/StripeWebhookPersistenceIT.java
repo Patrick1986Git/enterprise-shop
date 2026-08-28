@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +56,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	private static final String STRIPE_SIGNATURE = "sig";
 	private static final String WEBHOOK_PAYLOAD = "payload";
 	private static final String SUCCEEDED_EVENT_TYPE = "payment_intent.succeeded";
+	private static final String FAILED_EVENT_TYPE = "payment_intent.payment_failed";
 	private static final String UNSUPPORTED_EVENT_TYPE = "payment_intent.processing";
 
 	@Autowired
@@ -320,27 +322,79 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		verifyNoInteractions(cartCheckoutFacade);
 	}
 
+	@Test
+	void handleStripeWebhook_shouldReconcileFailedIntentAfterLocalProviderAttachmentWasLost() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(35), null);
+		Event event = paymentIntentEvent("evt_failed_lost_attach", FAILED_EVENT_TYPE,
+				seededOrder.order().getId().toString(), "pi_original", 3500L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isOk());
+		}
+
+		Order unchangedOrder = orderRepository.findById(seededOrder.order().getId()).orElseThrow();
+		Payment reconciledPayment = paymentRepository.findByOrderId(seededOrder.order().getId()).orElseThrow();
+		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
+		assertThat(reconciledPayment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertThat(reconciledPayment.getProviderPaymentId()).isEqualTo("pi_original");
+		assertStripeWebhookEventPersisted("evt_failed_lost_attach", FAILED_EVENT_TYPE);
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
+	void handleStripeWebhook_shouldRollBackFailedEventRegistrationAndStateWhenMonetaryValidationFails() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(35), null);
+		Event event = paymentIntentEvent("evt_failed_wrong_amount", FAILED_EVENT_TYPE,
+				seededOrder.order().getId().toString(), "pi_untrusted", 3499L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.errorCode").value("STRIPE_WEBHOOK_SIGNATURE_INVALID"));
+		}
+
+		Order unchangedOrder = orderRepository.findById(seededOrder.order().getId()).orElseThrow();
+		Payment unchangedPayment = paymentRepository.findByOrderId(seededOrder.order().getId()).orElseThrow();
+		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
+		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+		assertThat(unchangedPayment.getProviderPaymentId()).isNull();
+		assertStripeWebhookEventNotPersisted("evt_failed_wrong_amount");
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
 	private SeededOrder seedOrderWithPayment(BigDecimal orderAmount, String paymentIntentId) {
-		User user = userRepository.save(new User("stripe-webhook-" + paymentIntentId + "@example.com", "encoded-pass", "Test", "User"));
+		String fixtureToken = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+		User user = userRepository.save(new User("stripe-webhook-" + fixtureToken + "@example.com",
+				"encoded-pass", "Test", "User"));
 
 		Order order = new Order(user.getId(), user.getEmail());
 		setOrderTotal(order, orderAmount);
 		Order savedOrder = orderRepository.save(order);
 
 		Payment payment = new Payment(savedOrder, "STRIPE", orderAmount);
-		payment.attachProviderPayment(paymentIntentId, "cs_" + paymentIntentId);
+		if (paymentIntentId != null) {
+			payment.attachProviderPayment(paymentIntentId, "cs_" + paymentIntentId);
+		}
 		paymentRepository.save(payment);
 
 		return new SeededOrder(user, savedOrder);
 	}
 
 	private Event succeededEvent(String eventId, String orderId, String paymentIntentId, long amountReceived, String currency) {
+		return paymentIntentEvent(eventId, SUCCEEDED_EVENT_TYPE, orderId, paymentIntentId, amountReceived, currency);
+	}
+
+	private Event paymentIntentEvent(String eventId, String eventType, String orderId, String paymentIntentId,
+			long amountReceived, String currency) {
 		Event event = mock(Event.class);
 		EventDataObjectDeserializer deserializer = mock(EventDataObjectDeserializer.class);
 		PaymentIntent paymentIntent = mock(PaymentIntent.class);
 
 		when(event.getId()).thenReturn(eventId);
-		when(event.getType()).thenReturn(SUCCEEDED_EVENT_TYPE);
+		when(event.getType()).thenReturn(eventType);
 		when(event.getDataObjectDeserializer()).thenReturn(deserializer);
 		when(deserializer.getObject()).thenReturn(java.util.Optional.of(paymentIntent));
 		when(paymentIntent.getMetadata()).thenReturn(Map.of("orderId", orderId));
