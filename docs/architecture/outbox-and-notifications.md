@@ -136,3 +136,10 @@ application-level prevention of concurrent delivery for a valid lease. SMTP has 
 provider-side idempotency contract: if the provider accepts a message and the process
 fails before local success finalization, lease recovery can send it again. The system
 therefore does not promise exactly-once external delivery.
+
+The default claim lease is five minutes. The application does not currently configure
+JavaMail connection, read, or write timeouts, so an SMTP operation can outlive that
+lease. In that case recovery may start a new send while the stale sender is still
+running; token ownership prevents the stale worker from changing database state but
+cannot prevent or undo either external SMTP side effect. Operators must configure
+bounded provider timeouts below the claim lease when enabling SMTP.
