@@ -12,6 +12,7 @@ public class NotificationDeliveryProperties {
     private Duration fixedDelay = Duration.ofSeconds(10);
     private int maxAttempts = 3;
     private Duration retryDelay = Duration.ofMinutes(1);
+    private Duration claimDuration = Duration.ofMinutes(5);
 
     public boolean enabled() {
         return enabled;
@@ -32,6 +33,7 @@ public class NotificationDeliveryProperties {
     public Duration retryDelay() {
         return retryDelay;
     }
+    public Duration claimDuration() { return claimDuration; }
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
@@ -52,4 +54,5 @@ public class NotificationDeliveryProperties {
     public void setRetryDelay(Duration retryDelay) {
         this.retryDelay = retryDelay;
     }
+    public void setClaimDuration(Duration claimDuration) { this.claimDuration = claimDuration; }
 }

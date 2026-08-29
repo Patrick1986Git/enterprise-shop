@@ -17,7 +17,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
-import com.company.shop.module.notification.repository.NotificationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationDeliveryProcessorTest {
@@ -25,7 +24,7 @@ class NotificationDeliveryProcessorTest {
     private static final int BATCH_SIZE = 25;
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private NotificationDeliveryTransactionalWorker transactionalWorker;
 
     @Mock
     private NotificationSender notificationSender;
@@ -36,7 +35,7 @@ class NotificationDeliveryProcessorTest {
     @BeforeEach
     void setUp() {
         properties = new NotificationDeliveryProperties();
-        processor = new NotificationDeliveryProcessor(notificationRepository, notificationSender, properties);
+        processor = new NotificationDeliveryProcessor(transactionalWorker, notificationSender);
     }
 
     @Test
@@ -46,7 +45,7 @@ class NotificationDeliveryProcessorTest {
                 "temporary failure",
                 properties.maxAttempts(),
                 Instant.now().minusSeconds(60));
-        when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
+        stubClaim(BATCH_SIZE, notification);
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
 
@@ -64,7 +63,7 @@ class NotificationDeliveryProcessorTest {
     @Test
     void processPendingBatch_shouldKeepNotificationPendingWhenSenderThrowsAndAttemptsRemainBelowMaxAttempts() {
         Notification notification = pendingNotification();
-        when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
+        stubClaim(BATCH_SIZE, notification);
         doThrow(new IllegalStateException("sender failed")).when(notificationSender).send(notification);
         Instant beforeProcessing = Instant.now();
 
@@ -88,7 +87,7 @@ class NotificationDeliveryProcessorTest {
                 "first temporary failure",
                 properties.maxAttempts(),
                 Instant.now().plusSeconds(60));
-        when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
+        stubClaim(BATCH_SIZE, notification);
         doThrow(new IllegalStateException("sender failed")).when(notificationSender).send(notification);
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
@@ -105,7 +104,7 @@ class NotificationDeliveryProcessorTest {
 
     @Test
     void processPendingBatch_shouldReturnEmptyResultForEmptyBatch() {
-        when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of());
+        when(transactionalWorker.claimBatch(BATCH_SIZE)).thenReturn(List.of());
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
 
@@ -116,17 +115,17 @@ class NotificationDeliveryProcessorTest {
     @Test
     void processPendingBatch_shouldPassBatchSizeToRepository() {
         int batchSize = 7;
-        when(notificationRepository.findPendingBatchForUpdate(batchSize)).thenReturn(List.of());
+        when(transactionalWorker.claimBatch(batchSize)).thenReturn(List.of());
 
         processor.processPendingBatch(batchSize);
 
-        verify(notificationRepository).findPendingBatchForUpdate(batchSize);
+        verify(transactionalWorker).claimBatch(batchSize);
     }
 
     @Test
     void processPendingBatch_shouldUseExceptionClassNameWhenExceptionMessageIsNull() {
         Notification notification = pendingNotification();
-        when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
+        stubClaim(BATCH_SIZE, notification);
         doThrow(new NullMessageException()).when(notificationSender).send(notification);
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
@@ -139,12 +138,20 @@ class NotificationDeliveryProcessorTest {
     @Test
     void processPendingBatch_shouldUseExceptionClassNameWhenExceptionMessageIsBlank() {
         Notification notification = pendingNotification();
-        when(notificationRepository.findPendingBatchForUpdate(BATCH_SIZE)).thenReturn(List.of(notification));
+        stubClaim(BATCH_SIZE, notification);
         doThrow(new IllegalStateException("   ")).when(notificationSender).send(notification);
 
         processor.processPendingBatch(BATCH_SIZE);
 
         assertThat(notification.getLastError()).isEqualTo(IllegalStateException.class.getName());
+    }
+
+    private void stubClaim(int batchSize, Notification notification) {
+        UUID token = UUID.randomUUID();
+        when(transactionalWorker.claimBatch(batchSize)).thenReturn(List.of(new ClaimedNotification(notification, token)));
+        when(transactionalWorker.finalizeSuccess(notification.getId(), token)).thenReturn(true);
+        when(transactionalWorker.finalizeFailure(org.mockito.ArgumentMatchers.eq(notification.getId()),
+                org.mockito.ArgumentMatchers.eq(token), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
     }
 
     private Notification pendingNotification() {

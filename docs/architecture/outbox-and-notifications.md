@@ -117,3 +117,22 @@ Notification creation has two protections tied to `sourceEventId`:
 These protections cover duplicate processing of the same outbox event after crashes, retries, manual requeues, or concurrent races where the same event is attempted more than once. They also protect against duplicate notification records when a notification was committed but the outbox event was later retried.
 
 They do not protect against duplicates across different outbox event ids for the same order, side effects that occur outside the database after a notification is later delivered, duplicate rows when `sourceEventId` is null, or duplicate records created by a future handler that does not pass the source outbox event id. This protection must not be removed or weakened when changing transaction isolation.
+## Notification delivery transaction contract
+
+Delivery uses three explicit phases. A short transaction locks an eligible batch with
+`FOR UPDATE SKIP LOCKED`, assigns each row a unique claim token and lease, increments
+the attempt count, and commits. The sender then performs SMTP or other external I/O
+without a database transaction or row lock. A separate short transaction changes the
+row to `SENT`, or durably records a retry/terminal failure, only when the claim token
+still owns the row.
+
+An unexpired claim cannot be stolen. An expired claim is eligible for a new worker;
+the new token prevents the stale worker from finalizing over that recovery attempt.
+An expired final allowed attempt becomes `FAILED`. Operators may requeue only
+`FAILED` notifications, so an active claim cannot be mutated concurrently.
+
+The guarantee is at-least-once attempted delivery with bounded retries and
+application-level prevention of concurrent delivery for a valid lease. SMTP has no
+provider-side idempotency contract: if the provider accepts a message and the process
+fails before local success finalization, lease recovery can send it again. The system
+therefore does not promise exactly-once external delivery.
