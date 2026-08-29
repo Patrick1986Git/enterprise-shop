@@ -68,6 +68,13 @@ app:
       claim-lease: ${ORDER_RESERVATION_CLAIM_LEASE:PT5M}
       batch-size: ${ORDER_RESERVATION_BATCH_SIZE:25}
       max-attempts: ${ORDER_RESERVATION_MAX_ATTEMPTS:10}
+  notification:
+    smtp:
+      enabled: ${NOTIFICATION_SMTP_ENABLED:false}
+      from: ${NOTIFICATION_SMTP_FROM:no-reply@enterprise-shop.local}
+      connection-timeout: ${NOTIFICATION_SMTP_CONNECTION_TIMEOUT:PT30S}
+      read-timeout: ${NOTIFICATION_SMTP_READ_TIMEOUT:PT30S}
+      write-timeout: ${NOTIFICATION_SMTP_WRITE_TIMEOUT:PT30S}
 
 # #############################################################################
 # OBSERVABILITY: PRODUCTION LOGGING

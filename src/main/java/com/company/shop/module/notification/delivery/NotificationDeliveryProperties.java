@@ -40,19 +40,28 @@ public class NotificationDeliveryProperties {
     }
 
     public void setBatchSize(int batchSize) {
+        if (batchSize < 1) throw new IllegalArgumentException("batchSize must be positive");
         this.batchSize = batchSize;
     }
 
     public void setFixedDelay(Duration fixedDelay) {
-        this.fixedDelay = fixedDelay;
+        this.fixedDelay = positive(fixedDelay, "fixedDelay");
     }
 
     public void setMaxAttempts(int maxAttempts) {
+        if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be positive");
         this.maxAttempts = maxAttempts;
     }
 
     public void setRetryDelay(Duration retryDelay) {
-        this.retryDelay = retryDelay;
+        this.retryDelay = positive(retryDelay, "retryDelay");
     }
-    public void setClaimDuration(Duration claimDuration) { this.claimDuration = claimDuration; }
+    public void setClaimDuration(Duration claimDuration) { this.claimDuration = positive(claimDuration, "claimDuration"); }
+
+    private Duration positive(Duration value, String name) {
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalArgumentException(name + " must be positive");
+        }
+        return value;
+    }
 }
