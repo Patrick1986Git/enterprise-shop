@@ -81,6 +81,32 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
     }
 
     @Test
+    void blockedFirstSend_shouldNotPreclaimOrLaterResendSecondNotification() throws Exception {
+        Notification x = save("batch-x@example.com");
+        Notification y = save("batch-y@example.com");
+        jdbcTemplate.update("UPDATE notifications SET created_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minusSeconds(2)), x.getId());
+        jdbcTemplate.update("UPDATE notifications SET created_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minusSeconds(1)), y.getId());
+        sender.blockRecipient(x.getRecipient());
+
+        CompletableFuture<NotificationDeliveryResult> workerA = CompletableFuture.supplyAsync(
+                () -> processor.processPendingBatch(2));
+        assertThat(sender.awaitBlocked()).isTrue();
+
+        assertThat(row(x.getId()).get("status")).isEqualTo("PROCESSING");
+        assertThat(row(y.getId()).get("status")).isEqualTo("PENDING");
+        assertThat(sender.sentRecipients()).doesNotContain(y.getRecipient());
+
+        assertThat(processor.processPendingBatch(1).sentCount()).isEqualTo(1);
+        assertThat(row(y.getId()).get("status")).isEqualTo("SENT");
+
+        sender.release();
+        assertThat(workerA.get(10, TimeUnit.SECONDS).sentCount()).isEqualTo(1);
+        assertThat(sender.sentRecipients()).containsOnlyOnce(y.getRecipient());
+    }
+
+    @Test
     void expiredClaim_shouldBeReownedAndRejectBothStaleFinalizers() {
         Notification notification = save("recover@example.com");
         ClaimedNotification oldClaim = transactionalWorker.claimBatch(1).getFirst();

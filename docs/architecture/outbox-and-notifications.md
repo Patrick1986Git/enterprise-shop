@@ -119,9 +119,11 @@ These protections cover duplicate processing of the same outbox event after cras
 They do not protect against duplicates across different outbox event ids for the same order, side effects that occur outside the database after a notification is later delivered, duplicate rows when `sourceEventId` is null, or duplicate records created by a future handler that does not pass the source outbox event id. This protection must not be removed or weakened when changing transaction isolation.
 ## Notification delivery transaction contract
 
-Delivery uses three explicit phases. A short transaction locks an eligible batch with
-`FOR UPDATE SKIP LOCKED`, assigns each row a unique claim token and lease, increments
-the attempt count, and commits. The sender then performs SMTP or other external I/O
+Delivery uses three explicit phases. For each item, a short transaction locks one eligible
+row with `FOR UPDATE SKIP LOCKED`, assigns a unique claim token and lease, increments
+the attempt count, and commits. The configured batch size limits how many of these
+per-item cycles a poll processes; later items are not claimed while an earlier send is
+still running. The sender then performs SMTP or other external I/O
 without a database transaction or row lock. A separate short transaction changes the
 row to `SENT`, or durably records a retry/terminal failure, only when the claim token
 still owns the row.

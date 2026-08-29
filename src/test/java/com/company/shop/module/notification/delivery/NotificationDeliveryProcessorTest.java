@@ -3,6 +3,7 @@ package com.company.shop.module.notification.delivery;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,7 +43,7 @@ class NotificationDeliveryProcessorTest {
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
 
-        verify(transactionalWorker).claimBatch(BATCH_SIZE);
+        verify(transactionalWorker, times(2)).claimBatch(1);
         verify(notificationSender).send(notification);
         verify(transactionalWorker).finalizeSuccess(notification.getId(), token);
         verify(transactionalWorker, never()).finalizeFailure(notification.getId(), token, "sender failed");
@@ -92,11 +93,11 @@ class NotificationDeliveryProcessorTest {
 
     @Test
     void processPendingBatch_shouldReturnEmptyResultForEmptyBatch() {
-        when(transactionalWorker.claimBatch(BATCH_SIZE)).thenReturn(List.of());
+        when(transactionalWorker.claimBatch(1)).thenReturn(List.of());
 
         NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
 
-        verify(transactionalWorker).claimBatch(BATCH_SIZE);
+        verify(transactionalWorker).claimBatch(1);
         assertThat(result.sentCount()).isZero();
         assertThat(result.failedCount()).isZero();
     }
@@ -129,7 +130,8 @@ class NotificationDeliveryProcessorTest {
 
     private UUID stubClaim(Notification notification) {
         UUID token = UUID.randomUUID();
-        when(transactionalWorker.claimBatch(BATCH_SIZE)).thenReturn(List.of(new ClaimedNotification(notification, token)));
+        when(transactionalWorker.claimBatch(1))
+                .thenReturn(List.of(new ClaimedNotification(notification, token)), List.of());
         return token;
     }
 

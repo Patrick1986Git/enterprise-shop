@@ -1,7 +1,5 @@
 package com.company.shop.module.notification.delivery;
 
-import java.util.List;
-
 import org.springframework.stereotype.Component;
 
 import com.company.shop.module.notification.entity.Notification;
@@ -20,11 +18,14 @@ public class NotificationDeliveryProcessor {
     }
 
     public NotificationDeliveryResult processPendingBatch(int batchSize) {
-        List<ClaimedNotification> pendingNotifications = transactionalWorker.claimBatch(batchSize);
         int sentCount = 0;
         int failedCount = 0;
 
-        for (ClaimedNotification claim : pendingNotifications) {
+        for (int processedCount = 0; processedCount < batchSize; processedCount++) {
+            ClaimedNotification claim = transactionalWorker.claimBatch(1).stream().findFirst().orElse(null);
+            if (claim == null) {
+                break;
+            }
             Notification notification = claim.notification();
             try {
                 notificationSender.send(notification);
