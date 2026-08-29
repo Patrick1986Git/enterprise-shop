@@ -61,6 +61,12 @@ public class Notification extends BaseEntity {
     @Column(name = "next_attempt_at")
     private Instant nextAttemptAt;
 
+    @Column(name = "claim_token")
+    private UUID claimToken;
+
+    @Column(name = "claim_expires_at")
+    private Instant claimExpiresAt;
+
     protected Notification() {
     }
 
@@ -86,6 +92,50 @@ public class Notification extends BaseEntity {
         this.lastAttemptAt = now;
         this.lastError = null;
         this.nextAttemptAt = null;
+    }
+
+    public void claim(UUID token, Instant now, Instant expiresAt) {
+        if (status != NotificationStatus.PENDING
+                && !(status == NotificationStatus.PROCESSING && !claimExpiresAt.isAfter(now))) {
+            throw new IllegalStateException("Notification is not eligible for delivery");
+        }
+        status = NotificationStatus.PROCESSING;
+        claimToken = java.util.Objects.requireNonNull(token);
+        claimExpiresAt = java.util.Objects.requireNonNull(expiresAt);
+        attempts++;
+        lastAttemptAt = now;
+        nextAttemptAt = null;
+    }
+
+    public boolean finalizeSent(UUID token) {
+        if (!ownsClaim(token)) return false;
+        markSent();
+        clearClaim();
+        return true;
+    }
+
+    public boolean finalizeFailed(UUID token, String errorMessage, int maxAttempts, Instant nextAttempt) {
+        if (!ownsClaim(token)) return false;
+        lastError = errorMessage;
+        sentAt = null;
+        if (attempts >= maxAttempts) {
+            status = NotificationStatus.FAILED;
+            nextAttemptAt = null;
+        } else {
+            status = NotificationStatus.PENDING;
+            nextAttemptAt = nextAttempt;
+        }
+        clearClaim();
+        return true;
+    }
+
+    private boolean ownsClaim(UUID token) {
+        return status == NotificationStatus.PROCESSING && claimToken != null && claimToken.equals(token);
+    }
+
+    private void clearClaim() {
+        claimToken = null;
+        claimExpiresAt = null;
     }
 
     public void markFailed(String errorMessage) {
@@ -181,6 +231,10 @@ public class Notification extends BaseEntity {
     public Instant getNextAttemptAt() {
         return nextAttemptAt;
     }
+
+    public UUID getClaimToken() { return claimToken; }
+
+    public Instant getClaimExpiresAt() { return claimExpiresAt; }
 
     private static String requireText(String value, String message) {
         if (value == null || value.isBlank()) {

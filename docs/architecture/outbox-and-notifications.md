@@ -117,3 +117,31 @@ Notification creation has two protections tied to `sourceEventId`:
 These protections cover duplicate processing of the same outbox event after crashes, retries, manual requeues, or concurrent races where the same event is attempted more than once. They also protect against duplicate notification records when a notification was committed but the outbox event was later retried.
 
 They do not protect against duplicates across different outbox event ids for the same order, side effects that occur outside the database after a notification is later delivered, duplicate rows when `sourceEventId` is null, or duplicate records created by a future handler that does not pass the source outbox event id. This protection must not be removed or weakened when changing transaction isolation.
+## Notification delivery transaction contract
+
+Delivery uses three explicit phases. For each item, a short transaction locks one eligible
+row with `FOR UPDATE SKIP LOCKED`, assigns a unique claim token and lease, increments
+the attempt count, and commits. The configured batch size limits how many of these
+per-item cycles a poll processes; later items are not claimed while an earlier send is
+still running. The sender then performs SMTP or other external I/O
+without a database transaction or row lock. A separate short transaction changes the
+row to `SENT`, or durably records a retry/terminal failure, only when the claim token
+still owns the row.
+
+An unexpired claim cannot be stolen. An expired claim is eligible for a new worker;
+the new token prevents the stale worker from finalizing over that recovery attempt.
+An expired final allowed attempt becomes `FAILED`. Operators may requeue only
+`FAILED` notifications, so an active claim cannot be mutated concurrently.
+
+The guarantee is at-least-once attempted delivery with bounded retries and
+application-level prevention of concurrent delivery for a valid lease. SMTP has no
+provider-side idempotency contract: if the provider accepts a message and the process
+fails before local success finalization, lease recovery can send it again. The system
+therefore does not promise exactly-once external delivery.
+
+The default claim lease is five minutes. The application does not currently configure
+JavaMail connection, read, or write timeouts, so an SMTP operation can outlive that
+lease. In that case recovery may start a new send while the stale sender is still
+running; token ownership prevents the stale worker from changing database state but
+cannot prevent or undo either external SMTP side effect. Operators must configure
+bounded provider timeouts below the claim lease when enabling SMTP.

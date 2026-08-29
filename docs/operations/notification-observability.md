@@ -217,3 +217,9 @@ Use global action log search to inspect admin activity by `actorEmail`, `created
 - The `details` field is informational and does not change delivery, retry, requeue, scheduling, or persistence behavior.
 - Delete endpoints, manual status mutation, and retry-now operations are intentionally not part of this API.
 - This remains part of the modular monolith. It does not introduce Kafka, RabbitMQ, external brokers, or microservices.
+Notifications in `PROCESSING` are actively claimed until `claim_expires_at`.
+An expired claim is abandoned work and will be reclaimed by a poller (or changed to
+`FAILED` when its last allowed attempt has already been consumed). A sustained or
+growing population of expired claims indicates worker termination, sender latency
+greater than the configured claim duration, or finalization failures. `PENDING`
+continues to distinguish due work from a scheduled retry through `next_attempt_at`.

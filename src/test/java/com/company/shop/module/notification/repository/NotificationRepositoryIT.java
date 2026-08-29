@@ -225,7 +225,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-01-01T10:04:00Z"),
                 now.minusSeconds(3600));
 
-        List<Notification> pendingNotifications = notificationRepository.findPendingBatchForUpdate(10);
+        List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(10, Instant.now(), 3);
 
         assertThat(pendingNotifications)
                 .extracting(Notification::getId)
@@ -300,7 +300,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         insertNotification(firstPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"), null);
         insertNotification(secondPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:01:00Z"), null);
 
-        List<Notification> pendingNotifications = notificationRepository.findPendingBatchForUpdate(1);
+        List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(1, Instant.now(), 3);
 
         assertThat(pendingNotifications)
                 .extracting(Notification::getId)
