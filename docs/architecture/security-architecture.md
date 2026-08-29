@@ -55,15 +55,21 @@
 
 ## CORS
 
-Current CORS configuration:
+Credentialed browser CORS uses an explicit origin allowlist:
 
 | Setting | Value |
 | --- | --- |
-| Allowed origins | `http://localhost:3000`, `http://localhost:8080` |
-| Allowed methods | `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS` |
-| Allowed headers | `Authorization`, `Cache-Control`, `Content-Type`, `X-Request-Id` |
+| Allowed origins | Default/development: `http://localhost:3000`, `http://localhost:8080`; production: `CORS_ALLOWED_ORIGINS` |
+| Allowed methods | `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` |
+| Allowed headers | `Authorization`, `Cache-Control`, `Content-Type`, `X-Request-Id`, `Idempotency-Key` |
 | Exposed headers | `Authorization`, `X-Request-Id` |
 | Credentials | Allowed |
+
+`CORS_ALLOWED_ORIGINS` is an optional comma-separated list of explicit HTTP(S) origins, for example
+`https://shop.example,https://admin.example`. Production has an empty allowlist when the variable is absent, so
+same-origin and server-to-server traffic remain available while cross-origin browser access fails closed. Wildcards,
+paths, queries, fragments, and non-HTTP(S) values are rejected; localhost is trusted in production only when listed
+explicitly.
 
 ## Security headers
 

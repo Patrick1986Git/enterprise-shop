@@ -227,8 +227,34 @@ class SecurityConfigWebMvcTest {
                         .header("Access-Control-Request-Method", "GET")
                         .header("Access-Control-Request-Headers", "X-Request-Id, Idempotency-Key"))
                 .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
                 .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-Request-Id")))
                 .andExpect(header().string("Access-Control-Allow-Headers", containsString("Idempotency-Key")));
+    }
+
+    @Test
+    void corsPatchPreflight_shouldAllowBrowserContract() throws Exception {
+        mockMvc.perform(options("/api/v1/me/cart/items/{productId}", UUID.randomUUID())
+                        .header("Origin", "http://localhost:3000")
+                        .header("Access-Control-Request-Method", "PATCH")
+                        .header("Access-Control-Request-Headers",
+                                "Authorization, Content-Type, X-Request-Id, Idempotency-Key"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+                .andExpect(header().string("Access-Control-Allow-Methods", containsString("PATCH")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Authorization")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Content-Type")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("X-Request-Id")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Idempotency-Key")));
+    }
+
+    @Test
+    void corsPreflight_shouldNotAllowUnknownOrigin() throws Exception {
+        mockMvc.perform(options("/api/v1/products")
+                        .header("Origin", "https://untrusted.example")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }
 
     @Test
@@ -236,6 +262,7 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(get("/api/v1")
                         .header("Origin", "http://localhost:3000"))
                 .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Expose-Headers", containsString("Authorization")))
                 .andExpect(header().string("Access-Control-Expose-Headers", containsString("X-Request-Id")));
     }
 

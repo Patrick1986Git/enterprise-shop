@@ -66,3 +66,10 @@ management:
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} requestId=%X{requestId} - %msg%n"
+
+app:
+  security:
+    cors:
+      allowed-origins:
+        - http://localhost:3000
+        - http://localhost:8080
