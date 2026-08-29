@@ -1,6 +1,7 @@
 package com.company.shop.module.notification.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -125,6 +126,91 @@ class NotificationTest {
         assertThat(notification.getLastRequeuedAt()).isNotNull();
         assertThat(notification.getLastRequeuedAt()).isAfterOrEqualTo(firstRequeuedAt);
         assertThat(notification.getLastRequeuedBy()).isEqualTo("second-admin@example.com");
+    }
+
+    @Test
+    void claim_shouldEstablishOwnershipAndCountAttemptExactlyOnce() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        UUID token = UUID.randomUUID();
+        Instant claimedAt = Instant.now();
+        Instant expiresAt = claimedAt.plusSeconds(60);
+
+        notification.claim(token, claimedAt, expiresAt);
+
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PROCESSING);
+        assertThat(notification.getClaimToken()).isEqualTo(token);
+        assertThat(notification.getClaimExpiresAt()).isEqualTo(expiresAt);
+        assertThat(notification.getAttempts()).isEqualTo(1);
+        assertThat(notification.getLastAttemptAt()).isEqualTo(claimedAt);
+        assertThatThrownBy(() -> notification.claim(UUID.randomUUID(), claimedAt, expiresAt))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void finalizeSent_shouldRequireOwnerAndClearClaim() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        UUID token = claim(notification);
+
+        assertThat(notification.finalizeSent(UUID.randomUUID())).isFalse();
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PROCESSING);
+        assertThat(notification.finalizeSent(token)).isTrue();
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
+        assertThat(notification.getSentAt()).isNotNull();
+        assertThat(notification.getClaimToken()).isNull();
+        assertThat(notification.getClaimExpiresAt()).isNull();
+        assertThat(notification.getLastError()).isNull();
+        assertThat(notification.getNextAttemptAt()).isNull();
+    }
+
+    @Test
+    void finalizeFailed_shouldScheduleRetryWithoutCountingAttemptTwice() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        UUID token = claim(notification);
+        Instant nextAttemptAt = Instant.now().plusSeconds(60);
+
+        assertThat(notification.finalizeFailed(token, "sender failed", 3, nextAttemptAt)).isTrue();
+
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
+        assertThat(notification.getAttempts()).isEqualTo(1);
+        assertThat(notification.getLastError()).isEqualTo("sender failed");
+        assertThat(notification.getNextAttemptAt()).isEqualTo(nextAttemptAt);
+        assertThat(notification.getClaimToken()).isNull();
+        assertThat(notification.getClaimExpiresAt()).isNull();
+    }
+
+    @Test
+    void finalizeFailed_shouldBecomeTerminalAtMaxAttempts() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        UUID token = claim(notification);
+
+        assertThat(notification.finalizeFailed(token, "terminal failure", 1, Instant.now().plusSeconds(60))).isTrue();
+
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
+        assertThat(notification.getAttempts()).isEqualTo(1);
+        assertThat(notification.getLastError()).isEqualTo("terminal failure");
+        assertThat(notification.getNextAttemptAt()).isNull();
+        assertThat(notification.getClaimToken()).isNull();
+        assertThat(notification.getClaimExpiresAt()).isNull();
+    }
+
+    @Test
+    void finalizeFailed_shouldIgnoreWrongTokenWithoutOverwritingClaim() {
+        Notification notification = pendingNotification(UUID.randomUUID());
+        UUID token = claim(notification);
+
+        assertThat(notification.finalizeFailed(UUID.randomUUID(), "stale failure", 3, Instant.now())).isFalse();
+
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PROCESSING);
+        assertThat(notification.getClaimToken()).isEqualTo(token);
+        assertThat(notification.getLastError()).isNull();
+        assertThat(notification.getAttempts()).isEqualTo(1);
+    }
+
+    private UUID claim(Notification notification) {
+        UUID token = UUID.randomUUID();
+        Instant now = Instant.now();
+        notification.claim(token, now, now.plusSeconds(60));
+        return token;
     }
 
     private Notification pendingNotification(UUID sourceEventId) {
