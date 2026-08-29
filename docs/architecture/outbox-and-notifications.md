@@ -75,6 +75,8 @@ app.notification.smtp.read-timeout=PT30S
 app.notification.smtp.write-timeout=PT30S
 ```
 
+The default Compose stack deliberately omits `SPRING_MAIL_HOST` and `SPRING_MAIL_PORT`, so disabled notification SMTP does not activate Spring Mail or make application health depend on an SMTP server. To opt in under Compose, supply `APP_NOTIFICATION_SMTP_ENABLED=true` together with Spring Boot's standard `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, and any required authentication/TLS variables in a deployment-specific Compose override. Do not add a placeholder mail host to the default stack.
+
 ## Event metadata/versioning transition plan
 
 The current outbox contract intentionally stores routing and version metadata outside the JSON payload: `outbox_events.event_type` remains the handler routing source, `outbox_events.event_version` stores queryable positive version metadata, and `outbox_events.payload` contains the raw event-specific payload. Legacy rows and payloads without metadata correspond to implicit version `1`; the schema default stores existing and new rows as version `1`. Existing rows therefore contain raw `OrderPlacedEventPayload` JSON, not an envelope, and new `OrderPlaced` events keep that non-enveloped payload shape. The current supported `OrderPlaced` event version is `1`: the recorder writes version `1` explicitly, and the notification handler accepts only version `1`.
