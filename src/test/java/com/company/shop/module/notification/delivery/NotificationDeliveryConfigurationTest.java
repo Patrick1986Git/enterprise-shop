@@ -1,13 +1,12 @@
 package com.company.shop.module.notification.delivery;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 import com.company.shop.module.notification.entity.Notification;
 
@@ -48,7 +47,36 @@ class NotificationDeliveryConfigurationTest {
                     assertThat(context).hasSingleBean(SmtpNotificationSender.class);
                     assertThat(context).doesNotHaveBean(NoopNotificationSender.class);
                     assertThat(context.getBean(NotificationSender.class)).isInstanceOf(SmtpNotificationSender.class);
+                    JavaMailSenderImpl mailSender = context.getBean(JavaMailSenderImpl.class);
+                    assertThat(mailSender.getSession().getProperty("mail.smtp.connectiontimeout")).isEqualTo("30000");
+                    assertThat(mailSender.getSession().getProperty("mail.smtp.timeout")).isEqualTo("30000");
+                    assertThat(mailSender.getSession().getProperty("mail.smtp.writetimeout")).isEqualTo("30000");
                 });
+    }
+
+    @Test
+    void configuration_shouldApplyTimeoutOverridesToEffectiveJavaMailSession() {
+        contextRunner.withUserConfiguration(JavaMailSenderConfiguration.class)
+                .withPropertyValues(
+                        "app.notification.smtp.enabled=true",
+                        "app.notification.smtp.connection-timeout=PT5S",
+                        "app.notification.smtp.read-timeout=PT6S",
+                        "app.notification.smtp.write-timeout=PT7S")
+                .run(context -> {
+                    JavaMailSenderImpl mailSender = context.getBean(JavaMailSenderImpl.class);
+                    assertThat(mailSender.getSession().getProperty("mail.smtp.connectiontimeout")).isEqualTo("5000");
+                    assertThat(mailSender.getSession().getProperty("mail.smtp.timeout")).isEqualTo("6000");
+                    assertThat(mailSender.getSession().getProperty("mail.smtp.writetimeout")).isEqualTo("7000");
+                });
+    }
+
+    @Test
+    void configuration_shouldFailWhenTimeoutIsNotShorterThanClaimLease() {
+        contextRunner.withUserConfiguration(JavaMailSenderConfiguration.class)
+                .withPropertyValues(
+                        "app.notification.smtp.enabled=true",
+                        "app.notification.smtp.read-timeout=PT5M")
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @Test
@@ -67,8 +95,8 @@ class NotificationDeliveryConfigurationTest {
     static class JavaMailSenderConfiguration {
 
         @Bean
-        JavaMailSender javaMailSender() {
-            return mock(JavaMailSender.class);
+        JavaMailSenderImpl javaMailSender() {
+            return new JavaMailSenderImpl();
         }
     }
 
