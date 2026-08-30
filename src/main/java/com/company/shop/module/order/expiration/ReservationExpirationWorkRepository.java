@@ -5,10 +5,22 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReservationExpirationWorkRepository extends JpaRepository<ReservationExpirationWork, UUID> {
+    @Query("""
+            SELECT w FROM ReservationExpirationWork w
+            WHERE (:status IS NULL OR w.status = :status)
+              AND (:orderId IS NULL OR w.orderId = :orderId)
+            """)
+    Page<ReservationExpirationWork> findAdminWork(
+            @Param("status") ReservationExpirationWorkStatus status,
+            @Param("orderId") UUID orderId,
+            Pageable pageable);
+
     @Query(value = """
             SELECT w.id FROM reservation_expiration_work w JOIN orders o ON o.id = w.order_id
             WHERE o.status = 'NEW' AND o.deleted = false

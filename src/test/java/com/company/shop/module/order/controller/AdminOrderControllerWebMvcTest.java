@@ -40,7 +40,10 @@ import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.expiration.ReservationExpirationRecoveryService;
 import com.company.shop.module.order.expiration.ReservationExpirationRecoveryResult;
+import com.company.shop.module.order.expiration.ReservationExpirationWorkQueryService;
+import com.company.shop.module.order.expiration.ReservationExpirationWorkResponseDTO;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkStatus;
+import com.company.shop.module.order.expiration.ReservationExpirationWorkNotFoundException;
 import java.time.Instant;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
@@ -61,6 +64,9 @@ class AdminOrderControllerWebMvcTest {
 
     @MockitoBean
     private ReservationExpirationRecoveryService reservationExpirationRecoveryService;
+
+    @MockitoBean
+    private ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -101,6 +107,73 @@ class AdminOrderControllerWebMvcTest {
                 .andExpect(jsonPath("$.lastError").doesNotExist());
 
         verify(reservationExpirationRecoveryService).recover(workId);
+    }
+
+    @Test
+    void getReservationExpirationWork_shouldReturnFailedWorkIdAndOperationalStateForAdmin() throws Exception {
+        UUID workId = UUID.fromString("00000000-0000-0000-0000-000000000071");
+        UUID orderId = UUID.fromString("00000000-0000-0000-0000-000000000072");
+        Instant failedAt = Instant.parse("2026-08-29T12:00:00Z");
+        ReservationExpirationWorkResponseDTO response = new ReservationExpirationWorkResponseDTO(
+                workId, orderId, ReservationExpirationWorkStatus.FAILED, failedAt.minusSeconds(3600), failedAt,
+                null, 10, "provider unavailable", null, failedAt, 2, failedAt.minusSeconds(60), "admin@example.com");
+        when(reservationExpirationWorkQueryService.findAll(any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1));
+
+        mockMvc.perform(get(ADMIN_ORDERS_URL + "/reservation-expiration-work")
+                        .with(user("admin").roles("ADMIN"))
+                        .param("status", "FAILED")
+                        .param("orderId", orderId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(workId.toString()))
+                .andExpect(jsonPath("$.content[0].orderId").value(orderId.toString()))
+                .andExpect(jsonPath("$.content[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.content[0].lastError").value("provider unavailable"))
+                .andExpect(jsonPath("$.content[0].attempts").value(10))
+                .andExpect(jsonPath("$.content[0].failedAt").value(failedAt.toString()))
+                .andExpect(jsonPath("$.content[0].recoveryCount").value(2))
+                .andExpect(jsonPath("$.content[0].lastRecoveredBy").value("admin@example.com"))
+                .andExpect(jsonPath("$.content[0].claimToken").doesNotExist());
+
+        verify(reservationExpirationWorkQueryService).findAll(
+                org.mockito.ArgumentMatchers.eq(ReservationExpirationWorkStatus.FAILED),
+                org.mockito.ArgumentMatchers.eq(orderId), any(Pageable.class));
+    }
+
+    @Test
+    void getReservationExpirationWork_shouldDenyAnonymousAndNonAdmin() throws Exception {
+        String url = ADMIN_ORDERS_URL + "/reservation-expiration-work";
+        mockMvc.perform(get(url)).andExpect(status().isForbidden());
+        mockMvc.perform(get(url).with(user("user").roles("USER"))).andExpect(status().isForbidden());
+        verifyNoInteractions(reservationExpirationWorkQueryService);
+    }
+
+    @Test
+    void getReservationExpirationWorkById_shouldReturnDetailForAdmin() throws Exception {
+        UUID workId = UUID.fromString("00000000-0000-0000-0000-000000000073");
+        UUID orderId = UUID.fromString("00000000-0000-0000-0000-000000000074");
+        when(reservationExpirationWorkQueryService.findById(workId)).thenReturn(
+                new ReservationExpirationWorkResponseDTO(workId, orderId, ReservationExpirationWorkStatus.FAILED,
+                        Instant.EPOCH, Instant.EPOCH, null, 3, "failed", null, Instant.EPOCH, 0, null, null));
+
+        mockMvc.perform(get(ADMIN_ORDERS_URL + "/reservation-expiration-work/{workId}", workId)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(workId.toString()))
+                .andExpect(jsonPath("$.claimToken").doesNotExist());
+        verify(reservationExpirationWorkQueryService).findById(workId);
+    }
+
+    @Test
+    void getReservationExpirationWorkById_shouldReturnNotFoundContractWhenMissing() throws Exception {
+        UUID workId = UUID.fromString("00000000-0000-0000-0000-000000000075");
+        when(reservationExpirationWorkQueryService.findById(workId))
+                .thenThrow(new ReservationExpirationWorkNotFoundException(workId));
+
+        mockMvc.perform(get(ADMIN_ORDERS_URL + "/reservation-expiration-work/{workId}", workId)
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("RESERVATION_EXPIRATION_WORK_NOT_FOUND"));
     }
 
     @Test
