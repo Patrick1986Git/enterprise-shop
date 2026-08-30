@@ -72,6 +72,22 @@ class ReservationExpirationWorkQueryServiceTest {
     }
 
     @Test
+    void findAll_shouldPreserveExplicitIdSortWithoutAppendingDuplicateTieBreaker() {
+        when(repository.findAdminWork(nullable(ReservationExpirationWorkStatus.class), nullable(UUID.class),
+                any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+        ReservationExpirationWorkQueryService service = new ReservationExpirationWorkQueryService(repository, mapper);
+        Sort requestedSort = Sort.by(Sort.Order.desc("failedAt"), Sort.Order.desc("id"));
+
+        service.findAll(null, null, PageRequest.of(0, 20, requestedSort));
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository).findAdminWork(nullable(ReservationExpirationWorkStatus.class), nullable(UUID.class),
+                pageable.capture());
+        assertThat(pageable.getValue().getSort()).containsExactly(
+                Sort.Order.desc("failedAt"), Sort.Order.desc("id"));
+    }
+
+    @Test
     void findAll_shouldRejectUnsupportedSort() {
         ReservationExpirationWorkQueryService service = new ReservationExpirationWorkQueryService(repository, mapper);
         assertThatThrownBy(() -> service.findAll(null, null, PageRequest.of(0, 20, Sort.by("claimToken"))))
