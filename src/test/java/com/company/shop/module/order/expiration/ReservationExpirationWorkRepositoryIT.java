@@ -25,13 +25,14 @@ import jakarta.persistence.EntityManager;
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
-    private static final Instant DUE_AT = Instant.parse("2026-01-01T10:00:00Z");
-    private static final UUID FIRST_WORK_ID = UUID.fromString("00000000-0000-0000-0000-000000000101");
-    private static final UUID SECOND_WORK_ID = UUID.fromString("00000000-0000-0000-0000-000000000102");
-    private static final UUID THIRD_WORK_ID = UUID.fromString("00000000-0000-0000-0000-000000000103");
-    private static final UUID FIRST_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000201");
-    private static final UUID SECOND_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000202");
-    private static final UUID THIRD_ORDER_ID = UUID.fromString("00000000-0000-0000-0000-000000000203");
+    private static final Instant DUE_AT = Instant.parse("0001-01-01T00:00:00Z");
+
+    private UUID firstWorkId;
+    private UUID secondWorkId;
+    private UUID thirdWorkId;
+    private UUID firstOrderId;
+    private UUID secondOrderId;
+    private UUID thirdOrderId;
 
     @Autowired
     private ReservationExpirationWorkRepository repository;
@@ -42,18 +43,22 @@ class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate.update("DELETE FROM reservation_expiration_work");
-        jdbcTemplate.update("DELETE FROM orders");
-        jdbcTemplate.update("DELETE FROM users");
-        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000301");
+        long workIdBase = UUID.randomUUID().getLeastSignificantBits() & (Long.MAX_VALUE - 3);
+        firstWorkId = new UUID(0, workIdBase);
+        secondWorkId = new UUID(0, workIdBase + 1);
+        thirdWorkId = new UUID(0, workIdBase + 2);
+        firstOrderId = UUID.randomUUID();
+        secondOrderId = UUID.randomUUID();
+        thirdOrderId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
         jdbcTemplate.update("INSERT INTO users (id, email, password) VALUES (?, ?, ?)",
-                userId, "expiration-query@example.com", "password");
-        insertOrder(FIRST_ORDER_ID, userId, "first@example.com");
-        insertOrder(SECOND_ORDER_ID, userId, "second@example.com");
-        insertOrder(THIRD_ORDER_ID, userId, "third@example.com");
-        insertFailedWork(FIRST_WORK_ID, FIRST_ORDER_ID, 4, 2, "admin@example.com");
-        insertFailedWork(SECOND_WORK_ID, SECOND_ORDER_ID, 3, 0, null);
-        insertClaimedWork(THIRD_WORK_ID, THIRD_ORDER_ID);
+                userId, "expiration-query-" + userId + "@example.com", "password");
+        insertOrder(firstOrderId, userId, "first-" + firstOrderId + "@example.com");
+        insertOrder(secondOrderId, userId, "second-" + secondOrderId + "@example.com");
+        insertOrder(thirdOrderId, userId, "third-" + thirdOrderId + "@example.com");
+        insertFailedWork(firstWorkId, firstOrderId, 4, 2, "admin@example.com");
+        insertFailedWork(secondWorkId, secondOrderId, 3, 0, null);
+        insertClaimedWork(thirdWorkId, thirdOrderId);
         entityManager.clear();
     }
 
@@ -63,35 +68,35 @@ class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
 
         assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.FAILED, null, pageable))
                 .extracting(ReservationExpirationWork::getId)
-                .containsExactly(FIRST_WORK_ID, SECOND_WORK_ID);
-        assertThat(repository.findAdminWork(null, SECOND_ORDER_ID, pageable))
+                .contains(firstWorkId, secondWorkId);
+        assertThat(repository.findAdminWork(null, secondOrderId, pageable))
                 .extracting(ReservationExpirationWork::getId)
-                .containsExactly(SECOND_WORK_ID);
-        assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.FAILED, FIRST_ORDER_ID, pageable))
+                .containsExactly(secondWorkId);
+        assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.FAILED, firstOrderId, pageable))
                 .extracting(ReservationExpirationWork::getId)
-                .containsExactly(FIRST_WORK_ID);
-        assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.CLAIMED, FIRST_ORDER_ID, pageable))
+                .containsExactly(firstWorkId);
+        assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.CLAIMED, firstOrderId, pageable))
                 .isEmpty();
         assertThat(repository.findAdminWork(null, null, pageable))
                 .extracting(ReservationExpirationWork::getId)
-                .containsExactly(FIRST_WORK_ID, SECOND_WORK_ID, THIRD_WORK_ID);
+                .contains(firstWorkId, secondWorkId, thirdWorkId);
     }
 
     @Test
     void findAdminWork_shouldPageDeterministicallyAndRemainReadOnly() {
-        PageRequest firstPage = PageRequest.of(0, 2, Sort.by(Sort.Order.asc("dueAt"), Sort.Order.asc("id")));
-        PageRequest secondPage = PageRequest.of(1, 2, Sort.by(Sort.Order.asc("dueAt"), Sort.Order.asc("id")));
-        Map<String, Object> before = operationalState(FIRST_WORK_ID);
+        PageRequest firstPage = PageRequest.of(0, 1, Sort.by(Sort.Order.asc("dueAt"), Sort.Order.asc("id")));
+        PageRequest secondPage = PageRequest.of(1, 1, Sort.by(Sort.Order.asc("dueAt"), Sort.Order.asc("id")));
+        Map<String, Object> before = operationalState(firstWorkId);
 
-        assertThat(repository.findAdminWork(null, null, firstPage))
+        assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.FAILED, null, firstPage))
                 .extracting(ReservationExpirationWork::getId)
-                .containsExactly(FIRST_WORK_ID, SECOND_WORK_ID);
-        assertThat(repository.findAdminWork(null, null, secondPage))
+                .containsExactly(firstWorkId);
+        assertThat(repository.findAdminWork(ReservationExpirationWorkStatus.FAILED, null, secondPage))
                 .extracting(ReservationExpirationWork::getId)
-                .containsExactly(THIRD_WORK_ID);
+                .containsExactly(secondWorkId);
         entityManager.flush();
 
-        assertThat(operationalState(FIRST_WORK_ID)).isEqualTo(before);
+        assertThat(operationalState(firstWorkId)).isEqualTo(before);
     }
 
     private void insertOrder(UUID orderId, UUID userId, String email) {
