@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -15,10 +17,17 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
@@ -27,7 +36,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.cart.entity.Cart;
 import com.company.shop.module.cart.repository.CartRepository;
 import com.company.shop.module.category.entity.Category;
@@ -43,6 +54,8 @@ import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.service.PaymentInitializationTransactionService;
 import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.PaymentTerminalTransitionService;
+import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.product.service.ProductService;
@@ -69,10 +82,124 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Autowired PaymentService paymentService;
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired ReservationExpirationProperties expirationProperties;
+    @Autowired ReservationExpirationWorkRepository workRepository;
+    @Autowired StripeWebhookEventRegistrar webhookEventRegistrar;
+    @Autowired PaymentTerminalTransitionService terminalTransitions;
+    @Autowired TransactionTemplate transactionTemplate;
     @Autowired Clock clock;
     @MockitoBean CurrentUserFacade currentUserFacade;
     @MockitoBean StripePaymentIntentGateway stripeGateway;
     @MockitoSpyBean PaymentInitializationTransactionService paymentInitialization;
+    @MockitoSpyBean OrderRepository lockingOrderRepository;
+    @MockitoSpyBean CartCheckoutFacade cartCheckoutFacade;
+
+    @ParameterizedTest(name = "expirationWins={0}")
+    @ValueSource(booleans = {true, false})
+    void expirationSucceededAndWebhook_shouldConvergeOnceAcrossBothOrderLockWinners(boolean expirationWins)
+            throws Exception {
+        Fixture fixture = checkout("expiration-success-race", 2);
+        Order order = fixture.order();
+        makeDue(order);
+        PaymentIntent succeeded = terminalIntent("pi_expiration-success-race", "succeeded", order);
+        when(stripeGateway.retrieve("pi_expiration-success-race")).thenReturn(succeeded);
+        clearInvocations(cartCheckoutFacade);
+
+        String eventId = "evt_expiration_success_race_" + UUID.randomUUID();
+        runExpirationAgainstWebhookLockRace(order.getId(), eventId, "payment_intent.succeeded", expirationWins,
+                () -> terminalTransitions.convergeSucceeded(order.getId(), succeeded));
+
+        assertTerminalState(fixture, OrderStatus.PAID, PaymentStatus.COMPLETED, 0, eventId);
+        verify(cartCheckoutFacade, times(1)).reconcileCartAfterSuccessfulPayment(eq(fixture.user().getId()), any());
+    }
+
+    @ParameterizedTest(name = "expirationWins={0}")
+    @ValueSource(booleans = {true, false})
+    void expirationCanceledAndWebhook_shouldReleaseInventoryOnceAcrossBothOrderLockWinners(boolean expirationWins)
+            throws Exception {
+        Fixture fixture = checkout("expiration-cancel-race", 2);
+        Order order = fixture.order();
+        makeDue(order);
+        PaymentIntent canceled = terminalIntent("pi_expiration-cancel-race", "canceled", order);
+        when(stripeGateway.retrieve("pi_expiration-cancel-race")).thenReturn(canceled);
+        clearInvocations(cartCheckoutFacade);
+
+        String eventId = "evt_expiration_cancel_race_" + UUID.randomUUID();
+        runExpirationAgainstWebhookLockRace(order.getId(), eventId, "payment_intent.canceled", expirationWins,
+                () -> terminalTransitions.convergeCanceled(order.getId(), canceled));
+
+        assertTerminalState(fixture, OrderStatus.CANCELLED, PaymentStatus.FAILED, 2, eventId);
+        verify(cartCheckoutFacade, times(0)).reconcileCartAfterSuccessfulPayment(any(), any());
+    }
+
+    private void runExpirationAgainstWebhookLockRace(UUID orderId, String eventId, String eventType,
+            boolean expirationWins, Runnable webhookTransition) throws Exception {
+        CountDownLatch winnerHasOrderLock = new CountDownLatch(1);
+        CountDownLatch loserAttemptedOrderLock = new CountDownLatch(1);
+        CountDownLatch releaseWinner = new CountDownLatch(1);
+        AtomicReference<UUID> racedOrderId = new AtomicReference<>(orderId);
+        doAnswer(invocation -> {
+            UUID requestedOrderId = invocation.getArgument(0);
+            boolean racedOrder = requestedOrderId.equals(racedOrderId.get());
+            boolean expirationThread = Thread.currentThread().getName().startsWith("expiration-race");
+            boolean winnerThread = expirationThread == expirationWins;
+            if (racedOrder && !winnerThread) loserAttemptedOrderLock.countDown();
+            Object result = invocation.callRealMethod();
+            if (racedOrder && winnerThread) {
+                winnerHasOrderLock.countDown();
+                if (!releaseWinner.await(10, TimeUnit.SECONDS)) {
+                    throw new AssertionError("Timed out while holding the winning Order lock");
+                }
+            }
+            return result;
+        }).when(lockingOrderRepository).findByIdForUpdate(any(UUID.class));
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable);
+            thread.setName("reservation-race-" + UUID.randomUUID());
+            return thread;
+        })) {
+            Runnable expirationTask = () -> {
+                Thread.currentThread().setName("expiration-race");
+                processor.processDueBatch();
+            };
+            Runnable webhookTask = () -> {
+                Thread.currentThread().setName("webhook-race");
+                transactionTemplate.executeWithoutResult(status -> {
+                    assertThat(webhookEventRegistrar.register(eventId, eventType)).isTrue();
+                    webhookTransition.run();
+                });
+            };
+            CompletableFuture<Void> winner = CompletableFuture.runAsync(
+                    expirationWins ? expirationTask : webhookTask, executor);
+            assertThat(winnerHasOrderLock.await(10, TimeUnit.SECONDS)).isTrue();
+            CompletableFuture<Void> loser = CompletableFuture.runAsync(
+                    expirationWins ? webhookTask : expirationTask, executor);
+            assertThat(loserAttemptedOrderLock.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(loser).as("losing terminal path must be blocked behind the winning Order lock").isNotDone();
+
+            releaseWinner.countDown();
+            winner.get(10, TimeUnit.SECONDS);
+            loser.get(10, TimeUnit.SECONDS);
+        } finally {
+            racedOrderId.set(null);
+            releaseWinner.countDown();
+        }
+    }
+
+    private void assertTerminalState(Fixture fixture, OrderStatus orderStatus, PaymentStatus paymentStatus,
+            int expectedStock, String eventId) {
+        assertThat(orderRepository.findById(fixture.order().getId()).orElseThrow().getStatus()).isEqualTo(orderStatus);
+        assertThat(paymentRepository.findByOrderId(fixture.order().getId()).orElseThrow().getStatus())
+                .isEqualTo(paymentStatus);
+        assertThat(stock(fixture.product().getId())).isEqualTo(expectedStock);
+        ReservationExpirationWork work = workRepository.findByOrderId(fixture.order().getId()).orElseThrow();
+        assertThat(work.getStatus()).isEqualTo(ReservationExpirationWorkStatus.COMPLETED);
+        assertThat(work.getAttempts()).isOne();
+        assertThat(work.getClaimToken()).isNull();
+        assertThat(work.getLastError()).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stripe_webhook_events WHERE stripe_event_id = ?", Long.class, eventId)).isOne();
+    }
 
     @Test
     void paymentInitialization_shouldConvergeOnOriginalIntentAfterProviderSuccessAndLostAttach() throws Exception {
@@ -251,6 +378,14 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     private PaymentIntent canceledProviderIntent(String id, BigDecimal amount) {
         PaymentIntent intent = providerIntent(id, "canceled");
         when(intent.getAmount()).thenReturn(amount.movePointRight(2).longValueExact());
+        when(intent.getCurrency()).thenReturn("pln");
+        return intent;
+    }
+    private PaymentIntent terminalIntent(String id, String status, Order order) {
+        PaymentIntent intent = providerIntent(id, status);
+        when(intent.getAmount()).thenReturn(order.getTotalAmount().movePointRight(2).longValueExact());
+        when(intent.getAmountReceived()).thenReturn("succeeded".equals(status)
+                ? order.getTotalAmount().movePointRight(2).longValueExact() : 0L);
         when(intent.getCurrency()).thenReturn("pln");
         return intent;
     }
