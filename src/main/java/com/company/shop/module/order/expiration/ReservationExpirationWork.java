@@ -56,6 +56,21 @@ public class ReservationExpirationWork extends BaseEntity {
         this.lastError = null;
         return claimToken;
     }
+    public boolean hasClaimBudget(int maxAttempts) {
+        return (long) attempts < (long) maxAttempts + recoveryCount;
+    }
+    public boolean hasExpiredClaim(Instant now) {
+        return status == ReservationExpirationWorkStatus.CLAIMED && claimUntil != null && !claimUntil.isAfter(now);
+    }
+    public void failExpiredClaim(Instant now, String error) {
+        if (!hasExpiredClaim(now)) {
+            throw new IllegalStateException("Only an expired reservation expiration claim can be exhausted");
+        }
+        status = ReservationExpirationWorkStatus.FAILED;
+        lastError = truncate(error);
+        failedAt = now;
+        clearClaim();
+    }
     public void complete(UUID token, Instant now) { requireClaim(token); status = ReservationExpirationWorkStatus.COMPLETED; completedAt = now; clearClaim(); }
     public void retry(UUID token, Instant now, Instant next, String error, int maxAttempts) {
         requireClaim(token); status = attempts >= maxAttempts ? ReservationExpirationWorkStatus.FAILED : ReservationExpirationWorkStatus.PENDING;

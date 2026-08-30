@@ -60,4 +60,21 @@ class ReservationExpirationWorkTest {
         assertThat(work.getRecoveryCount()).isEqualTo(1);
         assertThat(work.getLastRecoveredAt()).isEqualTo(now);
     }
+
+    @Test
+    void claimBudget_shouldIncludeExactlyOneAttemptPerRecoveryWithoutResettingAttempts() {
+        Instant now = Instant.parse("2026-08-15T12:00:00Z");
+        var work = new ReservationExpirationWork(UUID.randomUUID(), now.minusSeconds(60));
+
+        assertThat(work.hasClaimBudget(1)).isTrue();
+        UUID token = work.claim(now.minusSeconds(30), now.minusSeconds(20));
+        assertThat(work.hasClaimBudget(1)).isFalse();
+        work.retry(token, now.minusSeconds(10), now, "provider unavailable", 1);
+        work.requeueFailed(now, "admin@example.com");
+
+        assertThat(work.getAttempts()).isOne();
+        assertThat(work.hasClaimBudget(1)).isTrue();
+        work.claim(now, now.plusSeconds(30));
+        assertThat(work.hasClaimBudget(1)).isFalse();
+    }
 }

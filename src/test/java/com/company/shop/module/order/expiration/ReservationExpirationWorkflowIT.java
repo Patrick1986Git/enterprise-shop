@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.InvocationTargetException;
@@ -70,6 +71,7 @@ import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
+import com.company.shop.security.CurrentUserProvider;
 import com.stripe.model.PaymentIntent;
 
 @SpringBootTest
@@ -90,16 +92,109 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired ReservationExpirationProperties expirationProperties;
     @Autowired ReservationExpirationWorkRepository workRepository;
+    @Autowired ReservationExpirationClaimService claimService;
+    @Autowired ReservationExpirationRecoveryService recoveryService;
     @Autowired StripeWebhookEventRegistrar webhookEventRegistrar;
     @Autowired PaymentTerminalTransitionService terminalTransitions;
     @Autowired TransactionTemplate transactionTemplate;
     @Autowired Clock clock;
     @MockitoBean CurrentUserFacade currentUserFacade;
+    @MockitoBean CurrentUserProvider currentUserProvider;
     @MockitoBean StripePaymentIntentGateway stripeGateway;
     @MockitoBean ReservationExpirationPoller reservationExpirationPoller;
     @MockitoSpyBean PaymentInitializationTransactionService paymentInitialization;
     @MockitoSpyBean CartCheckoutFacade cartCheckoutFacade;
     @Autowired OrderLockCoordinator orderLockCoordinator;
+
+    @Test
+    void claimLeaseRecovery_shouldEnforceAutomaticAndAdminAuthorizedAttemptBudgets() throws Exception {
+        Fixture fixture = checkout("claim-budget", 1);
+        makeDue(fixture.order());
+        ReservationExpirationWork original = workRepository.findByOrderId(fixture.order().getId()).orElseThrow();
+        UUID workId = original.getId();
+        int configuredMaxAttempts = expirationProperties.maxAttempts();
+        expirationProperties.setMaxAttempts(2);
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
+        clearInvocations(stripeGateway);
+
+        try {
+            ReservationExpirationClaim first = claimService.claim(workId).orElseThrow();
+            ReservationExpirationWork active = workRepository.findById(workId).orElseThrow();
+            Instant activeUntil = active.getClaimUntil();
+            assertThat(claimService.claim(workId)).isEmpty();
+            assertClaim(workId, first.claimToken(), 1, ReservationExpirationWorkStatus.CLAIMED);
+            assertThat(workRepository.findById(workId).orElseThrow().getClaimUntil()).isEqualTo(activeUntil);
+            expireClaim(workId);
+            ReservationExpirationClaim second = claimService.claim(workId).orElseThrow();
+
+            assertThat(second.claimToken()).isNotEqualTo(first.claimToken());
+            assertThatThrownBy(() -> claimService.complete(first)).isInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() -> claimService.retry(first, "stale retry")).isInstanceOf(IllegalStateException.class);
+            assertClaim(workId, second.claimToken(), 2, ReservationExpirationWorkStatus.CLAIMED);
+
+            expireClaim(workId);
+            assertThat(claimService.claim(workId)).isEmpty();
+            assertThat(claimService.claim(workId)).isEmpty();
+            ReservationExpirationWork exhausted = workRepository.findById(workId).orElseThrow();
+            assertThat(exhausted.getStatus()).isEqualTo(ReservationExpirationWorkStatus.FAILED);
+            assertThat(exhausted.getAttempts()).isEqualTo(2);
+            assertThat(exhausted.getClaimToken()).isNull();
+            assertThat(exhausted.getClaimUntil()).isNull();
+            assertThat(exhausted.getLastError())
+                    .isEqualTo(ReservationExpirationClaimService.EXPIRED_CLAIM_BUDGET_EXHAUSTED);
+            verifyNoInteractions(stripeGateway);
+
+            ReservationExpirationRecoveryResult recovered = recoveryService.recover(workId);
+            assertThat(recovered.status()).isEqualTo(ReservationExpirationWorkStatus.PENDING);
+            assertThat(recovered.attempts()).isEqualTo(2);
+            assertThat(recovered.recoveryCount()).isOne();
+            ReservationExpirationClaim authorized = claimService.claim(workId).orElseThrow();
+            assertThat(claimService.retry(authorized, "recovered provider failure")).isTrue();
+            ReservationExpirationWork failedRecovery = workRepository.findById(workId).orElseThrow();
+            assertThat(failedRecovery.getAttempts()).isEqualTo(3);
+            assertThat(failedRecovery.getRecoveryCount()).isOne();
+            assertThat(failedRecovery.getLastRecoveredAt()).isNotNull();
+            assertThat(failedRecovery.getLastRecoveredBy()).isEqualTo("admin@example.com");
+
+            recoveryService.recover(workId);
+            ReservationExpirationClaim crashedRecovery = claimService.claim(workId).orElseThrow();
+            expireClaim(workId);
+            assertThat(claimService.claim(workId)).isEmpty();
+            ReservationExpirationWork crashed = workRepository.findById(workId).orElseThrow();
+            assertThat(crashed.getStatus()).isEqualTo(ReservationExpirationWorkStatus.FAILED);
+            assertThat(crashed.getAttempts()).isEqualTo(4);
+            assertThat(crashed.getRecoveryCount()).isEqualTo(2);
+            assertThat(crashed.getClaimToken()).isNull();
+            assertThat(crashedRecovery.claimToken()).isNotNull();
+            verifyNoInteractions(stripeGateway);
+        } finally {
+            expirationProperties.setMaxAttempts(configuredMaxAttempts);
+        }
+    }
+
+    @Test
+    void concurrentInitialClaims_shouldProduceOneOwnerAndLeaveUnrelatedWorkClaimable() throws Exception {
+        Fixture firstFixture = checkout("competing-claim", 1);
+        Fixture unrelatedFixture = checkout("unrelated-claim", 1);
+        makeDue(firstFixture.order());
+        makeDue(unrelatedFixture.order());
+        UUID workId = workRepository.findByOrderId(firstFixture.order().getId()).orElseThrow().getId();
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            var left = CompletableFuture.supplyAsync(() -> claimService.claim(workId), executor);
+            var right = CompletableFuture.supplyAsync(() -> claimService.claim(workId), executor);
+            assertThat(java.util.List.of(left.get(10, TimeUnit.SECONDS), right.get(10, TimeUnit.SECONDS)))
+                    .filteredOn(java.util.Optional::isPresent).hasSize(1);
+        }
+
+        ReservationExpirationWork durable = workRepository.findById(workId).orElseThrow();
+        assertThat(durable.getStatus()).isEqualTo(ReservationExpirationWorkStatus.CLAIMED);
+        assertThat(durable.getClaimToken()).isNotNull();
+        assertThat(durable.getAttempts()).isOne();
+        UUID unrelatedWorkId = workRepository.findByOrderId(unrelatedFixture.order().getId()).orElseThrow().getId();
+        assertThat(claimService.claim(unrelatedWorkId)).isPresent();
+        assertThat(workRepository.findById(unrelatedWorkId).orElseThrow().getAttempts()).isOne();
+    }
 
     @ParameterizedTest(name = "expirationWins={0}")
     @ValueSource(booleans = {true, false})
@@ -385,6 +480,16 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     private void makeDue(Order order) {
         jdbcTemplate.update("UPDATE orders SET reservation_expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE id = ?", order.getId());
         jdbcTemplate.update("UPDATE reservation_expiration_work SET due_at = CURRENT_TIMESTAMP - INTERVAL '1 second', next_attempt_at = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE order_id = ?", order.getId());
+    }
+    private void expireClaim(UUID workId) {
+        jdbcTemplate.update("UPDATE reservation_expiration_work SET claim_until = CURRENT_TIMESTAMP - INTERVAL '1 second' WHERE id = ?",
+                workId);
+    }
+    private void assertClaim(UUID workId, UUID token, int attempts, ReservationExpirationWorkStatus status) {
+        ReservationExpirationWork work = workRepository.findById(workId).orElseThrow();
+        assertThat(work.getStatus()).isEqualTo(status);
+        assertThat(work.getClaimToken()).isEqualTo(token);
+        assertThat(work.getAttempts()).isEqualTo(attempts);
     }
     private int stock(UUID productId) { return jdbcTemplate.queryForObject("SELECT stock FROM products WHERE id = ?", Integer.class, productId); }
     private record Fixture(User user, Product product, Order order) {}
