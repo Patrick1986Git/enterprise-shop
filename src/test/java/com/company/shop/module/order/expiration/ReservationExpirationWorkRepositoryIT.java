@@ -2,6 +2,7 @@ package com.company.shop.module.order.expiration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -113,7 +114,8 @@ class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
                     (id, order_id, status, due_at, next_attempt_at, attempts, last_error, failed_at,
                      recovery_count, last_recovered_at, last_recovered_by)
                 VALUES (?, ?, 'FAILED', ?, ?, ?, 'provider unavailable', ?, ?, ?, ?)
-                """, workId, orderId, DUE_AT, DUE_AT, attempts, DUE_AT, recoveryCount, recoveredAt, recoveredBy);
+                """, workId, orderId, sqlTimestamp(DUE_AT), sqlTimestamp(DUE_AT), attempts, sqlTimestamp(DUE_AT),
+                recoveryCount, sqlTimestamp(recoveredAt), recoveredBy);
     }
 
     private void insertClaimedWork(UUID workId, UUID orderId) {
@@ -121,7 +123,12 @@ class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
                 INSERT INTO reservation_expiration_work
                     (id, order_id, status, due_at, next_attempt_at, claim_token, claim_until, attempts, recovery_count)
                 VALUES (?, ?, 'CLAIMED', ?, ?, ?, ?, 1, 0)
-                """, workId, orderId, DUE_AT, DUE_AT, UUID.randomUUID(), DUE_AT.plusSeconds(300));
+                """, workId, orderId, sqlTimestamp(DUE_AT), sqlTimestamp(DUE_AT), UUID.randomUUID(),
+                sqlTimestamp(DUE_AT.plusSeconds(300)));
+    }
+
+    private Timestamp sqlTimestamp(Instant value) {
+        return value == null ? null : Timestamp.from(value);
     }
 
     private Map<String, Object> operationalState(UUID workId) {
