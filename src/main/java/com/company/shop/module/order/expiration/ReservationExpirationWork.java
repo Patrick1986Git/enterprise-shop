@@ -93,6 +93,7 @@ public class ReservationExpirationWork extends BaseEntity {
     public Instant getClaimUntil() { return claimUntil; }
     public int getAttempts() { return attempts; }
     public String getLastError() { return lastError; }
+    public Instant getCompletedAt() { return completedAt; }
     public Instant getFailedAt() { return failedAt; }
     public int getRecoveryCount() { return recoveryCount; }
     public Instant getLastRecoveredAt() { return lastRecoveredAt; }

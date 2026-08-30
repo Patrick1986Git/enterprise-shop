@@ -53,6 +53,7 @@ import com.company.shop.module.order.outbox.OutboxEventQueryService;
 import com.company.shop.module.order.outbox.OutboxEventTransactionalWorker;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.expiration.ReservationExpirationRecoveryService;
+import com.company.shop.module.order.expiration.ReservationExpirationWorkQueryService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
 import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
@@ -172,6 +173,8 @@ class OpenApiDocsSmokeTest {
     private OrderService orderService;
     @MockitoBean
     private ReservationExpirationRecoveryService reservationExpirationRecoveryService;
+    @MockitoBean
+    private ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
 
     @MockitoBean
     private OrderCheckoutProcessor orderCheckoutProcessor;
@@ -401,9 +404,15 @@ class OpenApiDocsSmokeTest {
         assertThat(operation(paths, "/api/v1/admin/notifications", "get").get("security").toString())
                 .as("Admin notification endpoint should document bearerAuth.")
                 .contains("bearerAuth");
+        assertThat(operation(paths, "/api/v1/admin/orders/reservation-expiration-work", "get")
+                .get("security").toString())
+                .as("Reservation expiration work discovery should document bearerAuth.")
+                .contains("bearerAuth");
 
         assertResponseRef(paths, "/api/v1/auth/login", "post", "401", "#/components/responses/UnauthorizedError");
         assertResponseRef(paths, "/api/v1/admin/notifications", "get", "403", "#/components/responses/ForbiddenError");
+        assertResponseRef(paths, "/api/v1/admin/orders/reservation-expiration-work/{workId}", "get", "404",
+                "#/components/responses/NotFoundError");
         assertResponseRef(paths, "/api/v1/products/slug/{slug}", "get", "404", "#/components/responses/NotFoundError");
     }
 
