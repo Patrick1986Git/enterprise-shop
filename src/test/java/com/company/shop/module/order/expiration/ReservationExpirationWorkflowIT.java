@@ -196,6 +196,63 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(workRepository.findById(unrelatedWorkId).orElseThrow().getAttempts()).isOne();
     }
 
+    @Test
+    void historicalOverBudgetFailure_shouldReceiveExactlyOneClaimPerAdminRecovery() throws Exception {
+        Fixture fixture = checkout("historical-over-budget", 1);
+        makeDue(fixture.order());
+        UUID workId = workRepository.findByOrderId(fixture.order().getId()).orElseThrow().getId();
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
+        clearInvocations(stripeGateway);
+        jdbcTemplate.update("""
+                UPDATE reservation_expiration_work
+                SET status = 'FAILED', attempts = 12, claim_token = NULL, claim_until = NULL,
+                    failed_at = CURRENT_TIMESTAMP, last_error = 'historical exhausted failure',
+                    recovery_count = 0, last_recovered_at = NULL, last_recovered_by = NULL,
+                    recovery_authorized = FALSE
+                WHERE id = ?
+                """, workId);
+
+        ReservationExpirationRecoveryResult firstRecovery = recoveryService.recover(workId);
+
+        assertThat(firstRecovery.status()).isEqualTo(ReservationExpirationWorkStatus.PENDING);
+        assertThat(firstRecovery.attempts()).isEqualTo(12);
+        assertThat(firstRecovery.recoveryCount()).isOne();
+        ReservationExpirationWork authorized = workRepository.findById(workId).orElseThrow();
+        assertThat(authorized.isRecoveryAuthorized()).isTrue();
+        assertThat(authorized.getLastRecoveredAt()).isNotNull();
+        assertThat(authorized.getLastRecoveredBy()).isEqualTo("admin@example.com");
+
+        ReservationExpirationClaim firstAuthorizedClaim = claimService.claim(workId).orElseThrow();
+        ReservationExpirationWork claimed = workRepository.findById(workId).orElseThrow();
+        assertThat(claimed.getAttempts()).isEqualTo(13);
+        assertThat(claimed.getRecoveryCount()).isOne();
+        assertThat(claimed.isRecoveryAuthorized()).isFalse();
+        assertThat(claimService.claim(workId)).isEmpty();
+
+        expireClaim(workId);
+        assertThat(claimService.claim(workId)).isEmpty();
+        ReservationExpirationWork failedAfterCrash = workRepository.findById(workId).orElseThrow();
+        assertThat(failedAfterCrash.getStatus()).isEqualTo(ReservationExpirationWorkStatus.FAILED);
+        assertThat(failedAfterCrash.getAttempts()).isEqualTo(13);
+        assertThat(failedAfterCrash.getRecoveryCount()).isOne();
+        assertThat(failedAfterCrash.getClaimToken()).isNull();
+        assertThat(failedAfterCrash.getClaimUntil()).isNull();
+        assertThat(failedAfterCrash.getLastError())
+                .isEqualTo(ReservationExpirationClaimService.EXPIRED_CLAIM_BUDGET_EXHAUSTED);
+        assertThat(firstAuthorizedClaim.claimToken()).isNotNull();
+        verifyNoInteractions(stripeGateway);
+
+        ReservationExpirationRecoveryResult secondRecovery = recoveryService.recover(workId);
+        assertThat(secondRecovery.attempts()).isEqualTo(13);
+        assertThat(secondRecovery.recoveryCount()).isEqualTo(2);
+        ReservationExpirationClaim secondAuthorizedClaim = claimService.claim(workId).orElseThrow();
+        assertThat(secondAuthorizedClaim.claimToken()).isNotEqualTo(firstAuthorizedClaim.claimToken());
+        ReservationExpirationWork secondClaimed = workRepository.findById(workId).orElseThrow();
+        assertThat(secondClaimed.getAttempts()).isEqualTo(14);
+        assertThat(secondClaimed.getRecoveryCount()).isEqualTo(2);
+        assertThat(secondClaimed.isRecoveryAuthorized()).isFalse();
+    }
+
     @ParameterizedTest(name = "expirationWins={0}")
     @ValueSource(booleans = {true, false})
     void expirationSucceededAndWebhook_shouldConvergeOnceAcrossBothOrderLockWinners(boolean expirationWins)

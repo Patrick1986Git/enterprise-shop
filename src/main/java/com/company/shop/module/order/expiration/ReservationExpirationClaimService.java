@@ -25,9 +25,7 @@ public class ReservationExpirationClaimService {
         Instant now = clock.instant();
         return repository.findClaimableForUpdate(workId, now).flatMap(work -> {
             if (!work.hasClaimBudget(properties.maxAttempts())) {
-                if (work.hasExpiredClaim(now)) {
-                    work.failExpiredClaim(now, EXPIRED_CLAIM_BUDGET_EXHAUSTED);
-                }
+                work.failClaimBudgetExhausted(now, EXPIRED_CLAIM_BUDGET_EXHAUSTED);
                 return Optional.empty();
             }
             UUID token = work.claim(now, now.plus(properties.claimLease()));

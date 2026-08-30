@@ -73,8 +73,22 @@ class ReservationExpirationWorkTest {
         work.requeueFailed(now, "admin@example.com");
 
         assertThat(work.getAttempts()).isOne();
+        assertThat(work.isRecoveryAuthorized()).isTrue();
         assertThat(work.hasClaimBudget(1)).isTrue();
         work.claim(now, now.plusSeconds(30));
+        assertThat(work.isRecoveryAuthorized()).isFalse();
         assertThat(work.hasClaimBudget(1)).isFalse();
+    }
+
+    @Test
+    void failClaimBudgetExhausted_shouldRejectActiveClaim() {
+        Instant now = Instant.parse("2026-08-15T12:00:00Z");
+        var work = new ReservationExpirationWork(UUID.randomUUID(), now.minusSeconds(60));
+        work.claim(now, now.plusSeconds(30));
+
+        assertThat(work.hasExpiredClaim(now)).isFalse();
+        assertThatThrownBy(() -> work.failClaimBudgetExhausted(now, "budget exhausted"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(work.getStatus()).isEqualTo(ReservationExpirationWorkStatus.CLAIMED);
     }
 }

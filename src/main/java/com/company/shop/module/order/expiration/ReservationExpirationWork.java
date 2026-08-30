@@ -40,6 +40,8 @@ public class ReservationExpirationWork extends BaseEntity {
     private Instant lastRecoveredAt;
     @Column(name = "last_recovered_by", length = 255)
     private String lastRecoveredBy;
+    @Column(name = "recovery_authorized", nullable = false)
+    private boolean recoveryAuthorized;
 
     protected ReservationExpirationWork() {}
     public ReservationExpirationWork(UUID orderId, Instant dueAt) {
@@ -53,18 +55,19 @@ public class ReservationExpirationWork extends BaseEntity {
         this.claimToken = UUID.randomUUID();
         this.claimUntil = claimUntil;
         this.attempts++;
+        this.recoveryAuthorized = false;
         this.lastError = null;
         return claimToken;
     }
     public boolean hasClaimBudget(int maxAttempts) {
-        return (long) attempts < (long) maxAttempts + recoveryCount;
+        return attempts < maxAttempts || recoveryAuthorized;
     }
     public boolean hasExpiredClaim(Instant now) {
         return status == ReservationExpirationWorkStatus.CLAIMED && claimUntil != null && !claimUntil.isAfter(now);
     }
-    public void failExpiredClaim(Instant now, String error) {
-        if (!hasExpiredClaim(now)) {
-            throw new IllegalStateException("Only an expired reservation expiration claim can be exhausted");
+    public void failClaimBudgetExhausted(Instant now, String error) {
+        if (status != ReservationExpirationWorkStatus.PENDING && !hasExpiredClaim(now)) {
+            throw new IllegalStateException("Only pending work or an expired claim can exhaust its claim budget");
         }
         status = ReservationExpirationWorkStatus.FAILED;
         lastError = truncate(error);
@@ -84,6 +87,7 @@ public class ReservationExpirationWork extends BaseEntity {
         status = ReservationExpirationWorkStatus.PENDING;
         nextAttemptAt = now;
         recoveryCount++;
+        recoveryAuthorized = true;
         lastRecoveredAt = now;
         lastRecoveredBy = recoveredBy;
     }
@@ -113,4 +117,5 @@ public class ReservationExpirationWork extends BaseEntity {
     public int getRecoveryCount() { return recoveryCount; }
     public Instant getLastRecoveredAt() { return lastRecoveredAt; }
     public String getLastRecoveredBy() { return lastRecoveredBy; }
+    public boolean isRecoveryAuthorized() { return recoveryAuthorized; }
 }
