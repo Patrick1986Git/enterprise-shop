@@ -21,6 +21,20 @@ class GitHubActionsPolicyTest(unittest.TestCase):
     def workflow(self, reference, extra=""):
         return f"jobs:\n  test:\n    steps:\n      - uses: {reference}\n{extra}"
 
+    def ci_workflow(self, ref):
+        return self.workflow(
+            f"actions/checkout@{SHA}",
+            "        with:\n"
+            "          persist-credentials: false\n"
+            "  container-security:\n"
+            "    steps:\n"
+            "      - name: Checkout\n"
+            f"        uses: actions/checkout@{SHA}\n"
+            "        with:\n"
+            "          persist-credentials: false\n"
+            f"          ref: {ref}\n",
+        )
+
     def test_accepts_external_action_pinned_to_full_sha(self):
         self.assertEqual([], self.validate(self.workflow(f"owner/action@{SHA}")))
 
@@ -72,6 +86,33 @@ class GitHubActionsPolicyTest(unittest.TestCase):
     def test_ignores_action_like_text_in_run_block(self):
         workflow = "jobs:\n  test:\n    steps:\n      - run: |\n          uses: image@example:tag\n"
         self.assertEqual([], self.validate(workflow))
+
+    def test_container_security_checkout_preserves_event_ref_semantics(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        self.assertEqual([], self.validate(self.ci_workflow(expression), "ci.yml"))
+
+        refs = {
+            "schedule": ("refs/heads/ignored", "master"),
+            "workflow_dispatch": ("refs/heads/ratchet", "refs/heads/ratchet"),
+            "pull_request": ("refs/pull/294/merge", "refs/pull/294/merge"),
+            "push": ("refs/heads/master", "refs/heads/master"),
+        }
+        for event_name, (github_ref, expected) in refs.items():
+            with self.subTest(event_name=event_name):
+                self.assertEqual(
+                    expected,
+                    POLICY.resolve_container_security_checkout_ref(
+                        expression, event_name, github_ref
+                    ),
+                )
+
+    def test_rejects_container_security_checkout_that_anchors_dispatch_to_master(self):
+        expression = (
+            "${{ (github.event_name == 'schedule' || "
+            "github.event_name == 'workflow_dispatch') && 'master' || github.ref }}"
+        )
+        violations = self.validate(self.ci_workflow(expression), "ci.yml")
+        self.assertTrue(any("workflow_dispatch" in violation for violation in violations))
 
 
 if __name__ == "__main__":
