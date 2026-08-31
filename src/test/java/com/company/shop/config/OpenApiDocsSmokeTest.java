@@ -54,6 +54,7 @@ import com.company.shop.module.order.outbox.OutboxEventTransactionalWorker;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.expiration.ReservationExpirationRecoveryService;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkQueryService;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogQueryService;
 import com.company.shop.module.order.expiration.LegacyReservationService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
@@ -176,6 +177,8 @@ class OpenApiDocsSmokeTest {
     private ReservationExpirationRecoveryService reservationExpirationRecoveryService;
     @MockitoBean
     private ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
+    @MockitoBean
+    private ReservationExpirationAdminActionLogQueryService reservationExpirationAdminActionLogQueryService;
 
     @MockitoBean
     private LegacyReservationService legacyReservationService;

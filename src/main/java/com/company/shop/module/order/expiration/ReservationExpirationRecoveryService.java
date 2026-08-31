@@ -20,14 +20,18 @@ public class ReservationExpirationRecoveryService {
     private final ReservationExpirationWorkRepository workRepository;
     private final OrderRepository orderRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final ReservationExpirationAdminActionLogRepository actionLogRepository;
     private final MeterRegistry meters;
     private final Clock clock;
 
     public ReservationExpirationRecoveryService(ReservationExpirationWorkRepository workRepository,
-            OrderRepository orderRepository, CurrentUserProvider currentUserProvider, MeterRegistry meters, Clock clock) {
+            OrderRepository orderRepository, CurrentUserProvider currentUserProvider,
+            ReservationExpirationAdminActionLogRepository actionLogRepository,
+            MeterRegistry meters, Clock clock) {
         this.workRepository = workRepository;
         this.orderRepository = orderRepository;
         this.currentUserProvider = currentUserProvider;
+        this.actionLogRepository = actionLogRepository;
         this.meters = meters;
         this.clock = clock;
     }
@@ -42,13 +46,18 @@ public class ReservationExpirationRecoveryService {
         String actor = normalizedActor();
         Order order = orderRepository.findByIdForUpdate(work.getOrderId()).orElse(null);
         String outcome;
+        ReservationExpirationAdminActionOutcome auditOutcome;
         if (order == null || order.getStatus() != OrderStatus.NEW) {
             work.completeFailedForTerminalOrder(clock.instant(), actor);
             outcome = "terminal_noop";
+            auditOutcome = ReservationExpirationAdminActionOutcome.TERMINAL_NOOP;
         } else {
             work.requeueFailed(clock.instant(), actor);
             outcome = "requeued";
+            auditOutcome = ReservationExpirationAdminActionOutcome.REQUEUED;
         }
+        actionLogRepository.save(ReservationExpirationAdminActionLog.recovery(
+                work.getOrderId(), work.getId(), auditOutcome, actor, work.getLastRecoveredAt()));
         meters.counter("shop.order.reservation_expiration.recovery.total", "outcome", outcome).increment();
         log.info("Reservation expiration recovery outcome={} workId={} orderId={} actor={}",
                 outcome, work.getId(), work.getOrderId(), actor);

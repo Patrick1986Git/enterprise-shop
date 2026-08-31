@@ -27,6 +27,7 @@ class ReservationExpirationRecoveryServiceTest {
     @Mock ReservationExpirationWorkRepository workRepository;
     @Mock OrderRepository orderRepository;
     @Mock CurrentUserProvider currentUserProvider;
+    @Mock ReservationExpirationAdminActionLogRepository actionLogRepository;
     private SimpleMeterRegistry meters;
     private ReservationExpirationRecoveryService service;
 
@@ -34,7 +35,7 @@ class ReservationExpirationRecoveryServiceTest {
     void setUp() {
         meters = new SimpleMeterRegistry();
         service = new ReservationExpirationRecoveryService(workRepository, orderRepository, currentUserProvider,
-                meters, Clock.fixed(NOW, ZoneOffset.UTC));
+                actionLogRepository, meters, Clock.fixed(NOW, ZoneOffset.UTC));
         lenient().when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
     }
 
@@ -53,6 +54,10 @@ class ReservationExpirationRecoveryServiceTest {
         assertThat(work.getLastError()).isEqualTo("provider unavailable");
         assertThat(meters.counter("shop.order.reservation_expiration.recovery.total", "outcome", "requeued").count())
                 .isEqualTo(1);
+        var captor = org.mockito.ArgumentCaptor.forClass(ReservationExpirationAdminActionLog.class);
+        verify(actionLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getOutcome()).isEqualTo(ReservationExpirationAdminActionOutcome.REQUEUED);
+        assertThat(captor.getValue().getActorEmail()).isEqualTo("admin@example.com");
     }
 
     @Test
@@ -68,6 +73,9 @@ class ReservationExpirationRecoveryServiceTest {
         assertThat(result.status()).isEqualTo(ReservationExpirationWorkStatus.COMPLETED);
         assertThat(meters.counter("shop.order.reservation_expiration.recovery.total", "outcome", "terminal_noop").count())
                 .isEqualTo(1);
+        var captor = org.mockito.ArgumentCaptor.forClass(ReservationExpirationAdminActionLog.class);
+        verify(actionLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getOutcome()).isEqualTo(ReservationExpirationAdminActionOutcome.TERMINAL_NOOP);
     }
 
     @Test

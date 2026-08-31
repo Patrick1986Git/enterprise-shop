@@ -24,6 +24,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import com.company.shop.security.CurrentUserProvider;
 
 @ExtendWith(MockitoExtension.class)
 class LegacyReservationServiceTest {
@@ -32,13 +33,20 @@ class LegacyReservationServiceTest {
 
     @Mock OrderRepository orderRepository;
     @Mock ReservationExpirationWorkRepository workRepository;
+    @Mock ReservationExpirationAdminActionLogRepository actionLogRepository;
+    @Mock CurrentUserProvider currentUserProvider;
 
     @Test
     void adopt_shouldCreateImmediatelyDueInitialWorkWithoutRecoveryAuthorization() {
         Order order = order(null);
         when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
         when(workRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.empty());
-        when(workRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+            ReservationExpirationWork work = invocation.getArgument(0);
+            setId(work, UUID.fromString("00000000-0000-0000-0000-000000000102"));
+            return work;
+        });
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("  admin@example.com  ");
 
         LegacyReservationAdoptionResult result = service().adopt(ORDER_ID);
 
@@ -52,6 +60,12 @@ class LegacyReservationServiceTest {
         assertThat(captor.getValue().getNextAttemptAt()).isEqualTo(NOW);
         assertThat(captor.getValue().getAttempts()).isZero();
         assertThat(captor.getValue().isRecoveryAuthorized()).isFalse();
+        var logCaptor = org.mockito.ArgumentCaptor.forClass(ReservationExpirationAdminActionLog.class);
+        verify(actionLogRepository).save(logCaptor.capture());
+        assertThat(logCaptor.getValue().getOrderId()).isEqualTo(ORDER_ID);
+        assertThat(logCaptor.getValue().getWorkId()).isEqualTo(result.workId());
+        assertThat(logCaptor.getValue().getActorEmail()).isEqualTo("admin@example.com");
+        assertThat(logCaptor.getValue().getOutcome()).isEqualTo(ReservationExpirationAdminActionOutcome.ADOPTED);
     }
 
     @Test
@@ -60,9 +74,11 @@ class LegacyReservationServiceTest {
         ReservationExpirationWork work = new ReservationExpirationWork(ORDER_ID, NOW.minusSeconds(60));
         when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
         when(workRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.of(work));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
 
         assertThat(service().adopt(ORDER_ID).adopted()).isFalse();
         verify(workRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(actionLogRepository);
     }
 
     @Test
@@ -127,7 +143,9 @@ class LegacyReservationServiceTest {
     }
 
     private LegacyReservationService service() {
-        return new LegacyReservationService(orderRepository, workRepository, Clock.fixed(NOW, ZoneOffset.UTC));
+        org.mockito.Mockito.lenient().when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
+        return new LegacyReservationService(orderRepository, workRepository, actionLogRepository,
+                currentUserProvider, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private void assertSort(Pageable requested, Sort expected) {
@@ -151,5 +169,15 @@ class LegacyReservationServiceTest {
             throw new AssertionError(ex);
         }
         return order;
+    }
+
+    private void setId(Object entity, UUID id) {
+        try {
+            var field = com.company.shop.common.model.BaseEntity.class.getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(entity, id);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
     }
 }
