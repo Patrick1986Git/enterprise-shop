@@ -55,6 +55,45 @@ class ReservationExpirationAdminActionLogQueryServiceTest {
     }
 
     @Test
+    void search_shouldPreserveExplicitIdSortWithoutDuplicateTieBreaker() {
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        Pageable requested = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "id"));
+
+        service().search(null, null, null, null, null, null, null, requested);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository).findAll(any(Specification.class), captor.capture());
+        assertThat(captor.getValue().getSort()).isEqualTo(requested.getSort());
+    }
+
+    @Test
+    void search_shouldAcceptEqualDateRange() {
+        Instant boundary = Instant.parse("2026-08-31T12:00:00Z");
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service().search(null, null, null, null, null,
+                boundary, boundary, PageRequest.of(0, 20));
+
+        verify(repository).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void search_shouldSupportUnpagedRequestWithStableDefaultSort() {
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service().search(null, null, null, null, null, null, null, Pageable.unpaged());
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository).findAll(any(Specification.class), captor.capture());
+        assertThat(captor.getValue().isUnpaged()).isTrue();
+        assertThat(captor.getValue().getSort()).isEqualTo(Sort.by(
+                Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+    }
+
+    @Test
     void search_shouldRejectInvalidDateRangeAndUnsupportedSort() {
         Instant now = Instant.parse("2026-08-31T12:00:00Z");
         assertThatThrownBy(() -> service().search(null, null, null, null, null,

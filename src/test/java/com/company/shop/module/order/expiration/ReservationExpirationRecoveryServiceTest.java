@@ -61,6 +61,22 @@ class ReservationExpirationRecoveryServiceTest {
     }
 
     @Test
+    void recover_shouldTrimAdminIdentityInSummaryAndAudit() {
+        ReservationExpirationWork work = failedWork();
+        Order order = new Order(UUID.randomUUID(), "buyer@example.com", "key", NOW);
+        when(workRepository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.of(work));
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("  admin@example.com  ");
+
+        service.recover(WORK_ID);
+
+        assertThat(work.getLastRecoveredBy()).isEqualTo("admin@example.com");
+        var captor = org.mockito.ArgumentCaptor.forClass(ReservationExpirationAdminActionLog.class);
+        verify(actionLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getActorEmail()).isEqualTo("admin@example.com");
+    }
+
+    @Test
     void recover_shouldCompleteFailedWorkWithoutRequeueWhenWebhookAlreadyMadeOrderTerminal() {
         ReservationExpirationWork work = failedWork();
         Order order = new Order(UUID.randomUUID(), "buyer@example.com", "key", NOW);

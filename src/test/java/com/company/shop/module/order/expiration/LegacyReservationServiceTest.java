@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,6 +36,12 @@ class LegacyReservationServiceTest {
     @Mock ReservationExpirationWorkRepository workRepository;
     @Mock ReservationExpirationAdminActionLogRepository actionLogRepository;
     @Mock CurrentUserProvider currentUserProvider;
+
+    @BeforeEach
+    void setUp() {
+        org.mockito.Mockito.lenient().when(currentUserProvider.getCurrentUserEmail())
+                .thenReturn("admin@example.com");
+    }
 
     @Test
     void adopt_shouldCreateImmediatelyDueInitialWorkWithoutRecoveryAuthorization() {
@@ -79,6 +86,17 @@ class LegacyReservationServiceTest {
         assertThat(service().adopt(ORDER_ID).adopted()).isFalse();
         verify(workRepository, never()).save(org.mockito.ArgumentMatchers.any());
         verifyNoInteractions(actionLogRepository);
+    }
+
+    @Test
+    void adopt_shouldRejectNullAdminIdentityBeforeLockingOrPersisting() {
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(null);
+
+        assertThatThrownBy(() -> service().adopt(ORDER_ID))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("current admin email must not be blank");
+
+        verifyNoInteractions(orderRepository, workRepository, actionLogRepository);
     }
 
     @Test
@@ -143,7 +161,6 @@ class LegacyReservationServiceTest {
     }
 
     private LegacyReservationService service() {
-        org.mockito.Mockito.lenient().when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
         return new LegacyReservationService(orderRepository, workRepository, actionLogRepository,
                 currentUserProvider, Clock.fixed(NOW, ZoneOffset.UTC));
     }
