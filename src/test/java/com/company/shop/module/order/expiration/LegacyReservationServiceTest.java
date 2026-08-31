@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -19,6 +20,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.repository.OrderRepository;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class LegacyReservationServiceTest {
@@ -71,8 +76,69 @@ class LegacyReservationServiceTest {
         verify(workRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void adopt_shouldRejectTerminalOrder() {
+        Order order = order(null);
+        order.cancelIfNew();
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+        when(workRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().adopt(ORDER_ID))
+                .isInstanceOf(LegacyReservationAdoptionNotAllowedException.class);
+        verify(workRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void adopt_shouldFailClosedWhenWorkExistsWithoutDeadline() {
+        Order order = order(null);
+        when(orderRepository.findByIdForUpdate(ORDER_ID)).thenReturn(Optional.of(order));
+        when(workRepository.findByOrderId(ORDER_ID))
+                .thenReturn(Optional.of(new ReservationExpirationWork(ORDER_ID, NOW)));
+
+        assertThatThrownBy(() -> service().adopt(ORDER_ID))
+                .isInstanceOf(LegacyReservationAdoptionNotAllowedException.class);
+        verify(workRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void findUnmanaged_shouldApplyDeterministicDefaultSort() {
+        assertSort(PageRequest.of(2, 5), Sort.by(Sort.Order.asc("createdAt"), Sort.Order.asc("id")));
+    }
+
+    @Test
+    void findUnmanaged_shouldAppendAscendingIdTieBreakerToSupportedSort() {
+        assertSort(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt")),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id")));
+    }
+
+    @Test
+    void findUnmanaged_shouldPreserveExplicitIdDirectionWithoutDuplication() {
+        assertSort(PageRequest.of(0, 20,
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+    }
+
+    @Test
+    void findUnmanaged_shouldRejectUnsupportedSortBeforeRepositoryExecution() {
+        assertThatThrownBy(() -> service().findUnmanaged(
+                PageRequest.of(0, 20, Sort.by("paymentStatus"))))
+                .isInstanceOf(LegacyReservationSortInvalidException.class);
+        verifyNoInteractions(orderRepository);
+    }
+
     private LegacyReservationService service() {
         return new LegacyReservationService(orderRepository, workRepository, Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    private void assertSort(Pageable requested, Sort expected) {
+        when(orderRepository.findLegacyUnmanagedReservations(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new PageImpl<>(java.util.List.of()));
+        service().findUnmanaged(requested);
+        var captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(orderRepository).findLegacyUnmanagedReservations(captor.capture());
+        assertThat(captor.getValue().getPageNumber()).isEqualTo(requested.getPageNumber());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(requested.getPageSize());
+        assertThat(captor.getValue().getSort()).isEqualTo(expected);
     }
 
     private Order order(Instant deadline) {

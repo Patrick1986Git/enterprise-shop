@@ -17,6 +17,7 @@ import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -138,6 +139,28 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(work.isRecoveryAuthorized()).isFalse();
         assertThat(stock(legacy.product().getId())).isEqualTo(stockBefore);
         verifyNoInteractions(stripeGateway);
+    }
+
+    @Test
+    void legacyReservationDiscovery_shouldUseIdAsStableTieBreakerForEqualCreationTimes() throws Exception {
+        Fixture first = checkout("legacy-paging-first", 1);
+        Fixture second = checkout("legacy-paging-second", 1);
+        makeLegacy(first.order());
+        makeLegacy(second.order());
+        LocalDateTime sharedCreatedAt = LocalDateTime.of(2025, 1, 1, 12, 0);
+        jdbcTemplate.update("UPDATE orders SET created_at = ? WHERE id IN (?, ?)",
+                sharedCreatedAt, first.order().getId(), second.order().getId());
+        entityManager.clear();
+
+        var expected = jdbcTemplate.queryForList(
+                "SELECT id FROM orders WHERE id IN (?, ?) ORDER BY created_at ASC, id ASC",
+                UUID.class, first.order().getId(), second.order().getId());
+        var actual = legacyReservationService.findUnmanaged(PageRequest.of(0, 100)).stream()
+                .map(LegacyReservationResponseDTO::orderId)
+                .filter(expected::contains)
+                .toList();
+
+        assertThat(actual).containsExactlyElementsOf(expected);
     }
 
     @Test

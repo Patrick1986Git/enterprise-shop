@@ -47,6 +47,7 @@ import com.company.shop.module.order.expiration.ReservationExpirationWorkNotFoun
 import com.company.shop.module.order.expiration.LegacyReservationAdoptionResult;
 import com.company.shop.module.order.expiration.LegacyReservationResponseDTO;
 import com.company.shop.module.order.expiration.LegacyReservationService;
+import com.company.shop.module.order.expiration.LegacyReservationSortInvalidException;
 import java.time.Instant;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
@@ -124,6 +125,18 @@ class AdminOrderControllerWebMvcTest {
                 .andExpect(jsonPath("$.workId").value(workId.toString()))
                 .andExpect(jsonPath("$.adopted").value(true))
                 .andExpect(jsonPath("$.workStatus").value("PENDING"));
+    }
+
+    @Test
+    void getLegacyReservations_shouldReturnBadRequestForUnsupportedSort() throws Exception {
+        when(legacyReservationService.findUnmanaged(any(Pageable.class)))
+                .thenThrow(new LegacyReservationSortInvalidException("paymentStatus"));
+
+        mockMvc.perform(get(ADMIN_ORDERS_URL + "/legacy-reservations")
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sort", "paymentStatus,asc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("LEGACY_RESERVATION_SORT_INVALID"));
     }
 
     @Test
