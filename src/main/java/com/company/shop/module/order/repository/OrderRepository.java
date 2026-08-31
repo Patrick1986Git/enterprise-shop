@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.company.shop.module.order.entity.Order;
+import com.company.shop.module.order.expiration.LegacyReservationResponseDTO;
 
 import jakarta.persistence.LockModeType;
 
@@ -25,4 +26,15 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("SELECT o FROM Order o WHERE o.id = :id")
 	java.util.Optional<Order> findByIdForUpdate(@Param("id") UUID id);
+
+	@Query("""
+			SELECT new com.company.shop.module.order.expiration.LegacyReservationResponseDTO(
+			  o.id, o.status, o.createdAt, o.reservationExpiresAt, p.status,
+			  CASE WHEN p.providerPaymentId IS NOT NULL AND p.providerPaymentId <> '' THEN true ELSE false END)
+			FROM Order o LEFT JOIN Payment p ON p.order = o
+			WHERE o.status = com.company.shop.module.order.entity.OrderStatus.NEW
+			  AND o.reservationExpiresAt IS NULL
+			  AND NOT EXISTS (SELECT w.id FROM ReservationExpirationWork w WHERE w.orderId = o.id)
+			""")
+	Page<LegacyReservationResponseDTO> findLegacyUnmanagedReservations(Pageable pageable);
 }

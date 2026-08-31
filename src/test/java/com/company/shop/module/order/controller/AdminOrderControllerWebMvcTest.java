@@ -44,6 +44,10 @@ import com.company.shop.module.order.expiration.ReservationExpirationWorkQuerySe
 import com.company.shop.module.order.expiration.ReservationExpirationWorkResponseDTO;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkStatus;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkNotFoundException;
+import com.company.shop.module.order.expiration.LegacyReservationAdoptionResult;
+import com.company.shop.module.order.expiration.LegacyReservationResponseDTO;
+import com.company.shop.module.order.expiration.LegacyReservationService;
+import com.company.shop.module.order.expiration.LegacyReservationSortInvalidException;
 import java.time.Instant;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
@@ -69,6 +73,9 @@ class AdminOrderControllerWebMvcTest {
     private ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
 
     @MockitoBean
+    private LegacyReservationService legacyReservationService;
+
+    @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
@@ -85,6 +92,51 @@ class AdminOrderControllerWebMvcTest {
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void legacyReservationOperations_shouldRequireAdminAndReturnSafeContracts() throws Exception {
+        UUID orderId = UUID.fromString("00000000-0000-0000-0000-000000000111");
+        UUID workId = UUID.fromString("00000000-0000-0000-0000-000000000112");
+        Instant dueAt = Instant.parse("2026-08-31T12:00:00Z");
+        var legacy = new LegacyReservationResponseDTO(orderId, OrderStatus.NEW,
+                LocalDateTime.of(2025, 1, 1, 0, 0), null,
+                com.company.shop.module.order.entity.PaymentStatus.PENDING, true);
+        when(legacyReservationService.findUnmanaged(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(legacy)));
+        when(legacyReservationService.adopt(orderId)).thenReturn(new LegacyReservationAdoptionResult(
+                orderId, workId, dueAt, ReservationExpirationWorkStatus.PENDING, true));
+
+        String discoveryUrl = ADMIN_ORDERS_URL + "/legacy-reservations";
+        mockMvc.perform(get(discoveryUrl)).andExpect(status().isForbidden());
+        mockMvc.perform(get(discoveryUrl).with(user("user").roles("USER"))).andExpect(status().isForbidden());
+        mockMvc.perform(get(discoveryUrl).with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].orderId").value(orderId.toString()))
+                .andExpect(jsonPath("$.content[0].paymentStatus").value("PENDING"))
+                .andExpect(jsonPath("$.content[0].providerPaymentAttached").value(true))
+                .andExpect(jsonPath("$.content[0].reservationExpiresAt").doesNotExist());
+
+        String adoptionUrl = ADMIN_ORDERS_URL + "/{orderId}/legacy-reservation/adopt";
+        mockMvc.perform(post(adoptionUrl, orderId).with(csrf()).with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(adoptionUrl, orderId).with(csrf()).with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workId").value(workId.toString()))
+                .andExpect(jsonPath("$.adopted").value(true))
+                .andExpect(jsonPath("$.workStatus").value("PENDING"));
+    }
+
+    @Test
+    void getLegacyReservations_shouldReturnBadRequestForUnsupportedSort() throws Exception {
+        when(legacyReservationService.findUnmanaged(any(Pageable.class)))
+                .thenThrow(new LegacyReservationSortInvalidException("paymentStatus"));
+
+        mockMvc.perform(get(ADMIN_ORDERS_URL + "/legacy-reservations")
+                        .with(user("admin").roles("ADMIN"))
+                        .param("sort", "paymentStatus,asc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("LEGACY_RESERVATION_SORT_INVALID"));
     }
 
     @Test
