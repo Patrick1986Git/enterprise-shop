@@ -47,6 +47,16 @@ class ReservationExpirationMigrationIT extends PostgresContainerSupport {
         assertThat(count).isZero();
     }
 
+    @Test
+    void migration_shouldAddDurableOneShotRecoveryAuthorization() {
+        assertThat(jdbcTemplate.queryForMap("""
+                SELECT is_nullable, column_default FROM information_schema.columns
+                WHERE table_name = 'reservation_expiration_work' AND column_name = 'recovery_authorized'
+                """))
+                .containsEntry("is_nullable", "NO")
+                .containsEntry("column_default", "false");
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration({
             DataSourceAutoConfiguration.class,

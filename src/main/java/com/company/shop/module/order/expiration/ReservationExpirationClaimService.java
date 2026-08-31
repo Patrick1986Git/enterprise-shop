@@ -11,6 +11,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @Service
 @ConditionalOnProperty(name = "spring.datasource.url")
 public class ReservationExpirationClaimService {
+    static final String EXPIRED_CLAIM_BUDGET_EXHAUSTED =
+            "Claim lease expired after the reservation expiration attempt budget was exhausted";
     private final ReservationExpirationWorkRepository repository;
     private final ReservationExpirationProperties properties;
     private final Clock clock;
@@ -21,9 +23,13 @@ public class ReservationExpirationClaimService {
     @Transactional
     public Optional<ReservationExpirationClaim> claim(UUID workId) {
         Instant now = clock.instant();
-        return repository.findClaimableForUpdate(workId, now).map(work -> {
+        return repository.findClaimableForUpdate(workId, now).flatMap(work -> {
+            if (!work.hasClaimBudget(properties.maxAttempts())) {
+                work.failClaimBudgetExhausted(now, EXPIRED_CLAIM_BUDGET_EXHAUSTED);
+                return Optional.empty();
+            }
             UUID token = work.claim(now, now.plus(properties.claimLease()));
-            return new ReservationExpirationClaim(work.getId(), work.getOrderId(), token);
+            return Optional.of(new ReservationExpirationClaim(work.getId(), work.getOrderId(), token));
         });
     }
     @Transactional
