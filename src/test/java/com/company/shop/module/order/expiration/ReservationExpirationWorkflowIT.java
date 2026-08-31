@@ -96,6 +96,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired ReservationExpirationProperties expirationProperties;
     @Autowired ReservationExpirationWorkRepository workRepository;
+    @MockitoSpyBean ReservationExpirationAdminActionLogRepository actionLogRepository;
     @Autowired ReservationExpirationClaimService claimService;
     @Autowired ReservationExpirationRecoveryService recoveryService;
     @Autowired StripeWebhookEventRegistrar webhookEventRegistrar;
@@ -119,6 +120,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         makeLegacy(legacy.order());
         clearInvocations(stripeGateway);
         int stockBefore = stock(legacy.product().getId());
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("  adoption-admin@example.com  ");
 
         var discovered = legacyReservationService.findUnmanaged(PageRequest.of(0, 20));
         assertThat(discovered).extracting(LegacyReservationResponseDTO::orderId).contains(legacy.order().getId());
@@ -137,6 +139,14 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(work.getNextAttemptAt()).isEqualTo(work.getDueAt());
         assertThat(work.getAttempts()).isZero();
         assertThat(work.isRecoveryAuthorized()).isFalse();
+        var adoptionLogs = actionLogRepository.findAll(
+                ReservationExpirationAdminActionLogSpecifications.adminFilters(legacy.order().getId(), work.getId(),
+                        ReservationExpirationAdminActionType.LEGACY_ADOPTION,
+                        ReservationExpirationAdminActionOutcome.ADOPTED, null, null, null));
+        assertThat(adoptionLogs).singleElement().satisfies(action -> {
+            assertThat(action.getActorEmail()).isEqualTo("adoption-admin@example.com");
+            assertThat(action.getCreatedAt()).isNotNull();
+        });
         assertThat(stock(legacy.product().getId())).isEqualTo(stockBefore);
         verifyNoInteractions(stripeGateway);
     }
@@ -167,6 +177,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     void concurrentLegacyReservationAdoption_shouldConvergeToExactlyOneWorkRow() throws Exception {
         Fixture fixture = checkout("legacy-concurrent-adoption", 1);
         makeLegacy(fixture.order());
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("concurrent-admin@example.com");
         CountDownLatch start = new CountDownLatch(1);
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
             var first = CompletableFuture.supplyAsync(() -> adoptAfter(start, fixture.order().getId()), executor);
@@ -179,6 +190,29 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM reservation_expiration_work WHERE order_id = ?", Integer.class,
                 fixture.order().getId())).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reservation_expiration_admin_action_logs WHERE order_id = ? AND outcome = 'ADOPTED'",
+                Integer.class, fixture.order().getId())).isOne();
+    }
+
+    @Test
+    void legacyReservationAdoption_shouldRollbackBusinessMutationWhenAuditAppendFails() throws Exception {
+        Fixture fixture = checkout("legacy-audit-rollback", 1);
+        makeLegacy(fixture.order());
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("rollback-admin@example.com");
+        doThrow(new IllegalStateException("forced audit persistence failure"))
+                .when(actionLogRepository).save(any(ReservationExpirationAdminActionLog.class));
+
+        assertThatThrownBy(() -> legacyReservationService.adopt(fixture.order().getId()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("forced audit persistence failure");
+
+        entityManager.clear();
+        assertThat(orderRepository.findById(fixture.order().getId()).orElseThrow().getReservationExpiresAt()).isNull();
+        assertThat(workRepository.findByOrderId(fixture.order().getId())).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reservation_expiration_admin_action_logs WHERE order_id = ?",
+                Integer.class, fixture.order().getId())).isZero();
     }
 
     @Test
@@ -276,7 +310,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         Fixture fixture = checkout("historical-over-budget", 1);
         makeDue(fixture.order());
         UUID workId = workRepository.findByOrderId(fixture.order().getId()).orElseThrow().getId();
-        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin-a@example.com");
         clearInvocations(stripeGateway);
         jdbcTemplate.update("""
                 UPDATE reservation_expiration_work
@@ -295,7 +329,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         ReservationExpirationWork authorized = workRepository.findById(workId).orElseThrow();
         assertThat(authorized.isRecoveryAuthorized()).isTrue();
         assertThat(authorized.getLastRecoveredAt()).isNotNull();
-        assertThat(authorized.getLastRecoveredBy()).isEqualTo("admin@example.com");
+        assertThat(authorized.getLastRecoveredBy()).isEqualTo("admin-a@example.com");
 
         ReservationExpirationClaim firstAuthorizedClaim = claimService.claim(workId).orElseThrow();
         ReservationExpirationWork claimed = workRepository.findById(workId).orElseThrow();
@@ -317,6 +351,7 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(firstAuthorizedClaim.claimToken()).isNotNull();
         verifyNoInteractions(stripeGateway);
 
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin-b@example.com");
         ReservationExpirationRecoveryResult secondRecovery = recoveryService.recover(workId);
         assertThat(secondRecovery.attempts()).isEqualTo(13);
         assertThat(secondRecovery.recoveryCount()).isEqualTo(2);
@@ -326,6 +361,15 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(secondClaimed.getAttempts()).isEqualTo(14);
         assertThat(secondClaimed.getRecoveryCount()).isEqualTo(2);
         assertThat(secondClaimed.isRecoveryAuthorized()).isFalse();
+        var recoveryLogs = actionLogRepository.findAll(
+                ReservationExpirationAdminActionLogSpecifications.adminFilters(fixture.order().getId(), workId,
+                        ReservationExpirationAdminActionType.RECOVERY,
+                        ReservationExpirationAdminActionOutcome.REQUEUED, null, null, null),
+                org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Order.asc("createdAt"),
+                        org.springframework.data.domain.Sort.Order.asc("id")));
+        assertThat(recoveryLogs).extracting(ReservationExpirationAdminActionLog::getActorEmail)
+                .containsExactly("admin-a@example.com", "admin-b@example.com");
     }
 
     @ParameterizedTest(name = "expirationWins={0}")

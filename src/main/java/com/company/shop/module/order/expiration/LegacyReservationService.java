@@ -16,18 +16,25 @@ import com.company.shop.module.order.entity.Order;
 import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.exception.OrderNotFoundException;
 import com.company.shop.module.order.repository.OrderRepository;
+import com.company.shop.security.CurrentUserProvider;
 
 @Service
 public class LegacyReservationService {
     private static final Set<String> ALLOWED_SORT_PROPERTIES = Set.of("createdAt", "id");
     private final OrderRepository orderRepository;
     private final ReservationExpirationWorkRepository workRepository;
+    private final ReservationExpirationAdminActionLogRepository actionLogRepository;
+    private final CurrentUserProvider currentUserProvider;
     private final Clock clock;
 
     public LegacyReservationService(OrderRepository orderRepository,
-            ReservationExpirationWorkRepository workRepository, Clock clock) {
+            ReservationExpirationWorkRepository workRepository,
+            ReservationExpirationAdminActionLogRepository actionLogRepository,
+            CurrentUserProvider currentUserProvider, Clock clock) {
         this.orderRepository = orderRepository;
         this.workRepository = workRepository;
+        this.actionLogRepository = actionLogRepository;
+        this.currentUserProvider = currentUserProvider;
         this.clock = clock;
     }
 
@@ -38,6 +45,7 @@ public class LegacyReservationService {
 
     @Transactional
     public LegacyReservationAdoptionResult adopt(UUID orderId) {
+        String actor = normalizedActor();
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         var existingWork = workRepository.findByOrderId(orderId);
@@ -57,7 +65,16 @@ public class LegacyReservationService {
         Instant dueAt = clock.instant();
         order.adoptLegacyReservation(dueAt);
         ReservationExpirationWork work = workRepository.save(new ReservationExpirationWork(orderId, dueAt));
+        actionLogRepository.save(ReservationExpirationAdminActionLog.adoption(
+                orderId, work.getId(), actor, dueAt));
         return result(order, work, true);
+    }
+
+    private String normalizedActor() {
+        String actor = currentUserProvider.getCurrentUserEmail();
+        actor = actor == null ? null : actor.trim();
+        if (actor == null || actor.isBlank()) throw new IllegalArgumentException("current admin email must not be blank");
+        return actor;
     }
 
     private LegacyReservationAdoptionResult result(Order order, ReservationExpirationWork work, boolean adopted) {

@@ -48,6 +48,10 @@ import com.company.shop.module.order.expiration.LegacyReservationAdoptionResult;
 import com.company.shop.module.order.expiration.LegacyReservationResponseDTO;
 import com.company.shop.module.order.expiration.LegacyReservationService;
 import com.company.shop.module.order.expiration.LegacyReservationSortInvalidException;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogQueryService;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogResponseDTO;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionOutcome;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionType;
 import java.time.Instant;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
@@ -74,6 +78,9 @@ class AdminOrderControllerWebMvcTest {
 
     @MockitoBean
     private LegacyReservationService legacyReservationService;
+
+    @MockitoBean
+    private ReservationExpirationAdminActionLogQueryService actionLogQueryService;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
@@ -198,6 +205,31 @@ class AdminOrderControllerWebMvcTest {
         mockMvc.perform(get(url)).andExpect(status().isForbidden());
         mockMvc.perform(get(url).with(user("user").roles("USER"))).andExpect(status().isForbidden());
         verifyNoInteractions(reservationExpirationWorkQueryService);
+    }
+
+    @Test
+    void reservationExpirationActions_shouldRequireAdminAndReturnSafeContract() throws Exception {
+        UUID logId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID workId = UUID.randomUUID();
+        Instant createdAt = Instant.parse("2026-08-31T12:00:00Z");
+        var response = new ReservationExpirationAdminActionLogResponseDTO(logId, orderId, workId,
+                ReservationExpirationAdminActionType.RECOVERY,
+                ReservationExpirationAdminActionOutcome.REQUEUED, "admin@example.com", createdAt);
+        when(actionLogQueryService.search(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(response)));
+        String url = ADMIN_ORDERS_URL + "/reservation-expiration-actions";
+
+        mockMvc.perform(get(url)).andExpect(status().isForbidden());
+        mockMvc.perform(get(url).with(user("user").roles("USER"))).andExpect(status().isForbidden());
+        mockMvc.perform(get(url).with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(logId.toString()))
+                .andExpect(jsonPath("$.content[0].orderId").value(orderId.toString()))
+                .andExpect(jsonPath("$.content[0].workId").value(workId.toString()))
+                .andExpect(jsonPath("$.content[0].outcome").value("REQUEUED"))
+                .andExpect(jsonPath("$.content[0].actorEmail").value("admin@example.com"))
+                .andExpect(jsonPath("$.content[0].claimToken").doesNotExist());
     }
 
     @Test

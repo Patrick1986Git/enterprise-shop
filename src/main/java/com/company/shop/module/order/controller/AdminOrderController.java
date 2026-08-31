@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.util.UUID;
+import java.time.Instant;
 
 import com.company.shop.common.dto.PageResponseDTO;
 import com.company.shop.module.order.dto.OrderResponseDTO;
@@ -22,6 +23,10 @@ import com.company.shop.module.order.expiration.ReservationExpirationWorkStatus;
 import com.company.shop.module.order.expiration.LegacyReservationAdoptionResult;
 import com.company.shop.module.order.expiration.LegacyReservationResponseDTO;
 import com.company.shop.module.order.expiration.LegacyReservationService;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogQueryService;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogResponseDTO;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionOutcome;
+import com.company.shop.module.order.expiration.ReservationExpirationAdminActionType;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,15 +44,18 @@ public class AdminOrderController {
     private final ReservationExpirationRecoveryService reservationExpirationRecoveryService;
     private final ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
     private final LegacyReservationService legacyReservationService;
+    private final ReservationExpirationAdminActionLogQueryService actionLogQueryService;
 
     public AdminOrderController(OrderService orderService,
             ReservationExpirationRecoveryService reservationExpirationRecoveryService,
             ReservationExpirationWorkQueryService reservationExpirationWorkQueryService,
-            LegacyReservationService legacyReservationService) {
+            LegacyReservationService legacyReservationService,
+            ReservationExpirationAdminActionLogQueryService actionLogQueryService) {
         this.orderService = orderService;
         this.reservationExpirationRecoveryService = reservationExpirationRecoveryService;
         this.reservationExpirationWorkQueryService = reservationExpirationWorkQueryService;
         this.legacyReservationService = legacyReservationService;
+        this.actionLogQueryService = actionLogQueryService;
     }
 
     @GetMapping("/legacy-reservations")
@@ -108,6 +116,29 @@ public class AdminOrderController {
     })
     public ReservationExpirationWorkResponseDTO getReservationExpirationWork(@PathVariable UUID workId) {
         return reservationExpirationWorkQueryService.findById(workId);
+    }
+
+    @GetMapping("/reservation-expiration-actions")
+    @Operation(operationId = "searchReservationExpirationActions",
+            summary = "Search immutable reservation-expiration admin action history",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Reservation-expiration action history returned."),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
+    })
+    public PageResponseDTO<ReservationExpirationAdminActionLogResponseDTO> searchReservationExpirationActions(
+            @RequestParam(required = false) UUID orderId,
+            @RequestParam(required = false) UUID workId,
+            @RequestParam(required = false) ReservationExpirationAdminActionType actionType,
+            @RequestParam(required = false) ReservationExpirationAdminActionOutcome outcome,
+            @RequestParam(required = false) String actorEmail,
+            @RequestParam(required = false) Instant createdFrom,
+            @RequestParam(required = false) Instant createdTo,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponseDTO.from(actionLogQueryService.search(orderId, workId, actionType, outcome,
+                actorEmail, createdFrom, createdTo, pageable));
     }
 
     @GetMapping
