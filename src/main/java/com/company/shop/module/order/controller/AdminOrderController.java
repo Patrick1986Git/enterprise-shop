@@ -19,6 +19,9 @@ import com.company.shop.module.order.expiration.ReservationExpirationRecoverySer
 import com.company.shop.module.order.expiration.ReservationExpirationWorkQueryService;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkResponseDTO;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkStatus;
+import com.company.shop.module.order.expiration.LegacyReservationAdoptionResult;
+import com.company.shop.module.order.expiration.LegacyReservationResponseDTO;
+import com.company.shop.module.order.expiration.LegacyReservationService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,13 +38,45 @@ public class AdminOrderController {
     private final OrderService orderService;
     private final ReservationExpirationRecoveryService reservationExpirationRecoveryService;
     private final ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
+    private final LegacyReservationService legacyReservationService;
 
     public AdminOrderController(OrderService orderService,
             ReservationExpirationRecoveryService reservationExpirationRecoveryService,
-            ReservationExpirationWorkQueryService reservationExpirationWorkQueryService) {
+            ReservationExpirationWorkQueryService reservationExpirationWorkQueryService,
+            LegacyReservationService legacyReservationService) {
         this.orderService = orderService;
         this.reservationExpirationRecoveryService = reservationExpirationRecoveryService;
         this.reservationExpirationWorkQueryService = reservationExpirationWorkQueryService;
+        this.legacyReservationService = legacyReservationService;
+    }
+
+    @GetMapping("/legacy-reservations")
+    @Operation(operationId = "getLegacyReservations",
+            summary = "List unmanaged legacy reservations requiring operator review",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Unmanaged legacy reservations returned successfully."),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
+    })
+    public PageResponseDTO<LegacyReservationResponseDTO> getLegacyReservations(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponseDTO.from(legacyReservationService.findUnmanaged(pageable));
+    }
+
+    @PostMapping("/{orderId}/legacy-reservation/adopt")
+    @Operation(operationId = "adoptLegacyReservation",
+            summary = "Adopt an unmanaged legacy reservation for provider-aware reconciliation",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Legacy reservation adoption applied or already managed."),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
+    })
+    public LegacyReservationAdoptionResult adoptLegacyReservation(@PathVariable UUID orderId) {
+        return legacyReservationService.adopt(orderId);
     }
 
     @GetMapping("/reservation-expiration-work")

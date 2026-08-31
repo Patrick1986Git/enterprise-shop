@@ -229,6 +229,13 @@ public class Order extends SoftDeleteEntity {
         return reservationExpiresAt;
     }
 
+    public void adoptLegacyReservation(Instant reservationExpiresAt) {
+        if (this.status != OrderStatus.NEW || this.reservationExpiresAt != null) {
+            throw new IllegalStateException("Only an unmanaged NEW reservation can be adopted");
+        }
+        this.reservationExpiresAt = reservationExpiresAt;
+    }
+
     public OrderStatus getStatus() {
         return status;
     }

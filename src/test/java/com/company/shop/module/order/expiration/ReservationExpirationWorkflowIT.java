@@ -44,6 +44,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.data.domain.PageRequest;
+
+import jakarta.persistence.EntityManager;
 
 import com.company.shop.module.cart.api.internal.CartCheckoutFacade;
 import com.company.shop.module.cart.entity.Cart;
@@ -105,6 +108,55 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @MockitoSpyBean PaymentInitializationTransactionService paymentInitialization;
     @MockitoSpyBean CartCheckoutFacade cartCheckoutFacade;
     @Autowired OrderLockCoordinator orderLockCoordinator;
+    @Autowired LegacyReservationService legacyReservationService;
+    @Autowired EntityManager entityManager;
+
+    @Test
+    void legacyReservation_shouldBeDiscoverableAndAdoptedWithoutProviderOrInventoryMutation() throws Exception {
+        Fixture legacy = checkout("legacy-adoption", 2);
+        Fixture managed = checkout("managed-not-legacy", 1);
+        makeLegacy(legacy.order());
+        clearInvocations(stripeGateway);
+        int stockBefore = stock(legacy.product().getId());
+
+        var discovered = legacyReservationService.findUnmanaged(PageRequest.of(0, 20));
+        assertThat(discovered).extracting(LegacyReservationResponseDTO::orderId).contains(legacy.order().getId());
+        assertThat(discovered).extracting(LegacyReservationResponseDTO::orderId).doesNotContain(managed.order().getId());
+        LegacyReservationResponseDTO legacyState = discovered.stream()
+                .filter(candidate -> candidate.orderId().equals(legacy.order().getId())).findFirst().orElseThrow();
+        assertThat(legacyState.paymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(legacyState.providerPaymentAttached()).isTrue();
+
+        LegacyReservationAdoptionResult result = legacyReservationService.adopt(legacy.order().getId());
+
+        assertThat(result.adopted()).isTrue();
+        assertThat(orderRepository.findById(legacy.order().getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.NEW);
+        assertThat(orderRepository.findById(legacy.order().getId()).orElseThrow().getReservationExpiresAt()).isNotNull();
+        ReservationExpirationWork work = workRepository.findByOrderId(legacy.order().getId()).orElseThrow();
+        assertThat(work.getNextAttemptAt()).isEqualTo(work.getDueAt());
+        assertThat(work.getAttempts()).isZero();
+        assertThat(work.isRecoveryAuthorized()).isFalse();
+        assertThat(stock(legacy.product().getId())).isEqualTo(stockBefore);
+        verifyNoInteractions(stripeGateway);
+    }
+
+    @Test
+    void concurrentLegacyReservationAdoption_shouldConvergeToExactlyOneWorkRow() throws Exception {
+        Fixture fixture = checkout("legacy-concurrent-adoption", 1);
+        makeLegacy(fixture.order());
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            var first = CompletableFuture.supplyAsync(() -> adoptAfter(start, fixture.order().getId()), executor);
+            var second = CompletableFuture.supplyAsync(() -> adoptAfter(start, fixture.order().getId()), executor);
+            start.countDown();
+            assertThat(java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .extracting(LegacyReservationAdoptionResult::adopted)
+                    .containsExactlyInAnyOrder(true, false);
+        }
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM reservation_expiration_work WHERE order_id = ?", Integer.class,
+                fixture.order().getId())).isOne();
+    }
 
     @Test
     void claimLeaseRecovery_shouldEnforceAutomaticAndAdminAuthorizedAttemptBudgets() throws Exception {
@@ -479,6 +531,20 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         when(stripeGateway.create(any(UUID.class), any(BigDecimal.class), any(String.class))).thenReturn(provider);
         var response = orderService.placeOrderFromCart(suffix + "-key", new OrderCheckoutRequestDTO(null, null));
         return new Fixture(user, product, orderRepository.findById(response.id()).orElseThrow());
+    }
+    private void makeLegacy(Order order) {
+        jdbcTemplate.update("DELETE FROM reservation_expiration_work WHERE order_id = ?", order.getId());
+        jdbcTemplate.update("UPDATE orders SET reservation_expires_at = NULL WHERE id = ?", order.getId());
+        entityManager.clear();
+    }
+    private LegacyReservationAdoptionResult adoptAfter(CountDownLatch start, UUID orderId) {
+        try {
+            if (!start.await(10, TimeUnit.SECONDS)) throw new AssertionError("adoption start gate timed out");
+            return legacyReservationService.adopt(orderId);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(ex);
+        }
     }
     private CheckoutInput checkoutInput(String suffix, int stock) {
         String token = UUID.randomUUID().toString().replace("-", "").substring(0, 12);

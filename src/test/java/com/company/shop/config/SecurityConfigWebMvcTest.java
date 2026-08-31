@@ -45,6 +45,7 @@ import com.company.shop.module.order.controller.StripeWebhookController;
 import com.company.shop.module.order.service.OrderService;
 import com.company.shop.module.order.expiration.ReservationExpirationRecoveryService;
 import com.company.shop.module.order.expiration.ReservationExpirationWorkQueryService;
+import com.company.shop.module.order.expiration.LegacyReservationService;
 import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.product.controller.AdminProductController;
 import com.company.shop.module.product.controller.ProductController;
@@ -112,6 +113,9 @@ class SecurityConfigWebMvcTest {
     private ReservationExpirationRecoveryService reservationExpirationRecoveryService;
     @MockitoBean
     private ReservationExpirationWorkQueryService reservationExpirationWorkQueryService;
+
+    @MockitoBean
+    private LegacyReservationService legacyReservationService;
     @MockitoBean
     private PaymentService paymentService;
 
