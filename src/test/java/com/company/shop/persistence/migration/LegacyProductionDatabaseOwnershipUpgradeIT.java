@@ -193,12 +193,26 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
     private void assertOwnershipTransferRejectsUnrelatedSchema() throws Exception {
         JdbcTemplate admin = jdbc(ADMIN_USER, ADMIN_PASSWORD);
         admin.execute("CREATE SCHEMA unrelated_boundary_test AUTHORIZATION " + LEGACY_RUNTIME_USER);
-        admin.execute("CREATE TABLE unrelated_boundary_test.unrelated_data (id BIGINT PRIMARY KEY)");
+        JdbcTemplate legacyRuntime = jdbc(LEGACY_RUNTIME_USER, LEGACY_RUNTIME_PASSWORD);
+        legacyRuntime.execute("CREATE TABLE unrelated_boundary_test.unrelated_data (id BIGINT PRIMARY KEY)");
+
+        assertThat(admin.queryForObject("""
+                SELECT pg_get_userbyid(nspowner)
+                FROM pg_namespace
+                WHERE nspname = 'unrelated_boundary_test'
+                """, String.class)).isEqualTo(LEGACY_RUNTIME_USER);
+        assertThat(tableOwner(admin, "unrelated_boundary_test.unrelated_data")).isEqualTo(LEGACY_RUNTIME_USER);
 
         var result = executeOwnershipTransfer();
         assertThat(result.getExitCode()).isNotZero();
         assertThat(result.getStderr())
-                .contains("Legacy runtime owns out-of-boundary pg_class unrelated_boundary_test.unrelated_data");
+                .contains("Legacy runtime owns out-of-boundary pg_class unrelated_boundary_test.unrelated_data")
+                .doesNotContain(ADMIN_PASSWORD, LEGACY_RUNTIME_PASSWORD, MIGRATION_PASSWORD);
+
+        assertThat(tableOwner(admin, "orders")).isEqualTo(LEGACY_RUNTIME_USER).isNotEqualTo(MIGRATION_USER);
+        assertThat(tableOwner(admin, "notification_admin_action_logs"))
+                .isEqualTo(LEGACY_RUNTIME_USER)
+                .isNotEqualTo(MIGRATION_USER);
 
         admin.execute("DROP SCHEMA unrelated_boundary_test CASCADE");
     }
