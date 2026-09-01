@@ -11,7 +11,11 @@ BEGIN
     WHERE oid = TG_RELID;
 
     IF session_user = table_owner THEN
-        RETURN OLD;
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+
+        RETURN NEW;
     END IF;
 
     RAISE EXCEPTION 'admin action log % is append-only for runtime roles', TG_TABLE_NAME

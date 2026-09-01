@@ -33,6 +33,7 @@ psql_app() {
       --username "$APP_DB_USER" \
       --dbname "$POSTGRES_DB" \
       --quiet \
+      --set=VERBOSITY=verbose \
       --set=ON_ERROR_STOP=1 \
       "$@"
 }
@@ -44,6 +45,7 @@ assert_mutation_denied() {
     exit 1
   fi
   grep -q "append-only for runtime roles" /tmp/admin-action-log-denial.out
+  grep -Eq 'ERROR:[[:space:]]+42501:' /tmp/admin-action-log-denial.out
 }
 
 [ "$(psql_app --tuples-only --no-align --command "
@@ -78,6 +80,10 @@ do
   [ "$(psql_admin --tuples-only --no-align --command "SELECT actor_email FROM $table WHERE id = '$id';")" = "integrity-test@example.com" ]
   assert_mutation_denied "DELETE FROM $table WHERE id = '$id';"
   [ "$(psql_admin --tuples-only --no-align --command "SELECT count(*) FROM $table WHERE id = '$id';")" = "1" ]
+  psql_admin --command "UPDATE $table SET actor_email = 'owner-maintenance@example.com' WHERE id = '$id';" >/dev/null
+  [ "$(psql_admin --tuples-only --no-align --command "SELECT actor_email FROM $table WHERE id = '$id';")" = "owner-maintenance@example.com" ]
+  psql_admin --command "DELETE FROM $table WHERE id = '$id';" >/dev/null
+  [ "$(psql_admin --tuples-only --no-align --command "SELECT count(*) FROM $table WHERE id = '$id';")" = "0" ]
 done
 
 category_id=$(psql_app --tuples-only --no-align --command \
@@ -86,9 +92,4 @@ psql_app --command "UPDATE categories SET description = 'updated' WHERE id = '$c
 psql_app --command "DELETE FROM categories WHERE id = '$category_id';" >/dev/null
 [ "$(psql_admin --tuples-only --no-align --command "SELECT count(*) FROM categories WHERE id = '$category_id';")" = "0" ]
 
-psql_admin --command "
-  DELETE FROM notification_admin_action_logs WHERE id = '$notification_id';
-  DELETE FROM outbox_event_admin_action_logs WHERE id = '$outbox_id';
-  DELETE FROM reservation_expiration_admin_action_logs WHERE id = '$reservation_id';" >/dev/null
-
-echo "Runtime audit INSERT/SELECT succeeded, UPDATE/DELETE was denied, and ordinary DML remained available."
+echo "Runtime audit INSERT/SELECT succeeded, UPDATE/DELETE was denied with SQLSTATE 42501, owner maintenance succeeded, and ordinary DML remained available."
