@@ -219,6 +219,9 @@ jobs:
       - name: Verify application health endpoint
         run: curl --fail --show-error http://127.0.0.1:8080/actuator/health
 
+      - name: Verify runtime admin action-log append-only integrity
+        run: ./scripts/verify-admin-action-log-integrity.sh
+
       - name: Collect Compose status on failure
         if: failure()
         run: docker compose --profile full ps -a

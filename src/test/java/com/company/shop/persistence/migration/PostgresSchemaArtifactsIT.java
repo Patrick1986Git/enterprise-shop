@@ -91,6 +91,24 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
         assertThat(polishConfigExists).isTrue();
     }
 
+    @Test
+    void schema_shouldProtectEveryAdminActionLogWithAppendOnlyTrigger() {
+        List<String> protectedTables = jdbcTemplate.queryForList("""
+                SELECT c.relname
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_proc p ON p.oid = t.tgfoid
+                WHERE NOT t.tgisinternal
+                  AND p.proname = 'reject_runtime_admin_action_log_mutation'
+                ORDER BY c.relname
+                """, String.class);
+
+        assertThat(protectedTables).containsExactly(
+                "notification_admin_action_logs",
+                "outbox_event_admin_action_logs",
+                "reservation_expiration_admin_action_logs");
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration({
             DataSourceAutoConfiguration.class,
