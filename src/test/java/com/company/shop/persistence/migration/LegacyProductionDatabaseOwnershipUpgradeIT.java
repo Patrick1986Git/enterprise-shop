@@ -154,13 +154,12 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
                 .web(WebApplicationType.NONE)
                 .profiles("prod")
                 .properties(Map.of(
-                        "spring.datasource.url", POSTGRES.getJdbcUrl(),
-                        "spring.datasource.username", LEGACY_RUNTIME_USER,
-                        "spring.datasource.password", LEGACY_RUNTIME_PASSWORD,
-                        "spring.flyway.url", POSTGRES.getJdbcUrl(),
-                        "spring.flyway.user", MIGRATION_USER,
-                        "spring.flyway.password", MIGRATION_PASSWORD,
-                        "spring.flyway.baseline-on-migrate", "false"))
+                        "DATABASE_URL", POSTGRES.getJdbcUrl(),
+                        "DATABASE_USERNAME", LEGACY_RUNTIME_USER,
+                        "DATABASE_PASSWORD", LEGACY_RUNTIME_PASSWORD,
+                        "FLYWAY_URL", POSTGRES.getJdbcUrl(),
+                        "FLYWAY_USER", MIGRATION_USER,
+                        "FLYWAY_PASSWORD", MIGRATION_PASSWORD))
                 .run();
     }
 
