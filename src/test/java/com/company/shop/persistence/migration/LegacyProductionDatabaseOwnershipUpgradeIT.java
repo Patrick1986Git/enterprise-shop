@@ -79,6 +79,7 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
                                 + "notification_admin_action_logs, outbox_event_admin_action_logs, "
                                 + "reservation_expiration_admin_action_logs"));
 
+        assertOwnershipTransferRejectsUnrelatedSchema();
         executePrivilegedOwnershipTransfer();
         assertTransferredOwnershipAndRuntimePrivileges();
 
@@ -185,13 +186,30 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
     }
 
     private void executePrivilegedOwnershipTransfer() throws Exception {
+        var result = executeOwnershipTransfer();
+        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    private void assertOwnershipTransferRejectsUnrelatedSchema() throws Exception {
+        JdbcTemplate admin = jdbc(ADMIN_USER, ADMIN_PASSWORD);
+        admin.execute("CREATE SCHEMA unrelated_boundary_test AUTHORIZATION " + LEGACY_RUNTIME_USER);
+        admin.execute("CREATE TABLE unrelated_boundary_test.unrelated_data (id BIGINT PRIMARY KEY)");
+
+        var result = executeOwnershipTransfer();
+        assertThat(result.getExitCode()).isNotZero();
+        assertThat(result.getStderr())
+                .contains("Legacy runtime owns out-of-boundary pg_class unrelated_boundary_test.unrelated_data");
+
+        admin.execute("DROP SCHEMA unrelated_boundary_test CASCADE");
+    }
+
+    private org.testcontainers.containers.Container.ExecResult executeOwnershipTransfer() throws Exception {
         String command = "PGPASSWORD='" + ADMIN_PASSWORD + "' "
                 + "DATABASE_ADMIN_URL='postgresql://127.0.0.1:5432/" + DATABASE_NAME + "' "
                 + "DATABASE_NAME='" + DATABASE_NAME + "' DATABASE_ADMIN_USER='" + ADMIN_USER + "' "
                 + "LEGACY_RUNTIME_USER='" + LEGACY_RUNTIME_USER + "' FLYWAY_USER='" + MIGRATION_USER + "' "
                 + "/test/transfer-prod-db-ownership.sh";
-        var result = POSTGRES.execInContainer("sh", "-c", command);
-        assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+        return POSTGRES.execInContainer("sh", "-c", command);
     }
 
     private Flyway flyway(String user, String password) {

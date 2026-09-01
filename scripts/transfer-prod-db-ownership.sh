@@ -48,6 +48,7 @@ DO $$
 DECLARE
     legacy_oid OID;
     admin_is_superuser BOOLEAN;
+    boundary_violation TEXT;
 BEGIN
     IF current_database() <> current_setting('shop.expected_database') THEN
         RAISE EXCEPTION 'Connected database does not match DATABASE_NAME';
@@ -65,19 +66,70 @@ BEGIN
         RAISE EXCEPTION 'Legacy runtime and migration roles must already exist';
     END IF;
 
+    SELECT format('pg_class %I.%I (relkind=%s)', n.nspname, c.relname, c.relkind)
+    INTO boundary_violation
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relowner = legacy_oid
+      AND n.nspname <> current_setting('shop.app_schema')
+      AND NOT (
+          n.nspname = 'pg_toast'
+          AND (
+              EXISTS (
+                  SELECT 1
+                  FROM pg_class parent
+                  JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
+                  WHERE parent.reltoastrelid = c.oid
+                    AND parent.relowner = legacy_oid
+                    AND parent_namespace.nspname = current_setting('shop.app_schema')
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM pg_index toast_index
+                  JOIN pg_class toast_table ON toast_table.oid = toast_index.indrelid
+                  JOIN pg_class parent ON parent.reltoastrelid = toast_table.oid
+                  JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
+                  WHERE toast_index.indexrelid = c.oid
+                    AND parent.relowner = legacy_oid
+                    AND parent_namespace.nspname = current_setting('shop.app_schema')
+              )
+          )
+      )
+    ORDER BY c.oid
+    LIMIT 1;
+    IF boundary_violation IS NOT NULL THEN
+        RAISE EXCEPTION 'Legacy runtime owns out-of-boundary %', boundary_violation;
+    END IF;
+
+    SELECT format('pg_type %I.%I', n.nspname, t.typname)
+    INTO boundary_violation
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typowner = legacy_oid
+      AND n.nspname <> current_setting('shop.app_schema')
+      AND NOT (
+          n.nspname = 'pg_toast'
+          AND EXISTS (
+              SELECT 1
+              FROM pg_class toast_table
+              JOIN pg_class parent ON parent.reltoastrelid = toast_table.oid
+              JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
+              WHERE toast_table.oid = t.typrelid
+                AND parent.relowner = legacy_oid
+                AND parent_namespace.nspname = current_setting('shop.app_schema')
+          )
+      )
+    ORDER BY t.oid
+    LIMIT 1;
+    IF boundary_violation IS NOT NULL THEN
+        RAISE EXCEPTION 'Legacy runtime owns out-of-boundary %', boundary_violation;
+    END IF;
+
     IF EXISTS (SELECT 1 FROM pg_database WHERE datdba = legacy_oid AND datname <> current_database())
        OR EXISTS (SELECT 1 FROM pg_tablespace WHERE spcowner = legacy_oid)
        OR EXISTS (
-           SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-           WHERE c.relowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
-       )
-       OR EXISTS (
            SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
            WHERE p.proowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
-       )
-       OR EXISTS (
-           SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
-           WHERE t.typowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
        )
        OR EXISTS (
            SELECT 1 FROM pg_namespace WHERE nspowner = legacy_oid
