@@ -110,6 +110,37 @@ class ApplicationConfigurationProfileTest {
                 });
     }
 
+    @Test
+    void prodStartup_shouldRejectBlankFlywayUsername() {
+        productionContext()
+                .withPropertyValues(
+                        "spring.flyway.user= ",
+                        "spring.flyway.password=migration_password")
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasRootCauseMessage("Production Flyway username is required"));
+    }
+
+    @Test
+    void prodStartup_shouldRejectBlankFlywayPassword() {
+        productionContext()
+                .withPropertyValues(
+                        "spring.flyway.user=migration_user",
+                        "spring.flyway.password= ")
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasRootCauseMessage("Production Flyway password is required"));
+    }
+
+    @Test
+    void prodStartup_shouldRejectBlankRuntimeUsername() {
+        productionContext()
+                .withPropertyValues(
+                        "spring.datasource.username= ",
+                        "spring.flyway.user=migration_user",
+                        "spring.flyway.password=migration_password")
+                .run(context -> assertThat(context.getStartupFailure())
+                        .hasRootCauseMessage("Production Flyway runtime username is required"));
+    }
+
     private static ApplicationContextRunner productionContext() {
         return new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
