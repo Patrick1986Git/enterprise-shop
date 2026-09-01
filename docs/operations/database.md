@@ -16,6 +16,16 @@ The host may separately run a system PostgreSQL instance on `localhost:5432`; Do
 
 The `dev` profile keeps Hibernate in `ddl-auto: validate`. Schema changes must come from Flyway, not Hibernate auto-DDL. Local Flyway uses the admin/bootstrap identity by default through `spring.flyway.url`, `spring.flyway.user`, and `spring.flyway.password`; the application datasource uses the least-privilege runtime identity.
 
+## Production migration identity
+
+Production requires two distinct PostgreSQL login identities. `DATABASE_USERNAME` and `DATABASE_PASSWORD` configure the least-privilege runtime datasource. `FLYWAY_USER` and `FLYWAY_PASSWORD` configure the schema migration identity; `FLYWAY_URL` may select a dedicated migration endpoint and otherwise uses `DATABASE_URL`. None of the production Flyway credentials default to the runtime credentials. Missing migration credentials therefore stop startup rather than silently running DDL through the application identity.
+
+The migration identity applies Flyway before Hibernate validates the schema and owns the objects it creates. The runtime identity receives only `CONNECT`, schema `USAGE`, application DML, required sequence access, and required function execution. It must not be a superuser, database or schema owner, table owner, or hold `CREATEDB`/`CREATEROLE`. Production provisioning must establish default privileges for objects created by `FLYWAY_USER`, grant the runtime privileges, and then start the application with both credential sets available through secret management.
+
+This ownership split is part of the V45 append-only boundary. The mutation-rejection trigger deliberately permits the table owner to perform maintenance, while rejecting `UPDATE` and `DELETE` from the non-owner runtime session with SQLSTATE `42501`. Running Flyway as `DATABASE_USERNAME` would make a fresh deployment's runtime identity the protected tables' owner and defeat that boundary.
+
+Production uses `baseline-on-migrate: false`. Supported fresh deployments migrate an empty database from V1, and upgrades retain their existing `flyway_schema_history`; neither path needs automatic baselining. A non-empty schema without Flyway history is rejected so an accidental connection cannot silently adopt an unmanaged schema. Any exceptional legacy adoption requires a reviewed, explicit one-time Flyway baseline procedure before normal startup. Development retains its existing automatic-baseline compatibility.
+
 ## Least-privilege runtime grants
 
 The runtime role has `LOGIN`, `CONNECT` on `enterprise_shop_dev`, `USAGE` on schema `public`, DML privileges on existing application tables, sequence privileges needed by generated IDs, and function execution where required. It is explicitly kept as `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` and does not own the PostgreSQL server.
