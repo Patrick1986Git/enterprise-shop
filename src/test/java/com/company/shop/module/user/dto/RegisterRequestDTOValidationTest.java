@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import com.company.shop.validation.annotation.Utf8Length;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
@@ -129,6 +131,36 @@ class RegisterRequestDTOValidationTest {
 
 		assertThat(violations).filteredOn(violation -> violation.getPropertyPath().toString().equals("passwordRepeat"))
 				.extracting(ConstraintViolation::getMessage).contains("Passwords do not match");
+	}
+
+	@Test
+	void validate_shouldRejectFieldsBeyondPersistenceAndPasswordLimits() {
+		RegisterRequestDTO request = new RegisterRequestDTO(
+				"a".repeat(244) + "@example.com",
+				"x".repeat(73),
+				"x".repeat(73),
+				"F".repeat(101),
+				"L".repeat(101));
+
+		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
+
+		assertFieldHasConstraint(violations, "email", Size.class);
+		assertFieldHasConstraint(violations, "password", Utf8Length.class);
+		assertFieldHasConstraint(violations, "passwordRepeat", Utf8Length.class);
+		assertFieldHasConstraint(violations, "firstName", Size.class);
+		assertFieldHasConstraint(violations, "lastName", Size.class);
+	}
+
+	@Test
+	void validate_shouldApplyBcryptLimitToUtf8EncodedPasswordBytes() {
+		String unicodePassword = "🔐".repeat(19);
+		RegisterRequestDTO request = new RegisterRequestDTO(
+				"john@example.com", unicodePassword, unicodePassword, "John", "Doe");
+
+		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
+
+		assertFieldHasConstraint(violations, "password", Utf8Length.class);
+		assertFieldHasConstraint(violations, "passwordRepeat", Utf8Length.class);
 	}
 
 	private void assertFieldHasConstraint(Set<ConstraintViolation<RegisterRequestDTO>> violations, String field,

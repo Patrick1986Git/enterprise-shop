@@ -7,6 +7,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import com.company.shop.module.user.dto.LoginRequestDTO;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
+import com.company.shop.module.user.exception.InvalidCredentialsException;
 import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.module.user.exception.UserRoleNotConfiguredException;
 import com.company.shop.module.user.repository.RoleRepository;
@@ -52,8 +54,13 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	public AuthResponseDTO login(LoginRequestDTO request) {
 		String normalizedEmail = emailNormalizer.normalize(request.getEmail());
-		Authentication authentication = authenticationManager
-				.authenticate(new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword()));
+		Authentication authentication;
+		try {
+			authentication = authenticationManager
+					.authenticate(new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword()));
+		} catch (AuthenticationException ex) {
+			throw new InvalidCredentialsException();
+		}
 
 		String token = tokenProvider.generateToken(authentication);
 		return new AuthResponseDTO(token);

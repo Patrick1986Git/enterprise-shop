@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +26,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.company.shop.module.user.dto.LoginRequestDTO;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.module.user.entity.Role;
+import com.company.shop.module.user.exception.InvalidCredentialsException;
 import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.module.user.exception.UserRoleNotConfiguredException;
 import com.company.shop.module.user.repository.RoleRepository;
@@ -72,6 +74,18 @@ class AuthServiceImplTest {
         ArgumentCaptor<UsernamePasswordAuthenticationToken> tokenCaptor = ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
         verify(authenticationManager).authenticate(tokenCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(tokenCaptor.getValue().getName()).isEqualTo("user@example.com");
+    }
+
+    @Test
+    void login_shouldMapAuthenticationFailureToGenericDomainException() {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("internal authentication detail"));
+
+        assertThatThrownBy(() -> service.login(new LoginRequestDTO("user@example.com", "wrong-password")))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password");
+
+        verify(tokenProvider, never()).generateToken(any());
     }
 
     @Test
