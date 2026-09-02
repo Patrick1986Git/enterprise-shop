@@ -30,10 +30,13 @@ spring:
         jdbc.batch_size: 25
 
   # Database Migrations: Flyway
-  # Strict control over database schema versioning.
+  # Migration credentials are mandatory and deliberately separate from the runtime datasource.
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    url: ${FLYWAY_URL:${DATABASE_URL}}
+    user: ${FLYWAY_USER}
+    password: ${FLYWAY_PASSWORD}
+    baseline-on-migrate: false
     check-location: true
 
 # #############################################################################
