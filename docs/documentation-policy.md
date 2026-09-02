@@ -32,6 +32,14 @@ Generated artifacts are build outputs for now and must not be committed unless a
 
 The repository may expose generated documentation at runtime through SpringDoc/Swagger UI, and future automation may publish generated outputs as CI artifacts. Those generated files remain non-source artifacts under the current policy.
 
+### Public and trusted publication boundary
+
+GitHub Pages is a public documentation surface. It may publish only the generated `public-api` group, which is intended for unauthenticated external consumers. The aggregate OpenAPI document and the customer, ADMIN, webhook, and system groups are maintainer-facing contracts and must remain available only through trusted CI artifacts.
+
+The Pages bundle is generated fail closed: its file set and index links are restricted to the approved public group, and semantic validation must reject ADMIN, actuator, customer-only, and webhook paths even if they are introduced under an unexpected filename. New or reclassified OpenAPI groups must not be added to Pages until this policy explicitly identifies them as public and regression coverage proves the resulting contract is public-safe.
+
+Both public and trusted generated specifications remain uncommitted build outputs.
+
 ## Manual documentation scope
 
 Manual documentation under `docs/` should capture durable knowledge that is not safely or usefully generated from code. Appropriate manual documentation includes:

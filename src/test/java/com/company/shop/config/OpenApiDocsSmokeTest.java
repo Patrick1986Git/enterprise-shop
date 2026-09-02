@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -96,16 +98,10 @@ class OpenApiDocsSmokeTest {
             ADMIN_API_GROUP,
             WEBHOOKS_API_GROUP,
             SYSTEM_API_GROUP);
-    private static final Map<String, String> OPENAPI_SITE_SECTIONS = new LinkedHashMap<>();
+    private static final Map<String, String> PUBLIC_SITE_SECTIONS = new LinkedHashMap<>();
 
     static {
-        OPENAPI_SITE_SECTIONS.put("Default", "openapi");
-        OPENAPI_SITE_SECTIONS.put("All API", ALL_API_GROUP);
-        OPENAPI_SITE_SECTIONS.put("Public API", PUBLIC_API_GROUP);
-        OPENAPI_SITE_SECTIONS.put("Customer API", CUSTOMER_API_GROUP);
-        OPENAPI_SITE_SECTIONS.put("Admin API", ADMIN_API_GROUP);
-        OPENAPI_SITE_SECTIONS.put("Webhooks API", WEBHOOKS_API_GROUP);
-        OPENAPI_SITE_SECTIONS.put("System API", SYSTEM_API_GROUP);
+        PUBLIC_SITE_SECTIONS.put("Public API", PUBLIC_API_GROUP);
     }
 
     @Autowired
@@ -551,7 +547,17 @@ class OpenApiDocsSmokeTest {
     }
 
     private void writeStaticApiDocsSite() throws Exception {
-        for (String fileName : OPENAPI_SITE_SECTIONS.values()) {
+        try (Stream<Path> existingFiles = Files.list(SITE_OUTPUT_DIRECTORY)) {
+            existingFiles.forEach(path -> {
+                try {
+                    Files.delete(path);
+                } catch (Exception ex) {
+                    throw new IllegalStateException("Failed to clear static API documentation site", ex);
+                }
+            });
+        }
+
+        for (String fileName : PUBLIC_SITE_SECTIONS.values()) {
             copyOpenApiArtifactToSite(fileName + ".json");
             copyOpenApiArtifactToSite(fileName + ".yaml");
         }
@@ -583,7 +589,7 @@ class OpenApiDocsSmokeTest {
                 .append("    <h1>Enterprise Shop API Documentation</h1>\n")
                 .append("    <p>Download or browse the generated OpenAPI specifications.</p>\n");
 
-        OPENAPI_SITE_SECTIONS.forEach((label, fileName) -> html
+        PUBLIC_SITE_SECTIONS.forEach((label, fileName) -> html
                 .append("    <section>\n")
                 .append("      <h2>").append(label).append("</h2>\n")
                 .append("      <ul>\n")
@@ -606,8 +612,11 @@ class OpenApiDocsSmokeTest {
         assertThat(indexPath).exists().isRegularFile();
         assertThat(readFileSize(indexPath)).isPositive();
 
+        assertThat(listFileNames(SITE_OUTPUT_DIRECTORY))
+                .containsExactlyInAnyOrder("index.html", "public-api.json", "public-api.yaml");
+
         String index = readString(indexPath);
-        OPENAPI_SITE_SECTIONS.values().forEach(fileName -> {
+        PUBLIC_SITE_SECTIONS.values().forEach(fileName -> {
             Path jsonPath = SITE_OUTPUT_DIRECTORY.resolve(fileName + ".json");
             Path yamlPath = SITE_OUTPUT_DIRECTORY.resolve(fileName + ".yaml");
 
@@ -618,6 +627,49 @@ class OpenApiDocsSmokeTest {
             assertThat(index).contains("href=\"" + fileName + ".json\"");
             assertThat(index).contains("href=\"" + fileName + ".yaml\"");
         });
+
+        assertThat(index).doesNotContain(
+                "openapi.json",
+                ALL_API_GROUP,
+                CUSTOMER_API_GROUP,
+                ADMIN_API_GROUP,
+                WEBHOOKS_API_GROUP,
+                SYSTEM_API_GROUP);
+
+        Map<String, Object> trustedPublicPaths = paths(readJsonArtifact(
+                OPENAPI_OUTPUT_DIRECTORY.resolve(PUBLIC_API_GROUP + ".json")));
+        assertPublicPagesPaths(paths(readJsonArtifact(
+                SITE_OUTPUT_DIRECTORY.resolve(PUBLIC_API_GROUP + ".json"))), trustedPublicPaths);
+        assertPublicPagesPaths(paths(readYamlArtifact(
+                SITE_OUTPUT_DIRECTORY.resolve(PUBLIC_API_GROUP + ".yaml"))), trustedPublicPaths);
+
+        assertThat(paths(readJsonArtifact(OPENAPI_OUTPUT_DIRECTORY.resolve("openapi.json"))).keySet())
+                .anyMatch(path -> path.startsWith("/api/v1/admin/"))
+                .anyMatch(path -> path.startsWith("/actuator/"));
+        assertThat(paths(readJsonArtifact(OPENAPI_OUTPUT_DIRECTORY.resolve(ADMIN_API_GROUP + ".json"))).keySet())
+                .isNotEmpty()
+                .allMatch(path -> path.startsWith("/api/v1/admin/"));
+    }
+
+    private void assertPublicPagesPaths(
+            Map<String, Object> publishedPaths,
+            Map<String, Object> trustedPublicPaths) {
+        assertThat(publishedPaths.keySet())
+                .containsExactlyInAnyOrderElementsOf(trustedPublicPaths.keySet())
+                .noneMatch(path -> path.startsWith("/api/v1/admin/"))
+                .noneMatch(path -> path.startsWith("/actuator/"))
+                .noneMatch(path -> path.equals("/api/v1/me") || path.startsWith("/api/v1/me/"))
+                .noneMatch(path -> path.startsWith("/api/v1/orders/"))
+                .noneMatch(path -> path.equals("/api/v1/reviews") || path.startsWith("/api/v1/reviews/"))
+                .noneMatch(path -> path.startsWith("/api/v1/webhooks/"));
+    }
+
+    private Set<String> listFileNames(Path directory) {
+        try (Stream<Path> files = Files.list(directory)) {
+            return files.map(path -> path.getFileName().toString()).collect(Collectors.toSet());
+        } catch (Exception ex) {
+            throw new AssertionError("Failed to list generated documentation directory: " + directory, ex);
+        }
     }
 
     private void writeOpenApiArtifacts(String fileName, Map<String, Object> openApi) throws Exception {
