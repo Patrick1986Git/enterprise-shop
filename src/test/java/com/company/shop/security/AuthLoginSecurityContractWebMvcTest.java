@@ -3,6 +3,8 @@ package com.company.shop.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,6 +23,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -114,6 +117,29 @@ class AuthLoginSecurityContractWebMvcTest {
         assertThat(output).doesNotContain("BadCredentialsException", "UsernameNotFoundException", PASSWORD,
                 "WrongPassword123!", "jwt-value");
         assertThat(invalidCredentialsCount()).isEqualTo(countBefore + 4);
+    }
+
+    @Test
+    void login_shouldReturnGenericServerErrorForAuthenticationInfrastructureFailure(CapturedOutput output)
+            throws Exception {
+        double countBefore = invalidCredentialsCount();
+        when(userRepository.findActiveByEmailWithRoles("outage@example.com"))
+                .thenThrow(new DataAccessResourceFailureException("database connection detail"));
+
+        mockMvc.perform(login("outage@example.com", PASSWORD, "login-infrastructure-failure"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(header().string("X-Request-Id", "login-infrastructure-failure"))
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.message")
+                        .value("An unexpected server error occurred. Please contact support if the problem persists."))
+                .andExpect(jsonPath("$.errorCode").isEmpty())
+                .andExpect(jsonPath("$.token").doesNotExist());
+
+        assertThat(invalidCredentialsCount()).isEqualTo(countBefore);
+        verify(jwtTokenProvider, never()).generateToken(any());
+        assertThat(output).contains("InternalAuthenticationServiceException", "database connection detail")
+                .doesNotContain(PASSWORD, "jwt-value", "USER_INVALID_CREDENTIALS");
     }
 
     @Test
