@@ -14,7 +14,7 @@ When the application is running locally, SpringDoc exposes API documentation thr
 - Grouped OpenAPI JSON: `http://localhost:8080/api-docs/{group}` for stable SpringDoc groups such as `all-api`, `public-api`, `customer-api`, `admin-api`, `webhooks-api`, and `system-api`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
-These runtime endpoints are generated from the application. Generated files such as `openapi.json`, `openapi.yaml`, Swagger UI bundles, and `target/generated-docs` are build artifacts and must not be committed under the current policy.
+The `prod` profile disables the runtime OpenAPI endpoints and Swagger UI; local development and CI documentation generation remain enabled. These runtime endpoints are generated from the application. Generated files such as `openapi.json`, `openapi.yaml`, Swagger UI bundles, and `target/generated-docs` are build artifacts and must not be committed under the current policy.
 
 ## CI-generated OpenAPI artifacts
 

@@ -39,6 +39,14 @@ spring:
     baseline-on-migrate: false
     check-location: true
 
+# Runtime API documentation is disabled at the production trust boundary.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+  show-actuator: false
+
 # #############################################################################
 # SECURITY: JWT CONFIGURATION
 # Cryptographic settings for authentication.
