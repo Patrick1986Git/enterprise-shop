@@ -22,6 +22,8 @@
 - `/api-docs`, `/api-docs/**`
 - `/v3/api-docs/**`
 
+These documentation matchers support local development and documentation generation. The `prod` profile disables both SpringDoc API documents and Swagger UI, so they do not create production runtime handlers.
+
 `SecurityConfig` also permits public catalog/review reads:
 
 - `GET /api/v1/products`
