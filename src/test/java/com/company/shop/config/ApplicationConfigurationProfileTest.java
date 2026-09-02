@@ -10,7 +10,11 @@ import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.autoconfigure.web.ErrorProperties.IncludeAttribute;
+import org.springframework.boot.autoconfigure.web.WebProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
 class ApplicationConfigurationProfileTest {
@@ -56,6 +60,41 @@ class ApplicationConfigurationProfileTest {
         assertThat(properties.getProperty("spring.flyway.user")).isEqualTo("${FLYWAY_USER}");
         assertThat(properties.getProperty("spring.flyway.password")).isEqualTo("${FLYWAY_PASSWORD}");
         assertThat(properties.getProperty("spring.flyway.baseline-on-migrate")).isEqualTo("false");
+    }
+
+    @Test
+    void prodConfiguration_shouldUseSafeSpringBootFallbackErrorDefaults() {
+        new ApplicationContextRunner()
+                .withInitializer(new ConfigDataApplicationContextInitializer())
+                .withUserConfiguration(WebErrorPropertiesConfiguration.class)
+                .withPropertyValues("spring.profiles.active=prod")
+                .run(context -> {
+                    WebProperties webProperties = context.getBean(WebProperties.class);
+
+                    assertThat(webProperties.getError().getIncludeMessage()).isEqualTo(IncludeAttribute.NEVER);
+                    assertThat(webProperties.getError().getIncludeBindingErrors()).isEqualTo(IncludeAttribute.NEVER);
+                    assertThat(webProperties.getError().getIncludeStacktrace()).isEqualTo(IncludeAttribute.NEVER);
+                    assertThat(webProperties.getError().isIncludeException()).isFalse();
+                    assertThat(webProperties.getError().getIncludePath()).isEqualTo(IncludeAttribute.ALWAYS);
+                });
+    }
+
+    @Test
+    void devAndTestConfigurations_shouldRetainSpringBootFallbackErrorDefaults() {
+        for (String profile : new String[] { "dev", "test" }) {
+            new ApplicationContextRunner()
+                    .withInitializer(new ConfigDataApplicationContextInitializer())
+                    .withUserConfiguration(WebErrorPropertiesConfiguration.class)
+                    .withPropertyValues("spring.profiles.active=" + profile)
+                    .run(context -> {
+                        WebProperties webProperties = context.getBean(WebProperties.class);
+
+                        assertThat(webProperties.getError().getIncludeMessage()).isEqualTo(IncludeAttribute.NEVER);
+                        assertThat(webProperties.getError().getIncludeBindingErrors()).isEqualTo(IncludeAttribute.NEVER);
+                        assertThat(webProperties.getError().getIncludeStacktrace()).isEqualTo(IncludeAttribute.NEVER);
+                        assertThat(webProperties.getError().isIncludeException()).isFalse();
+                    });
+        }
     }
 
     @Test
@@ -159,5 +198,10 @@ class ApplicationConfigurationProfileTest {
         YamlPropertiesFactoryBean factory = new YamlPropertiesFactoryBean();
         factory.setResources(new ClassPathResource(resourceName));
         return factory.getObject();
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(WebProperties.class)
+    static class WebErrorPropertiesConfiguration {
     }
 }
