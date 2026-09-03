@@ -22,7 +22,7 @@ public class LoginRequestDTO {
 	private String email;
 
 	@Schema(
-			description = "User password.",
+			description = "User password. Must not exceed 72 UTF-8 bytes.",
 			example = "StrongPassword123!",
 			format = "password",
 			maxLength = 72,

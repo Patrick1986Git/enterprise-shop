@@ -24,7 +24,7 @@ public class RegisterRequestDTO {
 	private String email;
 
 	@Schema(
-			description = "Password for the new account. Must be at least 8 characters.",
+			description = "Password for the new account. Must contain between 8 and 72 characters and must not exceed 72 UTF-8 bytes.",
 			example = "StrongPassword123!",
 			format = "password",
 			minLength = 8,
@@ -38,7 +38,7 @@ public class RegisterRequestDTO {
 	private String password;
 
 	@Schema(
-			description = "Repeated password used to confirm the account password.",
+			description = "Repeated password used to confirm the account password. Must not exceed 72 UTF-8 bytes.",
 			example = "StrongPassword123!",
 			format = "password",
 			maxLength = 72,

@@ -339,6 +339,11 @@ class OpenApiDocsSmokeTest {
         assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "passwordRepeat", "maxLength", 72);
         assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "firstName", "maxLength", 100);
         assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "lastName", "maxLength", 100);
+
+        assertSchemaPropertyDescriptionContains(schemas, "LoginRequestDTO", "password", "72 UTF-8 bytes");
+        assertSchemaPropertyDescriptionContains(schemas, "RegisterRequestDTO", "password", "8 and 72 characters");
+        assertSchemaPropertyDescriptionContains(schemas, "RegisterRequestDTO", "password", "72 UTF-8 bytes");
+        assertSchemaPropertyDescriptionContains(schemas, "RegisterRequestDTO", "passwordRepeat", "72 UTF-8 bytes");
     }
 
     @Test
@@ -574,6 +579,18 @@ class OpenApiDocsSmokeTest {
         });
 
         assertThat(property).containsEntry(limitName, expectedValue);
+    }
+
+    private void assertSchemaPropertyDescriptionContains(Map<String, Object> schemas, String schemaName,
+            String propertyName, String expectedText) {
+        Map<String, Object> schema = objectMapper.convertValue(schemas.get(schemaName), new TypeReference<>() {
+        });
+        Map<String, Object> properties = objectMapper.convertValue(schema.get("properties"), new TypeReference<>() {
+        });
+        Map<String, Object> property = objectMapper.convertValue(properties.get(propertyName), new TypeReference<>() {
+        });
+
+        assertThat(property.get("description")).asString().contains(expectedText);
     }
 
     private void writeStaticApiDocsSite() throws Exception {

@@ -1,6 +1,7 @@
 package com.company.shop.module.user.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import java.lang.annotation.Annotation;
 import java.util.Locale;
@@ -161,6 +162,32 @@ class RegisterRequestDTOValidationTest {
 
 		assertFieldHasConstraint(violations, "password", Utf8Length.class);
 		assertFieldHasConstraint(violations, "passwordRepeat", Utf8Length.class);
+		assertUtf8LengthMessages(violations,
+				"Password must not exceed 72 UTF-8 bytes",
+				"Password confirmation must not exceed 72 UTF-8 bytes");
+	}
+
+	@Test
+	void validate_shouldDescribeBcryptLimitAsUtf8BytesInPolish() {
+		Locale.setDefault(Locale.forLanguageTag("pl"));
+		String unicodePassword = "🔐".repeat(19);
+
+		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(
+				new RegisterRequestDTO("john@example.com", unicodePassword, unicodePassword, "John", "Doe"));
+
+		assertUtf8LengthMessages(violations,
+				"Hasło nie może przekraczać 72 bajtów w kodowaniu UTF-8",
+				"Potwierdzenie hasła nie może przekraczać 72 bajtów w kodowaniu UTF-8");
+	}
+
+	private void assertUtf8LengthMessages(Set<ConstraintViolation<RegisterRequestDTO>> violations,
+			String passwordMessage, String confirmationMessage) {
+		assertThat(violations)
+				.filteredOn(violation -> violation.getConstraintDescriptor().getAnnotation() instanceof Utf8Length)
+				.extracting(violation -> violation.getPropertyPath().toString(), ConstraintViolation::getMessage)
+				.contains(
+						tuple("password", passwordMessage),
+						tuple("passwordRepeat", confirmationMessage));
 	}
 
 	private void assertFieldHasConstraint(Set<ConstraintViolation<RegisterRequestDTO>> violations, String field,
