@@ -18,6 +18,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.ProviderNotFoundException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.company.shop.module.user.dto.LoginRequestDTO;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.module.user.entity.Role;
+import com.company.shop.module.user.exception.InvalidCredentialsException;
 import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.module.user.exception.UserRoleNotConfiguredException;
 import com.company.shop.module.user.repository.RoleRepository;
@@ -72,6 +78,64 @@ class AuthServiceImplTest {
         ArgumentCaptor<UsernamePasswordAuthenticationToken> tokenCaptor = ArgumentCaptor.forClass(UsernamePasswordAuthenticationToken.class);
         verify(authenticationManager).authenticate(tokenCaptor.capture());
         org.assertj.core.api.Assertions.assertThat(tokenCaptor.getValue().getName()).isEqualTo("user@example.com");
+    }
+
+    @Test
+    void login_shouldMapBadCredentialsFailureToGenericDomainException() {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("internal authentication detail"));
+
+        assertThatThrownBy(() -> service.login(new LoginRequestDTO("user@example.com", "wrong-password")))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password");
+
+        verify(tokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void login_shouldMapAccountStatusFailureToGenericDomainException() {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new DisabledException("internal account status detail"));
+
+        assertThatThrownBy(() -> service.login(new LoginRequestDTO("user@example.com", "password")))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password");
+
+        verify(tokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void login_shouldPropagateInternalAuthenticationServiceFailure() {
+        InternalAuthenticationServiceException failure =
+                new InternalAuthenticationServiceException("repository unavailable");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.login(new LoginRequestDTO("user@example.com", "password")))
+                .isSameAs(failure);
+
+        verify(tokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void login_shouldPropagateAuthenticationServiceFailure() {
+        AuthenticationServiceException failure = new AuthenticationServiceException("authentication service unavailable");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.login(new LoginRequestDTO("user@example.com", "password")))
+                .isSameAs(failure);
+
+        verify(tokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void login_shouldPropagateProviderConfigurationFailure() {
+        ProviderNotFoundException failure = new ProviderNotFoundException("provider missing");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.login(new LoginRequestDTO("user@example.com", "password")))
+                .isSameAs(failure);
+
+        verify(tokenProvider, never()).generateToken(any());
     }
 
     @Test

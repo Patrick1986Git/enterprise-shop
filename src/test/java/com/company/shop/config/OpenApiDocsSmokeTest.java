@@ -324,6 +324,29 @@ class OpenApiDocsSmokeTest {
     }
 
     @Test
+    void openApiDocs_shouldDocumentAuthenticationInputBounds() throws Exception {
+        Map<String, Object> openApi = readOpenApi(API_DOCS_ENDPOINT);
+        Map<String, Object> components = objectMapper.convertValue(openApi.get("components"), new TypeReference<>() {
+        });
+        Map<String, Object> schemas = objectMapper.convertValue(components.get("schemas"), new TypeReference<>() {
+        });
+
+        assertSchemaPropertyLimit(schemas, "LoginRequestDTO", "email", "maxLength", 255);
+        assertSchemaPropertyLimit(schemas, "LoginRequestDTO", "password", "maxLength", 72);
+        assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "email", "maxLength", 255);
+        assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "password", "minLength", 8);
+        assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "password", "maxLength", 72);
+        assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "passwordRepeat", "maxLength", 72);
+        assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "firstName", "maxLength", 100);
+        assertSchemaPropertyLimit(schemas, "RegisterRequestDTO", "lastName", "maxLength", 100);
+
+        assertSchemaPropertyDescriptionContains(schemas, "LoginRequestDTO", "password", "72 UTF-8 bytes");
+        assertSchemaPropertyDescriptionContains(schemas, "RegisterRequestDTO", "password", "8 and 72 characters");
+        assertSchemaPropertyDescriptionContains(schemas, "RegisterRequestDTO", "password", "72 UTF-8 bytes");
+        assertSchemaPropertyDescriptionContains(schemas, "RegisterRequestDTO", "passwordRepeat", "72 UTF-8 bytes");
+    }
+
+    @Test
     void openApiDocs_shouldContainReusableApiErrorComponents() throws Exception {
         MvcResult result = mockMvc.perform(get(API_DOCS_ENDPOINT))
                 .andExpect(status().isOk())
@@ -544,6 +567,30 @@ class OpenApiDocsSmokeTest {
         assertThat(response.get("description")).isInstanceOf(String.class);
         assertThat(content).containsKey("application/json");
         assertThat(schema).containsEntry("$ref", "#/components/schemas/ApiError");
+    }
+
+    private void assertSchemaPropertyLimit(Map<String, Object> schemas, String schemaName, String propertyName,
+            String limitName, int expectedValue) {
+        Map<String, Object> schema = objectMapper.convertValue(schemas.get(schemaName), new TypeReference<>() {
+        });
+        Map<String, Object> properties = objectMapper.convertValue(schema.get("properties"), new TypeReference<>() {
+        });
+        Map<String, Object> property = objectMapper.convertValue(properties.get(propertyName), new TypeReference<>() {
+        });
+
+        assertThat(property).containsEntry(limitName, expectedValue);
+    }
+
+    private void assertSchemaPropertyDescriptionContains(Map<String, Object> schemas, String schemaName,
+            String propertyName, String expectedText) {
+        Map<String, Object> schema = objectMapper.convertValue(schemas.get(schemaName), new TypeReference<>() {
+        });
+        Map<String, Object> properties = objectMapper.convertValue(schema.get("properties"), new TypeReference<>() {
+        });
+        Map<String, Object> property = objectMapper.convertValue(properties.get(propertyName), new TypeReference<>() {
+        });
+
+        assertThat(property.get("description")).asString().contains(expectedText);
     }
 
     private void writeStaticApiDocsSite() throws Exception {
