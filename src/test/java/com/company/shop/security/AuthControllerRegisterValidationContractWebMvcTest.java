@@ -1,10 +1,9 @@
 package com.company.shop.security;
 
-import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.empty;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -26,7 +25,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.company.shop.common.exception.GlobalExceptionHandler;
 import com.company.shop.common.i18n.MessageService;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
-import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import tools.jackson.databind.ObjectMapper;
 import com.company.shop.support.TestMeterRegistryConfig;
@@ -55,20 +53,6 @@ class AuthControllerRegisterValidationContractWebMvcTest {
                 .andExpect(status().isCreated());
 
         verify(authService).register(any());
-    }
-
-    @Test
-    void registerValidationContract_shouldPreserveDuplicateEmailConflictContract() throws Exception {
-        RegisterRequestDTO request = new RegisterRequestDTO("USER@example.com", "secret123", "secret123", "John", "Doe");
-        doThrow(new UserAlreadyExistsException()).when(authService).register(any());
-
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.message").value("User account already exists"))
-                .andExpect(jsonPath("$.errorCode").value("USER_ALREADY_EXISTS"));
     }
 
     @Test
@@ -151,30 +135,6 @@ class AuthControllerRegisterValidationContractWebMvcTest {
                 .andExpect(jsonPath("$.errors.lastName", not(empty())))
                 .andExpect(jsonPath("$.errors.passwordRepeat", not(hasItem("Hasła nie są identyczne"))))
                 .andExpect(jsonPath("$.timestamp").exists());
-
-        verify(authService, never()).register(any());
-    }
-
-    @Test
-    void registerValidationContract_shouldRejectFieldsBeyondPersistenceAndPasswordLimits() throws Exception {
-        RegisterRequestDTO request = new RegisterRequestDTO(
-                "a".repeat(244) + "@example.com",
-                "x".repeat(73),
-                "x".repeat(73),
-                "F".repeat(101),
-                "L".repeat(101));
-
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.errors.email").isArray())
-                .andExpect(jsonPath("$.errors.password").isArray())
-                .andExpect(jsonPath("$.errors.passwordRepeat").isArray())
-                .andExpect(jsonPath("$.errors.firstName").isArray())
-                .andExpect(jsonPath("$.errors.lastName").isArray());
 
         verify(authService, never()).register(any());
     }

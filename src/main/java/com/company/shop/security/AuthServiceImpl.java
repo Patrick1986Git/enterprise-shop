@@ -4,9 +4,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.authentication.AccountStatusException;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,7 +16,6 @@ import com.company.shop.module.user.dto.LoginRequestDTO;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
 import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.exception.InvalidCredentialsException;
 import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.module.user.exception.UserRoleNotConfiguredException;
 import com.company.shop.module.user.repository.RoleRepository;
@@ -55,13 +52,8 @@ public class AuthServiceImpl implements AuthService {
 	@Override
 	public AuthResponseDTO login(LoginRequestDTO request) {
 		String normalizedEmail = emailNormalizer.normalize(request.getEmail());
-		Authentication authentication;
-		try {
-			authentication = authenticationManager
-					.authenticate(new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword()));
-		} catch (BadCredentialsException | AccountStatusException ex) {
-			throw new InvalidCredentialsException();
-		}
+		Authentication authentication = authenticationManager
+				.authenticate(new UsernamePasswordAuthenticationToken(normalizedEmail, request.getPassword()));
 
 		String token = tokenProvider.generateToken(authentication);
 		return new AuthResponseDTO(token);

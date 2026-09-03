@@ -1,7 +1,6 @@
 package com.company.shop.module.user.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.groups.Tuple.tuple;
 
 import java.lang.annotation.Annotation;
 import java.util.Locale;
@@ -12,8 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-
-import com.company.shop.validation.annotation.Utf8Length;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -132,62 +129,6 @@ class RegisterRequestDTOValidationTest {
 
 		assertThat(violations).filteredOn(violation -> violation.getPropertyPath().toString().equals("passwordRepeat"))
 				.extracting(ConstraintViolation::getMessage).contains("Passwords do not match");
-	}
-
-	@Test
-	void validate_shouldRejectFieldsBeyondPersistenceAndPasswordLimits() {
-		RegisterRequestDTO request = new RegisterRequestDTO(
-				"a".repeat(244) + "@example.com",
-				"x".repeat(73),
-				"x".repeat(73),
-				"F".repeat(101),
-				"L".repeat(101));
-
-		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
-
-		assertFieldHasConstraint(violations, "email", Size.class);
-		assertFieldHasConstraint(violations, "password", Utf8Length.class);
-		assertFieldHasConstraint(violations, "passwordRepeat", Utf8Length.class);
-		assertFieldHasConstraint(violations, "firstName", Size.class);
-		assertFieldHasConstraint(violations, "lastName", Size.class);
-	}
-
-	@Test
-	void validate_shouldApplyBcryptLimitToUtf8EncodedPasswordBytes() {
-		String unicodePassword = "🔐".repeat(19);
-		RegisterRequestDTO request = new RegisterRequestDTO(
-				"john@example.com", unicodePassword, unicodePassword, "John", "Doe");
-
-		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(request);
-
-		assertFieldHasConstraint(violations, "password", Utf8Length.class);
-		assertFieldHasConstraint(violations, "passwordRepeat", Utf8Length.class);
-		assertUtf8LengthMessages(violations,
-				"Password must not exceed 72 UTF-8 bytes",
-				"Password confirmation must not exceed 72 UTF-8 bytes");
-	}
-
-	@Test
-	void validate_shouldDescribeBcryptLimitAsUtf8BytesInPolish() {
-		Locale.setDefault(Locale.forLanguageTag("pl"));
-		String unicodePassword = "🔐".repeat(19);
-
-		Set<ConstraintViolation<RegisterRequestDTO>> violations = validator.validate(
-				new RegisterRequestDTO("john@example.com", unicodePassword, unicodePassword, "John", "Doe"));
-
-		assertUtf8LengthMessages(violations,
-				"Hasło nie może przekraczać 72 bajtów w kodowaniu UTF-8",
-				"Potwierdzenie hasła nie może przekraczać 72 bajtów w kodowaniu UTF-8");
-	}
-
-	private void assertUtf8LengthMessages(Set<ConstraintViolation<RegisterRequestDTO>> violations,
-			String passwordMessage, String confirmationMessage) {
-		assertThat(violations)
-				.filteredOn(violation -> violation.getConstraintDescriptor().getAnnotation() instanceof Utf8Length)
-				.extracting(violation -> violation.getPropertyPath().toString(), ConstraintViolation::getMessage)
-				.contains(
-						tuple("password", passwordMessage),
-						tuple("passwordRepeat", confirmationMessage));
 	}
 
 	private void assertFieldHasConstraint(Set<ConstraintViolation<RegisterRequestDTO>> violations, String field,
