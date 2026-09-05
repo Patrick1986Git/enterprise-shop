@@ -21,6 +21,7 @@ This `docs/` folder contains practical documentation that is currently grounded 
 
 ## Operations
 - [`operations/local-development.md`](./operations/local-development.md) — local PostgreSQL setup, profiles, startup, and smoke checks.
+- [`operations/production-edge.md`](./operations/production-edge.md) — production edge trust boundary and public-authentication abuse controls.
 - [`operations/database.md`](./operations/database.md) — PostgreSQL schema ownership and database conventions.
 - [`operations/container-security.md`](./operations/container-security.md) — Dockerfile linting, image vulnerability scanning, SBOM artifacts, and local reproduction commands.
 - [`operations/migrations.md`](./operations/migrations.md) — Flyway migration sequence and migration rules.

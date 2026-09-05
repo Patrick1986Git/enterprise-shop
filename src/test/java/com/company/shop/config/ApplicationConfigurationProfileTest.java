@@ -51,6 +51,13 @@ class ApplicationConfigurationProfileTest {
     }
 
     @Test
+    void prodConfiguration_shouldNotTrustForwardedHeaders() {
+        Properties properties = loadProperties("application-prod.yml");
+
+        assertThat(properties.getProperty("server.forward-headers-strategy")).isEqualTo("none");
+    }
+
+    @Test
     void prodConfiguration_shouldRequireDedicatedFlywayCredentialsAndRejectAutomaticBaselining() {
         Properties properties = loadProperties("application-prod.yml");
 

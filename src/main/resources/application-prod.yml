@@ -47,6 +47,11 @@ springdoc:
     enabled: false
   show-actuator: false
 
+# This repository does not own a production reverse proxy or its trusted network path.
+# Keep client/protocol forwarding metadata untrusted until that boundary is implemented.
+server:
+  forward-headers-strategy: none
+
 # #############################################################################
 # SECURITY: JWT CONFIGURATION
 # Cryptographic settings for authentication.
