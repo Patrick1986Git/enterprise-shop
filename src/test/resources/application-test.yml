@@ -19,7 +19,7 @@ spring:
 
 security:
   jwt:
-    secret: test-only-secret-that-is-at-least-256-bits-long-for-jwt-signing
+    secret: dGVzdC1vbmx5LTMyLWJ5dGUtand0LXNlY3JldC1rZXkh
     expiration: 3600000
     refresh-expiration: 86400000
 

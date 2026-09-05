@@ -74,7 +74,7 @@ import com.company.shop.security.jwt.JwtTokenProvider;
                 "spring.flyway.url=jdbc:postgresql://localhost:5432/test",
                 "spring.flyway.user=migration",
                 "spring.flyway.password=test",
-                "security.jwt.secret=test-only-secret-that-is-at-least-256-bits-long-for-jwt-signing",
+                "security.jwt.secret=dGVzdC1vbmx5LTMyLWJ5dGUtand0LXNlY3JldC1rZXkh",
                 "stripe.api-key=sk_test_placeholder",
                 "stripe.webhook-secret=whsec_placeholder",
                 "stripe.public-key=pk_test_placeholder"

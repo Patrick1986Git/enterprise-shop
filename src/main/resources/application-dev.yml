@@ -42,13 +42,13 @@ spring:
 security:
   jwt:
     # Security Notice: 
-    # The JWT_SECRET must be a Base64-encoded string of at least 256 bits for HS256.
+    # JWT_SECRET is RFC 4648 Base64 encoding of at least 32 random bytes.
     # Local development only, never production, override with JWT_SECRET.
-    secret: ${JWT_SECRET:dev-only-secret-that-should-not-be-used-in-production-at-least-256-bits}
+    secret: ${JWT_SECRET:ZGV2LW9ubHktand0LXNpZ25pbmcta2V5LTMyLWJ5dGVzISE=}
     
     # Token Lifespan Management
     expiration: 3600000          # Access Token: 1h (in milliseconds)
-    refresh-expiration: 86400000 # Refresh Token: 24h (in milliseconds)
+    refresh-expiration: 86400000 # Reserved; no refresh-token flow exists.
 
 # #############################################################################
 # INTEGRATIONS: STRIPE PAYMENT GATEWAY
