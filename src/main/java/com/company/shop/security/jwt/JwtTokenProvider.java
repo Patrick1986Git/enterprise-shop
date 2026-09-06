@@ -8,7 +8,7 @@
 
 package com.company.shop.security.jwt;
 
-import java.security.Key;
+import java.util.Base64;
 import java.util.Date;
 import java.util.stream.Collectors;
 
@@ -23,6 +23,7 @@ import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.WeakKeyException;
 
 /**
  * Core security component responsible for the lifecycle of JSON Web Tokens (JWT).
@@ -38,7 +39,7 @@ import io.jsonwebtoken.security.Keys;
 public class JwtTokenProvider {
 
     private final JwtProperties properties;
-    private final Key key;
+    private final SecretKey key;
 
     /**
      * Constructs the provider and initializes the cryptographic key.
@@ -47,7 +48,8 @@ public class JwtTokenProvider {
      */
     public JwtTokenProvider(JwtProperties properties) {
         this.properties = properties;
-        this.key = Keys.hmacShaKeyFor(properties.getSecret().getBytes());
+        this.key = signingKey(properties.getSecret());
+        validateExpiration(properties.getExpiration());
     }
 
     /**
@@ -62,7 +64,7 @@ public class JwtTokenProvider {
      */
     public String generateToken(Authentication authentication) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + properties.getExpiration());
+        Date expiry = new Date(Math.addExact(now.getTime(), properties.getExpiration()));
 
         String authorities = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -125,8 +127,39 @@ public class JwtTokenProvider {
      */
     private Jws<Claims> parseClaims(String token) {
         return Jwts.parser()
-                .verifyWith((SecretKey) key)
+                .verifyWith(key)
                 .build()
                 .parseSignedClaims(token);
+    }
+
+    private static SecretKey signingKey(String encodedSecret) {
+        if (encodedSecret == null || encodedSecret.isBlank()) {
+            throw new IllegalStateException("security.jwt.secret must be a non-blank Base64 value");
+        }
+
+        final byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(encodedSecret);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("security.jwt.secret must be valid RFC 4648 Base64", exception);
+        }
+
+        try {
+            return Keys.hmacShaKeyFor(keyBytes);
+        } catch (WeakKeyException exception) {
+            throw new IllegalStateException(
+                    "security.jwt.secret must encode at least 256 bits of key material", exception);
+        }
+    }
+
+    private static void validateExpiration(long expiration) {
+        if (expiration <= 0) {
+            throw new IllegalStateException("security.jwt.expiration must be positive");
+        }
+        try {
+            Math.addExact(System.currentTimeMillis(), expiration);
+        } catch (ArithmeticException exception) {
+            throw new IllegalStateException("security.jwt.expiration is too large", exception);
+        }
     }
 }

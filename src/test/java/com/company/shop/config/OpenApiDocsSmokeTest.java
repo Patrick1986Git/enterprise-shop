@@ -82,7 +82,9 @@ import tools.jackson.databind.ObjectMapper;
                 "spring.autoconfigure.exclude="
                         + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                         + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
-                        + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
+                        + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
+                "security.jwt.secret=dGVzdC1vbmx5LTMyLWJ5dGUtand0LXNlY3JldC1rZXkh",
+                "security.jwt.expiration=3600000"
         }
 )
 @AutoConfigureMockMvc
