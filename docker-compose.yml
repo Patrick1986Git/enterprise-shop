@@ -74,7 +74,10 @@ services:
       FLYWAY_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-enterprise_shop_dev}
       FLYWAY_USER: ${POSTGRES_USER:-postgres}
       FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_KEY_ID: ${JWT_KEY_ID:-dev-current}
       JWT_SECRET: ${JWT_SECRET:-ZGV2LW9ubHktand0LXNpZ25pbmcta2V5LTMyLWJ5dGVzISE=}
+      JWT_PREVIOUS_KEY_ID: ${JWT_PREVIOUS_KEY_ID:-}
+      JWT_PREVIOUS_SECRET: ${JWT_PREVIOUS_SECRET:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
       STRIPE_PUBLIC_KEY: ${STRIPE_PUBLIC_KEY:-pk_test_placeholder}

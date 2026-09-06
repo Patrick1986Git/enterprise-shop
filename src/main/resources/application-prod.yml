@@ -58,8 +58,13 @@ server:
 # #############################################################################
 security:
   jwt:
+    # Active key ID is non-secret and must be stable for the lifetime of issued tokens.
+    key-id: ${JWT_KEY_ID}
     # RFC 4648 Base64 encoding of at least 32 high-entropy random bytes.
     secret: ${JWT_SECRET}
+    # Optional bounded rollover key; configure both values together or neither.
+    previous-key-id: ${JWT_PREVIOUS_KEY_ID:}
+    previous-secret: ${JWT_PREVIOUS_SECRET:}
     expiration: 3600000          # 1 hour
     refresh-expiration: 86400000 # Reserved; no refresh-token flow exists.
 

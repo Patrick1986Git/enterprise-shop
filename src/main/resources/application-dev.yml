@@ -43,8 +43,12 @@ security:
   jwt:
     # Security Notice: 
     # JWT_SECRET is RFC 4648 Base64 encoding of at least 32 random bytes.
+    # Local development only, never production. Key IDs are non-secret.
+    key-id: ${JWT_KEY_ID:dev-current}
     # Local development only, never production, override with JWT_SECRET.
     secret: ${JWT_SECRET:ZGV2LW9ubHktand0LXNpZ25pbmcta2V5LTMyLWJ5dGVzISE=}
+    previous-key-id: ${JWT_PREVIOUS_KEY_ID:}
+    previous-secret: ${JWT_PREVIOUS_SECRET:}
     
     # Token Lifespan Management
     expiration: 3600000          # Access Token: 1h (in milliseconds)
