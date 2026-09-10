@@ -20,6 +20,7 @@ This `docs/` folder contains practical documentation that is currently grounded 
 - [`testing/strategy.md`](./testing/strategy.md) — current test categories, tooling, and Maven Wrapper commands.
 
 ## Operations
+- [`operations/production-configuration.md`](./operations/production-configuration.md) — canonical, machine-checked production environment contract, ownership, defaults, and deployment handoff.
 - [`operations/local-development.md`](./operations/local-development.md) — local PostgreSQL setup, profiles, startup, and smoke checks.
 - [`operations/production-edge.md`](./operations/production-edge.md) — production edge trust boundary and public-authentication abuse controls.
 - [`operations/http-capacity.md`](./operations/http-capacity.md) — production Tomcat admission, queueing, downstream-capacity, overload, and metric ownership.
