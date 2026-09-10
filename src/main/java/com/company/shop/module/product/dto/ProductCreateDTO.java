@@ -78,7 +78,8 @@ public class ProductCreateDTO {
 	        example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]",
 	        requiredMode = Schema.RequiredMode.NOT_REQUIRED
 	)
-	private List<String> imageUrls;
+	private List<@NotNull(message = "{validation.product.imageUrl.required}")
+			@Size(max = 512, message = "{validation.product.imageUrl.size}") String> imageUrls;
 
 	public ProductCreateDTO() {
 	}
