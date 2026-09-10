@@ -52,11 +52,40 @@ separated by `, `. Do not add production values to this table.
 | `ORDER_RESERVATION_CLAIM_LEASE` | `app.order.reservation-expiration.claim-lease` | defaulted | Optional; must be positive. | Non-secret | Spring duration; default `PT5M`. | Order recovery owner; configuration-properties setter validation. See [application lifecycle](./application-lifecycle.md). |
 | `ORDER_RESERVATION_BATCH_SIZE` | `app.order.reservation-expiration.batch-size` | defaulted | Optional; must be positive. | Sensitive | Integer reservations per polling pass; default `25`. | Order/database capacity owner; configuration-properties setter validation. See [application lifecycle](./application-lifecycle.md). |
 | `ORDER_RESERVATION_MAX_ATTEMPTS` | `app.order.reservation-expiration.max-attempts` | defaulted | Optional; must be positive. | Non-secret | Integer attempt count; default `10`. | Order recovery owner; configuration-properties setter validation. See [application lifecycle](./application-lifecycle.md). |
-| `NOTIFICATION_SMTP_ENABLED` | `app.notification.smtp.enabled` | defaulted | Optional; `false` selects the no-op sender, while `true` conditionally requires usable external Spring Mail transport configuration. | Non-secret | Boolean; default `false`. | Notification/platform owner; invalid binding fails startup and transport access must be tested externally. See [notification architecture](../architecture/outbox-and-notifications.md). |
+| `NOTIFICATION_SMTP_ENABLED` | `app.notification.smtp.enabled` | defaulted | Optional; `false` selects the no-op sender, while `true` requires a non-blank `spring.mail.host`. | Non-secret | Boolean; default `false`. | Notification/platform owner; incomplete local transport configuration fails startup and transport access must be tested externally. See [notification architecture](../architecture/outbox-and-notifications.md). |
 | `NOTIFICATION_SMTP_FROM` | `app.notification.smtp.from` | defaulted | Optional syntactically; operationally required to be a provider-accepted sender when SMTP is enabled. | Non-secret | Sender address; default `no-reply@enterprise-shop.local`. | Notification/mail owner; provider rejection occurs during delivery rather than repository startup validation. See [notification architecture](../architecture/outbox-and-notifications.md). |
 | `NOTIFICATION_SMTP_CONNECTION_TIMEOUT` | `app.notification.smtp.connection-timeout` | defaulted | Optional; positive, at most 2,147,483,647 ms, and shorter than the notification delivery claim duration when SMTP is enabled. | Sensitive | Spring duration; default `PT30S`. | Notification/platform latency owner; SMTP properties and delivery configuration validate. See [notification architecture](../architecture/outbox-and-notifications.md). |
 | `NOTIFICATION_SMTP_READ_TIMEOUT` | `app.notification.smtp.read-timeout` | defaulted | Optional; positive, at most 2,147,483,647 ms, and shorter than the notification delivery claim duration when SMTP is enabled. | Sensitive | Spring duration; default `PT30S`. | Notification/platform latency owner; SMTP properties and delivery configuration validate. See [notification architecture](../architecture/outbox-and-notifications.md). |
 | `NOTIFICATION_SMTP_WRITE_TIMEOUT` | `app.notification.smtp.write-timeout` | defaulted | Optional; positive, at most 2,147,483,647 ms, and shorter than the notification delivery claim duration when SMTP is enabled. | Sensitive | Spring duration; default `PT30S`. | Notification/platform latency owner; SMTP properties and delivery configuration validate. See [notification architecture](../architecture/outbox-and-notifications.md). |
+
+## Conditional framework-bound SMTP configuration
+
+The 35-row canonical inventory above remains limited to `${...}` placeholders explicitly present in
+`application-prod.yml`. SMTP transport settings are instead owned by Spring Boot's standard `spring.mail.*` binding and
+may be supplied through relaxed environment binding without appearing as placeholders in that file. They are therefore
+listed separately and are not inputs to the placeholder drift validator.
+
+When `NOTIFICATION_SMTP_ENABLED=true`, `SPRING_MAIL_HOST` (`spring.mail.host`) is required and must be non-blank. The
+application validates only that local invariant and does not connect to the server during startup. The following settings
+remain deployment/provider choices:
+
+| Environment binding | Spring property | Requirement | Classification |
+| --- | --- | --- | --- |
+| `SPRING_MAIL_HOST` | `spring.mail.host` | Required when notification SMTP is enabled. | Sensitive infrastructure configuration; not a credential. |
+| `SPRING_MAIL_PORT` | `spring.mail.port` | Optional; if absent, SMTP uses its protocol default port. | Non-secret. |
+| `SPRING_MAIL_USERNAME` | `spring.mail.username` | Optional; required only by the selected provider/relay policy. | Sensitive identity configuration; not necessarily secret. |
+| `SPRING_MAIL_PASSWORD` | `spring.mail.password` | Optional; required only by the selected provider/relay policy. | Secret; inject from deployment-controlled secret storage. |
+| `SPRING_MAIL_PROTOCOL` | `spring.mail.protocol` | Optional; Spring Boot defaults to `smtp`. | Non-secret. |
+| `SPRING_MAIL_SSL_ENABLED` | `spring.mail.ssl.enabled` | Optional; deployment-owned transport-security policy. | Sensitive operational security configuration. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | `spring.mail.properties[mail.smtp.auth]` | Optional; deployment-owned authentication policy. | Sensitive operational security configuration. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` | `spring.mail.properties[mail.smtp.starttls.enable]` | Optional; deployment-owned STARTTLS policy. | Sensitive operational security configuration. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED` | `spring.mail.properties[mail.smtp.starttls.required]` | Optional; deployment-owned STARTTLS policy. | Sensitive operational security configuration. |
+
+Spring Boot does not supply username, password, authentication, STARTTLS, or implicit TLS requirements. The resolved SMTP
+implementation defaults authentication, STARTTLS, and implicit TLS to disabled. This repository deliberately does not
+replace those provider-specific decisions with a second transport-properties abstraction. Repository-owned
+`NOTIFICATION_SMTP_*_TIMEOUT` values are applied directly to the effective Jakarta Mail session after Spring Boot creates
+the sender.
 
 ## Deployment handoff
 
