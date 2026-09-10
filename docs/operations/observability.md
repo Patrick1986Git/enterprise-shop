@@ -105,6 +105,10 @@ meters, HTTP outcomes, readiness, and the Hikari meters above. See
 [HTTP admission capacity and backpressure](./http-capacity.md) for queue and failure semantics. No duplicate gauges or
 numeric alert thresholds are defined.
 
+## Request parsing visibility
+
+A malformed body that reaches Spring MVC can appear in standard HTTP status metrics, but a connector-rejected oversized header, request-read timeout/disconnect, or edge-rejected body may occur before application instrumentation. Correlate fixed-cardinality edge rejection reasons and sanitized Tomcat parser/error logs with connector totals; do not log header/body contents or tag metrics with payload size, source IP, request ID, raw URI, email, or header values. See [Inbound HTTP request resource bounds](./http-request-bounds.md).
+
 ## Asynchronous degradation and alert contract
 
 Backlog is observed through metrics, not health. A short backlog must not remove a replica from traffic, and a database

@@ -127,3 +127,7 @@ for TLS termination, application-listener isolation, forwarding-header sanitatio
 proxy hop, separate login and registration policies, aggregate capacity protection, multi-replica behavior, limiter
 state degradation, low-cardinality telemetry, and direct-bypass tests. That evidence is external to this repository's
 current runtime and CI.
+
+## Request transport boundary
+
+The edge owns the generic raw request-body ceiling and, where required, an absolute upload-duration or minimum-rate policy. Tomcat's form limit does not constrain JSON or the raw Stripe webhook string, and its body-read timeout is an inactivity timeout rather than a total upload deadline. The value is deployment-specific and must be justified rather than copied from an invented repository default. See [Inbound HTTP request resource bounds](./http-request-bounds.md).
