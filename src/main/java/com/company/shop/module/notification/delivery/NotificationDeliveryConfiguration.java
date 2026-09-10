@@ -1,22 +1,38 @@
 package com.company.shop.module.notification.delivery;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.mail.autoconfigure.MailProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.util.StringUtils;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({NotificationSmtpProperties.class, NotificationDeliveryProperties.class})
+@EnableConfigurationProperties({
+        NotificationSmtpProperties.class,
+        NotificationDeliveryProperties.class,
+        MailProperties.class
+})
 public class NotificationDeliveryConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "app.notification.smtp", name = "enabled", havingValue = "true")
     @ConditionalOnMissingBean(NotificationSender.class)
-    SmtpNotificationSender smtpNotificationSender(JavaMailSender mailSender, NotificationSmtpProperties properties,
+    SmtpNotificationSender smtpNotificationSender(ObjectProvider<JavaMailSender> mailSenderProvider,
+            MailProperties mailProperties, NotificationSmtpProperties properties,
             NotificationDeliveryProperties deliveryProperties) {
+        if (!StringUtils.hasText(mailProperties.getHost())) {
+            throw new IllegalStateException(
+                    "SMTP notification delivery is enabled but spring.mail.host is missing or blank");
+        }
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable(() -> {
+            throw new IllegalStateException(
+                    "SMTP notification delivery is enabled but no JavaMailSender transport is configured");
+        });
         configureTimeouts(mailSender, properties, deliveryProperties);
         return new SmtpNotificationSender(mailSender, properties);
     }

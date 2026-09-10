@@ -57,7 +57,7 @@ Notification delivery is represented by a `NotificationSender` abstraction.
 - `NotificationDeliveryPoller` can periodically invoke `NotificationDeliveryProcessor` when `app.notification.delivery.enabled=true`.
 - `NotificationDeliveryProcessor` loads pending notifications in batches, calls `NotificationSender`, marks successful notifications `SENT`, and marks failed notifications `FAILED` with `last_error`.
 - `NoopNotificationSender` is the default fallback sender. It logs that delivery is skipped and does not call an external email/SMS provider.
-- `SmtpNotificationSender` is an opt-in SMTP adapter. It is registered only when `app.notification.smtp.enabled=true`; SMTP connection details continue to use Spring Boot `spring.mail.*` properties.
+- `SmtpNotificationSender` is an opt-in SMTP adapter. It is registered only when `app.notification.smtp.enabled=true`; enabling it requires a non-blank `spring.mail.host`, while all SMTP connection details continue to use Spring Boot `spring.mail.*` properties. Missing or blank host configuration fails startup without attempting provider I/O or exposing credentials.
 - SMTP connection, socket-read, and socket-write waits default to finite 30-second values. Configure them with `app.notification.smtp.connection-timeout`, `app.notification.smtp.read-timeout`, and `app.notification.smtp.write-timeout`; production exposes the corresponding `NOTIFICATION_SMTP_*_TIMEOUT` environment variables. Values must be positive, supported by Jakarta Mail's millisecond integer properties, and individually shorter than `app.notification.delivery.claim-duration` (five minutes by default).
 - These timeouts bound individual Jakarta Mail socket operations; they do not establish a strict wall-clock bound for the complete SMTP transaction. Keeping each timeout below the claim lease is a startup safety check, not proof that a send always finishes before lease expiry. Operators must monitor timeout/failure rates and size the lease for their SMTP exchange behavior.
 - Delivery remains at-least-once at the provider boundary. A provider can accept a message before a timeout or before local token-guarded finalization fails, and expired-claim recovery can then cause another external send. Claim tokens fence database finalization only; neither the lease nor socket timeouts provide exactly-once email delivery.
@@ -75,7 +75,7 @@ app.notification.smtp.read-timeout=PT30S
 app.notification.smtp.write-timeout=PT30S
 ```
 
-The default Compose stack deliberately omits `SPRING_MAIL_HOST` and `SPRING_MAIL_PORT`, so disabled notification SMTP does not activate Spring Mail or make application health depend on an SMTP server. To opt in under Compose, supply `APP_NOTIFICATION_SMTP_ENABLED=true` together with Spring Boot's standard `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, and any required authentication/TLS variables in a deployment-specific Compose override. Do not add a placeholder mail host to the default stack.
+The default Compose stack deliberately omits `SPRING_MAIL_HOST` and `SPRING_MAIL_PORT`, so disabled notification SMTP does not activate Spring Mail or make application health depend on an SMTP server. To opt in under Compose, supply `APP_NOTIFICATION_SMTP_ENABLED=true` together with Spring Boot's required `SPRING_MAIL_HOST` and any provider-required port, authentication, or TLS variables in a deployment-specific Compose override. Username, password, authentication, TLS, STARTTLS, and a custom port remain optional at the repository boundary because unauthenticated internal relays are supported. Do not add a placeholder mail host to the default stack. SMTP is neither a readiness nor a liveness dependency; DNS, reachability, credentials, certificate trust, sender authorization, and relay policy are verified operationally and delivery failures continue through the notification retry/recovery path.
 
 ## Event metadata/versioning transition plan
 
@@ -147,9 +147,11 @@ provider-side idempotency contract: if the provider accepts a message and the pr
 fails before local success finalization, lease recovery can send it again. The system
 therefore does not promise exactly-once external delivery.
 
-The default claim lease is five minutes. The application does not currently configure
-JavaMail connection, read, or write timeouts, so an SMTP operation can outlive that
-lease. In that case recovery may start a new send while the stale sender is still
-running; token ownership prevents the stale worker from changing database state but
-cannot prevent or undo either external SMTP side effect. Operators must configure
-bounded provider timeouts below the claim lease when enabling SMTP.
+The default claim lease is five minutes. The application maps its finite connection,
+read, and write timeouts to Jakarta Mail's `mail.smtp.connectiontimeout`,
+`mail.smtp.timeout`, and `mail.smtp.writetimeout` millisecond properties. Each defaults
+to 30 seconds, must be positive, must fit Jakarta Mail's positive integer millisecond
+range, and must be shorter than the claim lease. These per-operation bounds reduce but
+cannot eliminate overlap after lease expiry: token ownership prevents a stale worker
+from changing database state but cannot prevent or undo either external SMTP side
+effect.
