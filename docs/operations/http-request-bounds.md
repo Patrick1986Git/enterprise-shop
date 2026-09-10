@@ -30,12 +30,12 @@ Unless a controller declares another media type, these `@RequestBody` methods us
 | `PATCH /api/v1/me/cart/items/{productId}` | `UpdateCartItemRequestDTO`: quantity required and at least 1 | Authenticated | Cart/product reads and transactional writes |
 | `POST /api/v1/me/orders/checkout` | `OrderCheckoutRequestDTO`: discount code 3–20 when present; notes max 500; `Idempotency-Key` required/nonblank/max 128 characters | Authenticated | Cart/order/inventory DB work and bounded Stripe provider work |
 | `POST /api/v1/webhooks/stripe` | Raw `String`; no semantic or transport length constraint | Public, authenticated by Stripe signature | Signature verification, provider-event construction, idempotency and order/payment DB work |
-| `POST /api/v1/admin/products`; `PUT /api/v1/admin/products/{id}` | `ProductCreateDTO`: name max 255, SKU max 50, description max 5,000; price/stock/UUID constraints; **image URL list count and individual URL lengths are unbounded** | ADMIN | Category/product reads and writes |
+| `POST /api/v1/admin/products`; `PUT /api/v1/admin/products/{id}` | `ProductCreateDTO`: name max 255, SKU max 50, description max 5,000; price/stock/UUID constraints; each non-null image URL is max 512 Java UTF-16 code units; image URL list count remains product-policy unresolved | ADMIN | Category/product reads and writes |
 | `POST /api/v1/admin/categories`; `PUT /api/v1/admin/categories/{id}` | `CategoryCreateDTO`: name max 150; description max 500; optional parent UUID | ADMIN | Category reads and writes |
 | `PUT /api/v1/admin/users/{id}` | `UserUpdateDTO`: first/last name required/max 100 each | ADMIN | User read and write |
 | `POST /api/v1/reviews` | `ProductReviewRequestDTO`: product UUID required; rating 1–5; comment max 1,000 | Authenticated | Product/purchase/review reads and write |
 
-`OrderCreateRequestDTO` and `UserCreateDTO` exist but no production controller accepts them. Their missing collection/string maxima are not current inbound endpoint surface. No new `@Size` is added: the product image URL collection is a product-contract question, while raw-body boundedness must occur before DTO construction.
+`OrderCreateRequestDTO` and `UserCreateDTO` exist but no production controller accepts them. Their missing collection/string maxima are not current inbound endpoint surface. The product-image item bound mirrors the existing `VARCHAR(512)` persistence width conservatively: PostgreSQL measures characters, while Bean Validation applies `CharSequence.length()` and therefore counts Java UTF-16 code units. The collection has no item-count constraint. Generic raw-body boundedness remains a separate concern that must occur before DTO construction.
 
 ## Effective Tomcat and servlet limits
 

@@ -374,6 +374,32 @@ class AdminProductControllerWebMvcTest {
         }
 
         @Test
+        void createProduct_shouldReturnBadRequestWhenImageUrlExceedsMaxLength() throws Exception {
+            ProductCreateDTO request = new ProductCreateDTO(
+                    "Gaming Laptop",
+                    "SKU-200",
+                    "Opis",
+                    new BigDecimal("199.99"),
+                    1,
+                    UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                    List.of("a".repeat(513)));
+
+            mockMvc.perform(post(ADMIN_PRODUCTS_URL)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors['imageUrls[0]']").isArray())
+                    .andExpect(jsonPath("$.errors['imageUrls[0]']", not(empty())));
+
+            verifyNoInteractions(productService);
+        }
+
+        @Test
         void createProduct_shouldReturnConflictWhenSkuAlreadyExists() throws Exception {
             ProductCreateDTO request = sampleCreateDto();
             when(productService.create(any(ProductCreateDTO.class)))
@@ -581,6 +607,33 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
                     .andExpect(jsonPath("$.errors.stock").isArray())
                     .andExpect(jsonPath("$.errors.stock", not(empty())));
+
+            verifyNoInteractions(productService);
+        }
+
+        @Test
+        void updateProduct_shouldReturnBadRequestWhenImageUrlExceedsMaxLength() throws Exception {
+            UUID id = UUID.randomUUID();
+            ProductCreateDTO request = new ProductCreateDTO(
+                    "Gaming Laptop",
+                    "SKU-300",
+                    "Opis",
+                    new BigDecimal("199.99"),
+                    1,
+                    UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                    List.of("a".repeat(513)));
+
+            mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors['imageUrls[0]']").isArray())
+                    .andExpect(jsonPath("$.errors['imageUrls[0]']", not(empty())));
 
             verifyNoInteractions(productService);
         }

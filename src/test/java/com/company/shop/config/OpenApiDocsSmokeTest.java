@@ -354,6 +354,29 @@ class OpenApiDocsSmokeTest {
     }
 
     @Test
+    void openApiDocs_shouldDocumentProductImageUrlItemBoundWithoutCollectionMaximum() throws Exception {
+        Map<String, Object> openApi = readOpenApi(API_DOCS_ENDPOINT);
+        Map<String, Object> components = objectMapper.convertValue(openApi.get("components"), new TypeReference<>() {
+        });
+        Map<String, Object> schemas = objectMapper.convertValue(components.get("schemas"), new TypeReference<>() {
+        });
+        Map<String, Object> productCreateSchema = objectMapper.convertValue(
+                schemas.get("ProductCreateDTO"), new TypeReference<>() {
+                });
+        Map<String, Object> properties = objectMapper.convertValue(
+                productCreateSchema.get("properties"), new TypeReference<>() {
+                });
+        Map<String, Object> imageUrls = objectMapper.convertValue(
+                properties.get("imageUrls"), new TypeReference<>() {
+                });
+        Map<String, Object> items = objectMapper.convertValue(imageUrls.get("items"), new TypeReference<>() {
+        });
+
+        assertThat(items).containsEntry("maxLength", 512);
+        assertThat(imageUrls).doesNotContainKeys("maxItems", "minItems");
+    }
+
+    @Test
     void openApiDocs_shouldContainReusableApiErrorComponents() throws Exception {
         MvcResult result = mockMvc.perform(get(API_DOCS_ENDPOINT))
                 .andExpect(status().isOk())
