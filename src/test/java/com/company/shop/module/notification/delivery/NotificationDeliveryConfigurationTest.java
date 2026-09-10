@@ -1,6 +1,8 @@
 package com.company.shop.module.notification.delivery;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -129,6 +131,40 @@ class NotificationDeliveryConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).hasSingleBean(SmtpNotificationSender.class);
                     assertThat(mailSender.connectionTested).isFalse();
+                });
+    }
+
+    @Test
+    void configuration_shouldFailClosedWhenMailTransportBeanIsMissing() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(NotificationDeliveryConfiguration.class)
+                .withPropertyValues(
+                        "app.notification.smtp.enabled=true",
+                        "spring.mail.host=smtp.example.invalid",
+                        "spring.mail.password=diagnostic-secret")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(stackTrace(context.getStartupFailure()))
+                            .contains("SMTP notification delivery is enabled but no JavaMailSender transport is configured")
+                            .doesNotContain("diagnostic-secret", "ConnectException");
+                });
+    }
+
+    @Test
+    void configuration_shouldFailClosedForIncompatibleMailTransport() {
+        JavaMailSender mailSender = mock(JavaMailSender.class);
+
+        contextRunner
+                .withBean(JavaMailSender.class, () -> mailSender)
+                .withPropertyValues(
+                        "app.notification.smtp.enabled=true",
+                        "spring.mail.host=smtp.example.invalid")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining(
+                                    "SMTP notification delivery requires JavaMailSenderImpl for bounded timeouts");
+                    verifyNoInteractions(mailSender);
                 });
     }
 
