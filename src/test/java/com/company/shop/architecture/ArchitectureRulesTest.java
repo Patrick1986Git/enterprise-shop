@@ -87,6 +87,13 @@ class ArchitectureRulesTest {
                     .resideInAPackage("com.company.shop.module.category.repository..");
 
     @ArchTest
+    static final ArchRule cartModuleMustNotDependOnProductRepositories =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.cart..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.product.repository..");
+
+    @ArchTest
     static final ArchRule orderModuleMustNotDependOnProductEntities =
             noClasses()
                     .that().resideInAPackage("com.company.shop.module.order..")

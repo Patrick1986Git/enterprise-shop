@@ -13,10 +13,13 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.context.annotation.Import;
 
 import com.company.shop.module.cart.entity.Cart;
 import com.company.shop.module.cart.repository.CartRepository;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
+import com.company.shop.module.product.service.ProductCatalogFacadeImpl;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.persistence.support.PersistenceFixtures;
 import com.company.shop.persistence.support.PostgresContainerSupport;
@@ -26,6 +29,7 @@ import jakarta.persistence.PersistenceUnitUtil;
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
+@Import(ProductCatalogFacadeImpl.class)
 class CartRepositoryIT extends PostgresContainerSupport {
 
     @Autowired
@@ -33,6 +37,31 @@ class CartRepositoryIT extends PostgresContainerSupport {
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Autowired
+    private ProductCatalogFacade productCatalogFacade;
+
+    @Test
+    void productResolvedForCart_shouldRemainManagedAndPersistCartItemRelationship() {
+        User user = PersistenceFixtures.persistUser(entityManager, "cart.product.boundary@example.com");
+        Cart cart = PersistenceFixtures.persistCart(entityManager, user);
+        Product persistedProduct = PersistenceFixtures.persistProduct(
+                entityManager, "Boundary product", "boundary-product", "SKU-BOUNDARY", BigDecimal.TEN, 7);
+        entityManager.flush();
+        entityManager.clear();
+
+        Product resolvedProduct = productCatalogFacade.resolveProductForCart(persistedProduct.getId());
+        cart = cartRepository.findById(cart.getId()).orElseThrow();
+        cart.addItem(resolvedProduct, 2);
+        cartRepository.saveAndFlush(cart);
+        entityManager.clear();
+
+        Cart reloaded = cartRepository.findByUserIdWithItems(user.getId()).orElseThrow();
+        assertThat(reloaded.getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getProduct().getId()).isEqualTo(persistedProduct.getId());
+            assertThat(item.getQuantity()).isEqualTo(2);
+        });
+    }
 
     @Test
     void findByUserIdWithItems_shouldFetchItemsAndProductsWithCorrectData() {

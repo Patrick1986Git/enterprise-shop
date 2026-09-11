@@ -27,6 +27,12 @@ public class ProductCatalogFacadeImpl implements ProductCatalogFacade {
     }
 
     @Override
+    public Product resolveProductForCart(UUID productId) {
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+    }
+
+    @Override
     public CheckoutProduct reserveProductForCheckout(UUID productId, int quantity) {
         Product product = productRepository.findByIdWithLock(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
