@@ -63,6 +63,10 @@ server:
 # Production traffic routing must use readiness, while liveness deliberately
 # excludes shared dependencies to avoid restart loops during a database outage.
 management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       probes:

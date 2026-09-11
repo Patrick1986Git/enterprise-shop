@@ -101,6 +101,14 @@ class ApplicationConfigurationProfileTest {
     }
 
     @Test
+    void prodConfiguration_shouldExplicitlyOwnItsActuatorHttpAllowlist() {
+        Properties properties = loadProperties("application-prod.yml");
+
+        assertThat(properties.getProperty("management.endpoints.web.exposure.include"))
+                .isEqualTo("health,info,metrics,prometheus");
+    }
+
+    @Test
     void prodConfiguration_shouldRequireDedicatedFlywayCredentialsAndRejectAutomaticBaselining() {
         Properties properties = loadProperties("application-prod.yml");
 
