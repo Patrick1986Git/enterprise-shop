@@ -29,6 +29,7 @@ class ReservationExpirationMetricsTest {
         assertThat(registry.get("shop.order.reservation_expiration.failed.count").gauge().value()).isEqualTo(3);
         assertThat(registry.get("shop.order.reservation_expiration.failed.oldest.age.seconds").gauge().value())
                 .isEqualTo(125);
+        assertThat(registry.getMeters()).allSatisfy(meter -> assertThat(meter.getId().getTags()).isEmpty());
     }
 
     @Test

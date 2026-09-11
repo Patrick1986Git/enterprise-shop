@@ -29,7 +29,10 @@ Operational policy:
 
 ## Actuator and Prometheus
 
-Configured actuator web exposure includes `health`, `info`, `metrics`, and `prometheus`.
+Production explicitly owns an HTTP exposure allowlist containing only `health`, `info`, `metrics`, and `prometheus`;
+it does not rely on inherited exposure defaults. All endpoints share the application port. The repository does not
+define a separate management network, proxy, or Prometheus deployment, so deployment owners must decide whether the
+authenticated metrics path also requires network isolation.
 
 | Endpoint | Access | Purpose |
 | --- | --- | --- |
@@ -37,6 +40,23 @@ Configured actuator web exposure includes `health`, `info`, `metrics`, and `prom
 | `/actuator/info` | Admin | Application info. |
 | `/actuator/metrics` | Admin | Metrics index and individual meter lookup. |
 | `/actuator/prometheus` | Admin | Prometheus scrape endpoint provided by the Prometheus registry. |
+
+Anonymous aggregate health intentionally discloses only `status` and the `liveness`/`readiness` probe group names;
+component names and details are not returned. Probe responses disclose only `status`. Liveness contains only application
+liveness state. Production readiness contains application readiness and the standard database contributor, while SMTP,
+Stripe, and ordinary asynchronous backlog state are excluded. An ADMIN can receive authorized health details, including
+operational component names and statuses.
+
+`info` remains exposed for authenticated ADMIN diagnostics; no repository-defined info contributor publishes build,
+Git, environment, customer, or credential data. `metrics` and `prometheus` remain exposed because they are the
+documented operator inventory and scrape surfaces, but both require `ROLE_ADMIN`. This is an application authorization
+boundary, not evidence of a deployment-owned private monitoring network.
+
+Configuration/introspection and diagnostic endpoints—including `env`, `configprops`, `beans`, `mappings`, `heapdump`,
+`threaddump`, and `logfile`—are outside the production allowlist and therefore are not HTTP-exposed even to an ADMIN.
+Management responses must never contain datasource or Flyway passwords, JWT secrets, Stripe secrets, SMTP passwords,
+authenticated connection URLs, authorization headers, cookies, request bodies, or exception messages containing such
+values. Spring Boot sanitization is not the control for these endpoints; non-exposure is.
 
 ## Application metric inventory
 
