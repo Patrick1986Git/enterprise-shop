@@ -29,6 +29,8 @@ Purpose: category tree and catalog classification.
 - Public HTTP APIs: category listing and slug lookup under `/api/v1/categories`.
 - Admin HTTP APIs: create/read/update/delete under `/api/v1/admin/categories`.
 - Owns category hierarchy validation and duplicate/slug exceptions.
+- Owns category persistence access. Product creation and update resolve an assignable category through the narrow
+  `ProductCategoryFacade`; product code must not access `CategoryRepository` directly.
 
 ### order
 
@@ -50,6 +52,9 @@ Purpose: product browsing, search, reviews, stock reservation, and admin product
 - Admin HTTP APIs: create/read/update/delete under `/api/v1/admin/products`.
 - Owns product aggregate, review model, image model, specification-based querying, and product-specific invariants.
 - Exposes `ProductCatalogFacade` internally so checkout can reserve product stock and read checkout product snapshots through a narrow contract.
+- Retains the existing `Product` to `Category` lazy JPA relationship and database foreign key. The category facade
+  deliberately returns the managed category entity needed by that relational model; it is a module ownership boundary,
+  not an attempt to split the monolith or replace referential integrity with application validation.
 
 ### system
 
@@ -78,6 +83,23 @@ Purpose: notification records, delivery processing, admin observability, manual 
 - Delivery uses the `NotificationSender` abstraction. `NoopNotificationSender` is the fallback when no other sender bean is configured.
 - `SmtpNotificationSender` is selected when `app.notification.smtp.enabled=true`; SMTP transport settings use Spring Boot `spring.mail.*` configuration and the sender address comes from `app.notification.smtp.from`.
 - Scheduled delivery processing is controlled separately by `app.notification.delivery.enabled`.
+
+## Audited cross-module boundaries
+
+Production business-module dependencies are intentionally divided into two forms:
+
+- Narrow internal APIs (`cart.api.internal`, `category.api.internal`, `product.api.internal`, and `user.api.internal`)
+  are the permitted orchestration boundary for checkout and product category assignment.
+- JPA entity references remain where the current relational model requires them: cart owns associations to user and
+  product, product owns its category association, and product reviews associate to users. Order items do not associate
+  to products; they persist product id, name, SKU, and price snapshots.
+
+The remaining direct foreign repository access is cart's access to `ProductRepository` for live stock validation.
+Cart also calls `UserService`, and product review calls `UserService`; these flows return managed user entities required
+by their current JPA associations. They remain explicit architecture debt for a later transaction- and locking-aware
+change. The order module reaches cart, product, and user only through their internal APIs. Notification consumes the
+order-owned outbox handler contract and event payload. Security and authentication intentionally own cross-cutting
+access to user authentication persistence and are not business-module-to-business-module dependencies.
 
 ## Cross-cutting packages
 
