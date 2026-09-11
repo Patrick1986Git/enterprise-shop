@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
   "source": {
-    "pull_request": 339,
+    "pull_request": 344,
     "workflow": "CI",
-    "run_number": 812,
-    "head_sha": "70d3090c9293739bfeb8774e76f9a53940119ab2"
+    "run_number": 824,
+    "head_sha": "dcf409997865673955d17e7317607ddd74bcdeaa"
   },
   "metrics": {
     "LINE": {
-      "covered": 3500,
-      "missed": 469
+      "covered": 3505,
+      "missed": 468
     },
     "BRANCH": {
-      "covered": 925,
-      "missed": 242
+      "covered": 928,
+      "missed": 241
     }
   }
 }
