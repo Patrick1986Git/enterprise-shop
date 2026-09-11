@@ -2,6 +2,7 @@ package com.company.shop.module.category.service;
 
 import java.text.Normalizer;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -11,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.company.shop.module.category.api.internal.ProductCategoryFacade;
 import com.company.shop.module.category.dto.CategoryCreateDTO;
 import com.company.shop.module.category.dto.CategoryResponseDTO;
 import com.company.shop.module.category.entity.Category;
@@ -32,7 +34,7 @@ import com.company.shop.module.category.repository.CategoryRepository;
  */
 @Service
 @Transactional
-public class CategoryServiceImpl implements CategoryService {
+public class CategoryServiceImpl implements CategoryService, ProductCategoryFacade {
 
     private final CategoryRepository repo;
     private final CategoryMapper mapper;
@@ -64,6 +66,12 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional(readOnly = true)
     public CategoryResponseDTO findBySlug(String slug) {
         return repo.findBySlug(slug).map(mapper::toDto).orElseThrow(() -> new CategoryNotFoundException(slug));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Category> findAssignableCategory(UUID categoryId) {
+        return repo.findById(categoryId);
     }
 
     /**

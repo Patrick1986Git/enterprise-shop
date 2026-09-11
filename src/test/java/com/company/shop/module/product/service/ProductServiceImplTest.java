@@ -23,8 +23,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import com.company.shop.module.category.api.internal.ProductCategoryFacade;
 import com.company.shop.module.category.entity.Category;
-import com.company.shop.module.category.repository.CategoryRepository;
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
 import com.company.shop.module.product.entity.Product;
@@ -42,7 +42,7 @@ class ProductServiceImplTest {
     private ProductRepository productRepository;
 
     @Mock
-    private CategoryRepository categoryRepository;
+    private ProductCategoryFacade productCategoryFacade;
 
     @Mock
     private ProductMapper productMapper;
@@ -51,7 +51,7 @@ class ProductServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProductServiceImpl(productRepository, categoryRepository, productMapper);
+        service = new ProductServiceImpl(productRepository, productCategoryFacade, productMapper);
     }
 
     @Test
@@ -123,7 +123,7 @@ class ProductServiceImplTest {
     void create_shouldThrowWhenCategoryNotFound() {
         ProductCreateDTO dto = dto("Test Product", "SKU-123", UUID.randomUUID());
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.empty());
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(dto))
                 .isInstanceOf(ProductCategoryNotFoundException.class)
@@ -139,7 +139,7 @@ class ProductServiceImplTest {
         Category category = category();
 
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.of(category));
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.of(category));
         when(productRepository.existsBySlug("phone-case")).thenReturn(true);
         when(productRepository.existsBySlug("phone-case-2")).thenReturn(false);
         when(productRepository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -157,7 +157,7 @@ class ProductServiceImplTest {
         UUID categoryId = UUID.randomUUID();
         ProductCreateDTO dto = dto("Phone Case", "SKU-123", categoryId);
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category()));
+        when(productCategoryFacade.findAssignableCategory(categoryId)).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlug("phone-case")).thenReturn(true);
         when(productRepository.existsBySlug("phone-case-2")).thenReturn(true);
         when(productRepository.existsBySlug("phone-case-3")).thenReturn(true);
@@ -177,7 +177,7 @@ class ProductServiceImplTest {
         UUID categoryId = UUID.randomUUID();
         ProductCreateDTO dto = dto("Phone Case", "SKU-123", categoryId);
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category()));
+        when(productCategoryFacade.findAssignableCategory(categoryId)).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlug(any(String.class))).thenAnswer(invocation -> {
             String slug = invocation.getArgument(0);
             return !slug.matches("phone-case-[a-f0-9]{8}");
@@ -196,7 +196,7 @@ class ProductServiceImplTest {
     void create_shouldThrowWhenAllSlugCandidatesAreTaken() {
         ProductCreateDTO dto = dto("Phone Case", "SKU-123", UUID.randomUUID());
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.of(category()));
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlug(any(String.class))).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(dto))
@@ -213,7 +213,7 @@ class ProductServiceImplTest {
         Category category = category();
 
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.of(category));
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.of(category));
         when(productRepository.existsBySlug(any(String.class))).thenReturn(false);
         when(productRepository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(productMapper.toDto(any(Product.class))).thenReturn(stubResponse());
@@ -260,7 +260,7 @@ class ProductServiceImplTest {
         ProductCreateDTO dto = dto("Test Product", "NEW-SKU", UUID.randomUUID());
         when(productRepository.findById(productId)).thenReturn(Optional.of(product()));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.empty());
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.update(productId, dto))
                 .isInstanceOf(ProductCategoryNotFoundException.class)
@@ -277,7 +277,7 @@ class ProductServiceImplTest {
         Product existing = product();
         when(productRepository.findById(productId)).thenReturn(Optional.of(existing));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(false);
-        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category()));
+        when(productCategoryFacade.findAssignableCategory(categoryId)).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlugAndIdNot("test-product", productId)).thenReturn(false);
         when(productRepository.saveAndFlush(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(productMapper.toDto(any(Product.class))).thenReturn(stubResponse());
@@ -406,14 +406,14 @@ class ProductServiceImplTest {
 
     private void prepareCreateForSaveFailure(ProductCreateDTO dto) {
         when(productRepository.existsBySku(dto.getSku())).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.of(category()));
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlug("test-product")).thenReturn(false);
     }
 
     private void prepareUpdateForSaveFailure(UUID productId, ProductCreateDTO dto, Product existing) {
         when(productRepository.findById(productId)).thenReturn(Optional.of(existing));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(false);
-        when(categoryRepository.findById(dto.getCategoryId())).thenReturn(Optional.of(category()));
+        when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlugAndIdNot("test-product", productId)).thenReturn(false);
     }
 

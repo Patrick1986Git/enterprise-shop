@@ -72,14 +72,19 @@ class ArchitectureRulesTest {
                     .should().beInterfaces();
 
 
-    // TODO: Expand this rule to additional repositories after CartFacade,
-    // UserLookupFacade, CategoryFacade, and other module APIs are introduced.
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnProductRepository =
             noClasses()
                     .that().resideInAPackage("com.company.shop.module.order..")
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.product.repository..");
+
+    @ArchTest
+    static final ArchRule productModuleMustNotDependOnCategoryRepositories =
+            noClasses()
+                    .that().resideInAPackage("com.company.shop.module.product..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.category.repository..");
 
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnProductEntities =
@@ -110,7 +115,6 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.cart.service..");
 
-    // TODO: Expand cart/order entity boundary rules after order item product snapshot decoupling.
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnCartEntities =
             noClasses()

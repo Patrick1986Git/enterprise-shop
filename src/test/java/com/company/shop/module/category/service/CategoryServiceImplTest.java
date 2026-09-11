@@ -55,6 +55,18 @@ class CategoryServiceImplTest {
 		});
 	}
 
+	@Test
+	void findAssignableCategory_shouldReturnRepositoryResult() {
+		UUID categoryId = UUID.randomUUID();
+		Category category = new Category("Technology", "technology", "Products");
+		when(repo.findById(categoryId)).thenReturn(Optional.of(category));
+
+		Optional<Category> result = service.findAssignableCategory(categoryId);
+
+		assertThat(result).containsSame(category);
+		verify(repo).findById(categoryId);
+	}
+
 	@Nested
 	class CreateTests {
 

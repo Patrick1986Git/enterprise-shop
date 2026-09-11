@@ -20,8 +20,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.company.shop.module.category.api.internal.ProductCategoryFacade;
 import com.company.shop.module.category.entity.Category;
-import com.company.shop.module.category.repository.CategoryRepository;
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
 import com.company.shop.module.product.dto.ProductSearchCriteria;
@@ -50,14 +50,14 @@ public class ProductServiceImpl implements ProductService {
     private static final int RANDOM_SUFFIX_LENGTH = 8;
 
     private final ProductRepository productRepo;
-    private final CategoryRepository categoryRepo;
+    private final ProductCategoryFacade productCategoryFacade;
     private final ProductMapper mapper;
 
     public ProductServiceImpl(ProductRepository productRepo,
-            CategoryRepository categoryRepo,
+            ProductCategoryFacade productCategoryFacade,
             ProductMapper mapper) {
         this.productRepo = productRepo;
-        this.categoryRepo = categoryRepo;
+        this.productCategoryFacade = productCategoryFacade;
         this.mapper = mapper;
     }
 
@@ -134,7 +134,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Category getCategoryOrThrow(UUID categoryId) {
-        return categoryRepo.findById(categoryId)
+        return productCategoryFacade.findAssignableCategory(categoryId)
                 .orElseThrow(() -> new ProductCategoryNotFoundException(categoryId));
     }
 
