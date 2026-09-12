@@ -65,6 +65,14 @@ Order and payment terminal transitions converge in several repeated-delivery cas
 the risk of repeated terminal mutation, but it is not a substitute for exact provider-event
 idempotency and does not establish a safe replay horizon.
 
+A late succeeded intent is an idempotent no-op only after amount, PLN currency, provider identity,
+and the local terminal pair have been reconciled. `PAID` (or its later `SHIPPED` state) with a
+`COMPLETED` payment is consistent; a missing local provider attachment is recovered in that case.
+An identity or monetary mismatch, or succeeded provider evidence for another local terminal pair
+such as `CANCELLED`/`FAILED`, fails closed without reversing the order or restoring inventory. The
+webhook transaction then rolls back its event-ID insertion, so Stripe retry remains possible and
+the repeated operational failure remains visible rather than being durably consumed.
+
 Therefore:
 
 - do not age-purge webhook event IDs;

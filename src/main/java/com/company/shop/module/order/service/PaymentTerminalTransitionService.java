@@ -43,10 +43,17 @@ public class PaymentTerminalTransitionService {
     @Transactional
     public boolean convergeSucceeded(UUID orderId, PaymentIntent intent) {
         Order order = lockOrder(orderId);
-        if (order.getStatus() != OrderStatus.NEW) return false;
-        validatePaymentIntentMatchesOrder(intent, order);
         Payment payment = lockPayment(orderId);
-        validateProviderPaymentId(intent, payment);
+        validatePaymentIntentMatchesOrder(intent, order);
+        attachOrValidateProviderPayment(intent, payment);
+        if (order.getStatus() != OrderStatus.NEW) {
+            if ((order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.SHIPPED)
+                    && payment.getStatus() == PaymentStatus.COMPLETED) {
+                return false;
+            }
+            throw new WebhookProcessingException(
+                    "Succeeded provider payment conflicts with the terminal local payment state.");
+        }
         order.markAsPaid();
         payment.markAsCompleted();
         orderRepository.save(order);
@@ -93,15 +100,6 @@ public class PaymentTerminalTransitionService {
                 .orElseThrow(() -> new PaymentRecordNotFoundException(orderId));
     }
     private void attachOrValidateProviderPayment(PaymentIntent intent, Payment payment) {
-        if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
-                && !payment.getProviderPaymentId().equals(intent.getId())) {
-            throw new WebhookSignatureInvalidException("PaymentIntent id does not match the attached provider payment id.");
-        }
-        if (payment.getProviderPaymentId() == null || payment.getProviderPaymentId().isBlank()) {
-            payment.attachProviderPayment(intent.getId(), intent.getClientSecret());
-        }
-    }
-    private void validateProviderPaymentId(PaymentIntent intent, Payment payment) {
         if (payment.getProviderPaymentId() != null && !payment.getProviderPaymentId().isBlank()
                 && !payment.getProviderPaymentId().equals(intent.getId())) {
             throw new WebhookSignatureInvalidException("PaymentIntent id does not match the attached provider payment id.");

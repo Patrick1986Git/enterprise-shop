@@ -169,6 +169,121 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	}
 
 	@Test
+	void handleStripeWebhook_shouldRejectDifferentProviderForAlreadyPaidOrderAndRollBackEventRegistration() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), "pi_paid");
+		markOrderAndPaymentAsCompleted(seededOrder.order().getId());
+		Event event = succeededEvent("evt_paid_provider_mismatch", seededOrder.order().getId().toString(),
+				"pi_other", 4000L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.errorCode").value("STRIPE_WEBHOOK_SIGNATURE_INVALID"));
+		}
+
+		assertThat(orderRepository.findById(seededOrder.order().getId()).orElseThrow().getStatus())
+				.isEqualTo(OrderStatus.PAID);
+		assertThat(paymentRepository.findByOrderId(seededOrder.order().getId()).orElseThrow().getStatus())
+				.isEqualTo(PaymentStatus.COMPLETED);
+		assertStripeWebhookEventNotPersisted("evt_paid_provider_mismatch");
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
+	void handleStripeWebhook_shouldAttachMissingProviderForConsistentAlreadyPaidOrder() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), null);
+		markOrderAndPaymentAsCompleted(seededOrder.order().getId());
+		Event event = succeededEvent("evt_paid_lost_attach", seededOrder.order().getId().toString(),
+				"pi_recovered", 4000L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isOk());
+		}
+
+		Payment payment = paymentRepository.findByOrderId(seededOrder.order().getId()).orElseThrow();
+		assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+		assertThat(payment.getProviderPaymentId()).isEqualTo("pi_recovered");
+		assertStripeWebhookEventPersisted("evt_paid_lost_attach", SUCCEEDED_EVENT_TYPE);
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
+	void handleStripeWebhook_shouldRejectWrongMoneyForAlreadyPaidOrderAndRollBackEventRegistration() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), "pi_paid_money");
+		markOrderAndPaymentAsCompleted(seededOrder.order().getId());
+		Event wrongAmount = succeededEvent("evt_paid_wrong_amount", seededOrder.order().getId().toString(),
+				"pi_paid_money", 3999L, "pln");
+		Event wrongCurrency = succeededEvent("evt_paid_wrong_currency", seededOrder.order().getId().toString(),
+				"pi_paid_money", 4000L, "eur");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent("amount", STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(wrongAmount);
+			webhookStatic.when(() -> Webhook.constructEvent("currency", STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(wrongCurrency);
+			mockMvc.perform(post(WEBHOOK_URL).contentType(MediaType.APPLICATION_JSON)
+					.header("Stripe-Signature", STRIPE_SIGNATURE).content("amount"))
+					.andExpect(status().isBadRequest());
+			mockMvc.perform(post(WEBHOOK_URL).contentType(MediaType.APPLICATION_JSON)
+					.header("Stripe-Signature", STRIPE_SIGNATURE).content("currency"))
+					.andExpect(status().isBadRequest());
+		}
+
+		assertStripeWebhookEventNotPersisted("evt_paid_wrong_amount");
+		assertStripeWebhookEventNotPersisted("evt_paid_wrong_currency");
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
+	void handleStripeWebhook_shouldRejectPaidOrderWithPendingPaymentAndKeepEventRetryable() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), "pi_inconsistent");
+		Order order = orderRepository.findById(seededOrder.order().getId()).orElseThrow();
+		order.markAsPaid();
+		orderRepository.save(order);
+		Event event = succeededEvent("evt_paid_pending", order.getId().toString(),
+				"pi_inconsistent", 4000L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isInternalServerError());
+		}
+
+		assertThat(paymentRepository.findByOrderId(order.getId()).orElseThrow().getStatus())
+				.isEqualTo(PaymentStatus.PENDING);
+		assertStripeWebhookEventNotPersisted("evt_paid_pending");
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
+	void handleStripeWebhook_shouldRejectSucceededAfterCancellationAndKeepEventRetryable() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), "pi_canceled");
+		Order order = orderRepository.findById(seededOrder.order().getId()).orElseThrow();
+		order.cancelIfNew();
+		orderRepository.save(order);
+		Payment payment = paymentRepository.findByOrderId(order.getId()).orElseThrow();
+		payment.markAsFailed();
+		paymentRepository.save(payment);
+		Event event = succeededEvent("evt_success_after_cancel", order.getId().toString(),
+				"pi_canceled", 4000L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isInternalServerError())
+					.andExpect(jsonPath("$.errorCode").value("STRIPE_WEBHOOK_PROCESSING_ERROR"));
+		}
+
+		assertThat(orderRepository.findById(order.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.CANCELLED);
+		assertThat(paymentRepository.findByOrderId(order.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.FAILED);
+		assertStripeWebhookEventNotPersisted("evt_success_after_cancel");
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
 	void handleStripeWebhook_shouldBeIdempotentForDuplicateEventId() throws Exception {
 		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(75), "pi_duplicate_event");
 		Event event = succeededEvent(
