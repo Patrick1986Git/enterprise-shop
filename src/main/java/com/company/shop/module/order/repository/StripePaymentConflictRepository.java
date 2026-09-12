@@ -9,6 +9,8 @@ import java.time.Instant;
 import com.company.shop.module.order.entity.StripePaymentConflict;
 
 public interface StripePaymentConflictRepository extends JpaRepository<StripePaymentConflict, UUID> {
+    long countByStripeEventId(String stripeEventId);
+
     @Modifying
     @Query(value = """
             INSERT INTO stripe_payment_conflicts (id, order_id, payment_id, stripe_event_id, provider_payment_id,

@@ -6,6 +6,7 @@ import com.company.shop.common.exception.BusinessException;
 
 public class StripePaymentConflictNotFoundException extends BusinessException {
     public StripePaymentConflictNotFoundException(UUID id) {
-        super(HttpStatus.NOT_FOUND, "STRIPE_PAYMENT_CONFLICT_NOT_FOUND", "Stripe payment conflict not found: " + id);
+        super(HttpStatus.NOT_FOUND, "Stripe payment conflict not found: " + id,
+                "STRIPE_PAYMENT_CONFLICT_NOT_FOUND");
     }
 }

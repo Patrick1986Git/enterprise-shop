@@ -26,6 +26,8 @@ import com.company.shop.module.order.dto.StripePaymentConflictResponseDTO;
 import com.company.shop.module.order.entity.OrderStatus;
 import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.entity.StripePaymentConflictReason;
+import com.company.shop.module.order.exception.StripePaymentConflictNotFoundException;
+import com.company.shop.module.order.exception.StripePaymentConflictSortInvalidException;
 import com.company.shop.module.order.service.StripePaymentConflictQueryService;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
@@ -63,5 +65,59 @@ class AdminStripePaymentConflictControllerWebMvcTest {
     void findAll_shouldNotQueryForAnonymousRequest() throws Exception {
         mockMvc.perform(get(URL)).andExpect(status().isForbidden());
         verifyNoInteractions(queryService);
+    }
+
+    @Test
+    void findById_shouldRequireAdminAndReturnOnlySanitizedEvidence() throws Exception {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000201");
+        UUID orderId = UUID.fromString("00000000-0000-0000-0000-000000000202");
+        UUID paymentId = UUID.fromString("00000000-0000-0000-0000-000000000203");
+        var dto = new StripePaymentConflictResponseDTO(id, orderId, paymentId, "evt_detail", "pi_detail",
+                "payment_intent.succeeded", OrderStatus.CANCELLED, PaymentStatus.FAILED,
+                StripePaymentConflictReason.TERMINAL_STATE_CONTRADICTION, Instant.parse("2026-09-12T00:00:00Z"));
+        when(queryService.findById(id)).thenReturn(dto);
+        String detailUrl = URL + "/" + id;
+
+        mockMvc.perform(get(detailUrl)).andExpect(status().isForbidden());
+        mockMvc.perform(get(detailUrl).with(user("user").roles("USER"))).andExpect(status().isForbidden());
+        mockMvc.perform(get(detailUrl).with(user("admin").roles("ADMIN"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.orderId").value(orderId.toString()))
+                .andExpect(jsonPath("$.paymentId").value(paymentId.toString()))
+                .andExpect(jsonPath("$.stripeEventId").value("evt_detail"))
+                .andExpect(jsonPath("$.providerPaymentId").value("pi_detail"))
+                .andExpect(jsonPath("$.eventType").value("payment_intent.succeeded"))
+                .andExpect(jsonPath("$.orderStatus").value("CANCELLED"))
+                .andExpect(jsonPath("$.paymentStatus").value("FAILED"))
+                .andExpect(jsonPath("$.reason").value("TERMINAL_STATE_CONTRADICTION"))
+                .andExpect(jsonPath("$.observedAt").value("2026-09-12T00:00:00Z"))
+                .andExpect(jsonPath("$.rawPayload").doesNotExist())
+                .andExpect(jsonPath("$.stripeSignature").doesNotExist())
+                .andExpect(jsonPath("$.clientSecret").doesNotExist())
+                .andExpect(jsonPath("$.jwt").doesNotExist())
+                .andExpect(jsonPath("$.error").doesNotExist())
+                .andExpect(jsonPath("$.message").doesNotExist());
+    }
+
+    @Test
+    void findById_shouldReturnSanitizedNotFoundContract() throws Exception {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000204");
+        when(queryService.findById(id)).thenThrow(new StripePaymentConflictNotFoundException(id));
+
+        mockMvc.perform(get(URL + "/" + id).with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("STRIPE_PAYMENT_CONFLICT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("Stripe payment conflict not found: " + id));
+    }
+
+    @Test
+    void findAll_shouldReturnBadRequestForInvalidSort() throws Exception {
+        when(queryService.findAll(any(Pageable.class)))
+                .thenThrow(new StripePaymentConflictSortInvalidException("unsafe"));
+
+        mockMvc.perform(get(URL).queryParam("sort", "unsafe,asc").with(user("admin").roles("ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("STRIPE_PAYMENT_CONFLICT_SORT_INVALID"))
+                .andExpect(jsonPath("$.message").value("Unsupported conflict sort: unsafe"));
     }
 }

@@ -30,7 +30,9 @@ public class StripePaymentConflictQueryService {
                 .orElseThrow(() -> new StripePaymentConflictNotFoundException(id));
     }
     private Pageable deterministic(Pageable pageable) {
-        Sort sort = pageable.getSort().isUnsorted() ? Sort.by(Sort.Direction.DESC, "observedAt", "id") : pageable.getSort();
+        Sort sort = pageable.getSort().isUnsorted()
+                ? Sort.by(Sort.Order.desc("observedAt"), Sort.Order.asc("id"))
+                : pageable.getSort();
         for (Sort.Order order : sort) if (!ALLOWED_SORTS.contains(order.getProperty()))
             throw new StripePaymentConflictSortInvalidException(order.getProperty());
         if (sort.getOrderFor("id") == null) sort = sort.and(Sort.by(Sort.Direction.ASC, "id"));

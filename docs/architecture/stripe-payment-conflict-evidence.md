@@ -11,6 +11,10 @@ immutable observation per authenticated Stripe event (**Outcome B**).
 This is evidence, not a recovery workflow. ADMIN users can list and inspect it, but cannot acknowledge, edit, replay,
 refund, re-reserve inventory, or force a local state transition.
 
+The default operator list order is `observedAt DESC, id ASC`. The explicit ascending UUID tie-break is also appended
+to custom sorts that omit `id`, providing stable pagination and matching the `(observed_at DESC, id ASC)` PostgreSQL
+operator-query index.
+
 ## Trust and failure taxonomy
 
 Signature verification runs before an event is registered or any local financial row is locked. A malformed payload,
