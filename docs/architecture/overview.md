@@ -1,5 +1,8 @@
 # Architecture overview
 
+The implemented financial lifecycle, including reserved legacy status values and reconciliation invariants, is
+defined in [Order and payment state-machine contract](./order-payment-state-machine.md).
+
 ## Runtime stack
 
 enterprise-shop is a Java 21 modular monolith built on the current repository stack:
