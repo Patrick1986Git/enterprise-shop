@@ -117,6 +117,8 @@ import com.company.shop.security.jwt.JwtTokenProvider;
         PaymentInitializationTransactionService.class, PaymentTerminalTransitionService.class,
         StripeWebhookEventRegistrar.class, StripeWebhookProcessor.class,
         StripePaymentConflictQueryService.class, StripePaymentConflictRecorder.class,
+        com.company.shop.module.order.service.StripePaymentConflictDispositionCommandService.class,
+        com.company.shop.module.order.service.StripePaymentConflictDispositionQueryService.class,
         UserRolesStartupValidator.class
 })
 @MockitoBean(name = "jpaMappingContext", types = JpaMetamodelMappingContext.class)

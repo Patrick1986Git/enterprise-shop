@@ -54,6 +54,7 @@ assert_mutation_denied() {
     ('notification_admin_action_logs'),
     ('outbox_event_admin_action_logs'),
     ('reservation_expiration_admin_action_logs'),
+    ('stripe_payment_conflict_dispositions'),
     ('stripe_payment_conflicts')
   ) AS protected(table_name);")" = "t" ]
 
@@ -98,6 +99,30 @@ conflict_id=$(psql_app --tuples-only --no-align --command \
 [ "$(psql_app --tuples-only --no-align --command \
   "SELECT count(*) FROM stripe_payment_conflicts
    WHERE id = '$conflict_id' AND payment_status = 'FAILED';")" = "1" ]
+
+disposition_id=$(psql_app --tuples-only --no-align --command \
+  "INSERT INTO stripe_payment_conflict_dispositions (conflict_id, action_type, actor_email, created_at)
+   VALUES ('$conflict_id', 'ACKNOWLEDGED', 'integrity-test@example.com', CURRENT_TIMESTAMP) RETURNING id;")
+[ "$(psql_app --tuples-only --no-align --command \
+  "SELECT count(*) FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';")" = "1" ]
+assert_mutation_denied \
+  "UPDATE stripe_payment_conflict_dispositions SET actor_email = 'mutated@example.com' WHERE id = '$disposition_id';"
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT actor_email FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';")" = \
+  "integrity-test@example.com" ]
+assert_mutation_denied "DELETE FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';"
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT count(*) FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';")" = "1" ]
+psql_admin --command \
+  "UPDATE stripe_payment_conflict_dispositions SET actor_email = 'owner-maintenance@example.com'
+   WHERE id = '$disposition_id';" >/dev/null
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT actor_email FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';")" = \
+  "owner-maintenance@example.com" ]
+psql_admin --command "DELETE FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';" >/dev/null
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT count(*) FROM stripe_payment_conflict_dispositions WHERE id = '$disposition_id';")" = "0" ]
+
 assert_mutation_denied \
   "UPDATE stripe_payment_conflicts SET payment_status = 'PENDING' WHERE id = '$conflict_id';"
 [ "$(psql_admin --tuples-only --no-align --command \

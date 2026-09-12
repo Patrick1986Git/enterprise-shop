@@ -44,9 +44,11 @@ This class includes:
 
 - processed outbox history after all correctness dependencies end;
 - sent notification history after source-event deduplication dependencies end;
-- failed or dead-letter forensic history after recovery is formally closed; and
+- failed or dead-letter forensic history after recovery is formally closed;
 - `notification_admin_action_logs`, `outbox_event_admin_action_logs`, and
-  `reservation_expiration_admin_action_logs`.
+  `reservation_expiration_admin_action_logs`; and
+- `stripe_payment_conflict_dispositions`, whose investigation-accountability lifetime is coupled to the retained
+  Class 1 conflict evidence.
 
 Correctness may eventually stop depending on a Class 3 record, but its retention duration remains
 business, security, legal, and deployment owned.
@@ -128,11 +130,16 @@ arbitrary period:
 
 ## ADMIN action-history invariant
 
-The three ADMIN history tables are append-only for runtime credentials under V45:
+The ADMIN history tables are append-only for runtime credentials:
 
 - `notification_admin_action_logs`;
-- `outbox_event_admin_action_logs`; and
-- `reservation_expiration_admin_action_logs`.
+- `outbox_event_admin_action_logs`;
+- `reservation_expiration_admin_action_logs`; and
+- `stripe_payment_conflict_dispositions`.
+
+Stripe conflict dispositions have a non-cascading foreign key to the Class 1 conflict observation. They record review
+or escalation only and never prove financial correction. The foreign key preserves investigation context; it does not
+authorize deletion of either record family.
 
 Do not add runtime cleanup for these tables or weaken V45. If future policy requires deletion, it
 must use a distinct privileged administrative or migration identity, be independently audited, and

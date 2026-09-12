@@ -8,8 +8,16 @@ retry eventually ends, while local log retention and provider-history retention 
 the repository defines no guarantee that either will outlive an investigation. The application therefore stores one
 immutable observation per authenticated Stripe event (**Outcome B**).
 
-This is evidence, not a recovery workflow. ADMIN users can list and inspect it, but cannot acknowledge, edit, replay,
-refund, re-reserve inventory, or force a local state transition.
+This is evidence, not a recovery workflow. ADMIN users can list and inspect it and append a separate investigation
+disposition. `ACKNOWLEDGED` means only that the authenticated administrator reviewed the evidence. `ESCALATED` means
+only that the administrator handed it to the appropriate operational or financial investigation process. Neither
+action proves correction, reconciliation, refund, compensation, or any Stripe operation. Administrators cannot edit
+the observation, replay the webhook, refund, re-reserve inventory, or force a local state transition through this API.
+
+Each genuine administrator action is retained, including repeated or concurrent actions; there is no heuristic
+deduplication. The actor email comes exclusively from the authenticated server-side current-user context and is not a
+request field. Disposition history is independently append-only and ordered by `createdAt DESC, id ASC`. It is queried
+separately with bounded pagination rather than embedded in conflict-list results.
 
 The default operator list order is `observedAt DESC, id ASC`. The explicit ascending UUID tie-break is also appended
 to custom sorts that omit `id`, providing stable pagination and matching the `(observed_at DESC, id ASC)` PostgreSQL
@@ -71,3 +79,7 @@ protected DTO, never in metric tags.
 The table is Class 1 correctness-critical evidence under the repository retention boundary. No age-based deletion is
 authorized. PostgreSQL rejects runtime-role updates/deletes while permitting the migration owner to administer schema;
 the evidence is therefore append-only under application credentials.
+
+Disposition rows reference their retained conflict with a non-cascading foreign key. They are Class 3 append-only
+audit history whose lifetime is coupled to the Class 1 conflict evidence: no age-based deletion or runtime cleanup is
+authorized, and removal of the parent while its investigation history exists is rejected by PostgreSQL.

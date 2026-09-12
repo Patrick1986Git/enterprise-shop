@@ -226,6 +226,14 @@ class OpenApiDocsSmokeTest {
     private StripePaymentConflictQueryService stripePaymentConflictQueryService;
 
     @MockitoBean
+    private com.company.shop.module.order.service.StripePaymentConflictDispositionCommandService
+            stripePaymentConflictDispositionCommandService;
+
+    @MockitoBean
+    private com.company.shop.module.order.service.StripePaymentConflictDispositionQueryService
+            stripePaymentConflictDispositionQueryService;
+
+    @MockitoBean
     private StripePaymentConflictRecorder stripePaymentConflictRecorder;
 
     @MockitoBean
@@ -276,7 +284,8 @@ class OpenApiDocsSmokeTest {
                         "/api/v1/admin/outbox-events/summary",
                         "/api/v1/admin/notifications/{id}/requeue",
                         "/api/v1/admin/notifications/{id}/actions",
-                        "/api/v1/admin/notification-actions");
+                        "/api/v1/admin/notification-actions",
+                        "/api/v1/admin/orders/stripe-payment-conflicts/{conflictId}/dispositions");
 
         assertThat(pathKeys)
                 .as("Generated OpenAPI path keys: %s", pathKeys)
@@ -302,7 +311,8 @@ class OpenApiDocsSmokeTest {
     void groupedOpenApiDocs_shouldExposeRepresentativePathsForConfiguredAudiences() throws Exception {
         Map<String, Object> adminPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + ADMIN_API_GROUP));
         assertThat(adminPaths)
-                .containsKeys("/api/v1/admin/notifications", "/api/v1/admin/outbox-events")
+                .containsKeys("/api/v1/admin/notifications", "/api/v1/admin/outbox-events",
+                        "/api/v1/admin/orders/stripe-payment-conflicts/{conflictId}/dispositions")
                 .doesNotContainKeys("/api/v1/products", "/api/v1/auth/login");
 
         Map<String, Object> webhookPaths = paths(readOpenApi(API_DOCS_ENDPOINT + "/" + WEBHOOKS_API_GROUP));
