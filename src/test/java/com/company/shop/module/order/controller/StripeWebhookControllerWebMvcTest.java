@@ -29,7 +29,7 @@ import com.company.shop.common.exception.GlobalExceptionHandler;
 import com.company.shop.common.i18n.MessageService;
 import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
-import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.StripeWebhookProcessor;
 import com.company.shop.security.jwt.JwtAuthenticationFilter;
 import com.company.shop.support.TestMeterRegistryConfig;
 
@@ -50,7 +50,7 @@ class StripeWebhookControllerWebMvcTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private PaymentService paymentService;
+	private StripeWebhookProcessor webhookProcessor;
 
 	@Test
 	void handleStripeWebhook_shouldReturnOkAndDelegateWhenRequestIsValid() throws Exception {
@@ -64,7 +64,7 @@ class StripeWebhookControllerWebMvcTest {
 				.andExpect(status().isOk())
 				.andExpect(content().string(""));
 
-		verify(paymentService).handleWebhook(eq(payload), eq(signature));
+		verify(webhookProcessor).process(eq(payload), eq(signature));
 	}
 
 	@Test
@@ -82,7 +82,7 @@ class StripeWebhookControllerWebMvcTest {
 				.andExpect(jsonPath("$.errors.expectedType").value("String"))
 				.andExpect(jsonPath("$.timestamp", matchesPattern(TIMESTAMP_REGEX)));
 
-		verifyNoInteractions(paymentService);
+		verifyNoInteractions(webhookProcessor);
 	}
 
 	@Test
@@ -98,7 +98,7 @@ class StripeWebhookControllerWebMvcTest {
 				.andExpect(jsonPath("$.errorCode").value("REQUEST_INVALID"))
 				.andExpect(jsonPath("$.timestamp", matchesPattern(TIMESTAMP_REGEX)));
 
-		verifyNoInteractions(paymentService);
+		verifyNoInteractions(webhookProcessor);
 	}
 
 	@Test
@@ -107,8 +107,8 @@ class StripeWebhookControllerWebMvcTest {
 		String signature = "sig_invalid";
 
 		doThrow(new WebhookSignatureInvalidException())
-				.when(paymentService)
-				.handleWebhook(eq(payload), eq(signature));
+				.when(webhookProcessor)
+				.process(eq(payload), eq(signature));
 
 		mockMvc.perform(post(WEBHOOK_URL)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -128,8 +128,8 @@ class StripeWebhookControllerWebMvcTest {
 		String signature = "sig_test";
 
 		doThrow(new WebhookProcessingException("Unable to process Stripe webhook event."))
-				.when(paymentService)
-				.handleWebhook(eq(payload), eq(signature));
+				.when(webhookProcessor)
+				.process(eq(payload), eq(signature));
 
 		mockMvc.perform(post(WEBHOOK_URL)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -149,8 +149,8 @@ class StripeWebhookControllerWebMvcTest {
 		String signature = "sig_test";
 
 		doThrow(new RuntimeException("boom"))
-				.when(paymentService)
-				.handleWebhook(eq(payload), eq(signature));
+				.when(webhookProcessor)
+				.process(eq(payload), eq(signature));
 
 		mockMvc.perform(post(WEBHOOK_URL)
 				.contentType(MediaType.APPLICATION_JSON)

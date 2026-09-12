@@ -40,12 +40,12 @@ psql_app() {
 
 assert_mutation_denied() {
   statement=$1
-  if psql_app --command "$statement" >/tmp/admin-action-log-denial.out 2>&1; then
+  if psql_app --command "$statement" >/tmp/runtime-append-only-denial.out 2>&1; then
     echo "Expected runtime mutation to be denied: $statement" >&2
     exit 1
   fi
-  grep -q "append-only for runtime roles" /tmp/admin-action-log-denial.out
-  grep -Eq 'ERROR:[[:space:]]+42501:' /tmp/admin-action-log-denial.out
+  grep -q "append-only for runtime roles" /tmp/runtime-append-only-denial.out
+  grep -Eq 'ERROR:[[:space:]]+42501:' /tmp/runtime-append-only-denial.out
 }
 
 [ "$(psql_app --tuples-only --no-align --command "
@@ -53,7 +53,8 @@ assert_mutation_denied() {
   FROM (VALUES
     ('notification_admin_action_logs'),
     ('outbox_event_admin_action_logs'),
-    ('reservation_expiration_admin_action_logs')
+    ('reservation_expiration_admin_action_logs'),
+    ('stripe_payment_conflicts')
   ) AS protected(table_name);")" = "t" ]
 
 notification_id=$(psql_app --tuples-only --no-align --command \
@@ -86,10 +87,36 @@ do
   [ "$(psql_admin --tuples-only --no-align --command "SELECT count(*) FROM $table WHERE id = '$id';")" = "0" ]
 done
 
+conflict_id=$(psql_app --tuples-only --no-align --command \
+  "INSERT INTO stripe_payment_conflicts
+     (id, order_id, payment_id, stripe_event_id, provider_payment_id, event_type,
+      order_status, payment_status, reason, observed_at)
+   VALUES (uuid_generate_v4(), uuid_generate_v4(), uuid_generate_v4(),
+     'evt_runtime_append_only_integrity', 'pi_runtime_append_only_integrity',
+     'payment_intent.succeeded', 'CANCELLED', 'FAILED', 'TERMINAL_STATE_CONTRADICTION', CURRENT_TIMESTAMP)
+   RETURNING id;")
+[ "$(psql_app --tuples-only --no-align --command \
+  "SELECT count(*) FROM stripe_payment_conflicts
+   WHERE id = '$conflict_id' AND payment_status = 'FAILED';")" = "1" ]
+assert_mutation_denied \
+  "UPDATE stripe_payment_conflicts SET payment_status = 'PENDING' WHERE id = '$conflict_id';"
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT payment_status FROM stripe_payment_conflicts WHERE id = '$conflict_id';")" = "FAILED" ]
+assert_mutation_denied "DELETE FROM stripe_payment_conflicts WHERE id = '$conflict_id';"
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT count(*) FROM stripe_payment_conflicts WHERE id = '$conflict_id';")" = "1" ]
+psql_admin --command \
+  "UPDATE stripe_payment_conflicts SET payment_status = 'PENDING' WHERE id = '$conflict_id';" >/dev/null
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT payment_status FROM stripe_payment_conflicts WHERE id = '$conflict_id';")" = "PENDING" ]
+psql_admin --command "DELETE FROM stripe_payment_conflicts WHERE id = '$conflict_id';" >/dev/null
+[ "$(psql_admin --tuples-only --no-align --command \
+  "SELECT count(*) FROM stripe_payment_conflicts WHERE id = '$conflict_id';")" = "0" ]
+
 category_id=$(psql_app --tuples-only --no-align --command \
   "INSERT INTO categories (name, slug) VALUES ('Integrity test category', 'integrity-test-category') RETURNING id;")
 psql_app --command "UPDATE categories SET description = 'updated' WHERE id = '$category_id';" >/dev/null
 psql_app --command "DELETE FROM categories WHERE id = '$category_id';" >/dev/null
 [ "$(psql_admin --tuples-only --no-align --command "SELECT count(*) FROM categories WHERE id = '$category_id';")" = "0" ]
 
-echo "Runtime audit INSERT/SELECT succeeded, UPDATE/DELETE was denied with SQLSTATE 42501, owner maintenance succeeded, and ordinary DML remained available."
+echo "Runtime append-only INSERT/SELECT succeeded, UPDATE/DELETE was denied with SQLSTATE 42501, owner maintenance succeeded, and ordinary DML remained available."

@@ -59,6 +59,9 @@ import com.company.shop.module.order.expiration.ReservationExpirationWorkQuerySe
 import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogQueryService;
 import com.company.shop.module.order.expiration.LegacyReservationService;
 import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.StripeWebhookProcessor;
+import com.company.shop.module.order.service.StripePaymentConflictQueryService;
+import com.company.shop.module.order.service.StripePaymentConflictRecorder;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
 import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
 import com.company.shop.module.order.service.query.OrderQueryProcessor;
@@ -215,6 +218,15 @@ class OpenApiDocsSmokeTest {
 
     @MockitoBean
     private PaymentService paymentService;
+
+    @MockitoBean
+    private StripeWebhookProcessor stripeWebhookProcessor;
+
+    @MockitoBean
+    private StripePaymentConflictQueryService stripePaymentConflictQueryService;
+
+    @MockitoBean
+    private StripePaymentConflictRecorder stripePaymentConflictRecorder;
 
     @MockitoBean
     private StripeWebhookEventRegistrar stripeWebhookEventRegistrar;

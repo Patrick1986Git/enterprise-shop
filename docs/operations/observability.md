@@ -69,6 +69,7 @@ clamp age to zero if the application clock is behind a stored timestamp.
 | `shop.checkout.total` | Counter | `OrderCheckoutProcessor` | `result`: `attempt`, `success`, `failure` | Checkout attempts and terminal in-process outcomes. |
 | `shop.payment_intent.total` | Counter | `PaymentServiceImpl` | `result`: `created`, `reused`, `failed` | Payment-intent initialization outcomes. |
 | `shop.webhook.total` | Counter | `PaymentServiceImpl` | `result`: `received`, `processed`, `ignored`, `duplicate`, `failed` | Validly parsed arrivals and webhook handling outcomes. A signature/payload rejection contributes only `failed`, not `received`. |
+| `shop.stripe.payment_conflict.total` | Counter | `StripePaymentConflictRecorder` | `reason`: `TERMINAL_STATE_CONTRADICTION` | Newly persisted authenticated provider/local contradiction observations. Same-event retries do not increment it. |
 | `shop.business_exception.total` | Counter | `GlobalExceptionHandler` | `error_code`: repository-defined business error codes; `status_class`: `4xx`, `5xx`, `other` | Business exceptions translated to API errors. Error messages are never tags. |
 | `shop.order.reservation_expiration.total` | Counter | `ReservationExpirationProcessor` | `outcome`: `claimed`, `terminal_noop`, `provider_succeeded`, `provider_already_canceled`, `provider_canceled`, `provider_pending`, `failed`, `retry`, `retry_exhausted` | Reservation-expiration processing transitions and outcomes. A claim can increment more than one outcome. |
 | `shop.order.reservation_expiration.inventory_units_released` | Counter | `ReservationExpirationProcessor` | none | Inventory units released by successful reservation expiration. |
@@ -169,6 +170,12 @@ investigation. Outbox and notification failures persist bounded workflow state a
 inspection but do not currently emit dedicated failure logs. This avoids logging outbox payloads, notification bodies,
 recipients, raw webhook bodies, secrets, or client secrets; metrics provide the proactive signal and protected records
 provide drill-down context.
+
+Terminal Stripe success contradictions additionally persist immutable, sanitized observations for protected ADMIN
+list/detail inspection. Alert on the finite-reason conflict counter according to deployment-owned objectives, then use
+the stored Stripe event/PaymentIntent and local Order/Payment identifiers for drill-down. The generic webhook failure
+counter remains broader by design. No unresolved-conflict gauge exists because observations are immutable history, not
+a repository-defined open/resolved workflow.
 
 Notification `last_attempt_at` consistently means the delivery-attempt instant. A claimed delivery writes it when the
 claim begins; `finalizeFailed` later preserves that instant whether it schedules a retry or enters FAILED. The legacy

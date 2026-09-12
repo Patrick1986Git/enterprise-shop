@@ -28,6 +28,7 @@ import com.company.shop.module.order.exception.PaymentAlreadyCompletedException;
 import com.company.shop.module.order.exception.PaymentAmountInvalidException;
 import com.company.shop.module.order.exception.PaymentProcessingException;
 import com.company.shop.module.order.exception.StripeConfigurationException;
+import com.company.shop.module.order.exception.StripePaymentConflictException;
 import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
 import com.company.shop.module.order.repository.OrderRepository;
@@ -175,6 +176,9 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (OrderNotFoundException | PaymentAmountInvalidException | WebhookSignatureInvalidException ex) {
             incrementWebhookMetric(RESULT_FAILED);
             throw ex;
+        } catch (StripePaymentConflictException ex) {
+            incrementWebhookMetric(RESULT_FAILED);
+            throw ex;
         } catch (Exception e) {
             incrementWebhookMetric(RESULT_FAILED);
             log.error("Stripe webhook processing failed", e);
@@ -195,7 +199,7 @@ public class PaymentServiceImpl implements PaymentService {
             return false;
         }
 
-        return terminalTransitions.convergeSucceeded(orderIdFromMetadata(intent), intent);
+        return terminalTransitions.convergeSucceeded(orderIdFromMetadata(intent), intent, event.getId(), event.getType());
     }
 
     private boolean handlePaymentIntentFailed(com.stripe.model.Event event) {
