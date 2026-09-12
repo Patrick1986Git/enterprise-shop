@@ -676,6 +676,8 @@ class PaymentServiceImplWebhookTest {
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
         Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         PaymentIntent intent = paymentIntentWithMetadata(order.getId());
+        when(intent.getAmountReceived()).thenReturn(null);
+        when(intent.getAmount()).thenReturn(null);
         Event event = succeededEvent("evt_amount_missing", intent);
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
@@ -686,12 +688,15 @@ class PaymentServiceImplWebhookTest {
 
             assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
                     .isInstanceOf(WebhookSignatureInvalidException.class)
-                    .hasMessageContaining("payment amount");
+                    .hasMessage("PaymentIntent does not contain payment amount.");
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(payment.getProviderPaymentId()).isNull();
             assertWebhookMetricCount("failed", 1);
             verify(orderRepository, never()).save(order);
             verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+            verify(paymentRepository, never()).save(payment);
             verifyNoInteractions(cartCheckoutFacade);
         }
     }
