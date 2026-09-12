@@ -20,6 +20,9 @@ This is the first lightweight quality gate for our modular monolith. The goal is
 6. `..entity..` must not depend on `..dto..`, `..controller..`, `..service..`, `..repository..`.
 7. `*Controller` classes in `..controller..` must be annotated with `@RestController`.
 8. Types in `..repository..` whose names end with `Repository` must be interfaces.
+9. Order must not bypass the internal product, cart, or user APIs, and the cart and product modules must not depend on
+   the user module's service package. User-owned `api.internal` contracts remain allowed, as do intentional JPA entity
+   associations. Security/authentication persistence is outside these business-module rules.
 
 ## How to run
 

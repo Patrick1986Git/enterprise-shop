@@ -43,7 +43,10 @@ import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.product.repository.ProductReviewRepository;
 import com.company.shop.module.product.repository.RatingStats;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.service.UserService;
+import com.company.shop.module.user.api.internal.CurrentUserAssociationFacade;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
+import com.company.shop.security.SecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 class ProductReviewServiceImplTest {
@@ -55,13 +58,16 @@ class ProductReviewServiceImplTest {
     private ProductRepository productRepository;
 
     @Mock
-    private UserService userService;
+    private CurrentUserFacade currentUserFacade;
+
+    @Mock
+    private CurrentUserAssociationFacade currentUserAssociationFacade;
 
     private ProductReviewServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ProductReviewServiceImpl(reviewRepository, productRepository, userService);
+        service = new ProductReviewServiceImpl(reviewRepository, productRepository, currentUserFacade, currentUserAssociationFacade);
     }
 
     @Test
@@ -74,7 +80,7 @@ class ProductReviewServiceImplTest {
         Product product = product(productId);
         ProductReviewRequestDTO request = new ProductReviewRequestDTO(productId, 5, "Excellent");
 
-        when(userService.getCurrentUserEntity()).thenReturn(user);
+        when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, userId)).thenReturn(false);
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
         when(reviewRepository.saveAndFlush(any(ProductReview.class))).thenAnswer(invocation -> {
@@ -108,7 +114,7 @@ class ProductReviewServiceImplTest {
     void addReview_shouldThrowWhenReviewAlreadyExistsWithoutDownstreamWork() {
         UUID productId = UUID.randomUUID();
         User user = user(UUID.randomUUID(), "Alex", "Morgan");
-        when(userService.getCurrentUserEntity()).thenReturn(user);
+        when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(true);
 
         assertThatThrownBy(() -> service.addReview(new ProductReviewRequestDTO(productId, 5, "Great")))
@@ -125,7 +131,7 @@ class ProductReviewServiceImplTest {
     void addReview_shouldThrowWhenProductMissingWithoutPersistenceOrRatingUpdate() {
         UUID productId = UUID.randomUUID();
         User user = user(UUID.randomUUID(), "Alex", "Morgan");
-        when(userService.getCurrentUserEntity()).thenReturn(user);
+        when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(false);
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.empty());
 
@@ -260,7 +266,7 @@ class ProductReviewServiceImplTest {
                 .isInstanceOf(ProductReviewNotFoundException.class)
                 .hasMessageContaining(reviewId.toString());
 
-        verifyNoInteractions(userService);
+        verifyNoInteractions(currentUserFacade, currentUserAssociationFacade);
         verify(reviewRepository, never()).getRatingStatsByProductId(any(UUID.class));
         verify(productRepository, never()).save(any(Product.class));
     }
@@ -288,7 +294,7 @@ class ProductReviewServiceImplTest {
         service.deleteReview(review.getId());
 
         assertThat(review.isDeleted()).isTrue();
-        verify(userService).isAdmin(admin);
+        verify(currentUserFacade).getCurrentUser();
         verify(reviewRepository).getRatingStatsByProductId(review.getProduct().getId());
         verify(productRepository).save(review.getProduct());
     }
@@ -333,7 +339,7 @@ class ProductReviewServiceImplTest {
     private Product prepareSuccessfulReviewPersistence(UUID productId) {
         User user = user(UUID.randomUUID(), "Alex", "Morgan");
         Product product = product(productId);
-        when(userService.getCurrentUserEntity()).thenReturn(user);
+        when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(false);
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
         when(reviewRepository.saveAndFlush(any(ProductReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -342,7 +348,7 @@ class ProductReviewServiceImplTest {
 
     private void prepareAddForPersistenceFailure(UUID productId, DataIntegrityViolationException failure) {
         User user = user(UUID.randomUUID(), "Alex", "Morgan");
-        when(userService.getCurrentUserEntity()).thenReturn(user);
+        when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
         when(reviewRepository.existsByProductIdAndUserId(productId, user.getId())).thenReturn(false);
         when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product(productId)));
         when(reviewRepository.saveAndFlush(any(ProductReview.class))).thenThrow(failure);
@@ -367,8 +373,8 @@ class ProductReviewServiceImplTest {
         Product product = product(UUID.randomUUID());
         ProductReview review = review(UUID.randomUUID(), product, owner, 5, "Great", LocalDateTime.now());
         when(reviewRepository.findById(review.getId())).thenReturn(Optional.of(review));
-        when(userService.getCurrentUserEntity()).thenReturn(currentUser);
-        when(userService.isAdmin(currentUser)).thenReturn(admin);
+        when(currentUserFacade.getCurrentUser()).thenReturn(
+                currentUser(currentUser, admin ? SecurityConstants.ROLE_ADMIN : SecurityConstants.ROLE_USER));
         if (owner.getId().equals(currentUser.getId()) || admin) {
             when(productRepository.findByIdWithLock(product.getId())).thenReturn(Optional.of(product));
             when(reviewRepository.getRatingStatsByProductId(product.getId())).thenReturn(stats);
@@ -406,4 +412,8 @@ class ProductReviewServiceImplTest {
     private void setEntityField(Object target, String fieldName, Object value) {
         ReflectionTestUtils.setField(target, fieldName, value);
     }
+    private CurrentUserSnapshot currentUser(User user, String... roles) {
+        return new CurrentUserSnapshot(user.getId(), user.getEmail(), java.util.Set.of(roles));
+    }
+
 }

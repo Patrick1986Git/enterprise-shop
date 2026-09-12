@@ -22,7 +22,10 @@ import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.product.repository.ProductReviewRepository;
 import com.company.shop.module.product.repository.RatingStats;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.service.UserService;
+import com.company.shop.module.user.api.internal.CurrentUserAssociationFacade;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
+import com.company.shop.security.SecurityConstants;
 
 @Service
 @Transactional
@@ -32,17 +35,20 @@ public class ProductReviewServiceImpl implements ProductReviewService {
 
     private final ProductReviewRepository reviewRepo;
     private final ProductRepository productRepo;
-    private final UserService userService;
+    private final CurrentUserFacade currentUserFacade;
+    private final CurrentUserAssociationFacade currentUserAssociationFacade;
 
-    public ProductReviewServiceImpl(ProductReviewRepository reviewRepo, ProductRepository productRepo, UserService userService) {
+    public ProductReviewServiceImpl(ProductReviewRepository reviewRepo, ProductRepository productRepo,
+            CurrentUserFacade currentUserFacade, CurrentUserAssociationFacade currentUserAssociationFacade) {
         this.reviewRepo = reviewRepo;
         this.productRepo = productRepo;
-        this.userService = userService;
+        this.currentUserFacade = currentUserFacade;
+        this.currentUserAssociationFacade = currentUserAssociationFacade;
     }
 
     @Override
     public ProductReviewResponseDTO addReview(ProductReviewRequestDTO dto) {
-        User user = userService.getCurrentUserEntity();
+        User user = currentUserAssociationFacade.getCurrentUserForAssociation();
 
         if (reviewRepo.existsByProductIdAndUserId(dto.productId(), user.getId())) {
             throw new ProductReviewAlreadyExistsException(dto.productId());
@@ -75,9 +81,9 @@ public class ProductReviewServiceImpl implements ProductReviewService {
         ProductReview review = reviewRepo.findById(reviewId)
                 .orElseThrow(() -> new ProductReviewNotFoundException(reviewId));
 
-        User currentUser = userService.getCurrentUserEntity();
-        boolean isOwner = review.getUser().getId().equals(currentUser.getId());
-        boolean isAdmin = userService.isAdmin(currentUser);
+        CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
+        boolean isOwner = review.getUser().getId().equals(currentUser.id());
+        boolean isAdmin = currentUser.hasRole(SecurityConstants.ROLE_ADMIN);
 
         if (!isOwner && !isAdmin) {
             throw new ProductReviewAccessDeniedException();
