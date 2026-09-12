@@ -426,7 +426,7 @@ class PaymentServiceImplWebhookTest {
 
             assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
                     .isInstanceOf(WebhookProcessingException.class)
-                    .hasMessageContaining("Unable to process Stripe webhook event");
+                    .hasMessageContaining("conflicts with the terminal local payment state");
         }
 
         assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
@@ -940,7 +940,7 @@ class PaymentServiceImplWebhookTest {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
             assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
                     .isInstanceOf(WebhookProcessingException.class)
-                    .hasMessageContaining("Unable to process Stripe webhook event");
+                    .hasMessageContaining("conflicts with the terminal local payment state");
         }
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);

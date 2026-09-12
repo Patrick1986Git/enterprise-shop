@@ -109,6 +109,27 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
                 "reservation_expiration_admin_action_logs");
     }
 
+    @Test
+    void schema_shouldContainImmutableStripePaymentConflictEvidence() {
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'stripe_payment_conflicts')
+                """, Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_trigger t
+                    JOIN pg_class c ON c.oid = t.tgrelid
+                    JOIN pg_proc p ON p.oid = t.tgfoid
+                    WHERE NOT t.tgisinternal AND c.relname = 'stripe_payment_conflicts'
+                      AND p.proname = 'reject_runtime_stripe_payment_conflict_mutation')
+                """, Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT indexname FROM pg_indexes
+                WHERE tablename = 'stripe_payment_conflicts'
+                """, String.class)).contains("uq_stripe_payment_conflicts_event",
+                        "idx_stripe_payment_conflicts_observed_id");
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ImportAutoConfiguration({
             DataSourceAutoConfiguration.class,

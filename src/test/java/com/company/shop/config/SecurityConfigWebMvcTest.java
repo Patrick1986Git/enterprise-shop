@@ -48,6 +48,7 @@ import com.company.shop.module.order.expiration.ReservationExpirationWorkQuerySe
 import com.company.shop.module.order.expiration.ReservationExpirationAdminActionLogQueryService;
 import com.company.shop.module.order.expiration.LegacyReservationService;
 import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.StripeWebhookProcessor;
 import com.company.shop.module.product.controller.AdminProductController;
 import com.company.shop.module.product.controller.ProductController;
 import com.company.shop.module.product.controller.ProductReviewController;
@@ -121,6 +122,9 @@ class SecurityConfigWebMvcTest {
     private LegacyReservationService legacyReservationService;
     @MockitoBean
     private PaymentService paymentService;
+
+    @MockitoBean
+    private StripeWebhookProcessor stripeWebhookProcessor;
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;

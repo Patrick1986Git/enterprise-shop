@@ -19,6 +19,7 @@ worker, maintenance endpoint, or archive facility.
 These records must not be deleted merely because they are old:
 
 - `stripe_webhook_events`, whose provider event IDs enforce exact webhook replay protection;
+- `stripe_payment_conflicts`, whose immutable observations retain authenticated provider/local contradiction evidence;
 - actionable or recoverable `outbox_events`;
 - `PENDING` and `PROCESSING` notifications;
 - `FAILED` notifications while ADMIN requeue remains supported;
@@ -79,6 +80,10 @@ Therefore:
 - do not invent a Stripe replay duration; and
 - require an authoritative provider replay and reconciliation contract before considering archive,
   tombstone, or purge behavior.
+
+`stripe_payment_conflicts` is independent of the replay barrier. Its rows remain after rejected webhook transactions
+roll back and retain the minimum sanitized provider/local evidence after logs or provider delivery history expire.
+Runtime credentials cannot update or delete these observations. No conflict-evidence purge is authorized.
 
 ## Outbox invariant
 

@@ -18,6 +18,7 @@ import com.company.shop.module.order.entity.Payment;
 import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.exception.OrderNotFoundException;
 import com.company.shop.module.order.exception.PaymentRecordNotFoundException;
+import com.company.shop.module.order.exception.StripePaymentConflictException;
 import com.company.shop.module.order.exception.WebhookProcessingException;
 import com.company.shop.module.order.exception.WebhookSignatureInvalidException;
 import com.company.shop.module.order.repository.OrderRepository;
@@ -46,6 +47,11 @@ public class PaymentTerminalTransitionService {
 
     @Transactional
     public boolean convergeSucceeded(UUID orderId, PaymentIntent intent) {
+        return convergeSucceeded(orderId, intent, null, null);
+    }
+
+    @Transactional
+    public boolean convergeSucceeded(UUID orderId, PaymentIntent intent, String stripeEventId, String eventType) {
         Order order = lockOrder(orderId);
         Payment payment = lockPayment(orderId);
         validatePaymentIntentMatchesOrder(intent, order);
@@ -59,8 +65,9 @@ public class PaymentTerminalTransitionService {
                     + "providerPaymentId={} orderStatus={} paymentStatus={}",
                     order.getId(), payment.getId(), payment.getProviderPaymentId(), order.getStatus(),
                     payment.getStatus());
-            throw new WebhookProcessingException(
-                    "Succeeded provider payment conflicts with the terminal local payment state.");
+            throw new StripePaymentConflictException(
+                    order.getId(), payment.getId(), intent.getId(), order.getStatus(), payment.getStatus(),
+                    stripeEventId, eventType);
         }
         order.markAsPaid();
         payment.markAsCompleted();

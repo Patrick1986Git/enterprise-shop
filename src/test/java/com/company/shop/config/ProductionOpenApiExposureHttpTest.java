@@ -49,6 +49,9 @@ import com.company.shop.module.order.service.PaymentService;
 import com.company.shop.module.order.service.PaymentInitializationTransactionService;
 import com.company.shop.module.order.service.PaymentTerminalTransitionService;
 import com.company.shop.module.order.service.StripeWebhookEventRegistrar;
+import com.company.shop.module.order.service.StripeWebhookProcessor;
+import com.company.shop.module.order.service.StripePaymentConflictQueryService;
+import com.company.shop.module.order.service.StripePaymentConflictRecorder;
 import com.company.shop.module.order.service.checkout.OrderCheckoutProcessor;
 import com.company.shop.module.order.service.query.OrderQueryProcessor;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
@@ -112,7 +115,8 @@ import com.company.shop.security.jwt.JwtTokenProvider;
         OutboxEventQueryService.class, OutboxEventAdminCommandService.class,
         OutboxEventAdminActionLogQueryService.class, PaymentService.class,
         PaymentInitializationTransactionService.class, PaymentTerminalTransitionService.class,
-        StripeWebhookEventRegistrar.class,
+        StripeWebhookEventRegistrar.class, StripeWebhookProcessor.class,
+        StripePaymentConflictQueryService.class, StripePaymentConflictRecorder.class,
         UserRolesStartupValidator.class
 })
 @MockitoBean(name = "jpaMappingContext", types = JpaMetamodelMappingContext.class)

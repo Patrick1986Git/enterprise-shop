@@ -38,6 +38,7 @@ import com.company.shop.module.order.entity.PaymentStatus;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.repository.StripeWebhookEventRepository;
+import com.company.shop.module.order.repository.StripePaymentConflictRepository;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
@@ -73,6 +74,9 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 
 	@Autowired
 	private StripeWebhookEventRepository stripeWebhookEventRepository;
+
+	@Autowired
+	private StripePaymentConflictRepository stripePaymentConflictRepository;
 
 	@MockitoBean
 	private CartCheckoutFacade cartCheckoutFacade;
@@ -299,11 +303,23 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 					.thenReturn(event);
 			performWebhookRequest().andExpect(status().isInternalServerError())
 					.andExpect(jsonPath("$.errorCode").value("STRIPE_WEBHOOK_PROCESSING_ERROR"));
+			performWebhookRequest().andExpect(status().isInternalServerError())
+					.andExpect(jsonPath("$.errorCode").value("STRIPE_WEBHOOK_PROCESSING_ERROR"));
 		}
 
 		assertThat(orderRepository.findById(order.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.CANCELLED);
 		assertThat(paymentRepository.findByOrderId(order.getId()).orElseThrow().getStatus()).isEqualTo(PaymentStatus.FAILED);
 		assertStripeWebhookEventNotPersisted("evt_success_after_cancel");
+		assertThat(stripePaymentConflictRepository.findAll())
+				.filteredOn(conflict -> conflict.getStripeEventId().equals("evt_success_after_cancel"))
+				.singleElement()
+				.satisfies(conflict -> {
+					assertThat(conflict.getOrderId()).isEqualTo(order.getId());
+					assertThat(conflict.getPaymentId()).isEqualTo(payment.getId());
+					assertThat(conflict.getProviderPaymentId()).isEqualTo("pi_canceled");
+					assertThat(conflict.getOrderStatus()).isEqualTo(OrderStatus.CANCELLED);
+					assertThat(conflict.getPaymentStatus()).isEqualTo(PaymentStatus.FAILED);
+				});
 		verifyNoInteractions(cartCheckoutFacade);
 	}
 
@@ -363,6 +379,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 		assertThat(unchangedOrder.getStatus()).isEqualTo(OrderStatus.NEW);
 		assertThat(unchangedPayment.getStatus()).isEqualTo(PaymentStatus.PENDING);
 		assertStripeWebhookEventNotPersisted("evt_persistence_amount_mismatch");
+		assertNoStripePaymentConflict("evt_persistence_amount_mismatch");
 		verifyNoInteractions(cartCheckoutFacade);
 	}
 
@@ -616,6 +633,11 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	private void assertStripeWebhookEventNotPersisted(String eventId) {
 		assertThat(stripeWebhookEventRepository.findAll())
 				.noneMatch(savedEvent -> savedEvent.getStripeEventId().equals(eventId));
+	}
+
+	private void assertNoStripePaymentConflict(String eventId) {
+		assertThat(stripePaymentConflictRepository.findAll())
+				.noneMatch(conflict -> conflict.getStripeEventId().equals(eventId));
 	}
 
 	private record SeededOrder(User user, Order order) {

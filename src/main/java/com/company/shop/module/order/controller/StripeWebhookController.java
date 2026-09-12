@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.order.service.StripeWebhookProcessor;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,10 +20,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "Webhooks", description = "Stripe payment webhook endpoint.")
 public class StripeWebhookController {
 
-	private final PaymentService paymentService;
+	private final StripeWebhookProcessor webhookProcessor;
 
-	public StripeWebhookController(PaymentService paymentService) {
-		this.paymentService = paymentService;
+	public StripeWebhookController(StripeWebhookProcessor webhookProcessor) {
+		this.webhookProcessor = webhookProcessor;
 	}
 
 	@PostMapping
@@ -45,7 +45,7 @@ public class StripeWebhookController {
 			@Parameter(description = "Stripe signature header used to verify the webhook payload.")
 			@RequestHeader("Stripe-Signature") String sigHeader) {
 
-		paymentService.handleWebhook(payload, sigHeader);
+		webhookProcessor.process(payload, sigHeader);
 		return ResponseEntity.ok().build();
 	}
 }
