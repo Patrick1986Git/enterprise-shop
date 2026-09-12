@@ -203,7 +203,12 @@ Do not grant the runtime role membership in the migration or administrative role
 
 The runtime role has `LOGIN`, `CONNECT` on `enterprise_shop_dev`, `USAGE` on schema `public`, DML privileges on existing application tables, sequence privileges needed by generated IDs, and function execution where required. It is explicitly kept as `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` and does not own the PostgreSQL server.
 
-The three operator-history tables (`notification_admin_action_logs`, `outbox_event_admin_action_logs`, and `reservation_expiration_admin_action_logs`) are append-only for non-owner runtime identities. The runtime role can insert and query their rows, but database triggers reject row updates and deletes even though the general table grants include those operations. Flyway creates the triggers while connected as the administrative schema owner, after the one-shot role bootstrap and before the runtime datasource begins normal work. Re-running the broad, idempotent role bootstrap therefore cannot remove the protection.
+The operator-history tables (`notification_admin_action_logs`, `outbox_event_admin_action_logs`,
+`reservation_expiration_admin_action_logs`, and `stripe_payment_conflict_dispositions`) are append-only for non-owner
+runtime identities. The runtime role can insert and query their rows, but database triggers reject row updates and
+deletes even though the general table grants include those operations. Flyway creates the triggers while connected as
+the administrative schema owner, after the one-shot role bootstrap and before the runtime datasource begins normal
+work. Re-running the broad, idempotent role bootstrap therefore cannot remove the protection.
 
 This boundary protects against accidental application or repository mutation and direct mutation through runtime credentials. It does not protect against a PostgreSQL superuser, the table owner, or a migration administrator deliberately changing or disabling the triggers. Administrative retention, if introduced in the future, must use a separate privileged identity; no audit-log retention process currently exists. The [operational data-retention contract](./data-retention.md) defines the evidence and execution boundary required before such maintenance can be introduced. A future operator-history table must attach `reject_runtime_admin_action_log_mutation()` in the same forward Flyway migration that creates the table.
 

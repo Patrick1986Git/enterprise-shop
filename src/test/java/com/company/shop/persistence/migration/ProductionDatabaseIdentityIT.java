@@ -129,7 +129,8 @@ class ProductionDatabaseIdentityIT {
                 "orders",
                 "notification_admin_action_logs",
                 "outbox_event_admin_action_logs",
-                "reservation_expiration_admin_action_logs");
+                "reservation_expiration_admin_action_logs",
+                "stripe_payment_conflict_dispositions");
         for (String table : tables) {
             assertThat(tableOwner(table)).isEqualTo(MIGRATION_USER);
         }
@@ -171,6 +172,45 @@ class ProductionDatabaseIdentityIT {
 
         assertThat(jdbcTemplate.update("UPDATE categories SET description = 'updated' WHERE id = ?", categoryId)).isOne();
         assertThat(jdbcTemplate.update("DELETE FROM categories WHERE id = ?", categoryId)).isOne();
+    }
+
+    @Test
+    void runtime_shouldAppendAndReadConflictDispositionButRejectMutationWhileOwnerCanMaintain() {
+        UUID conflictId = jdbcTemplate.queryForObject("""
+                INSERT INTO stripe_payment_conflicts
+                    (id, order_id, payment_id, stripe_event_id, provider_payment_id, event_type,
+                     order_status, payment_status, reason, observed_at)
+                VALUES (?, ?, ?, ?, ?, 'payment_intent.succeeded', 'CANCELLED', 'FAILED',
+                    'TERMINAL_STATE_CONTRADICTION', CURRENT_TIMESTAMP)
+                RETURNING id
+                """, UUID.class, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "evt_identity_" + UUID.randomUUID(), "pi_identity_" + UUID.randomUUID());
+        UUID dispositionId = jdbcTemplate.queryForObject("""
+                INSERT INTO stripe_payment_conflict_dispositions
+                    (conflict_id, action_type, actor_email, created_at)
+                VALUES (?, 'ACKNOWLEDGED', 'identity-test@example.com', CURRENT_TIMESTAMP)
+                RETURNING id
+                """, UUID.class, conflictId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT actor_email FROM stripe_payment_conflict_dispositions WHERE id = ?",
+                String.class, dispositionId)).isEqualTo("identity-test@example.com");
+        assertRuntimeMutationDenied("UPDATE stripe_payment_conflict_dispositions "
+                + "SET actor_email = 'changed@example.com' WHERE id = '" + dispositionId + "'");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT actor_email FROM stripe_payment_conflict_dispositions WHERE id = ?",
+                String.class, dispositionId)).isEqualTo("identity-test@example.com");
+        assertRuntimeMutationDenied(
+                "DELETE FROM stripe_payment_conflict_dispositions WHERE id = '" + dispositionId + "'");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM stripe_payment_conflict_dispositions WHERE id = ?",
+                Integer.class, dispositionId)).isOne();
+
+        ownerJdbc().update("UPDATE stripe_payment_conflict_dispositions "
+                + "SET actor_email = 'owner-maintenance@example.com' WHERE id = ?", dispositionId);
+        assertThat(ownerJdbc().update(
+                "DELETE FROM stripe_payment_conflict_dispositions WHERE id = ?", dispositionId)).isOne();
+        assertThat(ownerJdbc().update("DELETE FROM stripe_payment_conflicts WHERE id = ?", conflictId)).isOne();
     }
 
     @Test

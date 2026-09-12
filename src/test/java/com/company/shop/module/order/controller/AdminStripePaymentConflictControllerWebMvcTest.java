@@ -2,10 +2,13 @@ package com.company.shop.module.order.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,6 +32,10 @@ import com.company.shop.module.order.entity.StripePaymentConflictReason;
 import com.company.shop.module.order.exception.StripePaymentConflictNotFoundException;
 import com.company.shop.module.order.exception.StripePaymentConflictSortInvalidException;
 import com.company.shop.module.order.service.StripePaymentConflictQueryService;
+import com.company.shop.module.order.service.StripePaymentConflictDispositionCommandService;
+import com.company.shop.module.order.service.StripePaymentConflictDispositionQueryService;
+import com.company.shop.module.order.dto.StripePaymentConflictDispositionResponseDTO;
+import com.company.shop.module.order.entity.StripePaymentConflictDispositionType;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.jwt.JwtTokenProvider;
 import com.company.shop.support.WebMvcSliceTestConfig;
@@ -40,6 +47,8 @@ class AdminStripePaymentConflictControllerWebMvcTest {
     private static final String URL = "/api/v1/admin/orders/stripe-payment-conflicts";
     @Autowired MockMvc mockMvc;
     @MockitoBean StripePaymentConflictQueryService queryService;
+    @MockitoBean StripePaymentConflictDispositionCommandService dispositionCommandService;
+    @MockitoBean StripePaymentConflictDispositionQueryService dispositionQueryService;
     @MockitoBean JwtTokenProvider jwtTokenProvider;
     @MockitoBean UserDetailsServiceImpl userDetailsService;
 
@@ -119,5 +128,55 @@ class AdminStripePaymentConflictControllerWebMvcTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("STRIPE_PAYMENT_CONFLICT_SORT_INVALID"))
                 .andExpect(jsonPath("$.message").value("Unsupported conflict sort: unsafe"));
+    }
+
+    @Test
+    void appendDisposition_shouldRequireAdminAndExposeNoActorInput() throws Exception {
+        UUID id = UUID.randomUUID();
+        var response = new StripePaymentConflictDispositionResponseDTO(UUID.randomUUID(), id,
+                StripePaymentConflictDispositionType.ACKNOWLEDGED, "admin@example.com",
+                Instant.parse("2026-09-12T01:00:00Z"));
+        when(dispositionCommandService.append(id, StripePaymentConflictDispositionType.ACKNOWLEDGED))
+                .thenReturn(response);
+        String body = "{\"actionType\":\"ACKNOWLEDGED\",\"actorEmail\":\"attacker@example.com\"}";
+
+        mockMvc.perform(post(URL + "/" + id + "/dispositions").with(csrf())
+                .contentType("application/json").content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(URL + "/" + id + "/dispositions").with(csrf()).with(user("user").roles("USER"))
+                .contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mockMvc.perform(post(URL + "/" + id + "/dispositions").with(csrf())
+                .with(user("authenticated-admin").roles("ADMIN"))
+                .contentType("application/json").content(body)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.actorEmail").value("admin@example.com"))
+                .andExpect(jsonPath("$.actionType").value("ACKNOWLEDGED"));
+    }
+
+    @Test
+    void appendDisposition_shouldRejectMissingOrInvalidAction() throws Exception {
+        UUID id = UUID.randomUUID();
+        mockMvc.perform(post(URL + "/" + id + "/dispositions").with(csrf()).with(user("admin").roles("ADMIN"))
+                .contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(URL + "/" + id + "/dispositions").with(csrf()).with(user("admin").roles("ADMIN"))
+                .contentType("application/json").content("{\"actionType\":\"RESOLVED\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(dispositionCommandService);
+    }
+
+    @Test
+    void findDispositions_shouldRequireAdminAndReturnBoundedHistory() throws Exception {
+        UUID id = UUID.randomUUID();
+        var response = new StripePaymentConflictDispositionResponseDTO(UUID.randomUUID(), id,
+                StripePaymentConflictDispositionType.ESCALATED, "admin@example.com", Instant.now());
+        when(dispositionQueryService.findByConflictId(eq(id), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(response)));
+
+        mockMvc.perform(get(URL + "/" + id + "/dispositions")).andExpect(status().isForbidden());
+        mockMvc.perform(get(URL + "/" + id + "/dispositions").with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(URL + "/" + id + "/dispositions?page=1&size=5")
+                .with(user("admin").roles("ADMIN"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].actionType").value("ESCALATED"));
     }
 }

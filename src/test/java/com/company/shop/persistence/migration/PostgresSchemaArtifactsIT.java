@@ -106,7 +106,8 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
         assertThat(protectedTables).containsExactly(
                 "notification_admin_action_logs",
                 "outbox_event_admin_action_logs",
-                "reservation_expiration_admin_action_logs");
+                "reservation_expiration_admin_action_logs",
+                "stripe_payment_conflict_dispositions");
     }
 
     @Test
@@ -128,6 +129,19 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
                 WHERE tablename = 'stripe_payment_conflicts'
                 """, String.class)).contains("uq_stripe_payment_conflicts_event",
                         "idx_stripe_payment_conflicts_observed_id");
+    }
+
+    @Test
+    void schema_shouldContainIndexedConflictDispositionHistoryWithNonCascadingForeignKey() {
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT indexname FROM pg_indexes
+                WHERE tablename = 'stripe_payment_conflict_dispositions'
+                """, String.class)).contains("idx_stripe_conflict_dispositions_conflict_created");
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT confdeltype = 'a'
+                FROM pg_constraint
+                WHERE conname = 'fk_stripe_conflict_dispositions_conflict'
+                """, Boolean.class)).isTrue();
     }
 
     @Configuration(proxyBeanMethods = false)
