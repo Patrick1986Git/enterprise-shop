@@ -355,9 +355,15 @@ class PaymentServiceImplWebhookTest {
         givenWebhookEventRegistrationSucceeds();
         Order paidOrder = orderWithTotal(BigDecimal.valueOf(25));
         paidOrder.markAsPaid();
-        Event event = succeededEvent("evt_already_paid", paymentIntentWithMetadata(paidOrder.getId()));
+        Payment payment = new Payment(paidOrder, "STRIPE", paidOrder.getTotalAmount());
+        payment.attachProviderPayment("pi_paid", "cs_paid");
+        payment.markAsCompleted();
+        Event event = succeededEvent("evt_already_paid",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(
+                        paidOrder.getId(), 2500L, "pln", "pi_paid"));
 
         when(orderRepository.findByIdForUpdate(paidOrder.getId())).thenReturn(Optional.of(paidOrder));
+        when(paymentRepository.findByOrderIdForUpdate(paidOrder.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
@@ -366,9 +372,68 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_already_paid", "payment_intent.succeeded");
             verify(orderRepository).findByIdForUpdate(paidOrder.getId());
+            verify(paymentRepository).findByOrderIdForUpdate(paidOrder.getId());
             verify(orderRepository, never()).save(paidOrder);
-            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+            verify(paymentRepository, never()).save(payment);
+            verifyNoInteractions(cartCheckoutFacade);
         }
+    }
+
+    @Test
+    void handleWebhook_shouldTreatShippedCompletedOrderAsReconciledSuccess() {
+        givenWebhookEventRegistrationSucceeds();
+        Order shippedOrder = orderWithTotal(BigDecimal.valueOf(25));
+        shippedOrder.markAsPaid();
+        setField(shippedOrder, "status", OrderStatus.SHIPPED);
+        Payment payment = new Payment(shippedOrder, "STRIPE", shippedOrder.getTotalAmount());
+        payment.attachProviderPayment("pi_shipped", "cs_shipped");
+        payment.markAsCompleted();
+        Event event = succeededEvent("evt_shipped",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(
+                        shippedOrder.getId(), 2500L, "pln", "pi_shipped"));
+        when(orderRepository.findByIdForUpdate(shippedOrder.getId())).thenReturn(Optional.of(shippedOrder));
+        when(paymentRepository.findByOrderIdForUpdate(shippedOrder.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+        }
+
+        assertThat(shippedOrder.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        verify(orderRepository, never()).save(shippedOrder);
+        verify(paymentRepository, never()).save(payment);
+        verifyNoInteractions(cartCheckoutFacade, productCatalogFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldRejectPaidOrderWithFailedPayment() {
+        givenWebhookEventRegistrationSucceeds();
+        Order paidOrder = orderWithTotal(BigDecimal.valueOf(25));
+        paidOrder.markAsPaid();
+        Payment payment = new Payment(paidOrder, "STRIPE", paidOrder.getTotalAmount());
+        payment.attachProviderPayment("pi_paid_failed", "cs_paid_failed");
+        payment.markAsFailed();
+        Event event = succeededEvent("evt_paid_failed",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(
+                        paidOrder.getId(), 2500L, "pln", "pi_paid_failed"));
+        when(orderRepository.findByIdForUpdate(paidOrder.getId())).thenReturn(Optional.of(paidOrder));
+        when(paymentRepository.findByOrderIdForUpdate(paidOrder.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookProcessingException.class)
+                    .hasMessageContaining("Unable to process Stripe webhook event");
+        }
+
+        assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(orderRepository, never()).save(paidOrder);
+        verify(paymentRepository, never()).save(payment);
+        verifyNoInteractions(cartCheckoutFacade, productCatalogFacade);
     }
 
     @Test
@@ -397,7 +462,7 @@ class PaymentServiceImplWebhookTest {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
         Event event = succeededEvent("evt_payment_missing",
-                paymentIntentWithMetadataAndAmountReceivedAndCurrency(order.getId(), 1999L, "pln"));
+                paymentIntentWithMetadata(order.getId()));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
         when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.empty());
@@ -584,10 +649,12 @@ class PaymentServiceImplWebhookTest {
     void handleWebhook_shouldThrowWhenAmountDoesNotMatchOrderTotal() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         Event event = succeededEvent("evt_amount_mismatch",
                 paymentIntentWithMetadataAndAmountReceived(order.getId(), 1500L));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
@@ -598,7 +665,8 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_amount_mismatch", "payment_intent.succeeded");
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+            verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -606,22 +674,30 @@ class PaymentServiceImplWebhookTest {
     void handleWebhook_shouldThrowWhenPaymentAmountIsMissing() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         PaymentIntent intent = paymentIntentWithMetadata(order.getId());
+        when(intent.getAmountReceived()).thenReturn(null);
+        when(intent.getAmount()).thenReturn(null);
         Event event = succeededEvent("evt_amount_missing", intent);
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
 
             assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
                     .isInstanceOf(WebhookSignatureInvalidException.class)
-                    .hasMessageContaining("payment amount");
+                    .hasMessage("PaymentIntent does not contain payment amount.");
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.PENDING);
+            assertThat(payment.getProviderPaymentId()).isNull();
             assertWebhookMetricCount("failed", 1);
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+            verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+            verify(paymentRepository, never()).save(payment);
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -655,10 +731,12 @@ class PaymentServiceImplWebhookTest {
     void handleWebhook_shouldThrowWhenCurrencyIsMissing() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         Event event = succeededEvent("evt_currency_missing",
                 paymentIntentWithMetadataAndAmountReceivedAndCurrency(order.getId(), 1999L, null));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
@@ -669,7 +747,8 @@ class PaymentServiceImplWebhookTest {
 
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+            verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -678,6 +757,7 @@ class PaymentServiceImplWebhookTest {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.ONE);
         setField(order, "totalAmount", BigDecimal.ZERO);
+        Payment payment = new Payment(order, "STRIPE", BigDecimal.ZERO);
         PaymentIntent intent = paymentIntentWithMetadata(order.getId());
         when(intent.getAmountReceived()).thenReturn(0L);
         when(intent.getAmount()).thenReturn(0L);
@@ -685,6 +765,7 @@ class PaymentServiceImplWebhookTest {
         Event event = succeededEvent("evt_invalid_order_total", intent);
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
@@ -696,7 +777,8 @@ class PaymentServiceImplWebhookTest {
             assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
             assertWebhookMetricCount("failed", 1);
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+            verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -704,10 +786,12 @@ class PaymentServiceImplWebhookTest {
     void handleWebhook_shouldThrowWhenCurrencyIsNotPln() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
+        Payment payment = new Payment(order, "STRIPE", order.getTotalAmount());
         Event event = succeededEvent("evt_currency_mismatch",
                 paymentIntentWithMetadataAndAmountReceivedAndCurrency(order.getId(), 1999L, "eur"));
 
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
@@ -718,7 +802,8 @@ class PaymentServiceImplWebhookTest {
 
             verifyWebhookEventRegistered("evt_currency_mismatch", "payment_intent.succeeded");
             verify(orderRepository, never()).save(order);
-            verifyNoInteractions(paymentRepository, cartCheckoutFacade);
+            verify(paymentRepository).findByOrderIdForUpdate(order.getId());
+            verifyNoInteractions(cartCheckoutFacade);
         }
     }
 
@@ -839,7 +924,7 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
-    void handleWebhook_shouldIgnoreSuccessAfterCancellationWithoutCompletingPaymentOrReconcilingCart() {
+    void handleWebhook_shouldRejectSuccessAfterCancellationWithoutCompletingPaymentOrReconcilingCart() {
         givenWebhookEventRegistrationSucceeds();
         Order order = orderWithTotal(BigDecimal.valueOf(19.99));
         order.cancelIfNew();
@@ -847,17 +932,20 @@ class PaymentServiceImplWebhookTest {
         payment.attachProviderPayment("pi_canceled", "cs_canceled");
         payment.markAsFailed();
         when(orderRepository.findByIdForUpdate(order.getId())).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdForUpdate(order.getId())).thenReturn(Optional.of(payment));
         Event event = succeededEvent("evt_success_after_cancel",
-                paymentIntentWithMetadata(order.getId()));
+                paymentIntentWithMetadataAndId(order.getId(), "pi_canceled"));
 
         try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
             webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
-            service.handleWebhook("payload", "sig");
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookProcessingException.class)
+                    .hasMessageContaining("Unable to process Stripe webhook event");
         }
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
-        verify(paymentRepository, never()).findByOrderIdForUpdate(order.getId());
+        verify(paymentRepository).findByOrderIdForUpdate(order.getId());
         verifyNoInteractions(productCatalogFacade, cartCheckoutFacade);
     }
 
