@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -108,6 +109,8 @@ class CartServiceImplTest {
 			ArgumentCaptor<Cart> cartCaptor = ArgumentCaptor.forClass(Cart.class);
 			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItems(user.getId());
+			verify(cartRepository).lockCartCreationForUser(user.getId());
+			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(cartRepository).save(cartCaptor.capture());
 			verify(cartMapper).toDTO(savedCart);
 
@@ -221,7 +224,8 @@ class CartServiceImplTest {
 
 			assertThat(result).isEqualTo(dto);
 			verify(currentUserFacade).getCurrentUser();
-			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
+			verify(cartRepository, times(2)).findByUserIdWithItemsForUpdate(user.getId());
+			verify(cartRepository).lockCartCreationForUser(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 
 			ArgumentCaptor<Cart> cartCaptor = ArgumentCaptor.forClass(Cart.class);
@@ -359,7 +363,8 @@ class CartServiceImplTest {
 
 			assertThat(result).isEqualTo(dto);
 			verify(currentUserFacade).getCurrentUser();
-			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
+			verify(cartRepository, times(2)).findByUserIdWithItemsForUpdate(user.getId());
+			verify(cartRepository).lockCartCreationForUser(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 
 			ArgumentCaptor<Cart> cartCaptor = ArgumentCaptor.forClass(Cart.class);
@@ -505,7 +510,8 @@ class CartServiceImplTest {
 
 			assertThat(result).isEqualTo(dto);
 			verify(currentUserFacade).getCurrentUser();
-			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
+			verify(cartRepository, times(2)).findByUserIdWithItemsForUpdate(user.getId());
+			verify(cartRepository).lockCartCreationForUser(user.getId());
 
 			ArgumentCaptor<Cart> cartCaptor = ArgumentCaptor.forClass(Cart.class);
 			verify(cartRepository, atLeastOnce()).save(cartCaptor.capture());

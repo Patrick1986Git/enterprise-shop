@@ -42,6 +42,7 @@ public class CartController {
     @Operation(
             operationId = "getCurrentUserCart",
             summary = "Get the authenticated user's cart",
+            description = "Returns the current cart, lazily creating and persisting an empty cart on first access.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
@@ -75,6 +76,7 @@ public class CartController {
     @Operation(
             operationId = "updateCartItemQuantity",
             summary = "Update cart item quantity",
+            description = "Updates an existing line item. A missing cart is initialized; a missing line item is ignored.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
@@ -96,6 +98,7 @@ public class CartController {
     @Operation(
             operationId = "removeCartItem",
             summary = "Remove a product from the cart",
+            description = "Removes the line item when present. A missing cart is initialized and a missing item is ignored.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
@@ -112,6 +115,7 @@ public class CartController {
     @Operation(
             operationId = "clearCurrentUserCart",
             summary = "Clear the cart",
+            description = "Clears an existing cart. If no cart exists, the operation is a no-op.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {

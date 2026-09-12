@@ -18,6 +18,12 @@
 
 Purpose: authenticated shopper cart lifecycle.
 
+Cart retrieval intentionally lazy-provisions a persistent empty cart in a writable transaction. Established cart
+mutations continue to serialize on the cart row. When no row exists, creation takes a PostgreSQL transaction-scoped
+advisory lock derived from the user ID, repeats the row-locking lookup, and creates only if still absent. The database
+`UNIQUE (carts.user_id)` constraint remains the final one-cart-per-user invariant. Checkout uses lookup-only behavior:
+a missing cart is rejected rather than provisioned. Clear and post-payment reconciliation remain no-ops when absent.
+
 - HTTP APIs: `/api/v1/me/cart` and nested item operations.
 - Owns `Cart`, `CartItem`, cart DTOs, mapper, repository, service, and cart-specific stock exceptions.
 - Exposes `CartCheckoutFacade` internally so checkout can read and clear a user's cart without coupling order code to cart persistence internals.
