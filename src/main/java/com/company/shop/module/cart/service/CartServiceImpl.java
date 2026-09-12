@@ -8,6 +8,7 @@ package com.company.shop.module.cart.service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +26,8 @@ import com.company.shop.module.cart.repository.CartRepository;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.service.UserService;
+import com.company.shop.module.user.api.internal.CurrentUserAssociationFacade;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
 
 /**
  * Production implementation of {@link CartService}.
@@ -44,24 +46,27 @@ public class CartServiceImpl implements CartService {
 
     private final CartRepository cartRepository;
     private final ProductCatalogFacade productCatalogFacade;
-    private final UserService userService;
+    private final CurrentUserFacade currentUserFacade;
+    private final CurrentUserAssociationFacade currentUserAssociationFacade;
     private final CartMapper cartMapper;
 
     public CartServiceImpl(CartRepository cartRepository,
                            ProductCatalogFacade productCatalogFacade,
-                           UserService userService,
+                           CurrentUserFacade currentUserFacade,
+                           CurrentUserAssociationFacade currentUserAssociationFacade,
                            CartMapper cartMapper) {
         this.cartRepository = cartRepository;
         this.productCatalogFacade = productCatalogFacade;
-        this.userService = userService;
+        this.currentUserFacade = currentUserFacade;
+        this.currentUserAssociationFacade = currentUserAssociationFacade;
         this.cartMapper = cartMapper;
     }
 
     @Override
     @Transactional(readOnly = true)
     public CartResponseDTO getMyCart() {
-        User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCart(user);
+        UUID userId = currentUserFacade.getCurrentUser().id();
+        Cart cart = getOrCreateCart(userId, currentUserAssociationFacade::getCurrentUserForAssociation);
         return cartMapper.toDTO(cart);
     }
 
@@ -71,8 +76,8 @@ public class CartServiceImpl implements CartService {
     @Override
     public CartResponseDTO addToCart(AddToCartRequestDTO request) {
 
-        User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCartForUpdate(user);
+        UUID userId = currentUserFacade.getCurrentUser().id();
+        Cart cart = getOrCreateCartForUpdate(userId, currentUserAssociationFacade::getCurrentUserForAssociation);
 
         Product product = productCatalogFacade.resolveProductForCart(request.productId());
 
@@ -96,8 +101,8 @@ public class CartServiceImpl implements CartService {
     @Override
     public CartResponseDTO updateItemQuantity(UUID productId, UpdateCartItemRequestDTO request) {
 
-        User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCartForUpdate(user);
+        UUID userId = currentUserFacade.getCurrentUser().id();
+        Cart cart = getOrCreateCartForUpdate(userId, currentUserAssociationFacade::getCurrentUserForAssociation);
 
         Product product = productCatalogFacade.resolveProductForCart(productId);
 
@@ -113,8 +118,8 @@ public class CartServiceImpl implements CartService {
     @Override
     public CartResponseDTO removeItem(UUID productId) {
 
-        User user = userService.getCurrentUserEntity();
-        Cart cart = getOrCreateCartForUpdate(user);
+        UUID userId = currentUserFacade.getCurrentUser().id();
+        Cart cart = getOrCreateCartForUpdate(userId, currentUserAssociationFacade::getCurrentUserForAssociation);
 
         cart.removeItem(productId);
 
@@ -124,8 +129,7 @@ public class CartServiceImpl implements CartService {
     @Override
     public void clearCart() {
 
-        User user = userService.getCurrentUserEntity();
-        clearCartForUser(user.getId());
+        clearCartForUser(currentUserFacade.getCurrentUser().id());
     }
 
     @Override
@@ -161,14 +165,13 @@ public class CartServiceImpl implements CartService {
     /**
      * Ensures a cart exists for the user.
      */
-    private Cart getOrCreateCart(User user) {
-
-        return cartRepository.findByUserIdWithItems(user.getId())
-                .orElseGet(() -> cartRepository.save(new Cart(user)));
+    private Cart getOrCreateCart(UUID userId, Supplier<User> associationUserSupplier) {
+        return cartRepository.findByUserIdWithItems(userId)
+                .orElseGet(() -> cartRepository.save(new Cart(associationUserSupplier.get())));
     }
 
-    private Cart getOrCreateCartForUpdate(User user) {
-        return cartRepository.findByUserIdWithItemsForUpdate(user.getId())
-                .orElseGet(() -> cartRepository.save(new Cart(user)));
+    private Cart getOrCreateCartForUpdate(UUID userId, Supplier<User> associationUserSupplier) {
+        return cartRepository.findByUserIdWithItemsForUpdate(userId)
+                .orElseGet(() -> cartRepository.save(new Cart(associationUserSupplier.get())));
     }
 }

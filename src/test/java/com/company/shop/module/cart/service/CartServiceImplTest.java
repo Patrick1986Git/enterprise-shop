@@ -38,7 +38,9 @@ import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductNotFoundException;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.service.UserService;
+import com.company.shop.module.user.api.internal.CurrentUserAssociationFacade;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 
 @ExtendWith(MockitoExtension.class)
 class CartServiceImplTest {
@@ -50,7 +52,10 @@ class CartServiceImplTest {
 	private ProductCatalogFacade productCatalogFacade;
 
 	@Mock
-	private UserService userService;
+	private CurrentUserFacade currentUserFacade;
+
+	@Mock
+	private CurrentUserAssociationFacade currentUserAssociationFacade;
 
 	@Mock
 	private CartMapper cartMapper;
@@ -59,7 +64,7 @@ class CartServiceImplTest {
 
 	@BeforeEach
 	void setUp() {
-		service = new CartServiceImpl(cartRepository, productCatalogFacade, userService, cartMapper);
+		service = new CartServiceImpl(cartRepository, productCatalogFacade, currentUserFacade, currentUserAssociationFacade, cartMapper);
 	}
 
 	@Nested
@@ -71,14 +76,14 @@ class CartServiceImplTest {
 			Cart cart = new Cart(user);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItems(user.getId())).thenReturn(Optional.of(cart));
 			when(cartMapper.toDTO(cart)).thenReturn(dto);
 
 			CartResponseDTO result = service.getMyCart();
 
 			assertThat(result).isEqualTo(dto);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItems(user.getId());
 			verify(cartMapper).toDTO(cart);
 			verify(cartRepository, never()).save(any(Cart.class));
@@ -90,8 +95,9 @@ class CartServiceImplTest {
 			Cart savedCart = new Cart(user);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItems(user.getId())).thenReturn(Optional.empty());
+			when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
 			when(cartRepository.save(any(Cart.class))).thenReturn(savedCart);
 			when(cartMapper.toDTO(savedCart)).thenReturn(dto);
 
@@ -100,7 +106,7 @@ class CartServiceImplTest {
 			assertThat(result).isEqualTo(dto);
 
 			ArgumentCaptor<Cart> cartCaptor = ArgumentCaptor.forClass(Cart.class);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItems(user.getId());
 			verify(cartRepository).save(cartCaptor.capture());
 			verify(cartMapper).toDTO(savedCart);
@@ -122,7 +128,7 @@ class CartServiceImplTest {
 			AddToCartRequestDTO request = new AddToCartRequestDTO(product.getId(), 2);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(cart)).thenReturn(cart);
@@ -134,7 +140,7 @@ class CartServiceImplTest {
 			assertThat(cart.getItems()).hasSize(1);
 			assertThat(cart.getItems().get(0).getProduct().getId()).isEqualTo(product.getId());
 			assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(2);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository).save(cart);
@@ -151,7 +157,7 @@ class CartServiceImplTest {
 			AddToCartRequestDTO request = new AddToCartRequestDTO(product.getId(), 3);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(cart)).thenReturn(cart);
@@ -162,7 +168,7 @@ class CartServiceImplTest {
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).hasSize(1);
 			assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(5);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository).save(cart);
@@ -179,7 +185,7 @@ class CartServiceImplTest {
 			AddToCartRequestDTO request = new AddToCartRequestDTO(product.getId(), 3);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(cart)).thenReturn(cart);
@@ -190,7 +196,7 @@ class CartServiceImplTest {
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).hasSize(1);
 			assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(5);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository).save(cart);
@@ -204,8 +210,9 @@ class CartServiceImplTest {
 			AddToCartRequestDTO request = new AddToCartRequestDTO(product.getId(), 2);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.empty());
+			when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(cartMapper.toDTO(any(Cart.class))).thenReturn(dto);
@@ -213,7 +220,7 @@ class CartServiceImplTest {
 			CartResponseDTO result = service.addToCart(request);
 
 			assertThat(result).isEqualTo(dto);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 
@@ -240,18 +247,18 @@ class CartServiceImplTest {
 			UUID productId = UUID.randomUUID();
 			AddToCartRequestDTO request = new AddToCartRequestDTO(productId, 1);
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(productId)).thenThrow(new ProductNotFoundException(productId));
 
 			assertThatThrownBy(() -> service.addToCart(request)).isInstanceOf(ProductNotFoundException.class);
 
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(productId);
 			verify(cartRepository, never()).save(any(Cart.class));
 			verify(cartMapper, never()).toDTO(any(Cart.class));
-			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, userService);
+			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, currentUserFacade, currentUserAssociationFacade);
 		}
 
 		@Test
@@ -263,18 +270,18 @@ class CartServiceImplTest {
 
 			AddToCartRequestDTO request = new AddToCartRequestDTO(product.getId(), 2);
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 
 			assertThatThrownBy(() -> service.addToCart(request)).isInstanceOf(InsufficientStockException.class);
 
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository, never()).save(any(Cart.class));
 			verify(cartMapper, never()).toDTO(any(Cart.class));
-			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, userService);
+			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, currentUserFacade, currentUserAssociationFacade);
 		}
 	}
 
@@ -291,7 +298,7 @@ class CartServiceImplTest {
 			UpdateCartItemRequestDTO request = new UpdateCartItemRequestDTO(5);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(cart)).thenReturn(cart);
@@ -302,7 +309,7 @@ class CartServiceImplTest {
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).hasSize(1);
 			assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(5);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository).save(cart);
@@ -317,7 +324,7 @@ class CartServiceImplTest {
 			cart.addItem(product, 1);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(cart)).thenReturn(cart);
@@ -328,7 +335,7 @@ class CartServiceImplTest {
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).hasSize(1);
 			assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(5);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository).save(cart);
@@ -341,8 +348,9 @@ class CartServiceImplTest {
 			Product product = product(8, 10);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.empty());
+			when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(cartMapper.toDTO(any(Cart.class))).thenReturn(dto);
@@ -350,7 +358,7 @@ class CartServiceImplTest {
 			CartResponseDTO result = service.updateItemQuantity(product.getId(), new UpdateCartItemRequestDTO(2));
 
 			assertThat(result).isEqualTo(dto);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 
@@ -374,19 +382,19 @@ class CartServiceImplTest {
 			Cart cart = new Cart(user);
 			UUID productId = UUID.randomUUID();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(productId)).thenThrow(new ProductNotFoundException(productId));
 
 			assertThatThrownBy(() -> service.updateItemQuantity(productId, new UpdateCartItemRequestDTO(2)))
 					.isInstanceOf(ProductNotFoundException.class);
 
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(productId);
 			verify(cartRepository, never()).save(any(Cart.class));
 			verify(cartMapper, never()).toDTO(any(Cart.class));
-			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, userService);
+			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, currentUserFacade, currentUserAssociationFacade);
 		}
 
 		@Test
@@ -395,19 +403,19 @@ class CartServiceImplTest {
 			Cart cart = new Cart(user);
 			Product product = product(9, 3);
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 
 			assertThatThrownBy(() -> service.updateItemQuantity(product.getId(), new UpdateCartItemRequestDTO(5)))
 					.isInstanceOf(InsufficientStockException.class);
 
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository, never()).save(any(Cart.class));
 			verify(cartMapper, never()).toDTO(any(Cart.class));
-			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, userService);
+			verifyNoMoreInteractions(productCatalogFacade, cartRepository, cartMapper, currentUserFacade, currentUserAssociationFacade);
 		}
 
 		@Test
@@ -417,7 +425,7 @@ class CartServiceImplTest {
 			Product product = product(10, 10);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(productCatalogFacade.resolveProductForCart(product.getId())).thenReturn(product);
 			when(cartRepository.save(cart)).thenReturn(cart);
@@ -427,7 +435,7 @@ class CartServiceImplTest {
 
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).isEmpty();
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(productCatalogFacade).resolveProductForCart(product.getId());
 			verify(cartRepository).save(cart);
@@ -446,7 +454,7 @@ class CartServiceImplTest {
 			cart.addItem(product, 2);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(cartRepository.save(cart)).thenReturn(cart);
 			when(cartMapper.toDTO(cart)).thenReturn(dto);
@@ -455,7 +463,7 @@ class CartServiceImplTest {
 
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).isEmpty();
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(cartRepository).save(cart);
 			verify(cartMapper).toDTO(cart);
@@ -467,7 +475,7 @@ class CartServiceImplTest {
 			Cart cart = new Cart(user);
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 			when(cartRepository.save(cart)).thenReturn(cart);
 			when(cartMapper.toDTO(cart)).thenReturn(dto);
@@ -476,7 +484,7 @@ class CartServiceImplTest {
 
 			assertThat(result).isEqualTo(dto);
 			assertThat(cart.getItems()).isEmpty();
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(cartRepository).save(cart);
 			verify(cartMapper).toDTO(cart);
@@ -487,15 +495,16 @@ class CartServiceImplTest {
 			User user = user();
 			CartResponseDTO dto = cartResponse();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.empty());
+			when(currentUserAssociationFacade.getCurrentUserForAssociation()).thenReturn(user);
 			when(cartRepository.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
 			when(cartMapper.toDTO(any(Cart.class))).thenReturn(dto);
 
 			CartResponseDTO result = service.removeItem(UUID.randomUUID());
 
 			assertThat(result).isEqualTo(dto);
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 
 			ArgumentCaptor<Cart> cartCaptor = ArgumentCaptor.forClass(Cart.class);
@@ -523,13 +532,13 @@ class CartServiceImplTest {
 			Product product = product(12, 10);
 			cart.addItem(product, 1);
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.of(cart));
 
 			service.clearCart();
 
 			assertThat(cart.getItems()).isEmpty();
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(cartRepository).save(cart);
 		}
@@ -538,12 +547,12 @@ class CartServiceImplTest {
 		void clearCart_shouldDoNothingWhenCurrentUserCartMissing() {
 			User user = user();
 
-			when(userService.getCurrentUserEntity()).thenReturn(user);
+			when(currentUserFacade.getCurrentUser()).thenReturn(currentUser(user));
 			when(cartRepository.findByUserIdWithItemsForUpdate(user.getId())).thenReturn(Optional.empty());
 
 			service.clearCart();
 
-			verify(userService).getCurrentUserEntity();
+			verify(currentUserFacade).getCurrentUser();
 			verify(cartRepository).findByUserIdWithItemsForUpdate(user.getId());
 			verify(cartRepository, never()).save(any(Cart.class));
 		}
@@ -673,4 +682,8 @@ class CartServiceImplTest {
 			throw new RuntimeException(ex);
 		}
 	}
+	private CurrentUserSnapshot currentUser(User user) {
+		return new CurrentUserSnapshot(user.getId(), user.getEmail(), java.util.Set.of());
+	}
+
 }

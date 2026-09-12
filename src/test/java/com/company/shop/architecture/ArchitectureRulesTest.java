@@ -114,6 +114,15 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.user.service..");
 
+    @ArchTest
+    static final ArchRule cartAndProductModulesMustNotDependOnUserServices =
+            noClasses()
+                    .that().resideInAnyPackage(
+                            "com.company.shop.module.cart..",
+                            "com.company.shop.module.product..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.user.service..");
+
 
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnCartServices =

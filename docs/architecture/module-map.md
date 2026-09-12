@@ -71,7 +71,10 @@ Purpose: authenticated user profile and admin user management.
 - Authenticated HTTP API: `/api/v1/me`.
 - Admin HTTP APIs: `/api/v1/admin/users`.
 - Authentication HTTP APIs are implemented in the `security` package under `/api/v1/auth` but use user DTOs and services.
-- Exposes `CurrentUserFacade` internally so checkout can capture the current user's id/email snapshot without depending on web/security details.
+- Exposes `CurrentUserFacade` internally for immutable current-user identity and role snapshots. Business modules use
+  this boundary whenever an id, email, or authorization decision is sufficient.
+- Exposes the separate `CurrentUserAssociationFacade` only for persistence paths that must attach the managed current
+  `User` to an existing JPA association. This deliberately narrow capability is not a general user lookup or repository proxy.
 
 ### notification
 
@@ -99,9 +102,11 @@ The product module owns `ProductRepository`. Cart resolves the active, managed p
 `CartItem -> Product` JPA association through `ProductCatalogFacade`; the cart-specific lookup is an ordinary,
 non-locking lookup that validates currently visible stock without decrementing or reserving it. Checkout remains the
 authoritative inventory-reservation boundary and uses the facade's distinct pessimistic-locking reservation operation.
-Cart also calls `UserService`, and product review calls `UserService`; these flows return managed user entities required
-by their current JPA associations. They remain explicit architecture debt for a later transaction- and locking-aware
-change. The order module reaches cart, product, and user only through their internal APIs. Notification consumes the
+Cart and product review obtain immutable current-user identity and roles through `CurrentUserFacade`. They resolve a
+managed user through `CurrentUserAssociationFacade` only when creating a cart or product review whose existing mapping
+requires that entity. The `Cart -> User` and `ProductReview -> User` relationships and foreign keys intentionally remain;
+user service and repository implementations remain owned by the user module. The order module reaches cart, product,
+and user only through their internal APIs. Notification consumes the
 order-owned outbox handler contract and event payload. Security and authentication intentionally own cross-cutting
 access to user authentication persistence and are not business-module-to-business-module dependencies.
 
