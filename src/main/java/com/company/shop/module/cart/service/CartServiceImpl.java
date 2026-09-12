@@ -22,9 +22,8 @@ import com.company.shop.module.cart.exception.CartNotFoundException;
 import com.company.shop.module.cart.exception.InsufficientStockException;
 import com.company.shop.module.cart.mapper.CartMapper;
 import com.company.shop.module.cart.repository.CartRepository;
+import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
-import com.company.shop.module.product.exception.ProductNotFoundException;
-import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.service.UserService;
 
@@ -44,16 +43,16 @@ import com.company.shop.module.user.service.UserService;
 public class CartServiceImpl implements CartService {
 
     private final CartRepository cartRepository;
-    private final ProductRepository productRepository;
+    private final ProductCatalogFacade productCatalogFacade;
     private final UserService userService;
     private final CartMapper cartMapper;
 
     public CartServiceImpl(CartRepository cartRepository,
-                           ProductRepository productRepository,
+                           ProductCatalogFacade productCatalogFacade,
                            UserService userService,
                            CartMapper cartMapper) {
         this.cartRepository = cartRepository;
-        this.productRepository = productRepository;
+        this.productCatalogFacade = productCatalogFacade;
         this.userService = userService;
         this.cartMapper = cartMapper;
     }
@@ -75,8 +74,7 @@ public class CartServiceImpl implements CartService {
         User user = userService.getCurrentUserEntity();
         Cart cart = getOrCreateCartForUpdate(user);
 
-        Product product = productRepository.findById(request.productId())
-                .orElseThrow(() -> new ProductNotFoundException(request.productId()));
+        Product product = productCatalogFacade.resolveProductForCart(request.productId());
 
         int currentInCart = cart.getItems().stream()
                 .filter(item -> item.getProduct().getId().equals(request.productId()))
@@ -101,8 +99,7 @@ public class CartServiceImpl implements CartService {
         User user = userService.getCurrentUserEntity();
         Cart cart = getOrCreateCartForUpdate(user);
 
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException(productId));
+        Product product = productCatalogFacade.resolveProductForCart(productId);
 
         if (product.getStock() < request.quantity()) {
             throw new InsufficientStockException(product.getStock());

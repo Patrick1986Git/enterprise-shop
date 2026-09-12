@@ -51,7 +51,8 @@ Purpose: product browsing, search, reviews, stock reservation, and admin product
 - Authenticated HTTP APIs: review creation/deletion.
 - Admin HTTP APIs: create/read/update/delete under `/api/v1/admin/products`.
 - Owns product aggregate, review model, image model, specification-based querying, and product-specific invariants.
-- Exposes `ProductCatalogFacade` internally so checkout can reserve product stock and read checkout product snapshots through a narrow contract.
+- Exposes `ProductCatalogFacade` internally so cart can resolve the managed product required by its relationship and
+  checkout can reserve product stock and read checkout product snapshots through distinct narrow operations.
 - Retains the existing `Product` to `Category` lazy JPA relationship and database foreign key. The category facade
   deliberately returns the managed category entity needed by that relational model; it is a module ownership boundary,
   not an attempt to split the monolith or replace referential integrity with application validation.
@@ -94,7 +95,10 @@ Production business-module dependencies are intentionally divided into two forms
   product, product owns its category association, and product reviews associate to users. Order items do not associate
   to products; they persist product id, name, SKU, and price snapshots.
 
-The remaining direct foreign repository access is cart's access to `ProductRepository` for live stock validation.
+The product module owns `ProductRepository`. Cart resolves the active, managed product required by its intentional
+`CartItem -> Product` JPA association through `ProductCatalogFacade`; the cart-specific lookup is an ordinary,
+non-locking lookup that validates currently visible stock without decrementing or reserving it. Checkout remains the
+authoritative inventory-reservation boundary and uses the facade's distinct pessimistic-locking reservation operation.
 Cart also calls `UserService`, and product review calls `UserService`; these flows return managed user entities required
 by their current JPA associations. They remain explicit architecture debt for a later transaction- and locking-aware
 change. The order module reaches cart, product, and user only through their internal APIs. Notification consumes the
