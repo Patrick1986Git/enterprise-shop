@@ -96,7 +96,8 @@ The production tree has the following explicit lock acquisition sites:
 | Site | Purpose and contention class | Current wait behavior |
 | --- | --- | --- |
 | `OrderRepository.acquireCheckoutIdempotencyLock` | Transaction-scoped advisory lock serializes checkout by user and normalized idempotency key. | Blocking and potentially unbounded. The waiting request thread retains its Hikari connection. Replacing it with `pg_try_advisory_xact_lock` would turn serialization into an immediate failure/retry contract and is not correctness-equivalent. |
-| `CartRepository.findByUserIdWithItemsForUpdate` | Cart mutations and checkout snapshot serialization. | Normal short contention, but no configured upper bound. |
+| `CartRepository.findByUserIdWithItemsForUpdate` | Cart mutations and post-payment reconciliation serialization. | Normal short contention, but no configured upper bound. |
+| `CartRepository.lockCartCreationForUser` | Transaction-scoped advisory serialization only after a cart lookup finds no row. | Same-user first touches wait for the creator transaction; hash collisions can conservatively serialize unrelated first touches. |
 | `ProductRepository.findByIdWithLock` | Checkout reservation, inventory restoration, product mutation, and review aggregate serialization. | Checkout/inventory serialization, potentially unbounded; checkout sorts product identifiers before acquiring multiple product locks to reduce deadlock risk. |
 | `DiscountCodeRepository.findByCodeIgnoreCase` | Serializes the discount usage check/update. | Correctness-critical row serialization, potentially unbounded. |
 | `OrderRepository.findByIdForUpdate` | Payment convergence and reservation-expiration state transitions. | Correctness-critical row serialization, potentially unbounded. |

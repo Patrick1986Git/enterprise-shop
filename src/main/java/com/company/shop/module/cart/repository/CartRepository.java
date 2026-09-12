@@ -56,6 +56,13 @@ public interface CartRepository extends JpaRepository<Cart, UUID> {
     Optional<Cart> findByUserIdWithItemsForUpdate(@Param("userId") UUID userId);
 
     /**
+     * Serializes creation of the first cart for one user when no cart row exists to lock.
+     * The lock is transaction-scoped and PostgreSQL releases it automatically at completion.
+     */
+    @Query(value = "SELECT pg_advisory_xact_lock(hashtextextended(CAST(:userId AS text), 0))", nativeQuery = true)
+    void lockCartCreationForUser(@Param("userId") UUID userId);
+
+    /**
      * Finds a cart associated with a specific user.
      * <p>
      * Note: This method uses lazy loading for the items collection by default.
@@ -66,4 +73,6 @@ public interface CartRepository extends JpaRepository<Cart, UUID> {
      * @return an {@link Optional} containing the cart if it exists.
      */
     Optional<Cart> findByUserId(UUID userId);
+
+    long countByUserId(UUID userId);
 }

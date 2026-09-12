@@ -31,6 +31,7 @@ public interface CartService {
 
     /**
      * Retrieves the shopping cart DTO for the currently authenticated user.
+     * A persistent empty cart is initialized on first access when necessary.
      *
      * @return a {@link CartResponseDTO} enriched with calculated totals and product details.
      */
@@ -46,6 +47,7 @@ public interface CartService {
 
     /**
      * Updates the quantity of an existing line item in the cart.
+     * A missing cart is initialized; a missing line item leaves it empty.
      *
      * @param productId unique identifier of the product to update.
      * @param request   DTO containing the new absolute quantity.
@@ -55,6 +57,7 @@ public interface CartService {
 
     /**
      * Completely removes a product from the user's shopping cart.
+     * A missing cart is initialized; a missing line item is ignored.
      *
      * @param productId unique identifier of the product to be removed.
      * @return the updated {@link CartResponseDTO} after removal.
@@ -87,7 +90,8 @@ public interface CartService {
      * </p>
      *
      * @param userId unique identifier of the user.
-     * @return the {@link Cart} entity, either existing or newly initialized.
+     * @return the existing {@link Cart} entity.
+     * @throws com.company.shop.module.cart.exception.CartNotFoundException when the user has no cart.
      */
     Cart getCartEntityForUser(UUID userId);
 }
