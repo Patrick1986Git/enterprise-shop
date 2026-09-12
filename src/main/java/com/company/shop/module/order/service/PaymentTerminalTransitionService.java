@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +29,8 @@ import com.stripe.model.PaymentIntent;
 @Service
 @ConditionalOnProperty(name = "spring.datasource.url")
 public class PaymentTerminalTransitionService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentTerminalTransitionService.class);
+
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final CartCheckoutFacade cartCheckoutFacade;
@@ -51,6 +55,10 @@ public class PaymentTerminalTransitionService {
                     && payment.getStatus() == PaymentStatus.COMPLETED) {
                 return false;
             }
+            log.error("Succeeded provider payment conflicts with local state orderId={} paymentId={} "
+                    + "providerPaymentId={} orderStatus={} paymentStatus={}",
+                    order.getId(), payment.getId(), payment.getProviderPaymentId(), order.getStatus(),
+                    payment.getStatus());
             throw new WebhookProcessingException(
                     "Succeeded provider payment conflicts with the terminal local payment state.");
         }
