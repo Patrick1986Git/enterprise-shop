@@ -137,6 +137,29 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 	}
 
 	@Test
+	void handleStripeWebhook_shouldTreatShippedCompletedOrderAsReconciledSuccess() throws Exception {
+		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), "pi_shipped");
+		markOrderAndPaymentAsCompleted(seededOrder.order().getId());
+		Order order = orderRepository.findById(seededOrder.order().getId()).orElseThrow();
+		setOrderStatus(order, OrderStatus.SHIPPED);
+		orderRepository.save(order);
+		Event event = succeededEvent("evt_shipped_success", order.getId().toString(),
+				"pi_shipped", 4000L, "pln");
+
+		try (var webhookStatic = mockStatic(Webhook.class)) {
+			webhookStatic.when(() -> Webhook.constructEvent(WEBHOOK_PAYLOAD, STRIPE_SIGNATURE, "whsec_placeholder"))
+					.thenReturn(event);
+			performWebhookRequest().andExpect(status().isOk());
+		}
+
+		assertThat(orderRepository.findById(order.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.SHIPPED);
+		assertThat(paymentRepository.findByOrderId(order.getId()).orElseThrow().getStatus())
+				.isEqualTo(PaymentStatus.COMPLETED);
+		assertStripeWebhookEventPersisted("evt_shipped_success", SUCCEEDED_EVENT_TYPE);
+		verifyNoInteractions(cartCheckoutFacade);
+	}
+
+	@Test
 	void handleStripeWebhook_shouldIgnoreSucceededEventWhenOrderAlreadyPaid() throws Exception {
 		SeededOrder seededOrder = seedOrderWithPayment(BigDecimal.valueOf(40), "pi_duplicate");
 		markOrderAndPaymentAsCompleted(seededOrder.order().getId());
@@ -157,6 +180,7 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 					.header("Stripe-Signature", "sig")
 					.content("payload"))
 					.andExpect(status().isOk());
+			performWebhookRequest().andExpect(status().isOk());
 		}
 
 		Order unchangedOrder = orderRepository.findById(seededOrder.order().getId()).orElseThrow();
@@ -562,6 +586,16 @@ class StripeWebhookPersistenceIT extends PostgresContainerSupport {
 			createdAtField.set(order, LocalDateTime.now());
 		} catch (ReflectiveOperationException e) {
 			throw new IllegalStateException("Unable to set order amount for integration test", e);
+		}
+	}
+
+	private void setOrderStatus(Order order, OrderStatus status) {
+		try {
+			Field statusField = Order.class.getDeclaredField("status");
+			statusField.setAccessible(true);
+			statusField.set(order, status);
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException("Unable to set order status for integration test", e);
 		}
 	}
 

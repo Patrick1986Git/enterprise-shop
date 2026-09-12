@@ -380,6 +380,63 @@ class PaymentServiceImplWebhookTest {
     }
 
     @Test
+    void handleWebhook_shouldTreatShippedCompletedOrderAsReconciledSuccess() {
+        givenWebhookEventRegistrationSucceeds();
+        Order shippedOrder = orderWithTotal(BigDecimal.valueOf(25));
+        shippedOrder.markAsPaid();
+        setField(shippedOrder, "status", OrderStatus.SHIPPED);
+        Payment payment = new Payment(shippedOrder, "STRIPE", shippedOrder.getTotalAmount());
+        payment.attachProviderPayment("pi_shipped", "cs_shipped");
+        payment.markAsCompleted();
+        Event event = succeededEvent("evt_shipped",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(
+                        shippedOrder.getId(), 2500L, "pln", "pi_shipped"));
+        when(orderRepository.findByIdForUpdate(shippedOrder.getId())).thenReturn(Optional.of(shippedOrder));
+        when(paymentRepository.findByOrderIdForUpdate(shippedOrder.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            service.handleWebhook("payload", "sig");
+        }
+
+        assertThat(shippedOrder.getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        verify(orderRepository, never()).save(shippedOrder);
+        verify(paymentRepository, never()).save(payment);
+        verifyNoInteractions(cartCheckoutFacade, productCatalogFacade);
+    }
+
+    @Test
+    void handleWebhook_shouldRejectPaidOrderWithFailedPayment() {
+        givenWebhookEventRegistrationSucceeds();
+        Order paidOrder = orderWithTotal(BigDecimal.valueOf(25));
+        paidOrder.markAsPaid();
+        Payment payment = new Payment(paidOrder, "STRIPE", paidOrder.getTotalAmount());
+        payment.attachProviderPayment("pi_paid_failed", "cs_paid_failed");
+        payment.markAsFailed();
+        Event event = succeededEvent("evt_paid_failed",
+                paymentIntentWithMetadataAndAmountReceivedCurrencyAndId(
+                        paidOrder.getId(), 2500L, "pln", "pi_paid_failed"));
+        when(orderRepository.findByIdForUpdate(paidOrder.getId())).thenReturn(Optional.of(paidOrder));
+        when(paymentRepository.findByOrderIdForUpdate(paidOrder.getId())).thenReturn(Optional.of(payment));
+
+        try (MockedStatic<Webhook> webhookStatic = mockStatic(Webhook.class)) {
+            webhookStatic.when(() -> Webhook.constructEvent("payload", "sig", "whsec_test_123")).thenReturn(event);
+
+            assertThatThrownBy(() -> service.handleWebhook("payload", "sig"))
+                    .isInstanceOf(WebhookProcessingException.class)
+                    .hasMessageContaining("Unable to process Stripe webhook event");
+        }
+
+        assertThat(paidOrder.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(orderRepository, never()).save(paidOrder);
+        verify(paymentRepository, never()).save(payment);
+        verifyNoInteractions(cartCheckoutFacade, productCatalogFacade);
+    }
+
+    @Test
     void handleWebhook_shouldThrowWhenOrderNotFoundForWebhookOrderId() {
         givenWebhookEventRegistrationSucceeds();
         UUID orderId = UUID.randomUUID();
