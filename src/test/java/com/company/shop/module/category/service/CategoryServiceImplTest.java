@@ -21,11 +21,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import com.company.shop.module.category.dto.CategoryCreateDTO;
+import com.company.shop.module.category.api.internal.CategoryProductRetirementPolicy;
 import com.company.shop.module.category.dto.CategoryResponseDTO;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.category.exception.CategoryAlreadyExistsException;
 import com.company.shop.module.category.exception.CategoryHierarchyException;
 import com.company.shop.module.category.exception.CategoryNotFoundException;
+import com.company.shop.module.category.exception.CategoryRetirementConflictException;
 import com.company.shop.module.category.exception.CategorySlugAlreadyExistsException;
 import com.company.shop.module.category.mapper.CategoryMapper;
 import com.company.shop.module.category.repository.CategoryRepository;
@@ -39,11 +41,14 @@ class CategoryServiceImplTest {
 	@Mock
 	private CategoryMapper mapper;
 
+	@Mock
+	private CategoryProductRetirementPolicy productRetirementPolicy;
+
 	private CategoryServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
-		service = new CategoryServiceImpl(repo, mapper);
+		service = new CategoryServiceImpl(repo, mapper, productRetirementPolicy);
 	}
 
 	private void stubMapperToDto() {
@@ -59,12 +64,12 @@ class CategoryServiceImplTest {
 	void findAssignableCategory_shouldReturnRepositoryResult() {
 		UUID categoryId = UUID.randomUUID();
 		Category category = new Category("Technology", "technology", "Products");
-		when(repo.findById(categoryId)).thenReturn(Optional.of(category));
+		when(repo.findByIdWithLock(categoryId)).thenReturn(Optional.of(category));
 
 		Optional<Category> result = service.findAssignableCategory(categoryId);
 
 		assertThat(result).containsSame(category);
-		verify(repo).findById(categoryId);
+		verify(repo).findByIdWithLock(categoryId);
 	}
 
 	@Nested
@@ -121,12 +126,12 @@ class CategoryServiceImplTest {
 
 			when(repo.existsByName(dto.getName())).thenReturn(false);
 			when(repo.existsBySlug("electronics")).thenReturn(false);
-			when(repo.findById(missingParentId)).thenReturn(Optional.empty());
+			when(repo.findByIdWithLock(missingParentId)).thenReturn(Optional.empty());
 
 			assertThatThrownBy(() -> service.create(dto)).isInstanceOfSatisfying(CategoryNotFoundException.class,
 					ex -> assertThat(ex.getErrorCode()).isEqualTo("CATEGORY_NOT_FOUND"));
 
-			verify(repo).findById(missingParentId);
+			verify(repo).findByIdWithLock(missingParentId);
 			verify(repo, never()).saveAndFlush(any(Category.class));
 		}
 
@@ -139,7 +144,7 @@ class CategoryServiceImplTest {
 
 			when(repo.existsByName(dto.getName())).thenReturn(false);
 			when(repo.existsBySlug("child-category")).thenReturn(false);
-			when(repo.findById(parentId)).thenReturn(Optional.of(parent));
+			when(repo.findByIdWithLock(parentId)).thenReturn(Optional.of(parent));
 			when(repo.saveAndFlush(any(Category.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 			CategoryResponseDTO result = service.create(dto);
@@ -194,7 +199,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("  Home   Audio  ", "new-desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("home-audio", id)).thenReturn(false);
 			when(repo.saveAndFlush(existing)).thenReturn(existing);
@@ -214,7 +219,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Electronics", "electronics", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Electronics", "updated-desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("electronics", id)).thenReturn(false);
 			when(repo.saveAndFlush(existing)).thenReturn(existing);
@@ -233,7 +238,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Electronics", "desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(true);
 
 			assertThatThrownBy(() -> service.update(id, dto)).isInstanceOfSatisfying(
@@ -249,7 +254,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("New Name", "desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("new-name", id)).thenReturn(true);
 
@@ -267,10 +272,10 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("New Name", "desc", missingParentId);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("new-name", id)).thenReturn(false);
-			when(repo.findById(missingParentId)).thenReturn(Optional.empty());
+			when(repo.findByIdWithLock(missingParentId)).thenReturn(Optional.empty());
 
 			assertThatThrownBy(() -> service.update(id, dto)).isInstanceOfSatisfying(CategoryNotFoundException.class,
 					ex -> assertThat(ex.getErrorCode()).isEqualTo("CATEGORY_NOT_FOUND"));
@@ -288,10 +293,10 @@ class CategoryServiceImplTest {
 			Category parent = new Category("Parent", "parent", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Old Name", "desc", parentId);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("old-name", id)).thenReturn(false);
-			when(repo.findById(parentId)).thenReturn(Optional.of(parent));
+			when(repo.findByIdWithLock(parentId)).thenReturn(Optional.of(parent));
 			when(repo.saveAndFlush(existing)).thenReturn(existing);
 
 			CategoryResponseDTO result = service.update(id, dto);
@@ -307,7 +312,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Old Name", "desc", id);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("old-name", id)).thenReturn(false);
 
@@ -326,10 +331,10 @@ class CategoryServiceImplTest {
 			Category candidateParent = categoryNode(currentId);
 			CategoryCreateDTO dto = new CategoryCreateDTO("Current", "desc", candidateParentId);
 
-			when(repo.findById(currentId)).thenReturn(Optional.of(current));
+			when(repo.findByIdWithLock(currentId)).thenReturn(Optional.of(current));
 			when(repo.existsByNameAndIdNot(dto.getName(), currentId)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("current", currentId)).thenReturn(false);
-			when(repo.findById(candidateParentId)).thenReturn(Optional.of(candidateParent));
+			when(repo.findByIdWithLock(candidateParentId)).thenReturn(Optional.of(candidateParent));
 
 			assertThatThrownBy(() -> service.update(currentId, dto)).isInstanceOfSatisfying(
 					CategoryHierarchyException.class,
@@ -348,10 +353,10 @@ class CategoryServiceImplTest {
 			when(level2.getParent()).thenReturn(level3);
 			CategoryCreateDTO dto = new CategoryCreateDTO("Current", "desc", candidateParentId);
 
-			when(repo.findById(currentId)).thenReturn(Optional.of(current));
+			when(repo.findByIdWithLock(currentId)).thenReturn(Optional.of(current));
 			when(repo.existsByNameAndIdNot(dto.getName(), currentId)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("current", currentId)).thenReturn(false);
-			when(repo.findById(candidateParentId)).thenReturn(Optional.of(level2));
+			when(repo.findByIdWithLock(candidateParentId)).thenReturn(Optional.of(level2));
 
 			assertThatThrownBy(() -> service.update(currentId, dto)).isInstanceOfSatisfying(
 					CategoryHierarchyException.class,
@@ -365,7 +370,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Gaming Laptops", "desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("gaming-laptops", id)).thenReturn(false);
 			when(repo.saveAndFlush(existing)).thenThrow(new DataIntegrityViolationException("duplicate key",
@@ -384,7 +389,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Gaming Laptops", "desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("gaming-laptops", id)).thenReturn(false);
 			when(repo.saveAndFlush(existing)).thenThrow(new DataIntegrityViolationException("duplicate key",
@@ -403,7 +408,7 @@ class CategoryServiceImplTest {
 			Category existing = new Category("Old Name", "old-name", "desc");
 			CategoryCreateDTO dto = new CategoryCreateDTO("Gaming Laptops", "desc", null);
 
-			when(repo.findById(id)).thenReturn(Optional.of(existing));
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(existing));
 			when(repo.existsByNameAndIdNot(dto.getName(), id)).thenReturn(false);
 			when(repo.existsBySlugAndIdNot("gaming-laptops", id)).thenReturn(false);
 			when(repo.saveAndFlush(existing)).thenThrow(new DataIntegrityViolationException("duplicate key"));
@@ -411,6 +416,66 @@ class CategoryServiceImplTest {
 			assertThatThrownBy(() -> service.update(id, dto)).isInstanceOfSatisfying(
 					CategoryAlreadyExistsException.class,
 					ex -> assertThat(ex.getErrorCode()).isEqualTo("CATEGORY_ALREADY_EXISTS"));
+		}
+	}
+
+
+	@Nested
+	class DeleteTests {
+
+		@Test
+		void delete_shouldRetireUnreferencedLeafCategory() {
+			UUID id = UUID.randomUUID();
+			Category category = mock(Category.class);
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(category));
+
+			service.delete(id);
+
+			verify(repo).acquireHierarchyMutationLock();
+			verify(productRetirementPolicy).hasActiveProducts(id);
+			verify(repo).existsByParentId(id);
+			verify(category).delete();
+		}
+
+		@Test
+		void delete_shouldRejectCategoryReferencedByActiveProduct() {
+			UUID id = UUID.randomUUID();
+			Category category = mock(Category.class);
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(category));
+			when(productRetirementPolicy.hasActiveProducts(id)).thenReturn(true);
+
+			assertThatThrownBy(() -> service.delete(id))
+					.isInstanceOfSatisfying(CategoryRetirementConflictException.class, ex -> {
+						assertThat(ex.getStatus().value()).isEqualTo(409);
+						assertThat(ex.getErrorCode()).isEqualTo("CATEGORY_RETIREMENT_BLOCKED");
+					});
+
+			verify(repo, never()).existsByParentId(id);
+			verify(category, never()).delete();
+		}
+
+		@Test
+		void delete_shouldRejectCategoryReferencedByActiveChild() {
+			UUID id = UUID.randomUUID();
+			Category category = mock(Category.class);
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.of(category));
+			when(repo.existsByParentId(id)).thenReturn(true);
+
+			assertThatThrownBy(() -> service.delete(id))
+					.isInstanceOfSatisfying(CategoryRetirementConflictException.class,
+							ex -> assertThat(ex.getErrorCode()).isEqualTo("CATEGORY_RETIREMENT_BLOCKED"));
+
+			verify(category, never()).delete();
+		}
+
+		@Test
+		void delete_shouldThrowNotFoundForMissingOrAlreadyRetiredCategory() {
+			UUID id = UUID.randomUUID();
+			when(repo.findByIdWithLock(id)).thenReturn(Optional.empty());
+
+			assertThatThrownBy(() -> service.delete(id)).isInstanceOf(CategoryNotFoundException.class);
+
+			verify(productRetirementPolicy, never()).hasActiveProducts(id);
 		}
 	}
 

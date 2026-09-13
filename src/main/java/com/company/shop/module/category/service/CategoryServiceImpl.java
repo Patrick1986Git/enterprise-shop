@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.company.shop.module.category.api.internal.CategoryProductRetirementPolicy;
 import com.company.shop.module.category.api.internal.ProductCategoryFacade;
 import com.company.shop.module.category.dto.CategoryCreateDTO;
 import com.company.shop.module.category.dto.CategoryResponseDTO;
@@ -19,6 +20,7 @@ import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.category.exception.CategoryAlreadyExistsException;
 import com.company.shop.module.category.exception.CategoryHierarchyException;
 import com.company.shop.module.category.exception.CategoryNotFoundException;
+import com.company.shop.module.category.exception.CategoryRetirementConflictException;
 import com.company.shop.module.category.exception.CategorySlugAlreadyExistsException;
 import com.company.shop.module.category.mapper.CategoryMapper;
 import com.company.shop.module.category.repository.CategoryRepository;
@@ -38,6 +40,7 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
 
     private final CategoryRepository repo;
     private final CategoryMapper mapper;
+    private final CategoryProductRetirementPolicy productRetirementPolicy;
 
     private static final Pattern NONLATIN = Pattern.compile("[^\\w-]");
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]");
@@ -45,9 +48,11 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
     /**
      * Initialized with repository and mapper for full lifecycle management.
      */
-    public CategoryServiceImpl(CategoryRepository repo, CategoryMapper mapper) {
+    public CategoryServiceImpl(CategoryRepository repo, CategoryMapper mapper,
+            CategoryProductRetirementPolicy productRetirementPolicy) {
         this.repo = repo;
         this.mapper = mapper;
+        this.productRetirementPolicy = productRetirementPolicy;
     }
 
     @Override
@@ -69,9 +74,8 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<Category> findAssignableCategory(UUID categoryId) {
-        return repo.findById(categoryId);
+        return repo.findByIdWithLock(categoryId);
     }
 
     /**
@@ -92,6 +96,7 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
             throw new CategorySlugAlreadyExistsException(slug);
         }
 
+        acquireHierarchyMutationLockIfNeeded(dto.getParentId());
         Category parent = resolveParent(dto.getParentId(), null);
         Category category = new Category(dto.getName(), slug, dto.getDescription(), parent);
 
@@ -100,7 +105,8 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
 
     @Override
     public CategoryResponseDTO update(UUID id, CategoryCreateDTO dto) {
-        Category category = repo.findById(id).orElseThrow(() -> new CategoryNotFoundException(id));
+        repo.acquireHierarchyMutationLock();
+        Category category = repo.findByIdWithLock(id).orElseThrow(() -> new CategoryNotFoundException(id));
 
         if (repo.existsByNameAndIdNot(dto.getName(), id)) {
             throw new CategoryAlreadyExistsException(dto.getName());
@@ -119,8 +125,21 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
 
     @Override
     public void delete(UUID id) {
-        Category category = repo.findById(id).orElseThrow(() -> new CategoryNotFoundException(id));
+        repo.acquireHierarchyMutationLock();
+        Category category = repo.findByIdWithLock(id).orElseThrow(() -> new CategoryNotFoundException(id));
+        if (productRetirementPolicy.hasActiveProducts(id)) {
+            throw CategoryRetirementConflictException.activeProducts(id);
+        }
+        if (repo.existsByParentId(id)) {
+            throw CategoryRetirementConflictException.activeChildren(id);
+        }
         category.delete();
+    }
+
+    private void acquireHierarchyMutationLockIfNeeded(UUID parentId) {
+        if (parentId != null) {
+            repo.acquireHierarchyMutationLock();
+        }
     }
 
     /**
@@ -135,7 +154,7 @@ public class CategoryServiceImpl implements CategoryService, ProductCategoryFaca
             throw new CategoryHierarchyException("Category cannot be its own parent", "CATEGORY_SELF_PARENT");
         }
 
-        Category parent = repo.findById(parentId).orElseThrow(() -> new CategoryNotFoundException(parentId));
+        Category parent = repo.findByIdWithLock(parentId).orElseThrow(() -> new CategoryNotFoundException(parentId));
 
         if (currentCategoryId != null && createsCycle(currentCategoryId, parent)) {
             throw new CategoryHierarchyException("Category hierarchy cycle detected", "CATEGORY_CYCLE_DETECTED");

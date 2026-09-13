@@ -106,14 +106,15 @@ public class AdminCategoryController {
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@Operation(
 	        operationId = "deleteCategory",
-	        summary = "Delete a category (admin-only)",
+	        summary = "Retire a category (admin-only)",
 	        security = @SecurityRequirement(name = "bearerAuth")
 	)
 	@ApiResponses(value = {
-			@ApiResponse(responseCode = "204", description = "Category deleted successfully."),
+			@ApiResponse(responseCode = "204", description = "Category retired successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
-			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})
 	public void deleteCategory(
 			@Parameter(description = "Category identifier.")

@@ -37,6 +37,10 @@ Purpose: category tree and catalog classification.
 - Owns category hierarchy validation and duplicate/slug exceptions.
 - Owns category persistence access. Product creation and update resolve an assignable category through the narrow
   `ProductCategoryFacade`; product code must not access `CategoryRepository` directly.
+- Category retirement rejects a category referenced by an active Product or active child Category. Category owns the
+  assignment/retirement row-lock boundary and the Product dependency policy port; Product supplies the active-usage
+  query without exposing its repository. A retired Category is therefore never an intentionally unavailable
+  association for an active catalog Product or active hierarchy node.
 
 ### order
 

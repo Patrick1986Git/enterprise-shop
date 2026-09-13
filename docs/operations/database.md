@@ -99,6 +99,8 @@ The production tree has the following explicit lock acquisition sites:
 | `CartRepository.findByUserIdWithItemsForUpdate` | Cart mutations and post-payment reconciliation serialization. | Normal short contention, but no configured upper bound. |
 | `CartRepository.lockCartCreationForUser` | Transaction-scoped advisory serialization only after a cart lookup finds no row. | Same-user first touches wait for the creator transaction; hash collisions can conservatively serialize unrelated first touches. |
 | `ProductRepository.findByIdWithLock` | Checkout reservation, inventory restoration, Product retirement/catalog mutation, and review aggregate serialization. | Checkout/inventory/catalog serialization, potentially unbounded; checkout and restoration sort product identifiers before acquiring multiple product locks to reduce deadlock risk. |
+| `CategoryRepository.acquireHierarchyMutationLock` | Transaction-scoped advisory lock serializes Category parent mutation and retirement before Category row locking. | Category hierarchy writes and retirement, potentially unbounded. It does not serialize Product assignment. |
+| `CategoryRepository.findByIdWithLock` | Serializes active Category assignment with retirement after the hierarchy advisory lock, when applicable. | Product create/update and Category mutation, potentially unbounded. |
 | `DiscountCodeRepository.findByCodeIgnoreCase` | Serializes the discount usage check/update. | Correctness-critical row serialization, potentially unbounded. |
 | `OrderRepository.findByIdForUpdate` | Payment convergence and reservation-expiration state transitions. | Correctness-critical row serialization, potentially unbounded. |
 | `PaymentRepository.findByOrderIdForUpdate` | Payment initialization and terminal webhook convergence. | Correctness-critical row serialization, potentially unbounded. |
@@ -115,6 +117,23 @@ The production tree has the following explicit lock acquisition sites:
 still wait for a concurrent transaction. Ordinary ORM inserts, updates, deletes, foreign-key checks, and unique checks
 can likewise wait even though no lock syntax appears in repository source. Consequently the explicit-lock list is not
 a claim that all other SQL is non-blocking.
+
+### Category retirement and assignment
+
+Category retirement uses rejection policy rather than cascading or unavailable-association semantics. The transaction
+first acquires the single Category-hierarchy advisory lock, then locks the active Category row, checks active Product
+and child-Category usage, and sets `deleted` only when both checks are empty. Parent create/update takes the same
+advisory lock before locking an active parent, so retirement cannot pass its child check concurrently with a hierarchy
+mutation. Product create/update resolves its Category through `ProductCategoryFacade`, which locks that Category row;
+Product update retains its existing Product-row-first order. Retirement never locks Product rows, so it cannot form a
+Product-to-Category/Category-to-Product cycle.
+
+The row-lock winner determines the race. An assignment that locks first commits before retirement is checked and makes
+retirement fail with `CATEGORY_RETIREMENT_BLOCKED`; retirement that commits first makes the subsequent active Category
+lookup fail. Rollback releases both advisory and row locks and preserves the pre-transaction state. PostgreSQL retains
+the non-null `products.category_id` and both physical Category foreign keys, while Hibernate continues to hide rows
+whose `deleted` flag is true. The locking and rejection policy prevents those physical references from pointing from
+active Products or active child Categories to a logically hidden Category.
 
 ### Discount-code timeout finding
 

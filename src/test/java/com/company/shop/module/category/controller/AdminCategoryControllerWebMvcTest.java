@@ -42,6 +42,7 @@ import com.company.shop.module.category.dto.CategoryResponseDTO;
 import com.company.shop.module.category.exception.CategoryAlreadyExistsException;
 import com.company.shop.module.category.exception.CategoryHierarchyException;
 import com.company.shop.module.category.exception.CategoryNotFoundException;
+import com.company.shop.module.category.exception.CategoryRetirementConflictException;
 import com.company.shop.module.category.exception.CategorySlugAlreadyExistsException;
 import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.security.UserDetailsServiceImpl;
@@ -694,6 +695,26 @@ class AdminCategoryControllerWebMvcTest {
                     .andExpect(jsonPath("$.message").value("Category not found: 66666666-6666-6666-6666-666666666666"))
                     .andExpect(jsonPath("$.errors").value(nullValue()))
                     .andExpect(jsonPath("$.timestamp").exists());
+
+            verify(categoryService).delete(eq(id));
+            verifyNoMoreInteractions(categoryService);
+        }
+
+        @Test
+        void deleteCategory_shouldReturnConflictWhenActiveDependentsExist() throws Exception {
+            UUID id = UUID.fromString("55555555-5555-5555-5555-555555555555");
+            doThrow(CategoryRetirementConflictException.activeProducts(id))
+                    .when(categoryService).delete(eq(id));
+
+            mockMvc.perform(delete(ADMIN_CATEGORY_BY_ID_URL, id)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf()))
+                    .andExpect(status().isConflict())
+                    .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.errorCode").value("CATEGORY_RETIREMENT_BLOCKED"))
+                    .andExpect(jsonPath("$.message").value(
+                            "Category 55555555-5555-5555-5555-555555555555 cannot be retired while active products depend on it"));
 
             verify(categoryService).delete(eq(id));
             verifyNoMoreInteractions(categoryService);
