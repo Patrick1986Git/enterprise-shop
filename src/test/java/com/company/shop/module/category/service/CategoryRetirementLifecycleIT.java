@@ -2,8 +2,10 @@ package com.company.shop.module.category.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doAnswer;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -14,16 +16,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.company.shop.module.category.api.internal.ProductCategoryFacade;
+import com.company.shop.module.category.dto.CategoryCreateDTO;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.category.exception.CategoryNotFoundException;
 import com.company.shop.module.category.exception.CategoryRetirementConflictException;
 import com.company.shop.module.category.repository.CategoryRepository;
+import com.company.shop.module.product.dto.ProductCreateDTO;
+import com.company.shop.module.product.dto.ProductResponseDTO;
+import com.company.shop.module.product.dto.ProductUpdateDTO;
 import com.company.shop.module.product.entity.Product;
+import com.company.shop.module.product.exception.ProductCategoryNotFoundException;
 import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.product.service.ProductService;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
 @SpringBootTest
@@ -31,9 +40,10 @@ import com.company.shop.persistence.support.PostgresContainerSupport;
 class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
 
     @Autowired CategoryService categoryService;
-    @Autowired ProductCategoryFacade productCategoryFacade;
-    @Autowired CategoryRepository categoryRepository;
+    @MockitoSpyBean ProductCategoryFacade productCategoryFacade;
+    @MockitoSpyBean CategoryRepository categoryRepository;
     @Autowired ProductRepository productRepository;
+    @Autowired ProductService productService;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired JdbcTemplate jdbcTemplate;
 
@@ -178,6 +188,132 @@ class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
     }
 
     @Test
+    void retirementWinningRace_shouldRejectProductCreationWithoutPartialPersistence() throws Exception {
+        Category category = persistCategory(null);
+        CountDownLatch retirementLocked = new CountDownLatch(1);
+        CountDownLatch assignmentAttempted = new CountDownLatch(1);
+        CountDownLatch allowRetirementCommit = new CountDownLatch(1);
+        String sku = unique("RETIRE-FIRST-CREATE");
+
+        doAnswer(invocation -> {
+            assignmentAttempted.countDown();
+            return invocation.callRealMethod();
+        }).when(productCategoryFacade).findAssignableCategory(category.getId());
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var retirement = executor.submit(() -> retireHoldingLocks(
+                    category.getId(), retirementLocked, allowRetirementCommit));
+            assertThat(retirementLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+            var creation = executor.submit(() -> productService.create(new ProductCreateDTO(
+                    "Retirement-first product", sku, "must roll back", new BigDecimal("15.00"),
+                    7, category.getId(), List.of("https://example.test/retirement-first.jpg"))));
+            assertThat(assignmentAttempted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(creation).isNotDone();
+
+            allowRetirementCommit.countDown();
+            retirement.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> creation.get(10, TimeUnit.SECONDS))
+                    .hasRootCauseInstanceOf(ProductCategoryNotFoundException.class);
+        }
+
+        assertRetiredAndHidden(category.getId());
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from products where category_id = ?", Long.class, category.getId())).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from products where sku = ?", Long.class, sku)).isZero();
+    }
+
+    @Test
+    void retirementWinningRace_shouldRollbackProductReassignmentAndVersionIncrement() throws Exception {
+        Category original = persistCategory(null);
+        Category target = persistCategory(null);
+        Product product = persistProduct(original);
+        PhysicalProduct before = physicalProduct(product.getId());
+        CountDownLatch retirementLocked = new CountDownLatch(1);
+        CountDownLatch reassignmentAttempted = new CountDownLatch(1);
+        CountDownLatch allowRetirementCommit = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+            reassignmentAttempted.countDown();
+            return invocation.callRealMethod();
+        }).when(productCategoryFacade).findAssignableCategory(target.getId());
+
+        ProductUpdateDTO update = new ProductUpdateDTO(before.version(), "Must not persist",
+                unique("must-not-persist"), "must not persist", new BigDecimal("99.99"),
+                target.getId(), List.of("https://example.test/must-not-persist.jpg"));
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var retirement = executor.submit(() -> retireHoldingLocks(
+                    target.getId(), retirementLocked, allowRetirementCommit));
+            assertThat(retirementLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+            var reassignment = executor.submit(() -> productService.update(product.getId(), update));
+            assertThat(reassignmentAttempted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(reassignment).isNotDone();
+
+            allowRetirementCommit.countDown();
+            retirement.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> reassignment.get(10, TimeUnit.SECONDS))
+                    .hasRootCauseInstanceOf(ProductCategoryNotFoundException.class);
+        }
+
+        assertRetiredAndHidden(target.getId());
+        assertThat(physicalProduct(product.getId())).isEqualTo(before);
+        ProductResponseDTO readable = productService.findById(product.getId());
+        assertThat(readable.getCategoryId()).isEqualTo(original.getId());
+        assertThat(readable.getName()).isEqualTo(before.name());
+        assertThat(readable.getStock()).isEqualTo(before.stock());
+        assertThat(readable.getVersion()).isEqualTo(before.version());
+    }
+
+    @Test
+    void parentRetirementWinningRace_shouldRollbackEntireChildMutation() throws Exception {
+        Category previousParent = persistCategory(null);
+        Category child = persistCategory(previousParent);
+        Category candidateParent = persistCategory(null);
+        PhysicalCategory childBefore = physicalCategory(child.getId());
+        String childNameBefore = child.getName();
+        String childSlugBefore = child.getSlug();
+        String childDescriptionBefore = child.getDescription();
+        CountDownLatch retirementLocked = new CountDownLatch(1);
+        CountDownLatch hierarchyMutationAttempted = new CountDownLatch(1);
+        CountDownLatch allowRetirementCommit = new CountDownLatch(1);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var retirement = executor.submit(() -> retireHoldingLocks(
+                    candidateParent.getId(), retirementLocked, allowRetirementCommit));
+            assertThat(retirementLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+            doAnswer(invocation -> {
+                hierarchyMutationAttempted.countDown();
+                return invocation.callRealMethod();
+            }).when(categoryRepository).acquireHierarchyMutationLock();
+
+            CategoryCreateDTO update = new CategoryCreateDTO(
+                    "Must not replace child", "must not replace description", candidateParent.getId());
+            var reassignment = executor.submit(() -> categoryService.update(child.getId(), update));
+            assertThat(hierarchyMutationAttempted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(reassignment).isNotDone();
+
+            allowRetirementCommit.countDown();
+            retirement.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> reassignment.get(10, TimeUnit.SECONDS))
+                    .hasRootCauseInstanceOf(CategoryNotFoundException.class);
+        }
+
+        assertRetiredAndHidden(candidateParent.getId());
+        assertThat(physicalCategory(child.getId())).isEqualTo(childBefore);
+        transaction().executeWithoutResult(status ->
+                assertThat(categoryRepository.findById(child.getId())).hasValueSatisfying(activeChild -> {
+                    assertThat(activeChild.getName()).isEqualTo(childNameBefore);
+                    assertThat(activeChild.getSlug()).isEqualTo(childSlugBefore);
+                    assertThat(activeChild.getDescription()).isEqualTo(childDescriptionBefore);
+                    assertThat(activeChild.getParent().getId()).isEqualTo(previousParent.getId());
+                }));
+    }
+
+    @Test
     void retirementRollback_shouldReleaseLocksAndPreserveActiveState() {
         UUID categoryId = persistCategory(null).getId();
 
@@ -208,6 +344,36 @@ class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
                         rs.getObject(3, UUID.class)), id);
     }
 
+    private PhysicalProduct physicalProduct(UUID id) {
+        return jdbcTemplate.queryForObject("""
+                select name, slug, sku, description, price, stock, version, category_id, deleted
+                from products where id = ?
+                """, (rs, row) -> new PhysicalProduct(rs.getString("name"), rs.getString("slug"),
+                rs.getString("sku"), rs.getString("description"), rs.getBigDecimal("price"),
+                rs.getInt("stock"), rs.getLong("version"), rs.getObject("category_id", UUID.class),
+                rs.getBoolean("deleted")), id);
+    }
+
+    private void retireHoldingLocks(UUID categoryId, CountDownLatch retirementLocked,
+            CountDownLatch allowRetirementCommit) {
+        transaction().executeWithoutResult(status -> {
+            categoryRepository.acquireHierarchyMutationLock();
+            Category locked = categoryRepository.findByIdWithLock(categoryId).orElseThrow();
+            locked.delete();
+            categoryRepository.flush();
+            retirementLocked.countDown();
+            await(allowRetirementCommit);
+        });
+    }
+
+    private void assertRetiredAndHidden(UUID categoryId) {
+        assertThat(physicalCategory(categoryId)).satisfies(category -> {
+            assertThat(category.deleted()).isTrue();
+            assertThat(category.deletedAtPresent()).isTrue();
+        });
+        assertThat(categoryRepository.findById(categoryId)).isEmpty();
+    }
+
     private TransactionTemplate transaction() {
         return new TransactionTemplate(transactionManager);
     }
@@ -228,4 +394,7 @@ class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
     }
 
     private record PhysicalCategory(boolean deleted, boolean deletedAtPresent, UUID parentId) { }
+
+    private record PhysicalProduct(String name, String slug, String sku, String description,
+            BigDecimal price, int stock, long version, UUID categoryId, boolean deleted) { }
 }
