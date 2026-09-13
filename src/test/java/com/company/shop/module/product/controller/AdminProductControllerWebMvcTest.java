@@ -41,6 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.company.shop.support.WebMvcSliceTestConfig;
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
+import com.company.shop.module.product.dto.ProductUpdateDTO;
 import com.company.shop.module.product.exception.ProductCategoryNotFoundException;
 import com.company.shop.module.product.exception.ProductNotFoundException;
 import com.company.shop.module.product.exception.ProductSkuAlreadyExistsException;
@@ -212,7 +213,7 @@ class AdminProductControllerWebMvcTest {
                     "SKU-200",
                     "Opis laptopa",
                     new BigDecimal("3999.00"),
-                    10,
+				10,
                     categoryId,
                     List.of("https://cdn.example.com/products/laptop-1.jpg", "https://cdn.example.com/products/laptop-2.jpg"));
             ProductResponseDTO response = sampleProduct(
@@ -473,7 +474,7 @@ class AdminProductControllerWebMvcTest {
         @Test
         void updateProduct_shouldReturnForbiddenForAnonymousEvenWithCsrf() throws Exception {
             UUID id = UUID.randomUUID();
-            ProductCreateDTO request = sampleCreateDto();
+            ProductUpdateDTO request = sampleUpdateDto();
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
                             .with(csrf())
@@ -487,7 +488,7 @@ class AdminProductControllerWebMvcTest {
         @Test
         void updateProduct_shouldReturnForbiddenForUserRoleEvenWithCsrf() throws Exception {
             UUID id = UUID.randomUUID();
-            ProductCreateDTO request = sampleCreateDto();
+            ProductUpdateDTO request = sampleUpdateDto();
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
                             .with(user("user").roles("USER"))
@@ -502,7 +503,7 @@ class AdminProductControllerWebMvcTest {
         @Test
         void updateProduct_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
             UUID id = UUID.randomUUID();
-            ProductCreateDTO request = sampleCreateDto();
+            ProductUpdateDTO request = sampleUpdateDto();
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
                             .with(user("admin").roles("ADMIN"))
@@ -517,12 +518,11 @@ class AdminProductControllerWebMvcTest {
         void updateProduct_shouldReturnOkForAdminAndPassExactIdAndDtoToService() throws Exception {
             UUID id = UUID.fromString("44444444-4444-4444-4444-444444444444");
             UUID categoryId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-            ProductCreateDTO request = new ProductCreateDTO(
+            ProductUpdateDTO request = new ProductUpdateDTO(0L,
                     "Gaming Laptop Pro",
                     "SKU-300",
                     "Opis po zmianie",
                     new BigDecimal("4999.00"),
-                    20,
                     categoryId,
                     List.of("https://cdn.example.com/products/laptop-pro-1.jpg"));
             ProductResponseDTO response = sampleProduct(
@@ -532,7 +532,7 @@ class AdminProductControllerWebMvcTest {
                     "SKU-300",
                     new BigDecimal("4999.00"),
                     20);
-            when(productService.update(eq(id), any(ProductCreateDTO.class))).thenReturn(response);
+            when(productService.update(eq(id), any(ProductUpdateDTO.class))).thenReturn(response);
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
                             .with(user("admin").roles("ADMIN"))
@@ -548,23 +548,23 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(jsonPath("$.price").value(4999.00))
                     .andExpect(jsonPath("$.stock").value(20));
 
-            ArgumentCaptor<ProductCreateDTO> dtoCaptor = ArgumentCaptor.forClass(ProductCreateDTO.class);
+            ArgumentCaptor<ProductUpdateDTO> dtoCaptor = ArgumentCaptor.forClass(ProductUpdateDTO.class);
             verify(productService).update(eq(id), dtoCaptor.capture());
             verifyNoMoreInteractions(productService);
 
-            ProductCreateDTO captured = dtoCaptor.getValue();
+            ProductUpdateDTO captured = dtoCaptor.getValue();
             assertThat(captured.getName()).isEqualTo("Gaming Laptop Pro");
             assertThat(captured.getSku()).isEqualTo("SKU-300");
             assertThat(captured.getDescription()).isEqualTo("Opis po zmianie");
             assertThat(captured.getPrice()).isEqualByComparingTo("4999.00");
-            assertThat(captured.getStock()).isEqualTo(20);
+            assertThat(captured.getVersion()).isZero();
             assertThat(captured.getCategoryId()).isEqualTo(categoryId);
             assertThat(captured.getImageUrls()).containsExactly("https://cdn.example.com/products/laptop-pro-1.jpg");
         }
 
         @Test
         void updateProduct_shouldReturnBadRequestWhenPathVariableIsNotUuid() throws Exception {
-            ProductCreateDTO request = sampleCreateDto();
+            ProductUpdateDTO request = sampleUpdateDto();
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, "not-a-uuid")
                             .with(user("admin").roles("ADMIN"))
@@ -586,6 +586,7 @@ class AdminProductControllerWebMvcTest {
             UUID id = UUID.randomUUID();
             String invalidBody = """
                     {
+                      "version": 0,
                       "name": "Gaming Laptop",
                       "sku": "SKU-300",
                       "description": "Opis",
@@ -604,9 +605,8 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(content().contentTypeCompatibleWith(APPLICATION_JSON))
                     .andExpect(jsonPath("$.status").value(400))
-                    .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
-                    .andExpect(jsonPath("$.errors.stock").isArray())
-                    .andExpect(jsonPath("$.errors.stock", not(empty())));
+                    .andExpect(jsonPath("$.errorCode").value("REQUEST_INVALID"))
+                    .andExpect(jsonPath("$.message").value("Request body contains invalid values."));
 
             verifyNoInteractions(productService);
         }
@@ -614,12 +614,11 @@ class AdminProductControllerWebMvcTest {
         @Test
         void updateProduct_shouldReturnBadRequestWhenImageUrlExceedsMaxLength() throws Exception {
             UUID id = UUID.randomUUID();
-            ProductCreateDTO request = new ProductCreateDTO(
+            ProductUpdateDTO request = new ProductUpdateDTO(0L,
                     "Gaming Laptop",
                     "SKU-300",
                     "Opis",
                     new BigDecimal("199.99"),
-                    1,
                     UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
                     List.of("a".repeat(513)));
 
@@ -641,8 +640,8 @@ class AdminProductControllerWebMvcTest {
         @Test
         void updateProduct_shouldReturnNotFoundWhenProductMissing() throws Exception {
             UUID id = UUID.fromString("55555555-5555-5555-5555-555555555555");
-            ProductCreateDTO request = sampleCreateDto();
-            when(productService.update(eq(id), any(ProductCreateDTO.class)))
+            ProductUpdateDTO request = sampleUpdateDto();
+            when(productService.update(eq(id), any(ProductUpdateDTO.class)))
                     .thenThrow(new ProductNotFoundException(id));
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
@@ -658,14 +657,14 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(jsonPath("$.errors").value(nullValue()))
                     .andExpect(jsonPath("$.timestamp").exists());
 
-            verify(productService).update(eq(id), any(ProductCreateDTO.class));
+            verify(productService).update(eq(id), any(ProductUpdateDTO.class));
         }
 
         @Test
         void updateProduct_shouldReturnConflictWhenSkuAlreadyExists() throws Exception {
             UUID id = UUID.randomUUID();
-            ProductCreateDTO request = sampleCreateDto();
-            when(productService.update(eq(id), any(ProductCreateDTO.class)))
+            ProductUpdateDTO request = sampleUpdateDto();
+            when(productService.update(eq(id), any(ProductUpdateDTO.class)))
                     .thenThrow(new ProductSkuAlreadyExistsException("SKU-300"));
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
@@ -681,14 +680,14 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(jsonPath("$.errors").value(nullValue()))
                     .andExpect(jsonPath("$.timestamp").exists());
 
-            verify(productService).update(eq(id), any(ProductCreateDTO.class));
+            verify(productService).update(eq(id), any(ProductUpdateDTO.class));
         }
 
         @Test
         void updateProduct_shouldReturnConflictWhenSlugAlreadyExists() throws Exception {
             UUID id = UUID.randomUUID();
-            ProductCreateDTO request = sampleCreateDto();
-            when(productService.update(eq(id), any(ProductCreateDTO.class)))
+            ProductUpdateDTO request = sampleUpdateDto();
+            when(productService.update(eq(id), any(ProductUpdateDTO.class)))
                     .thenThrow(new ProductSlugAlreadyExistsException("gaming-laptop-pro"));
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
@@ -704,15 +703,15 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(jsonPath("$.errors").value(nullValue()))
                     .andExpect(jsonPath("$.timestamp").exists());
 
-            verify(productService).update(eq(id), any(ProductCreateDTO.class));
+            verify(productService).update(eq(id), any(ProductUpdateDTO.class));
         }
 
         @Test
         void updateProduct_shouldReturnNotFoundWhenCategoryMissing() throws Exception {
             UUID id = UUID.randomUUID();
             UUID categoryId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-            ProductCreateDTO request = sampleCreateDto();
-            when(productService.update(eq(id), any(ProductCreateDTO.class)))
+            ProductUpdateDTO request = sampleUpdateDto();
+            when(productService.update(eq(id), any(ProductUpdateDTO.class)))
                     .thenThrow(new ProductCategoryNotFoundException(categoryId));
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
@@ -728,7 +727,7 @@ class AdminProductControllerWebMvcTest {
                     .andExpect(jsonPath("$.errors").value(nullValue()))
                     .andExpect(jsonPath("$.timestamp").exists());
 
-            verify(productService).update(eq(id), any(ProductCreateDTO.class));
+            verify(productService).update(eq(id), any(ProductUpdateDTO.class));
         }
     }
 
@@ -816,6 +815,12 @@ class AdminProductControllerWebMvcTest {
         }
     }
 
+    private ProductUpdateDTO sampleUpdateDto() {
+        ProductCreateDTO create = sampleCreateDto();
+        return new ProductUpdateDTO(0L, create.getName(), create.getSku(), create.getDescription(),
+                create.getPrice(), create.getCategoryId(), create.getImageUrls());
+    }
+
     private ProductCreateDTO sampleCreateDto() {
         return new ProductCreateDTO(
                 "Gaming Laptop",
@@ -840,6 +845,7 @@ class AdminProductControllerWebMvcTest {
                 "Opis produktu",
                 price,
                 stock,
+                0,
                 UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
                 "Peripherals",
                 4.8,

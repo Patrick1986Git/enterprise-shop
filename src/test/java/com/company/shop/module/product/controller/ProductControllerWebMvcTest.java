@@ -491,6 +491,7 @@ class ProductControllerWebMvcTest {
                 "Description",
                 new BigDecimal("199.99"),
                 10,
+                0,
                 UUID.fromString("99999999-9999-9999-9999-999999999999"),
                 "Peripherals",
                 4.5,

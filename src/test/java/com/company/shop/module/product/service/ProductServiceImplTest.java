@@ -27,9 +27,11 @@ import com.company.shop.module.category.api.internal.ProductCategoryFacade;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
+import com.company.shop.module.product.dto.ProductUpdateDTO;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductCategoryNotFoundException;
 import com.company.shop.module.product.exception.ProductNotFoundException;
+import com.company.shop.module.product.exception.ProductUpdateConflictException;
 import com.company.shop.module.product.exception.ProductSkuAlreadyExistsException;
 import com.company.shop.module.product.exception.ProductSlugAlreadyExistsException;
 import com.company.shop.module.product.mapper.ProductMapper;
@@ -230,8 +232,8 @@ class ProductServiceImplTest {
     @Test
     void update_shouldThrowWhenProductDoesNotExist() {
         UUID productId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "SKU-123", UUID.randomUUID());
-        when(productRepository.findById(productId)).thenReturn(Optional.empty());
+        ProductUpdateDTO dto = updateDto("Test Product", "SKU-123", UUID.randomUUID());
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.update(productId, dto))
                 .isInstanceOf(ProductNotFoundException.class)
@@ -243,8 +245,8 @@ class ProductServiceImplTest {
     @Test
     void update_shouldThrowWhenSkuBelongsToAnotherProduct() {
         UUID productId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "NEW-SKU", UUID.randomUUID());
-        when(productRepository.findById(productId)).thenReturn(Optional.of(product()));
+        ProductUpdateDTO dto = updateDto("Test Product", "NEW-SKU", UUID.randomUUID());
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product()));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(true);
 
         assertThatThrownBy(() -> service.update(productId, dto))
@@ -257,8 +259,8 @@ class ProductServiceImplTest {
     @Test
     void update_shouldThrowWhenCategoryDoesNotExist() {
         UUID productId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "NEW-SKU", UUID.randomUUID());
-        when(productRepository.findById(productId)).thenReturn(Optional.of(product()));
+        ProductUpdateDTO dto = updateDto("Test Product", "NEW-SKU", UUID.randomUUID());
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product()));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(false);
         when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.empty());
 
@@ -273,9 +275,9 @@ class ProductServiceImplTest {
     void update_shouldUseExcludedProductSlugLookupWhenValidatingSlug() {
         UUID productId = UUID.randomUUID();
         UUID categoryId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "NEW-SKU", categoryId);
+        ProductUpdateDTO dto = updateDto("Test Product", "NEW-SKU", categoryId);
         Product existing = product();
-        when(productRepository.findById(productId)).thenReturn(Optional.of(existing));
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(existing));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(false);
         when(productCategoryFacade.findAssignableCategory(categoryId)).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlugAndIdNot("test-product", productId)).thenReturn(false);
@@ -287,12 +289,30 @@ class ProductServiceImplTest {
         verify(productRepository).existsBySlugAndIdNot("test-product", productId);
         verify(productRepository, never()).existsBySlug("test-product");
         assertThat(existing.getSku()).isEqualTo("NEW-SKU");
+        assertThat(existing.getStock()).isEqualTo(2);
+    }
+
+    @Test
+    void update_shouldRejectStaleVersionBeforeChangingState() {
+        UUID productId = UUID.randomUUID();
+        Product existing = product();
+        ProductUpdateDTO stale = new ProductUpdateDTO(1L, "Changed", "NEW-SKU", "Changed",
+                BigDecimal.ONE, UUID.randomUUID(), List.of("new-image"));
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.update(productId, stale))
+                .isInstanceOf(ProductUpdateConflictException.class);
+
+        assertThat(existing.getName()).isEqualTo("Existing Product");
+        assertThat(existing.getStock()).isEqualTo(2);
+        verify(productRepository, never()).saveAndFlush(any(Product.class));
+        verifyNoInteractions(productCategoryFacade);
     }
 
     @Test
     void update_shouldTranslateNestedSkuConstraintViolation() {
         UUID productId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "NEW-SKU", UUID.randomUUID());
+        ProductUpdateDTO dto = updateDto("Test Product", "NEW-SKU", UUID.randomUUID());
         prepareUpdateForSaveFailure(productId, dto, product());
         DataIntegrityViolationException failure = dataIntegrityViolation("uq_products_sku");
         when(productRepository.saveAndFlush(any(Product.class))).thenThrow(failure);
@@ -344,7 +364,7 @@ class ProductServiceImplTest {
     @Test
     void update_shouldFallbackToSkuRepositoryEvidenceWhenConstraintIsUnknown() {
         UUID productId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "NEW-SKU", UUID.randomUUID());
+        ProductUpdateDTO dto = updateDto("Test Product", "NEW-SKU", UUID.randomUUID());
         prepareUpdateForSaveFailure(productId, dto, product());
         DataIntegrityViolationException failure = dataIntegrityViolation("unknown_constraint");
         when(productRepository.saveAndFlush(any(Product.class))).thenThrow(failure);
@@ -358,7 +378,7 @@ class ProductServiceImplTest {
     @Test
     void update_shouldFallbackToSlugRepositoryEvidenceWhenConstraintIsUnknown() {
         UUID productId = UUID.randomUUID();
-        ProductCreateDTO dto = dto("Test Product", "NEW-SKU", UUID.randomUUID());
+        ProductUpdateDTO dto = updateDto("Test Product", "NEW-SKU", UUID.randomUUID());
         prepareUpdateForSaveFailure(productId, dto, product());
         DataIntegrityViolationException failure = dataIntegrityViolation("unknown_constraint");
         when(productRepository.saveAndFlush(any(Product.class))).thenThrow(failure);
@@ -410,8 +430,8 @@ class ProductServiceImplTest {
         when(productRepository.existsBySlug("test-product")).thenReturn(false);
     }
 
-    private void prepareUpdateForSaveFailure(UUID productId, ProductCreateDTO dto, Product existing) {
-        when(productRepository.findById(productId)).thenReturn(Optional.of(existing));
+    private void prepareUpdateForSaveFailure(UUID productId, ProductUpdateDTO dto, Product existing) {
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(existing));
         when(productRepository.existsBySkuAndIdNot(dto.getSku(), productId)).thenReturn(false);
         when(productCategoryFacade.findAssignableCategory(dto.getCategoryId())).thenReturn(Optional.of(category()));
         when(productRepository.existsBySlugAndIdNot("test-product", productId)).thenReturn(false);
@@ -435,6 +455,12 @@ class ProductServiceImplTest {
         return new Category("Accessories", "accessories", "desc");
     }
 
+
+    private ProductUpdateDTO updateDto(String name, String sku, UUID categoryId) {
+        return new ProductUpdateDTO(0L, name, sku, "Description", BigDecimal.valueOf(19.99), categoryId,
+                List.of("https://img.example/1.png"));
+    }
+
     private ProductCreateDTO dto(String name, String sku, UUID categoryId) {
         return new ProductCreateDTO(name, sku, "Description", BigDecimal.valueOf(19.99), 10, categoryId,
                 List.of("https://img.example/1.png"));
@@ -446,6 +472,6 @@ class ProductServiceImplTest {
 
     private ProductResponseDTO stubResponse(UUID id, String slug, String sku) {
         return new ProductResponseDTO(id, "name", slug, sku, "desc", BigDecimal.ONE,
-                1, UUID.randomUUID(), "cat", 0.0, 0, List.of());
+                1, 0, UUID.randomUUID(), "cat", 0.0, 0, List.of());
     }
 }

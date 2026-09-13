@@ -111,8 +111,8 @@ class ProductDomainValidationTest {
         Category category = new Category("Name", "slug", "desc");
         Product product = new Product("Prod", "prod", "SKU", "desc", new BigDecimal("19.99"), 1, category);
 
-        assertThatThrownBy(() -> product.update("Prod", "prod", "SKU", "desc",
-                new BigDecimal("10000000000.00"), 1, category))
+        assertThatThrownBy(() -> product.updateCatalog("Prod", "prod", "SKU", "desc",
+                new BigDecimal("10000000000.00"), category))
                 .isInstanceOf(ProductDataInvalidException.class)
                 .hasMessageContaining("at most 10 integer digits");
     }
