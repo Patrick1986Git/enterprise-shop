@@ -415,7 +415,7 @@ class ProductServiceImplTest {
     void update_shouldApplySoftDeleteTransitionWhenProductExists() {
         UUID productId = UUID.randomUUID();
         Product product = product();
-        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.of(product));
 
         service.delete(productId);
 
@@ -425,7 +425,7 @@ class ProductServiceImplTest {
     @Test
     void delete_shouldThrowWhenProductDoesNotExist() {
         UUID productId = UUID.randomUUID();
-        when(productRepository.findById(productId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdWithLock(productId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.delete(productId))
                 .isInstanceOf(ProductNotFoundException.class)

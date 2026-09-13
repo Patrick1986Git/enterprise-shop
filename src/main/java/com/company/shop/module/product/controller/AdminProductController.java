@@ -103,11 +103,11 @@ public class AdminProductController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(
             operationId = "deleteProduct",
-            summary = "Delete a product (admin-only)",
+            summary = "Retire a product (admin-only)",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "204", description = "Product deleted successfully."),
+            @ApiResponse(responseCode = "204", description = "Product retired successfully."),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
     })
