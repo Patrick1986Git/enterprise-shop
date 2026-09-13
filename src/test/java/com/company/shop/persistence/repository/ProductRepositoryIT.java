@@ -25,6 +25,8 @@ import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.persistence.support.PersistenceFixtures;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
+import jakarta.persistence.LockModeType;
+
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
@@ -48,18 +50,54 @@ class ProductRepositoryIT extends PostgresContainerSupport {
         entityManager.clear();
 
         Product created = productRepository.findById(productId).orElseThrow();
+        long versionBeforeReplacement = created.getVersion();
         assertThat(productMapper.toDto(created).getImageUrls()).containsExactly("A", "B", "C");
         assertThat(created.getMainImageUrl()).isEqualTo("A");
         assertThat(created.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
 
+        entityManager.getEntityManager().lock(created, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         created.replaceImages(List.of("C", "A", "B"));
         entityManager.flush();
         entityManager.clear();
 
         Product reordered = productRepository.findById(productId).orElseThrow();
+        assertThat(reordered.getVersion()).isGreaterThan(versionBeforeReplacement);
         assertThat(productMapper.toDto(reordered).getImageUrls()).containsExactly("C", "A", "B");
         assertThat(reordered.getMainImageUrl()).isEqualTo("C");
         assertThat(reordered.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
+    }
+
+    @Test
+    void productVersion_shouldAdvanceForInventoryRatingCatalogAndSoftDeleteMutations() {
+        Product product = PersistenceFixtures.persistProduct(entityManager, "Versioned", "versioned", "SKU-VERSIONED",
+                BigDecimal.TEN, 10);
+        entityManager.flush();
+        long initial = product.getVersion();
+
+        product.decreaseStock(1);
+        entityManager.flush();
+        assertThat(product.getVersion()).isGreaterThan(initial);
+        long afterReservation = product.getVersion();
+
+        product.restoreReservedStock(1);
+        entityManager.flush();
+        assertThat(product.getVersion()).isGreaterThan(afterReservation);
+        long afterRestoration = product.getVersion();
+
+        product.updateRatings(4.5, 2);
+        entityManager.flush();
+        assertThat(product.getVersion()).isGreaterThan(afterRestoration);
+        long afterRating = product.getVersion();
+
+        product.updateCatalog("Renamed", "renamed", "SKU-RENAMED", "updated", BigDecimal.ONE,
+                product.getCategory());
+        entityManager.flush();
+        assertThat(product.getVersion()).isGreaterThan(afterRating);
+        long afterCatalog = product.getVersion();
+
+        product.markDeleted();
+        entityManager.flush();
+        assertThat(product.getVersion()).isGreaterThan(afterCatalog);
     }
 
     @Test

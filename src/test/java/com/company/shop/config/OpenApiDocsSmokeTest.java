@@ -402,6 +402,24 @@ class OpenApiDocsSmokeTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void openApiDocs_shouldSeparateCatalogUpdateFromInventoryAndRequireVersion() throws Exception {
+        Map<String, Object> openApi = readOpenApi(API_DOCS_ENDPOINT);
+        Map<String, Object> components = objectMapper.convertValue(openApi.get("components"), new TypeReference<>() {
+        });
+        Map<String, Object> schemas = objectMapper.convertValue(components.get("schemas"), new TypeReference<>() {
+        });
+        Map<String, Object> update = objectMapper.convertValue(schemas.get("ProductUpdateDTO"), new TypeReference<>() {
+        });
+        Map<String, Object> properties = objectMapper.convertValue(update.get("properties"), new TypeReference<>() {
+        });
+
+        assertThat(properties).containsKeys("version", "name", "sku", "description", "price", "categoryId", "imageUrls");
+        assertThat(properties).doesNotContainKey("stock");
+        assertThat((List<String>) update.get("required")).contains("version");
+    }
+
+    @Test
     void openApiDocs_shouldContainReusableApiErrorComponents() throws Exception {
         MvcResult result = mockMvc.perform(get(API_DOCS_ENDPOINT))
                 .andExpect(status().isOk())

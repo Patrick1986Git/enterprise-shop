@@ -70,6 +70,8 @@ public class ProductResponseDTO {
             accessMode = Schema.AccessMode.READ_ONLY
     )
     private final int stock;
+    @Schema(description = "Concurrency token required for an administrative catalog update.", accessMode = Schema.AccessMode.READ_ONLY)
+    private final long version;
     @Schema(
             description = "Assigned category identifier.",
             example = "22222222-2222-2222-2222-222222222222",
@@ -118,6 +120,7 @@ public class ProductResponseDTO {
      * @param description   marketing content.
      * @param price         current unit price.
      * @param stock         available quantity.
+     * @param version       concurrency token for administrative catalog updates.
      * @param categoryId    parent category ID.
      * @param categoryName  parent category display name (flattened).
      * @param averageRating computed user rating (defaults to 0.0 if null).
@@ -125,7 +128,7 @@ public class ProductResponseDTO {
      * @param imageUrls     collection of image resource locations.
      */
     public ProductResponseDTO(UUID id, String name, String slug, String sku, String description, BigDecimal price,
-            int stock, UUID categoryId, String categoryName, Double averageRating, int reviewCount,
+            int stock, long version, UUID categoryId, String categoryName, Double averageRating, int reviewCount,
             List<String> imageUrls) {
         this.id = id;
         this.name = name;
@@ -134,6 +137,7 @@ public class ProductResponseDTO {
         this.description = description;
         this.price = price;
         this.stock = stock;
+        this.version = version;
         this.categoryId = categoryId;
         this.categoryName = categoryName;
         this.averageRating = averageRating != null ? averageRating : 0.0;
@@ -167,6 +171,10 @@ public class ProductResponseDTO {
 
     public int getStock() {
         return stock;
+    }
+
+    public long getVersion() {
+        return version;
     }
 
     public UUID getCategoryId() {

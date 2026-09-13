@@ -1,0 +1,9 @@
+# Product concurrency and field ownership
+
+Administrative product creation owns initial stock as well as catalog fields. After creation, stock is inventory-owned: checkout reservation decrements it and reservation release restores it while holding the product row lock. Administrative catalog updates cannot submit stock and therefore cannot resurrect a completed reservation or discard a restoration.
+
+`PUT /api/v1/admin/products/{id}` owns name, generated slug, SKU, description, price, category, and the complete ordered image gallery. Its aggregate concurrency token is the `version` returned by product reads. The service locks the product row, rejects a different version with `409 Conflict` and `PRODUCT_UPDATE_CONFLICT`, and only then asks JPA for a pessimistic force increment. Every successful catalog PUT—including a gallery-only change—therefore consumes the submitted token and returns its successor. A rejected or rolled-back request does not consume a token. Unknown request fields, including the former `stock` field, are rejected rather than ignored.
+
+Checkout reservation, inventory restoration, review aggregation, and administrative catalog update use the same pessimistic product-row serialization boundary. Force increment is scoped to the ADMIN catalog operation because inverse gallery child changes do not independently dirty the Product row. JPA `@Version` remains the database backstop for other Product scalar changes; the HTTP version precondition additionally detects payloads that became stale before a request began. Review-derived `averageRating` and `reviewCount` are not part of the administrative command.
+
+Gallery replacement remains atomic with the catalog update. Images retain zero-based `sort_order`, are read by `sortOrder ASC, id ASC`, and the first image remains the main image, including the deterministic legacy tie-break.

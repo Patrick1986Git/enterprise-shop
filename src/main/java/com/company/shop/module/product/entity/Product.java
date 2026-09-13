@@ -144,13 +144,12 @@ public class Product extends SoftDeleteEntity {
 		this.reviewCount = newCount;
 	}
 
-	public void update(String name, String slug, String sku, String description, BigDecimal price, int stock,
+	public void updateCatalog(String name, String slug, String sku, String description, BigDecimal price,
 			Category category) {
 		validateRequiredText(name, "Product name cannot be blank");
 		validateRequiredText(slug, "Product slug cannot be blank");
 		validateRequiredText(sku, "Product SKU cannot be blank");
 		validatePrice(price);
-		validateStock(stock);
 		if (category == null) {
 			throw new ProductDataInvalidException("Product category is required");
 		}
@@ -160,7 +159,6 @@ public class Product extends SoftDeleteEntity {
 		this.sku = sku;
 		this.description = description;
 		this.price = price;
-		this.stock = stock;
 		this.category = category;
 	}
 
@@ -238,6 +236,10 @@ public class Product extends SoftDeleteEntity {
 
 	public int getStock() {
 		return stock;
+	}
+
+	public long getVersion() {
+		return version;
 	}
 
 	public Category getCategory() {

@@ -25,14 +25,19 @@ import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
 import com.company.shop.module.product.dto.ProductSearchCriteria;
+import com.company.shop.module.product.dto.ProductUpdateDTO;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductCategoryNotFoundException;
 import com.company.shop.module.product.exception.ProductNotFoundException;
 import com.company.shop.module.product.exception.ProductSkuAlreadyExistsException;
 import com.company.shop.module.product.exception.ProductSlugAlreadyExistsException;
+import com.company.shop.module.product.exception.ProductUpdateConflictException;
 import com.company.shop.module.product.mapper.ProductMapper;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.product.specification.ProductSpecification;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 
 @Service
 @Transactional
@@ -52,13 +57,16 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepo;
     private final ProductCategoryFacade productCategoryFacade;
     private final ProductMapper mapper;
+    private final EntityManager entityManager;
 
     public ProductServiceImpl(ProductRepository productRepo,
             ProductCategoryFacade productCategoryFacade,
-            ProductMapper mapper) {
+            ProductMapper mapper,
+            EntityManager entityManager) {
         this.productRepo = productRepo;
         this.productCategoryFacade = productCategoryFacade;
         this.mapper = mapper;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -102,17 +110,24 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public ProductResponseDTO update(UUID id, ProductCreateDTO dto) {
-        Product product = getProductOrThrow(id);
+    public ProductResponseDTO update(UUID id, ProductUpdateDTO dto) {
+        Product product = productRepo.findByIdWithLock(id)
+                .orElseThrow(() -> new ProductNotFoundException(id));
 
-        validateSkuUniquenessForUpdate(dto.getSku(), id);
-        Category category = getCategoryOrThrow(dto.getCategoryId());
-        String slug = buildUniqueSlug(dto.getName(), id);
+        if (product.getVersion() != dto.version()) {
+            throw new ProductUpdateConflictException();
+        }
 
-        product.update(dto.getName(), slug, dto.getSku(), dto.getDescription(), dto.getPrice(), dto.getStock(), category);
-        product.replaceImages(dto.getImageUrls());
+        entityManager.lock(product, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
 
-        return saveAndMap(product, dto.getSku(), slug, id);
+        validateSkuUniquenessForUpdate(dto.sku(), id);
+        Category category = getCategoryOrThrow(dto.categoryId());
+        String slug = buildUniqueSlug(dto.name(), id);
+
+        product.updateCatalog(dto.name(), slug, dto.sku(), dto.description(), dto.price(), category);
+        product.replaceImages(dto.imageUrls());
+
+        return saveAndMap(product, dto.sku(), slug, id);
     }
 
     @Override

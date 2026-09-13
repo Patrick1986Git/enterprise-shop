@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
 import com.company.shop.module.product.dto.ProductSearchCriteria;
+import com.company.shop.module.product.dto.ProductUpdateDTO;
 
 /**
  * Service interface for managing product-related business operations.
@@ -79,7 +80,7 @@ public interface ProductService {
      * @return the updated product response object.
      * @throws com.company.shop.module.product.exception.ProductNotFoundException if the product does not exist.
      */
-    ProductResponseDTO update(UUID id, ProductCreateDTO dto);
+    ProductResponseDTO update(UUID id, ProductUpdateDTO dto);
 
     /**
      * Removes a product from the system.

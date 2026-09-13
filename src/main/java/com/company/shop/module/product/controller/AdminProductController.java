@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.module.product.dto.ProductCreateDTO;
 import com.company.shop.module.product.dto.ProductResponseDTO;
+import com.company.shop.module.product.dto.ProductUpdateDTO;
 import com.company.shop.module.product.service.ProductService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -85,15 +86,16 @@ public class AdminProductController {
             @ApiResponse(responseCode = "200", description = "Product updated successfully."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
-            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
     })
     public ProductResponseDTO updateProduct(
             @Parameter(description = "Product identifier.")
             @PathVariable UUID id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    description = "Product data used to update an existing product."
+                    description = "Catalog data and the version from the latest product GET. Stock is preserved."
             )
-            @Valid @RequestBody ProductCreateDTO dto) {
+            @Valid @RequestBody ProductUpdateDTO dto) {
         return productService.update(id, dto);
     }
 
