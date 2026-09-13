@@ -102,7 +102,7 @@ public class ProductResponseDTO {
      * List of associated image URLs, typically ordered by display priority.
      */
     @Schema(
-            description = "Product image URLs ordered for display.",
+            description = "Product image URLs in administrator-supplied display order; the first URL is the main image.",
             example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]",
             accessMode = Schema.AccessMode.READ_ONLY
     )

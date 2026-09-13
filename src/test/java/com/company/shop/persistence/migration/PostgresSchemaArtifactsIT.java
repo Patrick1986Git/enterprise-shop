@@ -28,6 +28,22 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
     private JdbcTemplate jdbcTemplate;
 
     @Test
+    void schema_shouldRequireAndIndexDeterministicProductImageOrder() {
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT is_nullable = 'NO'
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'product_images'
+                  AND column_name = 'sort_order'
+                """, Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForList("""
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'product_images'
+                """, String.class)).contains("idx_product_images_product_order");
+    }
+
+    @Test
     void schema_shouldContainCriticalFlywayAndDomainTables() {
         Boolean flywayHistoryExists = jdbcTemplate.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables " +

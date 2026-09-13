@@ -74,7 +74,7 @@ public class ProductCreateDTO {
 	private UUID categoryId;
 
 	@Schema(
-	        description = "Product image URLs ordered for display.",
+	        description = "Product image URLs in administrator-supplied display order; the first URL is the main image. No numeric gallery-size maximum is currently defined.",
 	        example = "[\"https://cdn.example.com/products/keyboard-001.jpg\"]",
 	        requiredMode = Schema.RequiredMode.NOT_REQUIRED
 	)

@@ -29,6 +29,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
@@ -73,6 +74,7 @@ public class Product extends SoftDeleteEntity {
 	private int reviewCount = 0;
 
 	@OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+	@OrderBy("sortOrder ASC, id ASC")
 	private List<ProductImage> images = new ArrayList<>();
 
 	protected Product() {
@@ -103,12 +105,18 @@ public class Product extends SoftDeleteEntity {
 	public void replaceImages(List<String> newImageUrls) {
 		this.images.clear();
 		if (newImageUrls != null) {
-			newImageUrls.forEach(this::addImage);
+			for (int position = 0; position < newImageUrls.size(); position++) {
+				this.images.add(new ProductImage(newImageUrls.get(position), this, position));
+			}
 		}
 	}
 
 	public void addImage(String url) {
-		ProductImage image = new ProductImage(url, this);
+		int nextPosition = images.stream()
+				.mapToInt(ProductImage::getSortOrder)
+				.max()
+				.orElse(-1) + 1;
+		ProductImage image = new ProductImage(url, this, nextPosition);
 		this.images.add(image);
 	}
 

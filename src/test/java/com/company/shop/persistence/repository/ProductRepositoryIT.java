@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.entity.Product;
+import com.company.shop.module.product.entity.ProductImage;
+import com.company.shop.module.product.mapper.ProductMapper;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.persistence.support.PersistenceFixtures;
 import com.company.shop.persistence.support.PostgresContainerSupport;
@@ -26,11 +30,59 @@ import com.company.shop.persistence.support.PostgresContainerSupport;
 @AutoConfigureTestDatabase(replace = Replace.NONE)
 class ProductRepositoryIT extends PostgresContainerSupport {
 
+    private final ProductMapper productMapper = org.mapstruct.factory.Mappers.getMapper(ProductMapper.class);
+
     @Autowired
     private ProductRepository productRepository;
 
     @Autowired
     private TestEntityManager entityManager;
+
+    @Test
+    void galleryOrder_shouldSurviveCreateAndReplacementReload() {
+        Product product = PersistenceFixtures.persistProduct(entityManager, "Gallery", "gallery", "SKU-GALLERY",
+                BigDecimal.TEN, 1);
+        product.replaceImages(List.of("A", "B", "C"));
+        entityManager.flush();
+        UUID productId = product.getId();
+        entityManager.clear();
+
+        Product created = productRepository.findById(productId).orElseThrow();
+        assertThat(productMapper.toDto(created).getImageUrls()).containsExactly("A", "B", "C");
+        assertThat(created.getMainImageUrl()).isEqualTo("A");
+        assertThat(created.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
+
+        created.replaceImages(List.of("C", "A", "B"));
+        entityManager.flush();
+        entityManager.clear();
+
+        Product reordered = productRepository.findById(productId).orElseThrow();
+        assertThat(productMapper.toDto(reordered).getImageUrls()).containsExactly("C", "A", "B");
+        assertThat(reordered.getMainImageUrl()).isEqualTo("C");
+        assertThat(reordered.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
+    }
+
+    @Test
+    void galleryOrder_shouldUseImageIdAsFallbackForEqualLegacyPositions() {
+        Product product = PersistenceFixtures.persistProduct(entityManager, "Legacy", "legacy", "SKU-LEGACY",
+                BigDecimal.TEN, 1);
+        UUID firstId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID secondId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        entityManager.getEntityManager().createNativeQuery("""
+                INSERT INTO product_images (id, product_id, image_url, sort_order)
+                VALUES (:secondId, :productId, 'B', 7), (:firstId, :productId, 'A', 7)
+                """)
+                .setParameter("secondId", secondId)
+                .setParameter("firstId", firstId)
+                .setParameter("productId", product.getId())
+                .executeUpdate();
+        entityManager.clear();
+
+        Product reloaded = productRepository.findById(product.getId()).orElseThrow();
+
+        assertThat(productMapper.toDto(reloaded).getImageUrls()).containsExactly("A", "B");
+        assertThat(reloaded.getMainImageUrl()).isEqualTo("A");
+    }
 
     @Test
     void findByCategoryId_shouldReturnOnlyActiveProductsFromGivenCategory() {

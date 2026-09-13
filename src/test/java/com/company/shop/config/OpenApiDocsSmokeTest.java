@@ -396,6 +396,9 @@ class OpenApiDocsSmokeTest {
 
         assertThat(items).containsEntry("maxLength", 512);
         assertThat(imageUrls).doesNotContainKeys("maxItems", "minItems");
+        assertThat(imageUrls.get("description").toString())
+                .contains("administrator-supplied display order", "first URL is the main image",
+                        "No numeric gallery-size maximum");
     }
 
     @Test
