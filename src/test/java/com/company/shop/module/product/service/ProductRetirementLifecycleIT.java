@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -33,6 +34,9 @@ import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductNotFoundException;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.order.dto.OrderCheckoutRequestDTO;
+import com.company.shop.module.order.entity.Order;
+import com.company.shop.module.order.entity.OrderItem;
+import com.company.shop.module.order.entity.Payment;
 import com.company.shop.module.order.repository.OrderRepository;
 import com.company.shop.module.order.repository.PaymentRepository;
 import com.company.shop.module.order.service.OrderService;
@@ -137,16 +141,20 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
     @Test
     void checkoutWithUnavailableLine_shouldFailBeforeStockOrderPaymentOrProviderMutation() {
         Fixture fixture = persistProductWithCart();
+        UUID unrelatedProductId = persistProduct("Unrelated product", "UNRELATED", 1);
+        persistUnrelatedOrderAndPayment(unrelatedProductId);
         authenticate(fixture);
         productService.delete(fixture.productId());
         PhysicalProduct before = physical(fixture.productId());
+        Set<UUID> ordersBefore = persistedOrderIds();
+        Set<UUID> paymentsBefore = persistedPaymentIds();
 
         assertThatThrownBy(() -> orderService.placeOrderFromCart("retired-product-checkout",
                 new OrderCheckoutRequestDTO(null, null))).isInstanceOf(ProductNotFoundException.class);
 
         assertThat(physical(fixture.productId())).isEqualTo(before);
-        assertThat(orderRepository.count()).isZero();
-        assertThat(paymentRepository.count()).isZero();
+        assertThat(persistedOrderIds()).isEqualTo(ordersBefore);
+        assertThat(persistedPaymentIds()).isEqualTo(paymentsBefore);
         verifyNoInteractions(paymentService);
     }
 
@@ -252,6 +260,27 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
             entityManager.flush();
             return product.getId();
         });
+    }
+
+    private void persistUnrelatedOrderAndPayment(UUID unrelatedProductId) {
+        transaction().executeWithoutResult(status -> {
+            String suffix = UUID.randomUUID().toString().substring(0, 8);
+            User unrelatedUser = new User("unrelated-" + suffix + "@example.com", "password", "Unrelated", "User");
+            entityManager.persist(unrelatedUser);
+            Order order = new Order(unrelatedUser.getId(), unrelatedUser.getEmail(), "unrelated-checkout-" + suffix);
+            order.addItem(new OrderItem(unrelatedProductId, "Unrelated product", "UNRELATED", 1, BigDecimal.TEN));
+            entityManager.persist(order);
+            entityManager.persist(new Payment(order, "STRIPE", order.getTotalAmount()));
+            entityManager.flush();
+        });
+    }
+
+    private Set<UUID> persistedOrderIds() {
+        return orderRepository.findAll().stream().map(Order::getId).collect(java.util.stream.Collectors.toSet());
+    }
+
+    private Set<UUID> persistedPaymentIds() {
+        return paymentRepository.findAll().stream().map(Payment::getId).collect(java.util.stream.Collectors.toSet());
     }
 
     private void authenticate(Fixture fixture) {
