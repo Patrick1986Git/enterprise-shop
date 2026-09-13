@@ -25,6 +25,8 @@ import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.persistence.support.PersistenceFixtures;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
+import jakarta.persistence.LockModeType;
+
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = Replace.NONE)
@@ -53,6 +55,7 @@ class ProductRepositoryIT extends PostgresContainerSupport {
         assertThat(created.getMainImageUrl()).isEqualTo("A");
         assertThat(created.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
 
+        entityManager.getEntityManager().lock(created, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         created.replaceImages(List.of("C", "A", "B"));
         entityManager.flush();
         entityManager.clear();

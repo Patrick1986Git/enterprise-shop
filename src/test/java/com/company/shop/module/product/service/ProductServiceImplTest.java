@@ -37,6 +37,9 @@ import com.company.shop.module.product.exception.ProductSlugAlreadyExistsExcepti
 import com.company.shop.module.product.mapper.ProductMapper;
 import com.company.shop.module.product.repository.ProductRepository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
 @ExtendWith(MockitoExtension.class)
 class ProductServiceImplTest {
 
@@ -49,11 +52,14 @@ class ProductServiceImplTest {
     @Mock
     private ProductMapper productMapper;
 
+    @Mock
+    private EntityManager entityManager;
+
     private ProductServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new ProductServiceImpl(productRepository, productCategoryFacade, productMapper);
+        service = new ProductServiceImpl(productRepository, productCategoryFacade, productMapper, entityManager);
     }
 
     @Test
@@ -290,6 +296,7 @@ class ProductServiceImplTest {
         verify(productRepository, never()).existsBySlug("test-product");
         assertThat(existing.getSku()).isEqualTo("NEW-SKU");
         assertThat(existing.getStock()).isEqualTo(2);
+        verify(entityManager).lock(existing, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
     }
 
     @Test
@@ -307,6 +314,7 @@ class ProductServiceImplTest {
         assertThat(existing.getStock()).isEqualTo(2);
         verify(productRepository, never()).saveAndFlush(any(Product.class));
         verifyNoInteractions(productCategoryFacade);
+        verifyNoInteractions(entityManager);
     }
 
     @Test

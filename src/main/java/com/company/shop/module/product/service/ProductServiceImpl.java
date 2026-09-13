@@ -36,6 +36,9 @@ import com.company.shop.module.product.mapper.ProductMapper;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.product.specification.ProductSpecification;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
 @Service
 @Transactional
 public class ProductServiceImpl implements ProductService {
@@ -54,13 +57,16 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepo;
     private final ProductCategoryFacade productCategoryFacade;
     private final ProductMapper mapper;
+    private final EntityManager entityManager;
 
     public ProductServiceImpl(ProductRepository productRepo,
             ProductCategoryFacade productCategoryFacade,
-            ProductMapper mapper) {
+            ProductMapper mapper,
+            EntityManager entityManager) {
         this.productRepo = productRepo;
         this.productCategoryFacade = productCategoryFacade;
         this.mapper = mapper;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -111,6 +117,8 @@ public class ProductServiceImpl implements ProductService {
         if (product.getVersion() != dto.version()) {
             throw new ProductUpdateConflictException();
         }
+
+        entityManager.lock(product, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
 
         validateSkuUniquenessForUpdate(dto.sku(), id);
         Category category = getCategoryOrThrow(dto.categoryId());
