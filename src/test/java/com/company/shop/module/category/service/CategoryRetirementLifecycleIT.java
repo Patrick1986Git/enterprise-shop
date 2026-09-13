@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
 
     @Autowired CategoryService categoryService;
     @MockitoSpyBean ProductCategoryFacade productCategoryFacade;
-    @MockitoSpyBean CategoryRepository categoryRepository;
+    @Autowired CategoryRepository categoryRepository;
     @Autowired ProductRepository productRepository;
     @Autowired ProductService productService;
     @Autowired PlatformTransactionManager transactionManager;
@@ -277,23 +278,24 @@ class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
         String childSlugBefore = child.getSlug();
         String childDescriptionBefore = child.getDescription();
         CountDownLatch retirementLocked = new CountDownLatch(1);
-        CountDownLatch hierarchyMutationAttempted = new CountDownLatch(1);
+        CountDownLatch childTransactionStarted = new CountDownLatch(1);
         CountDownLatch allowRetirementCommit = new CountDownLatch(1);
+        AtomicInteger childBackendPid = new AtomicInteger();
 
         try (var executor = Executors.newFixedThreadPool(2)) {
             var retirement = executor.submit(() -> retireHoldingLocks(
                     candidateParent.getId(), retirementLocked, allowRetirementCommit));
             assertThat(retirementLocked.await(10, TimeUnit.SECONDS)).isTrue();
 
-            doAnswer(invocation -> {
-                hierarchyMutationAttempted.countDown();
-                return invocation.callRealMethod();
-            }).when(categoryRepository).acquireHierarchyMutationLock();
-
             CategoryCreateDTO update = new CategoryCreateDTO(
                     "Must not replace child", "must not replace description", candidateParent.getId());
-            var reassignment = executor.submit(() -> categoryService.update(child.getId(), update));
-            assertThat(hierarchyMutationAttempted.await(10, TimeUnit.SECONDS)).isTrue();
+            var reassignment = executor.submit(() -> transaction().execute(status -> {
+                childBackendPid.set(jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+                childTransactionStarted.countDown();
+                return categoryService.update(child.getId(), update);
+            }));
+            assertThat(childTransactionStarted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(awaitHierarchyAdvisoryLockWait(childBackendPid.get())).isTrue();
             assertThat(reassignment).isNotDone();
 
             allowRetirementCommit.countDown();
@@ -372,6 +374,32 @@ class CategoryRetirementLifecycleIT extends PostgresContainerSupport {
             assertThat(category.deletedAtPresent()).isTrue();
         });
         assertThat(categoryRepository.findById(categoryId)).isEmpty();
+    }
+
+    private boolean awaitHierarchyAdvisoryLockWait(int backendPid) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            boolean waiting = Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                    select exists (
+                        select 1
+                        from pg_locks locks
+                        join pg_stat_activity activity on activity.pid = locks.pid
+                        where locks.pid = ?
+                          and locks.locktype = 'advisory'
+                          and locks.classid::bigint = 0
+                          and locks.objid::bigint = 1128354383
+                          and locks.objsubid = 1
+                          and not locks.granted
+                          and activity.wait_event_type = 'Lock'
+                          and activity.wait_event = 'advisory'
+                    )
+                    """, Boolean.class, backendPid));
+            if (waiting) {
+                return true;
+            }
+            Thread.onSpinWait();
+        }
+        return false;
     }
 
     private TransactionTemplate transaction() {
