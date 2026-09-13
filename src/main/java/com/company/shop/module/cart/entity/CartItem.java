@@ -10,6 +10,9 @@ package com.company.shop.module.cart.entity;
 
 import java.util.UUID;
 
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
+
 import com.company.shop.common.model.AuditableEntity;
 import com.company.shop.module.product.entity.Product;
 
@@ -45,6 +48,7 @@ public class CartItem extends AuditableEntity {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
+    @NotFound(action = NotFoundAction.IGNORE)
     private Product product;
 
     @Column(name = "product_id", insertable = false, updatable = false, nullable = false)

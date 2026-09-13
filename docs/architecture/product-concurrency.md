@@ -30,3 +30,11 @@ before an Order or Payment is committed. Existing Order items are independent hi
 name, SKU and price, so later retirement does not change order history. Reviews and images remain retained by their
 foreign keys; retirement does not hard-delete or cascade them. Provider calls occur only after the checkout transaction
 commits, so a retired cart Product cannot cause partial provider/payment creation.
+
+Hibernate's active-Product restriction makes the valid foreign-key target intentionally unavailable to ORM association
+resolution after retirement. `CartItem.product` therefore uses `@NotFound(IGNORE)`: the database foreign key remains
+mandatory and unchanged, while Hibernate materializes the catalog-inactive association as null instead of raising
+`FetchNotFoundException`. Hibernate treats such associations as eager; this does not add an N+1 query to the supported
+cart paths because both cart repository operations already fetch-join Product in the cart query. The separately mapped,
+read-only `product_id` column is the stable identity used by cart operations and checkout even when the association is
+unavailable.

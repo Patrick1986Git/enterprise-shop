@@ -2,6 +2,8 @@ package com.company.shop.module.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -14,18 +16,29 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.company.shop.module.cart.dto.CartResponseDTO;
+import com.company.shop.module.cart.dto.AddToCartRequestDTO;
+import com.company.shop.module.cart.dto.UpdateCartItemRequestDTO;
 import com.company.shop.module.cart.entity.Cart;
 import com.company.shop.module.cart.mapper.CartMapper;
 import com.company.shop.module.cart.repository.CartRepository;
+import com.company.shop.module.cart.service.CartService;
 import com.company.shop.module.category.entity.Category;
 import com.company.shop.module.product.api.internal.ProductCatalogFacade;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.exception.ProductNotFoundException;
 import com.company.shop.module.product.repository.ProductRepository;
+import com.company.shop.module.order.dto.OrderCheckoutRequestDTO;
+import com.company.shop.module.order.repository.OrderRepository;
+import com.company.shop.module.order.repository.PaymentRepository;
+import com.company.shop.module.order.service.OrderService;
+import com.company.shop.module.order.service.PaymentService;
+import com.company.shop.module.user.api.internal.CurrentUserFacade;
+import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
@@ -43,6 +56,13 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired EntityManager entityManager;
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired CartService cartService;
+    @Autowired OrderService orderService;
+    @Autowired OrderRepository orderRepository;
+    @Autowired PaymentRepository paymentRepository;
+
+    @MockitoBean CurrentUserFacade currentUserFacade;
+    @MockitoBean PaymentService paymentService;
 
     @Test
     void retirement_shouldHideProductAdvanceVersionAndRejectRepeatedRetirement() {
@@ -64,6 +84,8 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
     void retiredProduct_shouldRemainAsUnavailableCartLineAndFailReservationWithoutChangingStock() {
         Fixture fixture = persistProductWithCart();
         productService.delete(fixture.productId());
+        long persistedLines = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cart_items WHERE product_id = ?",
+                Long.class, fixture.productId());
 
         CartResponseDTO response = transaction().execute(status -> {
             Cart cart = cartRepository.findByUserIdWithItems(fixture.userId()).orElseThrow();
@@ -82,11 +104,50 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
             assertThat(item.subtotal()).isZero();
         });
         assertThat(response.totalAmount()).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cart_items WHERE product_id = ?", Long.class,
+                fixture.productId())).isEqualTo(persistedLines);
         int stock = physical(fixture.productId()).stock();
         assertThatThrownBy(() -> transaction().execute(status ->
                 productCatalogFacade.reserveProductForCheckout(fixture.productId(), 1)))
                 .isInstanceOf(ProductNotFoundException.class);
         assertThat(physical(fixture.productId()).stock()).isEqualTo(stock);
+    }
+
+    @Test
+    void unavailableCartLine_shouldSupportUnrelatedAddAndExplicitRemovalButRejectQuantityMutation() {
+        Fixture fixture = persistProductWithCart();
+        UUID activeProductId = persistProduct("Available companion", "COMPANION", 5);
+        authenticate(fixture);
+        productService.delete(fixture.productId());
+
+        assertThatThrownBy(() -> cartService.updateItemQuantity(fixture.productId(), new UpdateCartItemRequestDTO(4)))
+                .isInstanceOf(ProductNotFoundException.class);
+        assertThat(cartItemQuantity(fixture.userId(), fixture.productId())).isEqualTo(2);
+
+        CartResponseDTO withCompanion = cartService.addToCart(new AddToCartRequestDTO(activeProductId, 1));
+        assertThat(withCompanion.items()).extracting(item -> item.productId())
+                .containsExactlyInAnyOrder(fixture.productId(), activeProductId);
+
+        CartResponseDTO afterRemoval = cartService.removeItem(fixture.productId());
+        assertThat(afterRemoval.items()).extracting(item -> item.productId()).containsExactly(activeProductId);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cart_items WHERE product_id = ?", Long.class,
+                fixture.productId())).isZero();
+    }
+
+    @Test
+    void checkoutWithUnavailableLine_shouldFailBeforeStockOrderPaymentOrProviderMutation() {
+        Fixture fixture = persistProductWithCart();
+        authenticate(fixture);
+        productService.delete(fixture.productId());
+        PhysicalProduct before = physical(fixture.productId());
+
+        assertThatThrownBy(() -> orderService.placeOrderFromCart("retired-product-checkout",
+                new OrderCheckoutRequestDTO(null, null))).isInstanceOf(ProductNotFoundException.class);
+
+        assertThat(physical(fixture.productId())).isEqualTo(before);
+        assertThat(orderRepository.count()).isZero();
+        assertThat(paymentRepository.count()).isZero();
+        verifyNoInteractions(paymentService);
     }
 
     @Test
@@ -178,6 +239,32 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
             entityManager.flush();
             return new Fixture(product.getId(), user.getId());
         });
+    }
+
+    private UUID persistProduct(String name, String skuPrefix, int stock) {
+        return transaction().execute(status -> {
+            String suffix = UUID.randomUUID().toString().substring(0, 8);
+            Category category = new Category("Category " + suffix, "category-" + suffix, "desc");
+            entityManager.persist(category);
+            Product product = new Product(name, "product-" + suffix, skuPrefix + "-" + suffix, "desc",
+                    BigDecimal.TEN, stock, category);
+            entityManager.persist(product);
+            entityManager.flush();
+            return product.getId();
+        });
+    }
+
+    private void authenticate(Fixture fixture) {
+        when(currentUserFacade.getCurrentUser()).thenReturn(
+                new CurrentUserSnapshot(fixture.userId(), "user@example.com", java.util.Set.of()));
+    }
+
+    private int cartItemQuantity(UUID userId, UUID productId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ci.quantity FROM cart_items ci
+                JOIN carts c ON c.id = ci.cart_id
+                WHERE c.user_id = ? AND ci.product_id = ?
+                """, Integer.class, userId, productId);
     }
 
     private PhysicalProduct physical(UUID productId) {
