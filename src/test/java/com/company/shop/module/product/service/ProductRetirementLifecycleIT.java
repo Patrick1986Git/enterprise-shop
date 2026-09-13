@@ -141,7 +141,8 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
     @Test
     void checkoutWithUnavailableLine_shouldFailBeforeStockOrderPaymentOrProviderMutation() {
         Fixture fixture = persistProductWithCart();
-        persistUnrelatedOrderAndPayment();
+        UUID unrelatedProductId = persistProduct("Unrelated product", "UNRELATED", 1);
+        persistUnrelatedOrderAndPayment(unrelatedProductId);
         authenticate(fixture);
         productService.delete(fixture.productId());
         PhysicalProduct before = physical(fixture.productId());
@@ -261,13 +262,13 @@ class ProductRetirementLifecycleIT extends PostgresContainerSupport {
         });
     }
 
-    private void persistUnrelatedOrderAndPayment() {
+    private void persistUnrelatedOrderAndPayment(UUID unrelatedProductId) {
         transaction().executeWithoutResult(status -> {
             String suffix = UUID.randomUUID().toString().substring(0, 8);
             User unrelatedUser = new User("unrelated-" + suffix + "@example.com", "password", "Unrelated", "User");
             entityManager.persist(unrelatedUser);
             Order order = new Order(unrelatedUser.getId(), unrelatedUser.getEmail(), "unrelated-checkout-" + suffix);
-            order.addItem(new OrderItem(UUID.randomUUID(), "Unrelated product", "UNRELATED", 1, BigDecimal.TEN));
+            order.addItem(new OrderItem(unrelatedProductId, "Unrelated product", "UNRELATED", 1, BigDecimal.TEN));
             entityManager.persist(order);
             entityManager.persist(new Payment(order, "STRIPE", order.getTotalAmount()));
             entityManager.flush();
