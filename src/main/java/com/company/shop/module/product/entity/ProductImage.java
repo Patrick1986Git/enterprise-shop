@@ -51,7 +51,7 @@ public class ProductImage {
      * Determines the display sequence in the product gallery.
      * Lower values are typically displayed first.
      */
-    @Column(name = "sort_order")
+    @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 
     /**
@@ -69,15 +69,19 @@ public class ProductImage {
     }
 
     /**
-     * Initializes a new product image with a default sort order.
+     * Initializes a standalone product image at the first display position.
      *
      * @param imageUrl the resource location.
      * @param product  the associated product aggregate.
      */
     public ProductImage(String imageUrl, Product product) {
+        this(imageUrl, product, 0);
+    }
+
+    ProductImage(String imageUrl, Product product, int sortOrder) {
         this.imageUrl = imageUrl;
         this.product = product;
-        this.sortOrder = 0;
+        this.sortOrder = sortOrder;
     }
 
     public UUID getId() {
@@ -90,6 +94,10 @@ public class ProductImage {
 
     public Product getProduct() {
         return product;
+    }
+
+    public int getSortOrder() {
+        return sortOrder;
     }
 
     public void setProduct(Product product) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +15,36 @@ import com.company.shop.module.product.exception.ProductStockInvalidException;
 import com.company.shop.module.user.entity.User;
 
 class ProductDomainValidationTest {
+
+    @Test
+    void replaceImages_shouldAssignSubmittedDisplayOrderAndMainImage() {
+        Product product = new Product("Prod", "prod", "SKU", "desc", BigDecimal.ONE, 3,
+                new Category("Name", "slug", "desc"));
+
+        product.replaceImages(List.of("A", "B", "C"));
+
+        assertThat(product.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
+        assertThat(product.getImages()).extracting(ProductImage::getImageUrl).containsExactly("A", "B", "C");
+        assertThat(product.getMainImageUrl()).isEqualTo("A");
+
+        product.replaceImages(List.of("C", "A", "B"));
+
+        assertThat(product.getImages()).extracting(ProductImage::getSortOrder).containsExactly(0, 1, 2);
+        assertThat(product.getMainImageUrl()).isEqualTo("C");
+    }
+
+    @Test
+    void replaceImages_shouldPreserveExistingNullAndEmptySemantics() {
+        Product product = new Product("Prod", "prod", "SKU", "desc", BigDecimal.ONE, 3,
+                new Category("Name", "slug", "desc"));
+
+        product.replaceImages(null);
+        assertThat(product.getImages()).isEmpty();
+        assertThat(product.getMainImageUrl()).isNull();
+
+        product.replaceImages(List.of());
+        assertThat(product.getImages()).isEmpty();
+    }
 
     @Test
     void restoreReservedStock_shouldAddExactQuantityAndRejectInvalidInput() {
