@@ -77,7 +77,7 @@ public class Cart extends AuditableEntity {
 	 */
 	public void addItem(Product product, int quantity) {
 		Optional<CartItem> existingItem = items.stream()
-				.filter(item -> item.getProduct().getId().equals(product.getId())).findFirst();
+				.filter(item -> item.getProductId().equals(product.getId())).findFirst();
 
 		if (existingItem.isPresent()) {
 			existingItem.get().increaseQuantity(quantity);
@@ -92,7 +92,7 @@ public class Cart extends AuditableEntity {
 	 * @param productId unique identifier of the product to remove.
 	 */
 	public void removeItem(UUID productId) {
-		items.removeIf(item -> item.getProduct().getId().equals(productId));
+		items.removeIf(item -> item.getProductId().equals(productId));
 	}
 
 	/**
@@ -102,7 +102,7 @@ public class Cart extends AuditableEntity {
 	 * @param quantity  the new absolute quantity.
 	 */
 	public void updateItemQuantity(UUID productId, int quantity) {
-		items.stream().filter(item -> item.getProduct().getId().equals(productId)).findFirst()
+		items.stream().filter(item -> item.getProductId().equals(productId)).findFirst()
 				.ifPresent(item -> item.updateQuantity(quantity));
 	}
 
@@ -115,7 +115,7 @@ public class Cart extends AuditableEntity {
 
 	public void reconcileItem(UUID productId, int checkedOutQuantity) {
 		items.stream()
-				.filter(item -> item.getProduct().getId().equals(productId))
+				.filter(item -> item.getProductId().equals(productId))
 				.findFirst()
 				.ifPresent(item -> {
 					if (item.getQuantity() <= checkedOutQuantity) {
@@ -132,7 +132,8 @@ public class Cart extends AuditableEntity {
 	 * @return a {@link BigDecimal} representing the total price.
 	 */
 	public BigDecimal calculateTotalAmount() {
-		return items.stream().map(item -> item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+		return items.stream().filter(item -> item.getProduct() != null)
+				.map(item -> item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 

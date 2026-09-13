@@ -62,13 +62,14 @@ public interface CartMapper {
      * @param item the source cart item entity.
      * @return a flattened cart item response DTO.
      */
-    @Mapping(target = "productId", source = "product.id")
+    @Mapping(target = "productId", source = "productId")
     @Mapping(target = "productName", source = "product.name")
     @Mapping(target = "productSlug", source = "product.slug")
     @Mapping(target = "unitPrice", source = "product.price")
     @Mapping(target = "stockAvailable", source = "product.stock")
     @Mapping(target = "subtotal", expression = "java(calculateSubtotal(item))")
     @Mapping(target = "isLowStock", source = "item", qualifiedByName = "checkLowStock")
+    @Mapping(target = "available", expression = "java(item.getProduct() != null)")
     @Mapping(target = "mainImageUrl", ignore = true) 
     CartItemResponseDTO toItemDTO(CartItem item);
 

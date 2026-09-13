@@ -24,7 +24,7 @@ public class CartCheckoutFacadeImpl implements CartCheckoutFacade {
         Cart cart = cartService.getCartEntityForUser(userId);
 
         List<CartCheckoutItem> items = cart.getItems().stream()
-                .map(item -> new CartCheckoutItem(item.getProduct().getId(), item.getQuantity()))
+                .map(item -> new CartCheckoutItem(item.getProductId(), item.getQuantity()))
                 .toList();
 
         return new CartCheckoutSnapshot(cart.getId(), items);

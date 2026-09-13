@@ -132,7 +132,8 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public void delete(UUID id) {
-        Product product = getProductOrThrow(id);
+        Product product = productRepo.findByIdWithLock(id)
+                .orElseThrow(() -> new ProductNotFoundException(id));
         product.delete();
     }
 

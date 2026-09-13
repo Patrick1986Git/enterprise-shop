@@ -80,7 +80,7 @@ public class CartServiceImpl implements CartService {
         Product product = productCatalogFacade.resolveProductForCart(request.productId());
 
         int currentInCart = cart.getItems().stream()
-                .filter(item -> item.getProduct().getId().equals(request.productId()))
+                .filter(item -> item.getProductId().equals(request.productId()))
                 .mapToInt(CartItem::getQuantity)
                 .sum();
 

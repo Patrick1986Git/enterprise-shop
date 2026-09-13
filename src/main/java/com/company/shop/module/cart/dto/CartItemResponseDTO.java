@@ -89,5 +89,11 @@ public record CartItemResponseDTO(
                 example = "false",
                 accessMode = Schema.AccessMode.READ_ONLY
         )
-        boolean isLowStock
+        boolean isLowStock,
+        @Schema(
+                description = "Whether the product remains available in the active catalog.",
+                example = "true",
+                accessMode = Schema.AccessMode.READ_ONLY
+        )
+        boolean available
 ) {}

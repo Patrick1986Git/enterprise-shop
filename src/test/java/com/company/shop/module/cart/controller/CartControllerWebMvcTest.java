@@ -555,7 +555,8 @@ class CartControllerWebMvcTest {
                 2,
                 new BigDecimal("199.98"),
                 10,
-                false);
+                false,
+                true);
 
         return new CartResponseDTO(
                 cartId,
