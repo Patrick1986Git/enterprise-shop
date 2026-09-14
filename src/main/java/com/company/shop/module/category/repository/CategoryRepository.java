@@ -4,9 +4,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.company.shop.module.category.entity.Category;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * Repository interface for {@link Category} entity persistence management.
@@ -19,6 +24,15 @@ import com.company.shop.module.category.entity.Category;
  */
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select category from Category category where category.id = :id")
+    Optional<Category> findByIdWithLock(@Param("id") UUID id);
+
+    @Query(value = "select pg_advisory_xact_lock(1128354383)", nativeQuery = true)
+    void acquireHierarchyMutationLock();
+
+    boolean existsByParentId(UUID parentId);
 
     /**
      * Retrieves a category by its URL-friendly slug.

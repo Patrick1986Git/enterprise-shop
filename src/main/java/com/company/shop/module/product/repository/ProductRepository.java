@@ -37,6 +37,8 @@ import jakarta.persistence.LockModeType;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpecificationExecutor<Product> {
 
+    boolean existsByCategoryId(UUID categoryId);
+
     /**
      * Retrieves a product by its unique identifier with a pessimistic write lock.
      * <p>

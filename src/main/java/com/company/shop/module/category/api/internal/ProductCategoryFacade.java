@@ -13,5 +13,9 @@ import com.company.shop.module.category.entity.Category;
  */
 public interface ProductCategoryFacade {
 
+    /**
+     * Resolves and locks an active category for the duration of the caller's transaction.
+     * Category retirement uses the same row lock as its assignment serialization boundary.
+     */
     Optional<Category> findAssignableCategory(UUID categoryId);
 }
