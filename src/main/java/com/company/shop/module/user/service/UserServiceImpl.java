@@ -63,6 +63,7 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public void delete(UUID id) {
+		repository.acquireCommerceLifecycleLock(id);
 		User user = repository.findActiveById(id)
 				.orElseThrow(UserNotFoundException::new);
 
@@ -70,9 +71,11 @@ public class UserServiceImpl implements UserService {
 	}
 
 	@Override
-	@Transactional(readOnly = true)
 	public User getCurrentUserEntity() {
 		String email = currentUserProvider.getCurrentUserEmail();
+		User candidate = repository.findActiveByEmailWithRoles(email)
+				.orElseThrow(UserNotFoundException::new);
+		repository.acquireCommerceLifecycleLock(candidate.getId());
 		return repository.findActiveByEmailWithRoles(email)
 				.orElseThrow(UserNotFoundException::new);
 	}

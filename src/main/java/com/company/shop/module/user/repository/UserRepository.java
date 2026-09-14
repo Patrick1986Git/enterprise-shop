@@ -15,6 +15,9 @@ import com.company.shop.module.user.entity.User;
 
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
 
+    @Query(value = "SELECT pg_advisory_xact_lock(hashtextextended(CAST(:userId AS text), 0))", nativeQuery = true)
+    void acquireCommerceLifecycleLock(@Param("userId") UUID userId);
+
     @Query("""
             SELECT DISTINCT u
             FROM User u

@@ -23,6 +23,11 @@ mutations continue to serialize on the cart row. When no row exists, creation ta
 advisory lock derived from the user ID, repeats the row-locking lookup, and creates only if still absent. The database
 `UNIQUE (carts.user_id)` constraint remains the final one-cart-per-user invariant. Checkout uses lookup-only behavior:
 a missing cart is rejected rather than provisioned. Clear and post-payment reconciliation remain no-ops when absent.
+Active-user resolution and User retirement take that same advisory lock before any Cart row lock. The winner may
+commit its complete transaction; the waiter then rechecks active User state. Retirement leaves the physical Cart and
+its non-null foreign key intact but makes the Cart ORM-inert through an owner-activity restriction. Orders retain UUID
+and email snapshots and do not depend on a live User association. Checkout wins at its durable database-preparation
+commit; its provider call remains outside the transaction and may finish after a concurrent retirement.
 
 - HTTP APIs: `/api/v1/me/cart` and nested item operations.
 - Owns `Cart`, `CartItem`, cart DTOs, mapper, repository, service, and cart-specific stock exceptions.

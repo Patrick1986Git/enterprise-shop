@@ -61,6 +61,8 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
 
         mockMvc.perform(get("/api/v1/admin/users").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/me/cart").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
 
         mockMvc.perform(delete("/api/v1/admin/users/{id}", admin.getId())
                         .with(csrf())
@@ -74,6 +76,10 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
 
         mockMvc.perform(get("/api/v1/admin/users").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/me/cart").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM carts WHERE user_id = ?", Long.class, admin.getId())).isOne();
     }
 
     @Test

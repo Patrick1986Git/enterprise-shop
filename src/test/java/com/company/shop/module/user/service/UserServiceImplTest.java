@@ -54,6 +54,47 @@ class UserServiceImplTest {
     }
 
     @Test
+    void getCurrentUserEntity_shouldLockCandidateAndRecheckActiveState() {
+        String email = "john@example.com";
+        User user = new User(email, "encoded", "John", "Doe");
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
+        when(userRepository.findActiveByEmailWithRoles(email))
+                .thenReturn(Optional.of(user), Optional.of(user));
+
+        assertThat(service.getCurrentUserEntity()).isSameAs(user);
+
+        verify(userRepository).acquireCommerceLifecycleLock(user.getId());
+    }
+
+    @Test
+    void getCurrentUserEntity_shouldRejectRetirementThatWinsBeforeLifecycleLock() {
+        String email = "john@example.com";
+        User user = new User(email, "encoded", "John", "Doe");
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
+        when(userRepository.findActiveByEmailWithRoles(email))
+                .thenReturn(Optional.of(user), Optional.empty());
+
+        assertThatThrownBy(() -> service.getCurrentUserEntity())
+                .isInstanceOf(UserNotFoundException.class);
+
+        verify(userRepository).acquireCommerceLifecycleLock(user.getId());
+    }
+
+    @Test
+    void delete_shouldAcquireCommerceLifecycleLockBeforeActiveLookup() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("john@example.com", "encoded", "John", "Doe");
+        when(userRepository.findActiveById(userId)).thenReturn(Optional.of(user));
+
+        service.delete(userId);
+
+        var inOrder = org.mockito.Mockito.inOrder(userRepository);
+        inOrder.verify(userRepository).acquireCommerceLifecycleLock(userId);
+        inOrder.verify(userRepository).findActiveById(userId);
+        assertThat(user.isDeleted()).isTrue();
+    }
+
+    @Test
     void update_shouldUseActiveLookupAndTrimNames() {
         UUID userId = UUID.randomUUID();
         User user = new User("john@example.com", "encoded", "John", "Doe");
