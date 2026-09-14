@@ -95,6 +95,7 @@ The production tree has the following explicit lock acquisition sites:
 
 | Site | Purpose and contention class | Current wait behavior |
 | --- | --- | --- |
+| `UserRepository.acquireCommerceLifecycleLock` | Transaction-scoped advisory boundary between User retirement and authenticated Cart/checkout work. It uses the same per-user key as first-Cart creation. | Same-user work waits for the winning transaction and then rechecks active User state; hash collisions can conservatively serialize unrelated users. |
 | `OrderRepository.acquireCheckoutIdempotencyLock` | Transaction-scoped advisory lock serializes checkout by user and normalized idempotency key. | Blocking and potentially unbounded. The waiting request thread retains its Hikari connection. Replacing it with `pg_try_advisory_xact_lock` would turn serialization into an immediate failure/retry contract and is not correctness-equivalent. |
 | `CartRepository.findByUserIdWithItemsForUpdate` | Cart mutations and post-payment reconciliation serialization. | Normal short contention, but no configured upper bound. |
 | `CartRepository.lockCartCreationForUser` | Transaction-scoped advisory serialization only after a cart lookup finds no row. | Same-user first touches wait for the creator transaction; hash collisions can conservatively serialize unrelated first touches. |
@@ -117,6 +118,20 @@ The production tree has the following explicit lock acquisition sites:
 still wait for a concurrent transaction. Ordinary ORM inserts, updates, deletes, foreign-key checks, and unique checks
 can likewise wait even though no lock syntax appears in repository source. Consequently the explicit-lock list is not
 a claim that all other SQL is non-blocking.
+
+### User retirement and commerce
+
+User retirement and active current-user resolution share one transaction-scoped advisory lock derived from the User
+UUID. Resolution first finds a candidate from the authenticated email, acquires the lock, and repeats the active lookup;
+retirement acquires the same lock before its active lookup and soft-delete update. Cart work therefore orders locks as
+User lifecycle advisory lock, then Cart row lock; checkout orders them as User lifecycle advisory lock, checkout
+idempotency advisory lock, Cart read, then sorted Product row locks. No retirement path takes a Cart or Product row lock.
+
+The winner is allowed to commit atomically. If retirement wins, the repeated active lookup rejects waiting Cart or
+checkout work before it can create or mutate commerce state. If an operation wins, retirement waits for its transaction
+and then retires the User. The physical Cart and its non-null `user_id` foreign key are retained, but an owner-activity
+SQL restriction makes it unavailable to Hibernate after retirement. Historical Orders store User UUID and email values,
+not a User association, so their snapshots remain readable and unchanged.
 
 ### Category retirement and assignment
 

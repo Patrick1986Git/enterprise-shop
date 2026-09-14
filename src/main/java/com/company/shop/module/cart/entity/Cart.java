@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.hibernate.annotations.SQLRestriction;
+
 import com.company.shop.common.model.AuditableEntity;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.user.entity.User;
@@ -38,6 +40,7 @@ import jakarta.persistence.Table;
  */
 @Entity
 @Table(name = "carts")
+@SQLRestriction("exists (select 1 from users cart_owner where cart_owner.id = user_id and cart_owner.deleted = false)")
 public class Cart extends AuditableEntity {
 
 	/**
