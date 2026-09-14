@@ -129,9 +129,13 @@ idempotency advisory lock, Cart read, then sorted Product row locks. No retireme
 
 The winner is allowed to commit atomically. If retirement wins, the repeated active lookup rejects waiting Cart or
 checkout work before it can create or mutate commerce state. If an operation wins, retirement waits for its transaction
-and then retires the User. The physical Cart and its non-null `user_id` foreign key are retained, but an owner-activity
-SQL restriction makes it unavailable to Hibernate after retirement. Historical Orders store User UUID and email values,
-not a User association, so their snapshots remain readable and unchanged.
+and then retires the User. For checkout, the winning point is the commit of the preparation transaction containing the
+Order, Payment, inventory reservation, expiration work and outbox event. Payment-provider initialization intentionally
+runs after that commit. Retirement may therefore complete while the provider call is in flight; the already-authorized,
+durably prepared checkout may finish, while any new Cart or checkout request is rejected. No database transaction or
+advisory lock is held across provider I/O. The physical Cart and its non-null `user_id` foreign key are retained, but an
+owner-activity SQL restriction makes it unavailable to Hibernate after retirement. Historical Orders store User UUID
+and email values, not a User association, so their snapshots remain readable and unchanged.
 
 ### Category retirement and assignment
 

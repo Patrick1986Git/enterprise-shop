@@ -46,9 +46,11 @@ import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.UserNotFoundException;
+import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 import com.company.shop.security.CurrentUserProvider;
+import com.company.shop.security.SecurityConstants;
 
 import jakarta.persistence.EntityManager;
 
@@ -61,6 +63,7 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
     @Autowired private CartService cartService;
     @Autowired private OrderService orderService;
     @Autowired private UserRepository userRepository;
+    @Autowired private RoleRepository roleRepository;
     @Autowired private CartRepository cartRepository;
     @Autowired private CategoryRepository categoryRepository;
     @Autowired private ProductRepository productRepository;
@@ -118,48 +121,48 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
     @Test
     void retirementWinning_shouldRejectFirstCartCreationMutationAndCheckoutWithoutPartialState() throws Exception {
         Fixture noCart = fixture(false);
-        assertRetirementWins(noCart, () -> cartService.getMyCart());
+        assertRetirementWinsCartOperation(noCart, cartService::getMyCart);
         assertThat(physicalCartCount(noCart.user().getId())).isZero();
 
         Fixture mutation = fixture(true);
         int quantityBefore = physicalCartQuantity(mutation.cartId());
-        assertRetirementWins(mutation,
+        assertRetirementWinsCartOperation(mutation,
                 () -> cartService.addToCart(new AddToCartRequestDTO(mutation.product().getId(), 1)));
         assertThat(physicalCartQuantity(mutation.cartId())).isEqualTo(quantityBefore);
 
         Fixture checkout = fixture(true);
         int stockBefore = physicalStock(checkout.product().getId());
         clearInvocations(paymentService);
-        assertRetirementWins(checkout, () -> orderService.placeOrderFromCart(
-                "retirement-first", new OrderCheckoutRequestDTO(null, null)));
+        assertRetirementWinsCheckout(checkout);
         assertThat(physicalStock(checkout.product().getId())).isEqualTo(stockBefore);
         assertThat(count("orders", checkout.user().getId())).isZero();
         assertThat(countPayments(checkout.user().getId())).isZero();
         assertThat(countExpirationWork(checkout.user().getId())).isZero();
         assertThat(countOutbox(checkout.user().getId())).isZero();
+        assertThat(physicalCartQuantity(checkout.cartId())).isEqualTo(1);
         verifyNoInteractions(paymentService);
     }
 
     @Test
     void operationWinning_shouldCommitFirstCartMutationAndCheckoutBeforeRetirement() throws Exception {
         Fixture firstCart = fixture(false);
-        assertOperationWins(firstCart, cartService::getMyCart);
+        assertCartOperationWins(firstCart, cartService::getMyCart);
         assertThat(physicalCartCount(firstCart.user().getId())).isOne();
 
         Fixture mutation = fixture(true);
         int before = physicalCartQuantity(mutation.cartId());
-        assertOperationWins(mutation,
+        assertCartOperationWins(mutation,
                 () -> cartService.addToCart(new AddToCartRequestDTO(mutation.product().getId(), 1)));
         assertThat(physicalCartQuantity(mutation.cartId())).isEqualTo(before + 1);
 
         Fixture checkout = fixture(true);
         clearInvocations(paymentService);
-        assertOperationWins(checkout, () -> orderService.placeOrderFromCart(
-                "operation-first", new OrderCheckoutRequestDTO(null, null)));
+        assertCheckoutPreparationWins(checkout);
         assertThat(count("orders", checkout.user().getId())).isOne();
         assertThat(countPayments(checkout.user().getId())).isOne();
         assertThat(countExpirationWork(checkout.user().getId())).isOne();
         assertThat(physicalStock(checkout.product().getId())).isEqualTo(9);
+        assertThat(physicalCartQuantity(checkout.cartId())).isEqualTo(1);
         verify(paymentService).createPaymentIntent(any(Order.class));
     }
 
@@ -171,13 +174,15 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
             throw new ForcedRollback();
         })).isInstanceOf(ForcedRollback.class);
 
+        entityManager.clear();
         authenticatedEmail.set(fixture.user().getEmail());
         assertThat(userRepository.findActiveById(fixture.user().getId())).isPresent();
+        assertThat(cartRepository.findById(fixture.cartId())).isPresent();
         assertThat(cartService.addToCart(new AddToCartRequestDTO(fixture.product().getId(), 1)).totalItemsCount())
                 .isEqualTo(2);
     }
 
-    private void assertRetirementWins(Fixture fixture, Runnable operation) throws Exception {
+    private void assertRetirementWinsCartOperation(Fixture fixture, Runnable operation) throws Exception {
         CountDownLatch retired = new CountDownLatch(1);
         CountDownLatch commit = new CountDownLatch(1);
         AtomicInteger waiterPid = new AtomicInteger();
@@ -205,7 +210,7 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
         assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     }
 
-    private void assertOperationWins(Fixture fixture, Runnable operation) throws Exception {
+    private void assertCartOperationWins(Fixture fixture, Runnable operation) throws Exception {
         CountDownLatch operationDone = new CountDownLatch(1);
         CountDownLatch commit = new CountDownLatch(1);
         AtomicInteger waiterPid = new AtomicInteger();
@@ -231,6 +236,63 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
                 "select deleted from users where id = ?", Boolean.class, fixture.user().getId())).isTrue();
     }
 
+    private void assertRetirementWinsCheckout(Fixture fixture) throws Exception {
+        CountDownLatch retired = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        Future<?> retirement = executor.submit(() -> transaction().executeWithoutResult(status -> {
+            userRepository.acquireCommerceLifecycleLock(fixture.user().getId());
+            User active = userRepository.findActiveById(fixture.user().getId()).orElseThrow();
+            active.markDeleted();
+            userRepository.flush();
+            retired.countDown();
+            await(commit);
+        }));
+        assertThat(retired.await(10, TimeUnit.SECONDS)).isTrue();
+        Future<?> checkout = executor.submit(() -> {
+            authenticatedEmail.set(fixture.user().getEmail());
+            orderService.placeOrderFromCart("retirement-first", new OrderCheckoutRequestDTO(null, null));
+        });
+
+        assertThat(awaitAnyAdvisoryWait()).isTrue();
+        commit.countDown();
+        retirement.get(10, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> checkout.get(10, TimeUnit.SECONDS))
+                .hasRootCauseInstanceOf(UserNotFoundException.class);
+        executor.shutdown();
+        assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    }
+
+    private void assertCheckoutPreparationWins(Fixture fixture) throws Exception {
+        CountDownLatch providerEntered = new CountDownLatch(1);
+        CountDownLatch releaseProvider = new CountDownLatch(1);
+        when(paymentService.createPaymentIntent(any(Order.class))).thenAnswer(invocation -> {
+            providerEntered.countDown();
+            await(releaseProvider);
+            return new PaymentIntentResponseDTO("pi_test", "pk_test");
+        });
+
+        var executor = Executors.newFixedThreadPool(2);
+        Future<?> checkout = executor.submit(() -> {
+            authenticatedEmail.set(fixture.user().getEmail());
+            orderService.placeOrderFromCart("operation-first", new OrderCheckoutRequestDTO(null, null));
+        });
+        assertThat(providerEntered.await(10, TimeUnit.SECONDS)).isTrue();
+
+        Future<?> retirement = executor.submit(() -> userService.delete(fixture.user().getId()));
+        retirement.get(10, TimeUnit.SECONDS);
+        assertThat(jdbcTemplate.queryForObject(
+                "select deleted from users where id = ?", Boolean.class, fixture.user().getId())).isTrue();
+        assertThat(checkout.isDone()).isFalse();
+
+        releaseProvider.countDown();
+        checkout.get(10, TimeUnit.SECONDS);
+        authenticatedEmail.set(fixture.user().getEmail());
+        assertThatThrownBy(cartService::getMyCart).isInstanceOf(UserNotFoundException.class);
+        executor.shutdown();
+        assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    }
+
     private boolean awaitAdvisoryWait(AtomicInteger pid) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline) {
@@ -247,6 +309,22 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
         return false;
     }
 
+    private boolean awaitAnyAdvisoryWait() {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                    select exists (select 1 from pg_locks locks
+                    join pg_stat_activity activity on activity.pid = locks.pid
+                    where locks.locktype = 'advisory' and not locks.granted
+                    and activity.wait_event_type = 'Lock' and activity.wait_event = 'advisory')
+                    """, Boolean.class))) {
+                return true;
+            }
+            Thread.onSpinWait();
+        }
+        return false;
+    }
+
     private Fixture fixture(boolean withCart) {
         String suffix = UUID.randomUUID().toString();
         Category category = categoryRepository.saveAndFlush(new Category(
@@ -254,8 +332,9 @@ class UserCommerceLifecycleIT extends PostgresContainerSupport {
         Product product = productRepository.saveAndFlush(new Product(
                 "Lifecycle product", "lifecycle-product-" + suffix, "LIFE-" + suffix,
                 "Lifecycle product", BigDecimal.TEN, 10, category));
-        User user = userRepository.saveAndFlush(new User(
-                "lifecycle-" + suffix + "@example.com", "encoded", "Life", "Cycle"));
+        User user = new User("lifecycle-" + suffix + "@example.com", "encoded", "Life", "Cycle");
+        user.addRole(roleRepository.findByName(SecurityConstants.ROLE_USER).orElseThrow());
+        user = userRepository.saveAndFlush(user);
         UUID cartId = null;
         if (withCart) {
             Cart cart = new Cart(user);
