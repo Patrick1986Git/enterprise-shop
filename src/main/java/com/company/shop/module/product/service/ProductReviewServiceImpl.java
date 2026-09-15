@@ -82,7 +82,7 @@ public class ProductReviewServiceImpl implements ProductReviewService {
                 .orElseThrow(() -> new ProductReviewNotFoundException(reviewId));
 
         CurrentUserSnapshot currentUser = currentUserFacade.getCurrentUser();
-        boolean isOwner = review.getUser().getId().equals(currentUser.id());
+        boolean isOwner = review.getAuthorId().equals(currentUser.id());
         boolean isAdmin = currentUser.hasRole(SecurityConstants.ROLE_ADMIN);
 
         if (!isOwner && !isAdmin) {
@@ -131,7 +131,7 @@ public class ProductReviewServiceImpl implements ProductReviewService {
 
     private ProductReviewResponseDTO mapToResponse(ProductReview review) {
         return new ProductReviewResponseDTO(review.getId(),
-                review.getUser().getFirstName() + " " + review.getUser().getLastName(),
+                review.getAuthorName(),
                 review.getRating(),
                 review.getComment(),
                 review.getCreatedAt());

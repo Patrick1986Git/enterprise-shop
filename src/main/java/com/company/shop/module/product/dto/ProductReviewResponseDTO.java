@@ -14,7 +14,7 @@ public record ProductReviewResponseDTO(
     )
     UUID id,
     @Schema(
-            description = "Display name of the review author.",
+            description = "Display name captured when the review was published; it remains stable if the author account changes or is retired.",
             example = "Alex Morgan",
             accessMode = Schema.AccessMode.READ_ONLY
     )
