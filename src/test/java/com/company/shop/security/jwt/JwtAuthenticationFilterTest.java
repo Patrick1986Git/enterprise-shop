@@ -132,6 +132,22 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void doFilter_shouldBindValidEmailSubjectToWhateverActiveIdentityCurrentlyOwnsThatEmail() throws Exception {
+        MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
+        when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(activeUser(ROLE_ADMIN));
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        Authentication reboundAuthentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(reboundAuthentication).isNotNull();
+        assertThat(reboundAuthentication.getName()).isEqualTo(USER_EMAIL);
+        assertThat(authorityNames(reboundAuthentication)).containsExactly(ROLE_ADMIN);
+    }
+
+    @Test
     void doFilter_shouldKeepAuthenticationNull_whenTokenSubjectDoesNotExist() throws Exception {
         MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();

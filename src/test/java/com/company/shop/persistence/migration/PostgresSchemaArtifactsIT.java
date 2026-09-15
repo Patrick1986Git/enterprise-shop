@@ -61,21 +61,28 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
 
     @Test
     void schema_shouldContainCaseInsensitiveEmailUniquenessMechanism() {
-        List<String> userIndexes = jdbcTemplate.queryForList(
-                "SELECT indexdef FROM pg_indexes " +
-                        "WHERE schemaname = 'public' AND tablename = 'users'",
-                String.class);
+        List<String> userIndexes = jdbcTemplate.queryForList("""
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'users'
+                  AND indexdef ILIKE 'CREATE UNIQUE INDEX%'
+                """, String.class);
 
-        assertThat(userIndexes)
-                .isNotEmpty()
-                .anyMatch(indexDef -> {
-                    String normalized = indexDef == null
-                            ? ""
-                            : indexDef.toLowerCase().replace(" ", "");
-                    return normalized.contains("unique")
-                            && normalized.contains("lower(")
-                            && normalized.contains("email");
-                });
+        assertThat(userIndexes).contains("users_email_key", "ux_users_email_lower");
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT indexdef ILIKE '%USING btree (lower((email)::text))%'
+                       AND indexdef NOT ILIKE '% WHERE %'
+                FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'users'
+                  AND indexname = 'ux_users_email_lower'
+                """, Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT indexdef ILIKE '%USING btree (email)%'
+                       AND indexdef NOT ILIKE '% WHERE %'
+                FROM pg_indexes
+                WHERE schemaname = 'public' AND tablename = 'users'
+                  AND indexname = 'users_email_key'
+                """, Boolean.class)).isTrue();
     }
 
     @Test
