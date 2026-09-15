@@ -1,5 +1,7 @@
 package com.company.shop.security;
 
+import java.util.Set;
+
 import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +31,10 @@ import com.company.shop.security.jwt.JwtTokenProvider;
 public class AuthServiceImpl implements AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
-    private static final String USER_EMAIL_UNIQUE_CONSTRAINT = "ux_users_email_lower";
+    private static final Set<String> USER_EMAIL_UNIQUE_CONSTRAINTS = Set.of(
+            "users_email_key",
+            "ux_users_email_lower"
+    );
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
@@ -94,11 +99,16 @@ public class AuthServiceImpl implements AuthService {
 		Throwable current = ex;
 		while (current != null) {
 			if (current instanceof ConstraintViolationException constraintViolationException
-					&& USER_EMAIL_UNIQUE_CONSTRAINT.equalsIgnoreCase(constraintViolationException.getConstraintName())) {
+					&& isUserEmailUniqueConstraint(constraintViolationException.getConstraintName())) {
 				return true;
 			}
 			current = current.getCause();
 		}
 		return false;
+	}
+
+	private boolean isUserEmailUniqueConstraint(String constraintName) {
+		return constraintName != null && USER_EMAIL_UNIQUE_CONSTRAINTS.stream()
+				.anyMatch(knownConstraint -> knownConstraint.equalsIgnoreCase(constraintName));
 	}
 }
