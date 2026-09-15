@@ -61,27 +61,38 @@ class PostgresSchemaArtifactsIT extends PostgresContainerSupport {
 
     @Test
     void schema_shouldContainCaseInsensitiveEmailUniquenessMechanism() {
-        List<String> userIndexes = jdbcTemplate.queryForList("""
-                SELECT indexname
-                FROM pg_indexes
-                WHERE schemaname = 'public' AND tablename = 'users'
-                  AND indexdef ILIKE 'CREATE UNIQUE INDEX%'
-                """, String.class);
-
-        assertThat(userIndexes).contains("users_email_key", "ux_users_email_lower");
         assertThat(jdbcTemplate.queryForObject("""
-                SELECT indexdef ILIKE '%USING btree (lower((email)::text))%'
-                       AND indexdef NOT ILIKE '% WHERE %'
-                FROM pg_indexes
-                WHERE schemaname = 'public' AND tablename = 'users'
-                  AND indexname = 'ux_users_email_lower'
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint constraint_definition
+                    JOIN pg_class users_table ON users_table.oid = constraint_definition.conrelid
+                    JOIN pg_namespace table_schema ON table_schema.oid = users_table.relnamespace
+                    JOIN pg_attribute email_column
+                      ON email_column.attrelid = users_table.oid
+                     AND email_column.attname = 'email'
+                    WHERE table_schema.nspname = 'public'
+                      AND users_table.relname = 'users'
+                      AND constraint_definition.conname = 'users_email_key'
+                      AND constraint_definition.contype = 'u'
+                      AND array_length(constraint_definition.conkey, 1) = 1
+                      AND email_column.attnum = ANY (constraint_definition.conkey)
+                )
                 """, Boolean.class)).isTrue();
         assertThat(jdbcTemplate.queryForObject("""
-                SELECT indexdef ILIKE '%USING btree (email)%'
-                       AND indexdef NOT ILIKE '% WHERE %'
-                FROM pg_indexes
-                WHERE schemaname = 'public' AND tablename = 'users'
-                  AND indexname = 'users_email_key'
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_index index_definition
+                    JOIN pg_class index_relation ON index_relation.oid = index_definition.indexrelid
+                    JOIN pg_class users_table ON users_table.oid = index_definition.indrelid
+                    JOIN pg_namespace table_schema ON table_schema.oid = users_table.relnamespace
+                    WHERE table_schema.nspname = 'public'
+                      AND users_table.relname = 'users'
+                      AND index_relation.relname = 'ux_users_email_lower'
+                      AND index_definition.indisunique
+                      AND index_definition.indpred IS NULL
+                      AND lower(pg_get_expr(index_definition.indexprs, index_definition.indrelid))
+                            LIKE 'lower(%email%)'
+                )
                 """, Boolean.class)).isTrue();
     }
 

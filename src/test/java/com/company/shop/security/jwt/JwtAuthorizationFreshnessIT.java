@@ -3,7 +3,6 @@ package com.company.shop.security.jwt;
 import static com.company.shop.security.SecurityConstants.ROLE_ADMIN;
 import static com.company.shop.security.SecurityConstants.ROLE_USER;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -25,12 +24,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
-import com.company.shop.module.user.dto.RegisterRequestDTO;
-import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
-import com.company.shop.security.AuthService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -55,9 +51,6 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private AuthService authService;
 
     @Autowired
     private JwtTokenProvider tokenProvider;
@@ -126,11 +119,6 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
 
         mockMvc.perform(get("/api/v1/me/cart").header("Authorization", "Bearer " + issuedToken))
                 .andExpect(status().isForbidden());
-
-        assertThatThrownBy(() -> authService.register(new RegisterRequestDTO(
-                "  " + email.toUpperCase() + "  ", PASSWORD, PASSWORD, "JWT", "Replacement")))
-                .isInstanceOf(UserAlreadyExistsException.class)
-                .hasMessage("User account already exists");
 
         String conflictBody = mockMvc.perform(post("/api/v1/auth/register")
                         .with(csrf())
