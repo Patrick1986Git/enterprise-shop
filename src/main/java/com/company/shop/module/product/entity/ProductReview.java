@@ -1,5 +1,7 @@
 package com.company.shop.module.product.entity;
 
+import java.util.UUID;
+
 import org.hibernate.annotations.SQLRestriction;
 
 import com.company.shop.common.model.SoftDeleteEntity;
@@ -33,6 +35,12 @@ public class ProductReview extends SoftDeleteEntity {
 	@JoinColumn(name = "user_id")
 	private User user;
 
+	@Column(name = "user_id", insertable = false, updatable = false, nullable = false)
+	private UUID authorId;
+
+	@Column(name = "author_name", nullable = false, length = 201)
+	private String authorName;
+
 	@Column(nullable = false)
 	private int rating;
 
@@ -53,6 +61,7 @@ public class ProductReview extends SoftDeleteEntity {
 		validateComment(sanitizedComment);
 		this.product = product;
 		this.user = user;
+		this.authorName = displayName(user);
 		this.rating = rating;
 		this.comment = sanitizedComment;
 	}
@@ -63,6 +72,14 @@ public class ProductReview extends SoftDeleteEntity {
 
 	public User getUser() {
 		return user;
+	}
+
+	public UUID getAuthorId() {
+		return authorId != null ? authorId : user.getId();
+	}
+
+	public String getAuthorName() {
+		return authorName;
 	}
 
 	public int getRating() {
@@ -118,5 +135,12 @@ public class ProductReview extends SoftDeleteEntity {
 		}
 		String normalized = comment.trim();
 		return normalized.isEmpty() ? null : normalized;
+	}
+
+	private String displayName(User user) {
+		String firstName = user.getFirstName() == null ? "" : user.getFirstName().trim();
+		String lastName = user.getLastName() == null ? "" : user.getLastName().trim();
+		String displayName = (firstName + " " + lastName).trim();
+		return displayName.isEmpty() ? "Anonymous" : displayName;
 	}
 }

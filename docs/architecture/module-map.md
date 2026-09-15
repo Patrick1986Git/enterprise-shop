@@ -125,6 +125,12 @@ and user only through their internal APIs. Notification consumes the
 order-owned outbox handler contract and event payload. Security and authentication intentionally own cross-cutting
 access to user authentication persistence and are not business-module-to-business-module dependencies.
 
+Published product reviews preserve their original `User` foreign key and an immutable display-name snapshot. Account
+retirement therefore leaves review visibility and product rating aggregates unchanged, while public review reads and
+administrator moderation do not need to materialize a soft-retired `User`. Review creation first crosses the User
+commerce-lifecycle advisory boundary and then locks the Product; retirement only takes the User boundary and does not
+touch reviews or products, so it introduces no inverse Product-to-User lock order.
+
 ## Cross-cutting packages
 
 | Package | Responsibility |

@@ -98,6 +98,8 @@ class ProductReviewServiceImplTest {
         ProductReview persistedReview = reviewCaptor.getValue();
         assertThat(persistedReview.getProduct()).isSameAs(product);
         assertThat(persistedReview.getUser()).isSameAs(user);
+        assertThat(persistedReview.getAuthorId()).isEqualTo(userId);
+        assertThat(persistedReview.getAuthorName()).isEqualTo("Alex Morgan");
         assertThat(persistedReview.getRating()).isEqualTo(5);
         assertThat(persistedReview.getComment()).isEqualTo("Excellent");
         assertThat(product.getAverageRating()).isEqualTo(4.25);
@@ -228,6 +230,9 @@ class ProductReviewServiceImplTest {
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(reviewRepository.findByProductId(productId, pageable))
                 .thenReturn(new PageImpl<>(List.of(first, second), pageable, 2));
+
+        first.getUser().setFirstName("Changed");
+        first.getUser().setLastName("Name");
 
         Page<ProductReviewResponseDTO> response = service.getProductReviews(productId, pageable);
 
