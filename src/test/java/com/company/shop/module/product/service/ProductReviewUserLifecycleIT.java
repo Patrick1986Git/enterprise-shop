@@ -106,7 +106,11 @@ class ProductReviewUserLifecycleIT extends PostgresContainerSupport {
         ProductReview review = reviewRepository.findById(reviewId).orElseThrow();
         assertThat(review.getAuthorId()).isEqualTo(fixture.user().getId());
         assertThat(review.getAuthorName()).isEqualTo("Review Author");
-        assertThatThrownBy(() -> review.getUser().getFirstName())
+        assertThatThrownBy(() -> transaction().executeWithoutResult(status -> {
+            entityManager.clear();
+            ProductReview managedReview = reviewRepository.findById(reviewId).orElseThrow();
+            managedReview.getUser().getFirstName();
+        }))
                 .isInstanceOf(EntityNotFoundException.class);
 
         assertThat(productReviewService.getProductReviews(fixture.product().getId(),
