@@ -151,7 +151,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void register_shouldMapDataIntegrityViolationToBusinessExceptionForEmailConstraint() {
+    void register_shouldMapLowerEmailIndexViolationToBusinessException() {
         RegisterRequestDTO request = request("new@example.com");
         when(roleRepository.findByName(SecurityConstants.ROLE_USER)).thenReturn(Optional.of(new Role(SecurityConstants.ROLE_USER)));
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-pass");
@@ -168,14 +168,36 @@ class AuthServiceImplTest {
     }
 
     @Test
+    void register_shouldMapPhysicalEmailConstraintViolationToBusinessException() {
+        RegisterRequestDTO request = request("new@example.com");
+        when(roleRepository.findByName(SecurityConstants.ROLE_USER)).thenReturn(Optional.of(new Role(SecurityConstants.ROLE_USER)));
+        when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-pass");
+
+        ConstraintViolationException constraint = new ConstraintViolationException(
+                "duplicate key",
+                new SQLException("duplicate key"),
+                "USERS_EMAIL_KEY");
+        when(userRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("constraint", constraint));
+
+        assertThatThrownBy(() -> service.register(request))
+                .isInstanceOf(UserAlreadyExistsException.class)
+                .hasMessage("User account already exists");
+    }
+
+    @Test
     void register_shouldRethrowDataIntegrityViolationWhenConstraintIsDifferent() {
         RegisterRequestDTO request = request("new@example.com");
         when(roleRepository.findByName(SecurityConstants.ROLE_USER)).thenReturn(Optional.of(new Role(SecurityConstants.ROLE_USER)));
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-pass");
-        when(userRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("some_other_constraint"));
+        ConstraintViolationException constraint = new ConstraintViolationException(
+                "unrelated violation",
+                new SQLException("unrelated violation"),
+                "fk_user_roles_role");
+        DataIntegrityViolationException failure = new DataIntegrityViolationException("constraint", constraint);
+        when(userRepository.saveAndFlush(any())).thenThrow(failure);
 
         assertThatThrownBy(() -> service.register(request))
-                .isInstanceOf(DataIntegrityViolationException.class);
+                .isSameAs(failure);
     }
 
     @Test
