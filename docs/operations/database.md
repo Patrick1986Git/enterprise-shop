@@ -95,7 +95,7 @@ The production tree has the following explicit lock acquisition sites:
 
 | Site | Purpose and contention class | Current wait behavior |
 | --- | --- | --- |
-| `UserRepository.acquireCommerceLifecycleLock` | Transaction-scoped advisory boundary between User retirement and authenticated Cart/checkout work. It uses the same per-user key as first-Cart creation. | Same-user work waits for the winning transaction and then rechecks active User state; hash collisions can conservatively serialize unrelated users. |
+| `UserRepository.acquireCommerceLifecycleLock` | Transaction-scoped advisory boundary between User retirement, mutable profile updates, and authenticated Cart/checkout work. It uses the same per-user key as first-Cart creation. | Same-user work waits for the winning transaction and then rechecks active User state; hash collisions can conservatively serialize unrelated users. |
 | `OrderRepository.acquireCheckoutIdempotencyLock` | Transaction-scoped advisory lock serializes checkout by user and normalized idempotency key. | Blocking and potentially unbounded. The waiting request thread retains its Hikari connection. Replacing it with `pg_try_advisory_xact_lock` would turn serialization into an immediate failure/retry contract and is not correctness-equivalent. |
 | `CartRepository.findByUserIdWithItemsForUpdate` | Cart mutations and post-payment reconciliation serialization. | Normal short contention, but no configured upper bound. |
 | `CartRepository.lockCartCreationForUser` | Transaction-scoped advisory serialization only after a cart lookup finds no row. | Same-user first touches wait for the creator transaction; hash collisions can conservatively serialize unrelated first touches. |
@@ -121,14 +121,16 @@ a claim that all other SQL is non-blocking.
 
 ### User retirement and commerce
 
-User retirement and active current-user resolution share one transaction-scoped advisory lock derived from the User
+User retirement, mutable profile updates, and active current-user resolution share one transaction-scoped advisory lock derived from the User
 UUID. Resolution first finds a candidate from the authenticated email, acquires the lock, and repeats the active lookup;
 retirement acquires the same lock before its active lookup and soft-delete update. Cart work therefore orders locks as
 User lifecycle advisory lock, then Cart row lock; checkout orders them as User lifecycle advisory lock, checkout
 idempotency advisory lock, Cart read, then sorted Product row locks. No retirement path takes a Cart or Product row lock.
 
-The winner is allowed to commit atomically. If retirement wins, the repeated active lookup rejects waiting Cart or
-checkout work before it can create or mutate commerce state. If an operation wins, retirement waits for its transaction
+The winner is allowed to commit atomically. If retirement wins, the repeated active lookup rejects a waiting profile
+update, Cart operation, or checkout before it can mutate state. If a profile update wins, retirement waits for its
+transaction and then retires the User with the committed profile values intact. A stale application-level profile
+mutation therefore cannot undo retirement. If a commerce operation wins, retirement similarly waits for its transaction
 and then retires the User. For checkout, the winning point is the commit of the preparation transaction containing the
 Order, Payment, inventory reservation, expiration work and outbox event. Payment-provider initialization intentionally
 runs after that commit. Retirement may therefore complete while the provider call is in flight; the already-authorized,
