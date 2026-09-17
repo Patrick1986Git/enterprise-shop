@@ -52,6 +52,7 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public UserResponseDTO update(UUID id, UserUpdateDTO dto) {
+		repository.acquireCommerceLifecycleLock(id);
 		User user = repository.findActiveById(id)
 				.orElseThrow(UserNotFoundException::new);
 

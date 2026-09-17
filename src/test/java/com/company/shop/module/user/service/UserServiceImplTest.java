@@ -95,7 +95,7 @@ class UserServiceImplTest {
     }
 
     @Test
-    void update_shouldUseActiveLookupAndTrimNames() {
+    void update_shouldAcquireCommerceLifecycleLockBeforeActiveLookupAndTrimNames() {
         UUID userId = UUID.randomUUID();
         User user = new User("john@example.com", "encoded", "John", "Doe");
         UserUpdateDTO dto = new UserUpdateDTO("  Jane ", " Doe-Smith  ");
@@ -104,7 +104,9 @@ class UserServiceImplTest {
 
         service.update(userId, dto);
 
-        verify(userRepository).findActiveById(userId);
+        var inOrder = org.mockito.Mockito.inOrder(userRepository);
+        inOrder.verify(userRepository).acquireCommerceLifecycleLock(userId);
+        inOrder.verify(userRepository).findActiveById(userId);
         assertThat(user.getFirstName()).isEqualTo("Jane");
         assertThat(user.getLastName()).isEqualTo("Doe-Smith");
     }
