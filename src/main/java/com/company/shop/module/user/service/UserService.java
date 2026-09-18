@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import com.company.shop.module.user.dto.UserResponseDTO;
+import com.company.shop.module.user.dto.PasswordChangeRequestDTO;
 import com.company.shop.module.user.dto.UserUpdateDTO;
 import com.company.shop.module.user.entity.User;
 
@@ -16,6 +17,8 @@ public interface UserService {
 	UserResponseDTO findById(UUID id);
 
 	UserResponseDTO getCurrentUserProfile();
+
+	void changeCurrentUserPassword(PasswordChangeRequestDTO request);
 
 	UserResponseDTO update(UUID id, UserUpdateDTO dto);
 

@@ -20,6 +20,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 
+import com.company.shop.security.CredentialVersionUserDetails;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwsHeader;
@@ -92,6 +94,9 @@ public class JwtTokenProvider {
      * @return a compact, URL-safe JWT string.
      */
     public String generateToken(Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof CredentialVersionUserDetails userDetails)) {
+            throw new IllegalArgumentException("Authenticated principal does not expose credential version");
+        }
         Date now = new Date();
         Date expiry = new Date(Math.addExact(now.getTime(), properties.getExpiration()));
 
@@ -105,6 +110,7 @@ public class JwtTokenProvider {
                     .and()
                 .subject(authentication.getName())
                 .claim("roles", authorities)
+                .claim("credentialVersion", userDetails.getCredentialVersion())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(activeKey)
@@ -129,6 +135,16 @@ public class JwtTokenProvider {
      */
     public String getRoles(String token) {
         return parseClaims(token).getPayload().get("roles", String.class);
+    }
+
+    public Long getCredentialVersion(String token) {
+        Object value = parseClaims(token).getPayload().get("credentialVersion");
+        if (value instanceof Integer || value instanceof Long) {
+            Number number = (Number) value;
+            long version = number.longValue();
+            return version >= 0 ? version : null;
+        }
+        return null;
     }
 
     /**

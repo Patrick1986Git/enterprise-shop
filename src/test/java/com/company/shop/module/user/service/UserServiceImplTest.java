@@ -14,11 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.company.shop.module.user.dto.UserUpdateDTO;
+import com.company.shop.module.user.dto.PasswordChangeRequestDTO;
 import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.UserNotFoundException;
+import com.company.shop.module.user.exception.CurrentPasswordIncorrectException;
 import com.company.shop.module.user.mapper.UserMapper;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.security.CurrentUserProvider;
@@ -35,11 +38,14 @@ class UserServiceImplTest {
     @Mock
     private CurrentUserProvider currentUserProvider;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     private UserServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new UserServiceImpl(userRepository, userMapper, currentUserProvider);
+        service = new UserServiceImpl(userRepository, userMapper, currentUserProvider, passwordEncoder);
     }
 
     @Test
@@ -51,6 +57,40 @@ class UserServiceImplTest {
         assertThatThrownBy(() -> service.getCurrentUserEntity())
                 .isInstanceOf(UserNotFoundException.class)
                 .hasMessage("User not found");
+    }
+
+    @Test
+    void changeCurrentUserPassword_shouldVerifyEncodeAndIncrementCredentialVersion() {
+        String email = "john@example.com";
+        User user = new User(email, "old-encoded", "John", "Doe");
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
+        when(userRepository.findActiveByEmailWithRoles(email)).thenReturn(Optional.of(user), Optional.of(user));
+        when(passwordEncoder.matches("OldPassword123!", "old-encoded")).thenReturn(true);
+        when(passwordEncoder.encode("NewPassword456!")).thenReturn("new-encoded");
+
+        service.changeCurrentUserPassword(new PasswordChangeRequestDTO(
+                "OldPassword123!", "NewPassword456!", "NewPassword456!"));
+
+        assertThat(user.getPassword()).isEqualTo("new-encoded");
+        assertThat(user.getCredentialVersion()).isOne();
+        assertThat(user.getRoles()).isEmpty();
+    }
+
+    @Test
+    void changeCurrentUserPassword_shouldNotMutateWhenCurrentPasswordIsIncorrect() {
+        String email = "john@example.com";
+        User user = new User(email, "old-encoded", "John", "Doe");
+        when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
+        when(userRepository.findActiveByEmailWithRoles(email)).thenReturn(Optional.of(user), Optional.of(user));
+        when(passwordEncoder.matches("WrongPassword123!", "old-encoded")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.changeCurrentUserPassword(new PasswordChangeRequestDTO(
+                "WrongPassword123!", "NewPassword456!", "NewPassword456!")))
+                .isInstanceOf(CurrentPasswordIncorrectException.class)
+                .hasMessage("Current password is incorrect");
+
+        assertThat(user.getPassword()).isEqualTo("old-encoded");
+        assertThat(user.getCredentialVersion()).isZero();
     }
 
     @Test

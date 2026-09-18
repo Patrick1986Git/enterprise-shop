@@ -10,6 +10,8 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.company.shop.security.CredentialVersionUserDetails;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,17 +40,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (tokenProvider.validate(token)) {
                 String username = tokenProvider.getUsername(token);
-                authenticateActiveUser(request, username);
+                Long credentialVersion = tokenProvider.getCredentialVersion(token);
+                authenticateActiveUser(request, username, credentialVersion);
             }
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private void authenticateActiveUser(HttpServletRequest request, String username) {
+    private void authenticateActiveUser(HttpServletRequest request, String username, Long tokenCredentialVersion) {
         try {
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            if (!userDetails.isEnabled() || !userDetails.isAccountNonExpired()
+            if (!(userDetails instanceof CredentialVersionUserDetails versionedUser)
+                    || tokenCredentialVersion == null
+                    || tokenCredentialVersion != versionedUser.getCredentialVersion()
+                    || !userDetails.isEnabled() || !userDetails.isAccountNonExpired()
                     || !userDetails.isAccountNonLocked() || !userDetails.isCredentialsNonExpired()) {
                 return;
             }

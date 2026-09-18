@@ -43,6 +43,9 @@ public class User extends SoftDeleteEntity {
     @Column(name = "password", nullable = false, length = 255)
     private String password;
 
+    @Column(name = "credential_version", nullable = false)
+    private long credentialVersion;
+
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
@@ -98,6 +101,10 @@ public class User extends SoftDeleteEntity {
         return password;
     }
 
+    public long getCredentialVersion() {
+        return credentialVersion;
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -138,5 +145,10 @@ public class User extends SoftDeleteEntity {
      */
     public void disable() {
         this.enabled = false;
+    }
+
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+        this.credentialVersion = Math.incrementExact(this.credentialVersion);
     }
 }

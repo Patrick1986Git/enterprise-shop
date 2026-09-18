@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.Set;
 import java.util.Collection;
 import java.util.stream.Collectors;
@@ -25,8 +26,10 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import com.company.shop.security.CredentialVersionUserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
@@ -106,6 +109,7 @@ class JwtAuthenticationFilterTest {
         MockFilterChain filterChain = new MockFilterChain();
         when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
         when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(jwtTokenProvider.getCredentialVersion(VALID_TOKEN)).thenReturn(0L);
         when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(activeUser(ROLE_USER, ROLE_ADMIN));
 
         filter.doFilter(request, response, filterChain);
@@ -127,6 +131,7 @@ class JwtAuthenticationFilterTest {
 
         verify(jwtTokenProvider).validate(VALID_TOKEN);
         verify(jwtTokenProvider).getUsername(VALID_TOKEN);
+        verify(jwtTokenProvider).getCredentialVersion(VALID_TOKEN);
         verifyNoMoreInteractions(jwtTokenProvider);
         verify(userDetailsService).loadUserByUsername(USER_EMAIL);
     }
@@ -137,6 +142,7 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
         when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(jwtTokenProvider.getCredentialVersion(VALID_TOKEN)).thenReturn(0L);
         when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(activeUser(ROLE_ADMIN));
 
         filter.doFilter(request, response, new MockFilterChain());
@@ -154,6 +160,7 @@ class JwtAuthenticationFilterTest {
         MockFilterChain filterChain = new MockFilterChain();
         when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
         when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(jwtTokenProvider.getCredentialVersion(VALID_TOKEN)).thenReturn(0L);
         when(userDetailsService.loadUserByUsername(USER_EMAIL))
                 .thenThrow(new UsernameNotFoundException("User not found"));
 
@@ -170,6 +177,7 @@ class JwtAuthenticationFilterTest {
         MockFilterChain filterChain = new MockFilterChain();
         when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
         when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(jwtTokenProvider.getCredentialVersion(VALID_TOKEN)).thenReturn(0L);
         when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(
                 org.springframework.security.core.userdetails.User.withUsername(USER_EMAIL)
                         .password("")
@@ -189,10 +197,8 @@ class JwtAuthenticationFilterTest {
     }
 
     private UserDetails activeUser(String... roles) {
-        return org.springframework.security.core.userdetails.User.withUsername(USER_EMAIL)
-                .password("")
-                .authorities(roles)
-                .build();
+        return new CredentialVersionUserDetails(USER_EMAIL, "", true, true,
+                Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList(), 0);
     }
 
     private Set<String> authorityNames(Collection<? extends GrantedAuthority> authorities) {

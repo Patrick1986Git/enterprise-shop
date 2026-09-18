@@ -2,13 +2,16 @@ package com.company.shop.module.user.controller;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -90,6 +93,53 @@ class UserControllerWebMvcTest {
 
             verify(userService).getCurrentUserProfile();
             verifyNoMoreInteractions(userService);
+        }
+    }
+
+    @Nested
+    class ChangePassword {
+
+        @Test
+        void changePassword_shouldRequireAuthentication() throws Exception {
+            mockMvc.perform(put(CURRENT_USER_URL + "/password").with(csrf())
+                            .contentType(APPLICATION_JSON)
+                            .content(passwordChangeJson("OldPassword123!", "NewPassword456!")))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(userService);
+        }
+
+        @Test
+        void changePassword_shouldReturnNoContentAndDelegateForValidRequest() throws Exception {
+            mockMvc.perform(put(CURRENT_USER_URL + "/password")
+                            .with(csrf()).with(user("john.doe@example.com").roles("USER"))
+                            .contentType(APPLICATION_JSON)
+                            .content(passwordChangeJson("OldPassword123!", "NewPassword456!")))
+                    .andExpect(status().isNoContent());
+
+            verify(userService).changeCurrentUserPassword(any());
+        }
+
+        @Test
+        void changePassword_shouldRejectMismatchedOrOverlongUtf8PasswordBeforeService() throws Exception {
+            mockMvc.perform(put(CURRENT_USER_URL + "/password")
+                            .with(csrf()).with(user("john.doe@example.com").roles("USER"))
+                            .contentType(APPLICATION_JSON)
+                            .content("""
+                                    {"currentPassword":"OldPassword123!","newPassword":"%s",
+                                     "newPasswordRepeat":"different-password"}
+                                    """.formatted("🔐".repeat(19))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errors.newPassword").isArray())
+                    .andExpect(jsonPath("$.errors.newPasswordRepeat").isArray());
+
+            verifyNoInteractions(userService);
+        }
+
+        private String passwordChangeJson(String currentPassword, String newPassword) {
+            return """
+                    {"currentPassword":"%s","newPassword":"%s","newPasswordRepeat":"%s"}
+                    """.formatted(currentPassword, newPassword, newPassword);
         }
     }
 }

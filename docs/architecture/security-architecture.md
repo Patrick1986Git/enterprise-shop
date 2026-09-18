@@ -8,7 +8,8 @@
 - `JwtAuthenticationFilter` runs before `UsernamePasswordAuthenticationFilter`.
 - A JWT's signature and expiration establish token authenticity, but do not by themselves establish current account authorization. On every bearer-authenticated request, the filter reloads the active user and current roles from PostgreSQL. Missing, soft-deleted, disabled, expired, or locked accounts remain unauthenticated.
 - Account deletion, disablement, and persisted role changes therefore take effect on the next request. Authorities in the JWT are issuance-time metadata only; request authorization uses the authoritative roles loaded from persistence.
-- Password hashing uses `BCryptPasswordEncoder`.
+- Password hashing uses `BCryptPasswordEncoder`. Registration and authenticated password change enforce the same
+  8-to-72-character rule and the BCrypt-specific 72-byte UTF-8 ceiling.
 - Method security is enabled and controllers use `@PreAuthorize` for authenticated/admin boundaries.
 
 ## Public endpoints
@@ -91,7 +92,29 @@ HTTP sessions remain stateless: the database lookup validates each independent b
 
 ## Account and token lifecycle
 
-Login normalizes the submitted email and delegates password, enabled-state, and active-account checks to Spring Security backed by `UserDetailsServiceImpl`. Successful authentication produces an HMAC-signed bearer JWT whose subject is the normalized email, whose `roles` claim records the complete issuance-time authority set from Spring Security, and whose configured lifetime is one hour. Despite its historical name, that claim is authority metadata and is not limited to domain `ROLE_*` values. There is no refresh-token endpoint, persisted token/session record, revocation list, authorization version, or security-stamp mechanism.
+Login normalizes the submitted email and delegates password, enabled-state, and active-account checks to Spring Security backed by `UserDetailsServiceImpl`. Successful authentication produces an HMAC-signed bearer JWT whose subject is the normalized email, whose `roles` claim records the complete issuance-time authority set from Spring Security, and whose configured lifetime is one hour. Despite its historical name, that claim is authority metadata and is not limited to domain `ROLE_*` values. There is no refresh-token endpoint, persisted token/session record, or revocation list. Each User has a monotonically increasing `credential_version`; login binds that value to the JWT `credentialVersion` claim and every bearer request compares it with the current persisted value. Missing, malformed, negative, or stale claim values fail closed. Tokens issued before this contract do not have the claim and become unauthenticated at rollout; this deliberate one-time cutover is bounded by deployment rather than creating an indefinite legacy-token format.
+
+## Credential lifecycle and password management
+
+Public registration and login are the only unauthenticated credential operations. An authenticated User may change only
+their own password with `PUT /api/v1/me/password`. The operation takes the same PostgreSQL transaction-scoped advisory
+User lifecycle lock as profile updates and retirement, reloads the active User after acquiring the lock, verifies the
+current password with the repository-owned BCrypt encoder, hashes the validated replacement, and increments
+`credential_version` atomically with the password update. It does not change email or roles. Consequently, retirement
+that wins the lock prevents the password mutation, while a password change that wins commits fully before retirement;
+neither ordering can resurrect an account.
+
+Existing JWTs must stop authenticating immediately after a password change. Persisted credential versioning is selected
+because the filter already performs the authoritative User lookup, so comparison adds no session or revocation store and
+avoids timestamp precision, clock, transaction-ordering, and migration-backfill ambiguity. Allowing access until the
+one-hour expiry was rejected because repository evidence does not authorize that post-credential-change exposure. A
+password-change timestamp compared to `iat` was rejected for its database/JWT precision and commit-order races. A
+token/session revocation store was rejected as unnecessary operational state for this architecture.
+
+Forgotten-password recovery is intentionally not implemented. Although the notification subsystem can deliver generic
+email notifications, the repository defines no reset-token generation or hash-at-rest contract, single-use and replay
+semantics, expiry, enumeration-resistant API behavior, account-retirement invalidation rule, delivery SLA, or product UX.
+Those security and operational decisions must be established before reset-token issuance or consumption is added.
 
 `JWT_SECRET` has one representation in every profile: standard RFC 4648 Base64 encoding of the signing-key bytes. Production key material must be generated from at least 32 cryptographically random bytes (for example, `openssl rand -base64 32`); Base64 is only an encoding and does not encrypt the key. Startup fails before traffic is served when the value is missing, blank, malformed, decodes to fewer than 256 bits, or when the access-token lifetime is non-positive or cannot be added safely to the current epoch time. Diagnostics identify the invalid property without including its value.
 
