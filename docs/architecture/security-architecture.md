@@ -91,7 +91,7 @@ HTTP sessions remain stateless: the database lookup validates each independent b
 
 ## Account and token lifecycle
 
-Login normalizes the submitted email and delegates password, enabled-state, and active-account checks to Spring Security backed by `UserDetailsServiceImpl`. Successful authentication produces an HMAC-signed bearer JWT whose subject is the normalized email, whose `roles` claim records the issuance-time authorities, and whose configured lifetime is one hour. There is no refresh-token endpoint, persisted token/session record, revocation list, authorization version, or security-stamp mechanism.
+Login normalizes the submitted email and delegates password, enabled-state, and active-account checks to Spring Security backed by `UserDetailsServiceImpl`. Successful authentication produces an HMAC-signed bearer JWT whose subject is the normalized email, whose `roles` claim records the complete issuance-time authority set from Spring Security, and whose configured lifetime is one hour. Despite its historical name, that claim is authority metadata and is not limited to domain `ROLE_*` values. There is no refresh-token endpoint, persisted token/session record, revocation list, authorization version, or security-stamp mechanism.
 
 `JWT_SECRET` has one representation in every profile: standard RFC 4648 Base64 encoding of the signing-key bytes. Production key material must be generated from at least 32 cryptographically random bytes (for example, `openssl rand -base64 32`); Base64 is only an encoding and does not encrypt the key. Startup fails before traffic is served when the value is missing, blank, malformed, decodes to fewer than 256 bits, or when the access-token lifetime is non-positive or cannot be added safely to the current epoch time. Diagnostics identify the invalid property without including its value.
 
@@ -106,3 +106,35 @@ token remains cryptographically valid could bind that token to the new identity.
 therefore include retired rows, and public registration neither reactivates nor replaces them. This reservation is not a
 complete personal-data retention policy. Changing it requires an explicit redesign of JWT identity binding and the
 associated token migration and compatibility contract, rather than a partial unique index or email anonymization alone.
+
+## JWT subject migration decision
+
+The bearer-token subject remains the normalized email. This is an explicit compatibility decision rather than an
+endorsement of mutable business identifiers as the long-term token identity. The persisted User UUID is generated once,
+is not updateable, survives profile changes, and is suitable as the target immutable identity. The current authentication
+boundary cannot consume it, however: `JwtAuthenticationFilter` passes `sub` to `UserDetailsService.loadUserByUsername`,
+whose only supported subject lookup is the active User and roles query by normalized email. `CurrentUserProvider` and the
+module-owned `CurrentUserFacade` also intentionally expose the authenticated principal as an email-backed boundary.
+
+Repository evidence does not establish a coordinated deployment time at which all outstanding email-subject tokens may
+be invalidated or a durable cutoff after which legacy tokens must fail. Although production configures a fixed one-hour
+access-token lifetime, replicas can issue tokens until they are drained, and signing-key rollover may independently keep
+the signing key for an outstanding token valid. A hard cutover would therefore invalidate legitimately issued tokens.
+An unbounded dual parser would silently turn a temporary migration mechanism into a permanent contract. Inferring the
+subject type by attempting to parse it as a UUID is also rejected because it gives token contents, rather than an explicit
+schema contract, control over the lookup path.
+
+Accordingly, UUID-subject issuance is deferred. A future migration requires all of the following in one reviewed change:
+
+- an explicit version or identity-type claim on new tokens, with unknown or malformed values failing closed;
+- a narrow active-User lookup by UUID that fetches current roles and never falls back to email for a UUID token;
+- an operator-owned rollout start/cutoff contract that accounts for the last legacy-token issuer plus the maximum token
+  lifetime, independently of signing-key rotation;
+- compatibility tests proving that legacy email tokens resolve only the same active, permanently email-reserved User,
+  both token types fail after retirement, and database authorities override token role metadata; and
+- retirement/replay proof against PostgreSQL before legacy acceptance is removed.
+
+The permanent retired-email reservation remains unchanged during and after this audit. UUID migration and any future
+email-reuse policy are separate lifecycle/security decisions. No application or documented public API promises a JWT
+subject format; the login response treats the JWT as an opaque token. Within this repository, only the JWT provider reads
+`sub`, only the authentication filter consumes that value, and the tests inspect it to prove the current contract.
