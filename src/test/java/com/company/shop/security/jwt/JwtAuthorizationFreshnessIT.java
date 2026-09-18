@@ -10,7 +10,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Arrays;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -100,6 +103,27 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
     }
 
     @Test
+    void issuedToken_shouldUseCurrentPersistedAuthoritiesInsteadOfItsRolesClaim() throws Exception {
+        User user = createUser("jwt-role-change-" + UUID.randomUUID() + "@example.com", ROLE_ADMIN);
+        String issuedToken = login(user.getEmail());
+        String issuedAuthoritiesClaim = tokenProvider.getRoles(issuedToken);
+        Set<String> issuedAuthorities = parseAuthorities(issuedAuthoritiesClaim);
+        assertThat(issuedAuthorities).contains(ROLE_ADMIN).doesNotContain(ROLE_USER);
+
+        UUID userRoleId = roleRepository.findByName(ROLE_USER).orElseThrow().getId();
+        jdbcTemplate.update("DELETE FROM user_roles WHERE user_id = ?", user.getId());
+        jdbcTemplate.update("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", user.getId(), userRoleId);
+
+        mockMvc.perform(get("/api/v1/admin/users").header("Authorization", "Bearer " + issuedToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/me/cart").header("Authorization", "Bearer " + issuedToken))
+                .andExpect(status().isOk());
+        String unchangedAuthoritiesClaim = tokenProvider.getRoles(issuedToken);
+        assertThat(unchangedAuthoritiesClaim).isEqualTo(issuedAuthoritiesClaim);
+        assertThat(parseAuthorities(unchangedAuthoritiesClaim)).contains(ROLE_ADMIN).doesNotContain(ROLE_USER);
+    }
+
+    @Test
     void retiredEmail_shouldRemainReservedAndIssuedTokenShouldRemainUnauthenticated() throws Exception {
         String email = "jwt-retired-" + UUID.randomUUID() + "@example.com";
         register(email);
@@ -157,6 +181,13 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
         User user = new User(email, passwordEncoder.encode(PASSWORD), "JWT", "Test");
         user.addRole(role);
         return userRepository.saveAndFlush(user);
+    }
+
+    private Set<String> parseAuthorities(String authoritiesClaim) {
+        return Arrays.stream(authoritiesClaim.split(","))
+                .map(String::trim)
+                .filter(authority -> !authority.isEmpty())
+                .collect(Collectors.toSet());
     }
 
     private String login(String email) throws Exception {
