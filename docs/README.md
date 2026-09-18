@@ -12,6 +12,7 @@ This `docs/` folder contains practical documentation that is currently grounded 
 - [`architecture/security-architecture.md`](./architecture/security-architecture.md) — JWT authentication, route authorization, CORS, CSRF, and actuator access.
 - [`architecture/error-handling.md`](./architecture/error-handling.md) — API error contract, exception mapping, and business-exception metrics.
 - [`architecture/archunit.md`](./architecture/archunit.md) — ArchUnit quality gate and currently enforced architecture rules.
+- [`architecture/soft-delete-identifier-reservations.md`](./architecture/soft-delete-identifier-reservations.md) — logical retirement, physical retention, and business-identifier reservation decisions.
 
 ## API
 - [`api/overview.md`](./api/overview.md) — current API documentation policy note and generated documentation entry points.
