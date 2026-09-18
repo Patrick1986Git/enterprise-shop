@@ -35,6 +35,7 @@ import com.company.shop.module.category.repository.CategoryRepository;
 import com.company.shop.module.product.dto.ProductReviewRequestDTO;
 import com.company.shop.module.product.entity.Product;
 import com.company.shop.module.product.entity.ProductReview;
+import com.company.shop.module.product.exception.ProductReviewAlreadyExistsException;
 import com.company.shop.module.product.repository.ProductRepository;
 import com.company.shop.module.product.repository.ProductReviewRepository;
 import com.company.shop.module.user.entity.User;
@@ -221,6 +222,43 @@ class ProductReviewUserLifecycleIT extends PostgresContainerSupport {
         assertThat(jdbcTemplate.queryForObject("select deleted from product_reviews where id = ?", Boolean.class,
                 reviewId)).isTrue();
         assertAggregate(author.product().getId(), 0, 0.0);
+    }
+
+    @Test
+    void deletedReview_shouldRemainReservedAndRejectRecreationWithoutChangingAggregate() {
+        Fixture fixture = fixture(SecurityConstants.ROLE_USER);
+        authenticatedEmail.set(fixture.user().getEmail());
+        UUID reviewId = productReviewService.addReview(
+                new ProductReviewRequestDTO(fixture.product().getId(), 5, "Original review")).id();
+
+        productReviewService.deleteReview(reviewId);
+
+        assertThat(reviewRepository.findById(reviewId)).isEmpty();
+        assertThat(jdbcTemplate.queryForMap("""
+                select deleted, deleted_at, rating, comment
+                from product_reviews
+                where id = ?
+                """, reviewId))
+                .satisfies(row -> {
+                    assertThat(row.get("deleted")).isEqualTo(true);
+                    assertThat(row.get("deleted_at")).isNotNull();
+                    assertThat(row.get("rating")).isEqualTo(5);
+                    assertThat(row.get("comment")).isEqualTo("Original review");
+                });
+        assertAggregate(fixture.product().getId(), 0, 0.0);
+
+        assertThatThrownBy(() -> productReviewService.addReview(
+                new ProductReviewRequestDTO(fixture.product().getId(), 2, "Replacement review")))
+                .isInstanceOf(ProductReviewAlreadyExistsException.class)
+                .hasMessageContaining(fixture.product().getId().toString());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from product_reviews where product_id = ? and user_id = ?",
+                Long.class, fixture.product().getId(), fixture.user().getId())).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "select conname from pg_constraint where conrelid = 'product_reviews'::regclass and conname = ?",
+                String.class, "uk_user_product_review")).isEqualTo("uk_user_product_review");
+        assertAggregate(fixture.product().getId(), 0, 0.0);
     }
 
     private Fixture fixture(String role) {
