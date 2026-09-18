@@ -3,18 +3,20 @@ package com.company.shop.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.core.userdetails.User.withUsername;
+import static com.company.shop.security.SecurityConstants.ROLE_ADMIN;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -61,6 +63,7 @@ import com.company.shop.module.system.service.ApplicationStatusService;
 import com.company.shop.module.user.repository.RoleRepository;
 import com.company.shop.module.user.service.UserService;
 import com.company.shop.security.AuthService;
+import com.company.shop.security.CredentialVersionUserDetails;
 import com.company.shop.config.ProductionDatabaseOwnershipValidator;
 import com.company.shop.security.UserDetailsServiceImpl;
 import com.company.shop.security.UserRolesStartupValidator;
@@ -146,8 +149,12 @@ class ProductionOpenApiExposureHttpTest {
     void productionDocumentation_shouldBeUnavailableToAnonymousAndAdminCallers() throws Exception {
         when(jwtTokenProvider.validate("admin-token")).thenReturn(true);
         when(jwtTokenProvider.getUsername("admin-token")).thenReturn("admin@example.com");
+        when(jwtTokenProvider.getCredentialVersion("admin-token")).thenReturn(0L);
         when(userDetailsService.loadUserByUsername("admin@example.com"))
-                .thenReturn(withUsername("admin@example.com").password("password").roles("ADMIN").build());
+                .thenReturn(new CredentialVersionUserDetails(
+                        "admin@example.com", "password", true, true,
+                        Set.of(new SimpleGrantedAuthority(ROLE_ADMIN)),
+                        0));
 
         assertThat(get("/swagger-ui.html").statusCode()).isEqualTo(403);
         assertThat(get("/swagger-ui.html", "admin-token").statusCode()).isEqualTo(404);

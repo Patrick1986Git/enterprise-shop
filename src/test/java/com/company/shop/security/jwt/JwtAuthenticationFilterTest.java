@@ -137,6 +137,38 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void doFilter_shouldKeepAuthenticationNull_whenCredentialVersionClaimIsMissing() throws Exception {
+        MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain filterChain = new MockFilterChain();
+        when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
+        when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(jwtTokenProvider.getCredentialVersion(VALID_TOKEN)).thenReturn(null);
+        when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(activeUser(0, ROLE_USER));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertRequestPassedThroughFilterChain(filterChain, request, response);
+    }
+
+    @Test
+    void doFilter_shouldKeepAuthenticationNull_whenCredentialVersionDoesNotMatch() throws Exception {
+        MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain filterChain = new MockFilterChain();
+        when(jwtTokenProvider.validate(VALID_TOKEN)).thenReturn(true);
+        when(jwtTokenProvider.getUsername(VALID_TOKEN)).thenReturn(USER_EMAIL);
+        when(jwtTokenProvider.getCredentialVersion(VALID_TOKEN)).thenReturn(1L);
+        when(userDetailsService.loadUserByUsername(USER_EMAIL)).thenReturn(activeUser(2, ROLE_USER));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertRequestPassedThroughFilterChain(filterChain, request, response);
+    }
+
+    @Test
     void doFilter_shouldBindValidEmailSubjectToWhateverActiveIdentityCurrentlyOwnsThatEmail() throws Exception {
         MockHttpServletRequest request = requestWithAuthorizationHeader(TOKEN_PREFIX + VALID_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -197,8 +229,12 @@ class JwtAuthenticationFilterTest {
     }
 
     private UserDetails activeUser(String... roles) {
+        return activeUser(0, roles);
+    }
+
+    private UserDetails activeUser(long credentialVersion, String... roles) {
         return new CredentialVersionUserDetails(USER_EMAIL, "", true, true,
-                Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList(), 0);
+                Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList(), credentialVersion);
     }
 
     private Set<String> authorityNames(Collection<? extends GrantedAuthority> authorities) {
