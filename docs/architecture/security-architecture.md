@@ -111,10 +111,11 @@ one-hour expiry was rejected because repository evidence does not authorize that
 password-change timestamp compared to `iat` was rejected for its database/JWT precision and commit-order races. A
 token/session revocation store was rejected as unnecessary operational state for this architecture.
 
-Forgotten-password recovery is intentionally not implemented. Although the notification subsystem can deliver generic
-email notifications, the repository defines no reset-token generation or hash-at-rest contract, single-use and replay
-semantics, expiry, enumeration-resistant API behavior, account-retirement invalidation rule, delivery SLA, or product UX.
-Those security and operational decisions must be established before reset-token issuance or consumption is added.
+Forgotten-password recovery is intentionally not implemented. The
+[recovery boundary](./password-recovery-boundary.md) records the threat model and audit of opaque-token, encrypted-payload,
+after-commit SMTP, and provider-template alternatives. The repository defines neither a secure raw-token delivery and retry
+contract nor an approved expiry/retention policy, so no reset-token issuance, persistence, endpoint, or consumption path may
+be added until the documented owner inputs are resolved.
 
 `JWT_SECRET` has one representation in every profile: standard RFC 4648 Base64 encoding of the signing-key bytes. Production key material must be generated from at least 32 cryptographically random bytes (for example, `openssl rand -base64 32`); Base64 is only an encoding and does not encrypt the key. Startup fails before traffic is served when the value is missing, blank, malformed, decodes to fewer than 256 bits, or when the access-token lifetime is non-positive or cannot be added safely to the current epoch time. Diagnostics identify the invalid property without including its value.
 
