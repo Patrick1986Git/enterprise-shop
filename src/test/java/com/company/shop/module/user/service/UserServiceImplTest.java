@@ -152,6 +152,51 @@ class UserServiceImplTest {
     }
 
     @Test
+    void disable_shouldLockThenInvalidateCredentialsAndMapUser() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("john@example.com", "encoded", "John", "Doe");
+        when(userRepository.findActiveById(userId)).thenReturn(Optional.of(user));
+
+        service.disable(userId);
+
+        var inOrder = org.mockito.Mockito.inOrder(userRepository, userMapper);
+        inOrder.verify(userRepository).acquireCommerceLifecycleLock(userId);
+        inOrder.verify(userRepository).findActiveById(userId);
+        inOrder.verify(userMapper).toDto(user);
+        assertThat(user.isEnabled()).isFalse();
+        assertThat(user.getCredentialVersion()).isOne();
+    }
+
+    @Test
+    void disable_shouldBeIdempotentWithoutRepeatedCredentialInvalidation() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("john@example.com", "encoded", "John", "Doe");
+        user.disable();
+        when(userRepository.findActiveById(userId)).thenReturn(Optional.of(user));
+
+        service.disable(userId);
+
+        assertThat(user.getCredentialVersion()).isOne();
+    }
+
+    @Test
+    void enable_shouldLockAndRestoreAccountWithoutChangingCredentialVersion() {
+        UUID userId = UUID.randomUUID();
+        User user = new User("john@example.com", "encoded", "John", "Doe");
+        user.disable();
+        when(userRepository.findActiveById(userId)).thenReturn(Optional.of(user));
+
+        service.enable(userId);
+
+        var inOrder = org.mockito.Mockito.inOrder(userRepository, userMapper);
+        inOrder.verify(userRepository).acquireCommerceLifecycleLock(userId);
+        inOrder.verify(userRepository).findActiveById(userId);
+        inOrder.verify(userMapper).toDto(user);
+        assertThat(user.isEnabled()).isTrue();
+        assertThat(user.getCredentialVersion()).isOne();
+    }
+
+    @Test
     void isAdmin_shouldReturnTrueWhenAdminRoleAssigned() {
         User user = new User("john@example.com", "encoded", "John", "Doe");
 

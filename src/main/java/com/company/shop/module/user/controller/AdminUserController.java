@@ -97,6 +97,32 @@ public class AdminUserController {
 		return service.update(id, dto);
 	}
 
+	@PutMapping("/{id}/disable")
+	@Operation(operationId = "disableUser", summary = "Temporarily disable a user (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth"))
+	@ApiResponses(value = {
+			@ApiResponse(responseCode = "200", description = "User disabled and existing access tokens invalidated."),
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+	})
+	public UserResponseDTO disableUser(@PathVariable UUID id) {
+		return service.disable(id);
+	}
+
+	@PutMapping("/{id}/enable")
+	@Operation(operationId = "enableUser", summary = "Re-enable a user (admin-only)",
+	        security = @SecurityRequirement(name = "bearerAuth"))
+	@ApiResponses(value = {
+			@ApiResponse(responseCode = "200", description = "User enabled; tokens issued before suspension remain invalid."),
+			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
+			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+	})
+	public UserResponseDTO enableUser(@PathVariable UUID id) {
+		return service.enable(id);
+	}
+
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	@Operation(

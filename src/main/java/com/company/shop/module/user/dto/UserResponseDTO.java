@@ -41,6 +41,12 @@ public class UserResponseDTO {
 	)
 	private final String lastName;
 	@Schema(
+	        description = "Whether the account may authenticate.",
+	        requiredMode = Schema.RequiredMode.REQUIRED,
+	        accessMode = Schema.AccessMode.READ_ONLY
+	)
+	private final boolean enabled;
+	@Schema(
 	        description = "Role names assigned to the user.",
 	        example = "[\"ROLE_USER\"]",
 	        requiredMode = Schema.RequiredMode.REQUIRED,
@@ -48,11 +54,12 @@ public class UserResponseDTO {
 	)
 	private final Set<String> roles;
 
-	public UserResponseDTO(UUID id, String email, String firstName, String lastName, Set<String> roles) {
+	public UserResponseDTO(UUID id, String email, String firstName, String lastName, boolean enabled, Set<String> roles) {
 		this.id = id;
 		this.email = email;
 		this.firstName = firstName;
 		this.lastName = lastName;
+		this.enabled = enabled;
 		this.roles = roles;
 	}
 
@@ -70,6 +77,10 @@ public class UserResponseDTO {
 
 	public String getLastName() {
 		return lastName;
+	}
+
+	public boolean isEnabled() {
+		return enabled;
 	}
 
 	public Set<String> getRoles() {

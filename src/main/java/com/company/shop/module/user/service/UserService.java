@@ -24,6 +24,10 @@ public interface UserService {
 
 	void delete(UUID id);
 
+	UserResponseDTO disable(UUID id);
+
+	UserResponseDTO enable(UUID id);
+
 	User getCurrentUserEntity();
 
 	boolean isAdmin(User user);

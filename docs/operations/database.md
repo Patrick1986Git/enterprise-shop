@@ -121,7 +121,7 @@ a claim that all other SQL is non-blocking.
 
 ### User retirement and commerce
 
-User retirement, mutable profile updates, and active current-user resolution share one transaction-scoped advisory lock derived from the User
+User retirement, administrative enable/disable, mutable profile updates, and active current-user resolution share one transaction-scoped advisory lock derived from the User
 UUID. Resolution first finds a candidate from the authenticated email, acquires the lock, and repeats the active lookup;
 retirement acquires the same lock before its active lookup and soft-delete update. Cart work therefore orders locks as
 User lifecycle advisory lock, then Cart row lock; checkout orders them as User lifecycle advisory lock, checkout
@@ -130,7 +130,8 @@ idempotency advisory lock, Cart read, then sorted Product row locks. No retireme
 The winner is allowed to commit atomically. If retirement wins, the repeated active lookup rejects a waiting profile
 update, Cart operation, or checkout before it can mutate state. If a profile update wins, retirement waits for its
 transaction and then retires the User with the committed profile values intact. A stale application-level profile
-mutation therefore cannot undo retirement. If a commerce operation wins, retirement similarly waits for its transaction
+mutation or account-state command therefore cannot undo retirement. State changes serialize with each other; disable
+increments the credential version atomically with suspension so a later enable cannot resurrect an older token. If a commerce operation wins, retirement similarly waits for its transaction
 and then retires the User. For checkout, the winning point is the commit of the preparation transaction containing the
 Order, Payment, inventory reservation, expiration work and outbox event. Payment-provider initialization intentionally
 runs after that commit. Retirement may therefore complete while the provider call is in flight; the already-authorized,

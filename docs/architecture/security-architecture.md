@@ -121,7 +121,49 @@ be added until the documented owner inputs are resolved.
 
 JJWT chooses the strongest compatible HMAC algorithm for the decoded key: a 256-bit key produces HS256, while larger keys can produce HS384 or HS512. This preserves the library's existing safe algorithm selection rather than imposing a narrower algorithm contract. New tokens include a configured non-secret `kid` and are signed only by the active key. The parser uses JJWT's supported key-locator API to select the verification key from the protected header before parsing claims or verifying the signature. Production may optionally configure exactly one previous verification key for a bounded rollover window; it never signs new tokens. Unknown key IDs fail authentication. During the first rollout only, legacy no-`kid` tokens are accepted with the unchanged active key while no previous key is configured; configuring a previous key disables that fallback. Planned rotation, retirement, rollback, and emergency-compromise procedures are documented in `docs/operations/jwt-key-rotation.md`. There is still no refresh-token exchange or server-side session mechanism.
 
-The current production user-management API can update profile names and soft-delete users. Registration assigns `ROLE_USER`; there is no production endpoint or service operation that disables a user or adds/removes roles, and no production caller invokes `User.disable()`. Direct administrative persistence changes to enabled state or role membership are nevertheless enforced on the next authenticated request by the same authoritative reload.
+The administrative User API lists and reads active users, updates profile names, permanently retires accounts, and exposes
+narrow disable and enable commands. Disablement is a temporary authentication suspension: it retains the User, email,
+roles, and related commerce data. The disable transition increments `credential_version` in the same transaction before
+setting `enabled=false`. Re-enablement restores login and bearer authentication but does not increment the version again.
+Consequently, a token issued before suspension fails while the account is disabled and remains stale after re-enablement;
+only a subsequent login can issue a token for the new version. Repeated disable or enable commands are idempotent and do
+not repeatedly advance the version. Without the disable-time increment, the per-request enabled check would revoke the
+token only temporarily and that token could resurrect after re-enablement.
+
+Account-state commands use the existing per-User PostgreSQL transaction-scoped lifecycle advisory lock and repeat the
+active lookup after acquiring it. They therefore serialize with profile updates, password changes, commerce operations,
+retirement, and each other. Retirement remains permanent: it wins against a waiting state command by making the repeated
+active lookup fail, and no enable command can find or restore the soft-deleted User. No schema change is needed because
+`enabled` and `credential_version` are existing persisted invariants.
+
+The API deliberately does not add role commands. Registration assigns only `ROLE_USER`; the schema seeds `ROLE_USER` and
+`ROLE_ADMIN`, but the repository has no production administrator bootstrap, owner role, self-demotion policy, or stated
+last-active-admin invariant. An unrestricted role patch would therefore invent policy for self-demotion, final-admin
+demotion, and concurrent changes. Current persisted roles remain authoritative on every request, so an out-of-band
+demotion immediately removes ADMIN access and an out-of-band promotion immediately grants it even when the JWT role
+metadata differs. Production role management is deferred until an owner defines bootstrap, assignable roles,
+self-action, final-active-admin, and concurrency policy; any selected final-admin invariant must be PostgreSQL-backed,
+not an in-memory count.
+
+The existing admin profile-update and retirement APIs permit self-action and do not protect a final active administrator.
+The new state commands preserve that established behavior rather than silently imposing a different policy: an
+administrator may disable their own account or another administrator, including the final active administrator, and the
+change takes effect on the next bearer request. This may require database/operator recovery, so a prohibition or
+last-admin invariant remains an explicit product-owner decision. Role self-demotion is unsupported because all role
+mutation is unsupported.
+
+No User-administration action-log table is added. Existing append-only admin action logs are bounded to operational
+requeue/recovery workflows and record committed successful commands; they do not establish a repository-wide identity
+administration audit contract or durable rejected-outcome transaction. Defining actor retention, target snapshots,
+success/failure outcomes, read authorization, and transactional treatment of rejected attempts is an owner decision.
+Application logs must not be treated as a substitute and must never contain passwords, JWTs, request bodies, or raw
+credentials.
+
+The alternatives considered were: disable without enable, rejected because the existing persisted `enabled` state and
+domain disable operation describe a reversible suspension more narrowly than permanent retirement; retaining retirement
+as the only revocation mechanism, rejected because it cannot represent temporary suspension and permanently hides the
+identity; and disable plus re-enable without version invalidation, rejected because it resurrects pre-suspension JWTs.
+Disable plus re-enable with disable-time credential-version invalidation is the selected minimum coherent lifecycle.
 
 A normalized email remains reserved after User retirement. This is an authentication-identity and token-replay safety
 invariant, not merely an incidental uniqueness constraint: JWT subjects contain email, and each request binds that subject
