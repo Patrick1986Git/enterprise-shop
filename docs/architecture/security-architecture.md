@@ -145,6 +145,11 @@ metadata differs. Production role management is deferred until an owner defines 
 self-action, final-active-admin, and concurrency policy; any selected final-admin invariant must be PostgreSQL-backed,
 not an in-memory count.
 
+The complete administrator bootstrap, continuity, zero-administrator recovery, database-identity, concurrency, and audit
+analysis is recorded in the [administrator lifecycle boundary](./administrator-lifecycle-boundary.md). It deliberately
+fails closed pending named owner decisions; local PostgreSQL role bootstrap tooling is not an application administrator
+bootstrap mechanism.
+
 The existing admin profile-update and retirement APIs permit self-action and do not protect a final active administrator.
 The new state commands preserve that established behavior rather than silently imposing a different policy: an
 administrator may disable their own account or another administrator, including the final active administrator, and the
