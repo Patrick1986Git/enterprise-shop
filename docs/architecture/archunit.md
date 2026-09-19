@@ -20,9 +20,19 @@ This is the first lightweight quality gate for our modular monolith. The goal is
 6. `..entity..` must not depend on `..dto..`, `..controller..`, `..service..`, `..repository..`.
 7. `*Controller` classes in `..controller..` must be annotated with `@RestController`.
 8. Types in `..repository..` whose names end with `Repository` must be interfaces.
-9. Order must not bypass the internal product, cart, or user APIs, and the cart and product modules must not depend on
-   the user module's service package. User-owned `api.internal` contracts remain allowed, as do intentional JPA entity
-   associations. Security/authentication persistence is outside these business-module rules.
+9. A business module (`cart`, `category`, `notification`, `order`, `product`, `system`, or `user`) must not depend
+   directly on a different business module's `repository` or `service` package. Same-module access remains allowed;
+   cross-module orchestration must use the documented narrow `api.internal` contracts or the documented order outbox
+   handler/event contract. The rule reports both the source and forbidden target so the owning boundary is clear.
+10. Order must not depend on cart, product, or user entities. These additional rules preserve the checkout snapshot
+    boundary and are intentionally stricter than the general repository/service ownership rule.
+
+The business-module rule deliberately does not prohibit all cross-module dependencies. The relational model retains
+the documented `Cart -> User`, `CartItem -> Product`, `Product -> Category`, and `ProductReview -> User` associations.
+The narrow category and user association facades may therefore expose a managed entity where that existing JPA
+relationship requires one. Immutable records remain the preferred internal API payload everywhere else. The
+notification module consumes order-owned outbox types, and security/authentication's cross-cutting access to User
+authentication persistence is outside the business-module selector.
 
 ## How to run
 
@@ -43,4 +53,7 @@ mvn test
 - Start with low-risk, highly readable rules.
 - Prefer rules aligned with the current architecture over rules that force large restructuring.
 - If the current codebase violates an otherwise valid rule, mark that rule as `@Disabled` temporarily with a clear `TODO` and a remediation plan.
-- Avoid aggressive cross-module isolation rules at the beginning; introduce them incrementally after dependency analysis.
+- Do not replace the ownership rule with blanket module isolation: intentional entity associations and the outbox
+  handler contract are part of the documented monolith architecture.
+- Add a package to the centralized business-module set when introducing a new business module so repository and service
+  ownership is enforced in both directions.
