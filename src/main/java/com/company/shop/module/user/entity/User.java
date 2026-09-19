@@ -144,11 +144,25 @@ public class User extends SoftDeleteEntity {
      * Deactivates the user account without removing the record from the database.
      */
     public void disable() {
-        this.enabled = false;
+        if (this.enabled) {
+            this.enabled = false;
+            incrementCredentialVersion();
+        }
+    }
+
+    /**
+     * Restores interactive access without making tokens issued before suspension valid again.
+     */
+    public void enable() {
+        this.enabled = true;
     }
 
     public void changePassword(String encodedPassword) {
         this.password = encodedPassword;
+        incrementCredentialVersion();
+    }
+
+    private void incrementCredentialVersion() {
         this.credentialVersion = Math.incrementExact(this.credentialVersion);
     }
 }

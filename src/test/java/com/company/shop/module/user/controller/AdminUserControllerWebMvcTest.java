@@ -470,6 +470,54 @@ class AdminUserControllerWebMvcTest {
     }
 
     @Nested
+    class AccountState {
+
+        @Test
+        void disableUser_shouldReturnEnabledFalseForAdmin() throws Exception {
+            UUID id = UUID.randomUUID();
+            UserResponseDTO response = new UserResponseDTO(
+                    id, "user@example.com", "User", "Example", false, Set.of("ROLE_USER"));
+            when(userService.disable(id)).thenReturn(response);
+
+            mockMvc.perform(put(ADMIN_USERS_URL + "/{id}/disable", id)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.enabled").value(false));
+
+            verify(userService).disable(id);
+            verifyNoMoreInteractions(userService);
+        }
+
+        @Test
+        void enableUser_shouldReturnEnabledTrueForAdmin() throws Exception {
+            UUID id = UUID.randomUUID();
+            UserResponseDTO response = sampleUser(
+                    id, "user@example.com", "User", "Example", Set.of("ROLE_USER"));
+            when(userService.enable(id)).thenReturn(response);
+
+            mockMvc.perform(put(ADMIN_USERS_URL + "/{id}/enable", id)
+                            .with(user("admin").roles("ADMIN"))
+                            .with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.enabled").value(true));
+
+            verify(userService).enable(id);
+            verifyNoMoreInteractions(userService);
+        }
+
+        @Test
+        void disableUser_shouldRejectNonAdmin() throws Exception {
+            mockMvc.perform(put(ADMIN_USERS_URL + "/{id}/disable", UUID.randomUUID())
+                            .with(user("user").roles("USER"))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+
+            verifyNoInteractions(userService);
+        }
+    }
+
+    @Nested
     class DeleteUser {
 
         @Test
@@ -557,6 +605,6 @@ class AdminUserControllerWebMvcTest {
     }
 
     private UserResponseDTO sampleUser(UUID id, String email, String firstName, String lastName, Set<String> roles) {
-        return new UserResponseDTO(id, email, firstName, lastName, roles);
+        return new UserResponseDTO(id, email, firstName, lastName, true, roles);
     }
 }

@@ -157,6 +157,77 @@ class UserProfileRetirementLifecycleIT extends PostgresContainerSupport {
                 .containsEntry("deleted", true);
     }
 
+    @Test
+    void retirementWinning_shouldRejectWaitingEnableWithoutResurrectingAccount() throws Exception {
+        User user = fixture();
+        userService.disable(user.getId());
+        CountDownLatch retired = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        AtomicInteger waiterPid = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+
+        Future<?> retirement = executor.submit(() -> transaction().executeWithoutResult(status -> {
+            userRepository.acquireCommerceLifecycleLock(user.getId());
+            userRepository.findActiveById(user.getId()).orElseThrow().markDeleted();
+            userRepository.flush();
+            retired.countDown();
+            await(commit);
+        }));
+        assertThat(retired.await(10, TimeUnit.SECONDS)).isTrue();
+
+        Future<?> enable = executor.submit(() -> transaction().executeWithoutResult(status -> {
+            waiterPid.set(jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+            userService.enable(user.getId());
+        }));
+        assertThat(awaitAdvisoryWait(waiterPid)).isTrue();
+
+        commit.countDown();
+        retirement.get(10, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> enable.get(10, TimeUnit.SECONDS))
+                .hasRootCauseInstanceOf(UserNotFoundException.class);
+        shutdown(executor);
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "select enabled, credential_version, deleted from users where id = ?", user.getId());
+        assertThat(row).containsEntry("enabled", false)
+                .containsEntry("credential_version", 1L)
+                .containsEntry("deleted", true);
+    }
+
+    @Test
+    void disableWinning_shouldSerializeWaitingEnableAndKeepOldCredentialVersionRevoked() throws Exception {
+        User user = fixture();
+        CountDownLatch disabled = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        AtomicInteger waiterPid = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+
+        Future<?> disable = executor.submit(() -> transaction().executeWithoutResult(status -> {
+            userService.disable(user.getId());
+            userRepository.flush();
+            disabled.countDown();
+            await(commit);
+        }));
+        assertThat(disabled.await(10, TimeUnit.SECONDS)).isTrue();
+
+        Future<?> enable = executor.submit(() -> transaction().executeWithoutResult(status -> {
+            waiterPid.set(jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+            userService.enable(user.getId());
+        }));
+        assertThat(awaitAdvisoryWait(waiterPid)).isTrue();
+
+        commit.countDown();
+        disable.get(10, TimeUnit.SECONDS);
+        enable.get(10, TimeUnit.SECONDS);
+        shutdown(executor);
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "select enabled, credential_version, deleted from users where id = ?", user.getId());
+        assertThat(row).containsEntry("enabled", true)
+                .containsEntry("credential_version", 1L)
+                .containsEntry("deleted", false);
+    }
+
     private User fixture() {
         return fixture("encoded");
     }

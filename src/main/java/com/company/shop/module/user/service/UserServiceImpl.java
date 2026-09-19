@@ -87,6 +87,25 @@ public class UserServiceImpl implements UserService {
 	}
 
 	@Override
+	public UserResponseDTO disable(UUID id) {
+		User user = findActiveAfterLifecycleLock(id);
+		user.disable();
+		return mapper.toDto(user);
+	}
+
+	@Override
+	public UserResponseDTO enable(UUID id) {
+		User user = findActiveAfterLifecycleLock(id);
+		user.enable();
+		return mapper.toDto(user);
+	}
+
+	private User findActiveAfterLifecycleLock(UUID id) {
+		repository.acquireCommerceLifecycleLock(id);
+		return repository.findActiveById(id).orElseThrow(UserNotFoundException::new);
+	}
+
+	@Override
 	public User getCurrentUserEntity() {
 		String email = currentUserProvider.getCurrentUserEmail();
 		User candidate = repository.findActiveByEmailWithRoles(email)

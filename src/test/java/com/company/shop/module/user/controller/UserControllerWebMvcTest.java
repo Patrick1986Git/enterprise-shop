@@ -76,7 +76,7 @@ class UserControllerWebMvcTest {
                     "john.doe@example.com",
                     "John",
                     "Doe",
-                    Set.of("ROLE_USER"));
+                    true, Set.of("ROLE_USER"));
             when(userService.getCurrentUserProfile()).thenReturn(response);
 
             mockMvc.perform(get(CURRENT_USER_URL)

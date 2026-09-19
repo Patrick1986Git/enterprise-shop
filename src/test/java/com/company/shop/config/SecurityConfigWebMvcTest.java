@@ -139,7 +139,8 @@ class SecurityConfigWebMvcTest {
         when(applicationStatusService.getApplicationStatus()).thenReturn(
                 new ApplicationStatusDTO("shop", "1.0", "test", Instant.now(), List.of("test"), "17", "Linux", "1", "localhost"));
         when(userService.getCurrentUserProfile()).thenReturn(
-                new UserResponseDTO(UUID.randomUUID(), "user@example.com", "John", "Doe", Set.of("ROLE_USER")));
+                new UserResponseDTO(UUID.randomUUID(), "user@example.com", "John", "Doe", true,
+                        Set.of("ROLE_USER")));
 
         when(productService.findAll(any())).thenReturn(Page.empty());
         when(categoryService.findAll(any())).thenReturn(Page.empty());

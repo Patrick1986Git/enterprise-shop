@@ -125,6 +125,40 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
     }
 
     @Test
+    void issuedToken_shouldNotResurrectAfterAdministrativeDisableAndEnable() throws Exception {
+        User user = createUser("jwt-suspended-" + UUID.randomUUID() + "@example.com", ROLE_USER);
+        User admin = createUser("jwt-suspension-admin-" + UUID.randomUUID() + "@example.com", ROLE_ADMIN);
+        String oldToken = login(user.getEmail());
+        String adminToken = login(admin.getEmail());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/admin/users/{id}/disable", user.getId())
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false));
+
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + oldToken))
+                .andExpect(status().isForbidden());
+        loginShouldFail(user.getEmail(), PASSWORD);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/admin/users/{id}/enable", user.getId())
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true));
+
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + oldToken))
+                .andExpect(status().isForbidden());
+        String newToken = login(user.getEmail());
+        assertThat(tokenProvider.getCredentialVersion(oldToken)).isZero();
+        assertThat(tokenProvider.getCredentialVersion(newToken)).isOne();
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + newToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void retiredEmail_shouldRemainReservedAndIssuedTokenShouldRemainUnauthenticated() throws Exception {
         String email = "jwt-retired-" + UUID.randomUUID() + "@example.com";
         register(email);
