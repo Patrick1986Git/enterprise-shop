@@ -92,6 +92,13 @@ Restore only into an isolated, empty target. Keep application traffic and all wo
 
 Missing or inconsistent Flyway history, checksum mismatch, unsupported PostgreSQL version, absent dictionary/extension support, incomplete roles/owners/default privileges, failed constraints/triggers, unsafe sequences, or unexplained Stripe divergence are stop conditions—not reasons to repair history or relax validation.
 
+Restore preserves application `ROLE_ADMIN` assignments only as of the selected recovery point. It must not promote a
+User, enable a disabled User, or resurrect a retired User as a side effect. If the restored point has no usable
+administrator, ADMIN operations remain unavailable: the repository has no supported zero-administrator recovery command.
+Do not substitute the runtime, Flyway, or restore identity for the unresolved operator contract. The fail-closed recovery
+boundary and required owner decisions are recorded in the
+[administrator lifecycle boundary](../architecture/administrator-lifecycle-boundary.md).
+
 ## Rehearsal contract
 
 The deployment owner must run a restore rehearsal at a cadence derived from its RPO/RTO and after material PostgreSQL, backup-platform, role/ownership, extension/text-search, or migration changes. Because this repository has no production platform and this environment may not have Docker, no provider-shaped automation is added to every PR. The existing PostgreSQL/Testcontainers migration and production-identity tests remain component evidence, not a substitute for end-to-end restoration.

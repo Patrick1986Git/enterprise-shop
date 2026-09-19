@@ -11,6 +11,7 @@ This `docs/` folder contains practical documentation that is currently grounded 
 - [`architecture/outbox-and-notifications.md`](./architecture/outbox-and-notifications.md) — DB-backed order outbox and notification baseline.
 - [`architecture/security-architecture.md`](./architecture/security-architecture.md) — JWT authentication, route authorization, CORS, CSRF, and actuator access.
 - [`architecture/password-recovery-boundary.md`](./architecture/password-recovery-boundary.md) — fail-closed forgotten-password threat model, delivery alternatives, and required owner decisions.
+- [`architecture/administrator-lifecycle-boundary.md`](./architecture/administrator-lifecycle-boundary.md) — fail-closed application administrator bootstrap, continuity, recovery, and required owner decisions.
 - [`architecture/error-handling.md`](./architecture/error-handling.md) — API error contract, exception mapping, and business-exception metrics.
 - [`architecture/archunit.md`](./architecture/archunit.md) — ArchUnit quality gate and currently enforced architecture rules.
 - [`architecture/soft-delete-identifier-reservations.md`](./architecture/soft-delete-identifier-reservations.md) — logical retirement, physical retention, and business-identifier reservation decisions.

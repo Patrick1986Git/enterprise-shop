@@ -283,6 +283,13 @@ Persistence integration tests use independent Testcontainers PostgreSQL containe
 
 ## Schema ownership
 
+Application `ROLE_ADMIN` is data in the `roles` and `user_roles` tables, not a PostgreSQL role or login. The repository's
+local database-role bootstrap, production runtime identity, Flyway identity, and PostgreSQL administrative identity do
+not establish a first application administrator. No production operator mutation is supported until the identity,
+approval, least-privilege, transaction, and evidence decisions in the
+[administrator lifecycle boundary](../architecture/administrator-lifecycle-boundary.md) are resolved. In particular,
+do not grant the runtime identity a bootstrap capability or use an ordinary Flyway migration to select a human admin.
+
 | Area | Tables/features |
 | --- | --- |
 | User/security | Users, roles, user-role join, case-insensitive email uniqueness. |
