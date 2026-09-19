@@ -6,6 +6,7 @@ public final class UserErrorCodes {
     public static final String USER_ALREADY_EXISTS = "USER_ALREADY_EXISTS";
     public static final String USER_AUTHENTICATION_REQUIRED = "USER_AUTHENTICATION_REQUIRED";
     public static final String USER_INVALID_CREDENTIALS = "USER_INVALID_CREDENTIALS";
+    public static final String USER_CURRENT_PASSWORD_INCORRECT = "USER_CURRENT_PASSWORD_INCORRECT";
     public static final String USER_ROLE_NOT_CONFIGURED = "USER_ROLE_NOT_CONFIGURED";
 
     private UserErrorCodes() {

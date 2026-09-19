@@ -39,6 +39,7 @@ import tools.jackson.databind.ObjectMapper;
 class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
 
     private static final String PASSWORD = "StrongPassword123!";
+    private static final String NEW_PASSWORD = "NewStrongPassword456!";
 
     @Autowired
     private MockMvc mockMvc;
@@ -176,6 +177,97 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
                 .andExpect(jsonPath("$.message").value("Invalid email or password"));
     }
 
+    @Test
+    void passwordChange_shouldReplaceCredentialAndImmediatelyInvalidatePreviouslyIssuedToken() throws Exception {
+        User user = createUser("jwt-password-change-" + UUID.randomUUID() + "@example.com", ROLE_USER);
+        String oldToken = login(user.getEmail(), PASSWORD);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/me/password")
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + oldToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordChangeRequest(PASSWORD, NEW_PASSWORD, NEW_PASSWORD))))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + oldToken))
+                .andExpect(status().isForbidden());
+        loginShouldFail(user.getEmail(), PASSWORD);
+        String newToken = login(user.getEmail(), NEW_PASSWORD);
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + newToken))
+                .andExpect(status().isOk());
+        assertThat(tokenProvider.getCredentialVersion(newToken)).isEqualTo(1L);
+        assertThat(userRepository.findActiveByEmailWithRoles(user.getEmail()).orElseThrow().getRoles())
+                .extracting(Role::getName).containsExactly(ROLE_USER);
+    }
+
+    @Test
+    void passwordChange_shouldNotMutateCredentialWhenCurrentPasswordIsIncorrect() throws Exception {
+        User user = createUser("jwt-password-reject-" + UUID.randomUUID() + "@example.com", ROLE_USER);
+        String token = login(user.getEmail(), PASSWORD);
+
+        String response = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/v1/me/password")
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordChangeRequest("WrongPassword123!", NEW_PASSWORD, NEW_PASSWORD))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("USER_CURRENT_PASSWORD_INCORRECT"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response).doesNotContain(PASSWORD, NEW_PASSWORD, "WrongPassword123!");
+        assertThat(jdbcTemplate.queryForObject("SELECT credential_version FROM users WHERE id = ?",
+                Long.class, user.getId())).isZero();
+        login(user.getEmail(), PASSWORD);
+        loginShouldFail(user.getEmail(), NEW_PASSWORD);
+    }
+
+    @Test
+    void passwordChange_shouldEnforceRegistrationPasswordRulesWithoutMutation() throws Exception {
+        User user = createUser("jwt-password-validation-" + UUID.randomUUID() + "@example.com", ROLE_USER);
+        String token = login(user.getEmail(), PASSWORD);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/me/password")
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordChangeRequest(PASSWORD, "short", "short"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.newPassword").isArray());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/me/password")
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordChangeRequest(PASSWORD, "🔐".repeat(19), "🔐".repeat(19)))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.newPassword").isArray());
+
+        assertThat(jdbcTemplate.queryForObject("SELECT credential_version FROM users WHERE id = ?",
+                Long.class, user.getId())).isZero();
+        login(user.getEmail(), PASSWORD);
+    }
+
+    @Test
+    void passwordChange_shouldAcceptPasswordAtBcryptUtf8ByteBoundary() throws Exception {
+        User user = createUser("jwt-password-boundary-" + UUID.randomUUID() + "@example.com", ROLE_USER);
+        String token = login(user.getEmail(), PASSWORD);
+        String seventyTwoBytePassword = "🔐".repeat(18);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/me/password")
+                        .with(csrf())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordChangeRequest(
+                                PASSWORD, seventyTwoBytePassword, seventyTwoBytePassword))))
+                .andExpect(status().isNoContent());
+
+        login(user.getEmail(), seventyTwoBytePassword);
+    }
+
     private User createUser(String email, String roleName) {
         Role role = roleRepository.findByName(roleName).orElseThrow();
         User user = new User(email, passwordEncoder.encode(PASSWORD), "JWT", "Test");
@@ -191,16 +283,28 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
     }
 
     private String login(String email) throws Exception {
+        return login(email, PASSWORD);
+    }
+
+    private String login(String email, String password) throws Exception {
         String response = mockMvc.perform(post("/api/v1/auth/login")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new LoginRequest(email, PASSWORD))))
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
         JsonNode json = objectMapper.readTree(response);
         return json.get("token").asText();
+    }
+
+    private void loginShouldFail(String email, String password) throws Exception {
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
+                .andExpect(status().isUnauthorized());
     }
 
     private void register(String email) throws Exception {
@@ -212,6 +316,9 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
     }
 
     private record LoginRequest(String email, String password) {
+    }
+
+    private record PasswordChangeRequest(String currentPassword, String newPassword, String newPasswordRepeat) {
     }
 
     private record RegisterRequest(String email, String password, String passwordRepeat,

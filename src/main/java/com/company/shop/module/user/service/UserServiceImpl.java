@@ -6,8 +6,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.company.shop.module.user.dto.UserResponseDTO;
+import com.company.shop.module.user.dto.PasswordChangeRequestDTO;
+import com.company.shop.module.user.exception.CurrentPasswordIncorrectException;
 import com.company.shop.module.user.dto.UserUpdateDTO;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.UserNotFoundException;
@@ -23,11 +26,14 @@ public class UserServiceImpl implements UserService {
 	private final UserRepository repository;
 	private final UserMapper mapper;
 	private final CurrentUserProvider currentUserProvider;
+	private final PasswordEncoder passwordEncoder;
 
-	public UserServiceImpl(UserRepository repository, UserMapper mapper, CurrentUserProvider currentUserProvider) {
+	public UserServiceImpl(UserRepository repository, UserMapper mapper, CurrentUserProvider currentUserProvider,
+			PasswordEncoder passwordEncoder) {
 		this.repository = repository;
 		this.mapper = mapper;
 		this.currentUserProvider = currentUserProvider;
+		this.passwordEncoder = passwordEncoder;
 	}
 
 	@Override
@@ -48,6 +54,15 @@ public class UserServiceImpl implements UserService {
 	@Transactional(readOnly = true)
 	public UserResponseDTO getCurrentUserProfile() {
 		return mapper.toDto(getCurrentUserEntity());
+	}
+
+	@Override
+	public void changeCurrentUserPassword(PasswordChangeRequestDTO request) {
+		User user = getCurrentUserEntity();
+		if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+			throw new CurrentPasswordIncorrectException();
+		}
+		user.changePassword(passwordEncoder.encode(request.getNewPassword()));
 	}
 
 	@Override

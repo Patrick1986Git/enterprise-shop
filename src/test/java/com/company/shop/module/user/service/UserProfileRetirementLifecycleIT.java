@@ -19,11 +19,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.company.shop.module.user.dto.UserUpdateDTO;
+import com.company.shop.module.user.dto.PasswordChangeRequestDTO;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.UserNotFoundException;
 import com.company.shop.module.user.repository.RoleRepository;
@@ -42,6 +46,7 @@ class UserProfileRetirementLifecycleIT extends PostgresContainerSupport {
     @Autowired private UserDetailsService userDetailsService;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private PasswordEncoder passwordEncoder;
 
     @Test
     void retirementWinning_shouldRejectWaitingProfileUpdateAndKeepPhysicalRowRetired() throws Exception {
@@ -106,9 +111,59 @@ class UserProfileRetirementLifecycleIT extends PostgresContainerSupport {
         assertRetiredPhysicalRow(user, "Updated", "Name");
     }
 
+    @Test
+    void retirementWinning_shouldRejectWaitingPasswordChangeWithoutMutatingCredential() throws Exception {
+        User user = fixture(passwordEncoder.encode("StrongPassword123!"));
+        String originalPassword = user.getPassword();
+        CountDownLatch retired = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        AtomicInteger waiterPid = new AtomicInteger();
+        var executor = Executors.newFixedThreadPool(2);
+
+        Future<?> retirement = executor.submit(() -> transaction().executeWithoutResult(status -> {
+            userRepository.acquireCommerceLifecycleLock(user.getId());
+            userRepository.findActiveById(user.getId()).orElseThrow().markDeleted();
+            userRepository.flush();
+            retired.countDown();
+            await(commit);
+        }));
+        assertThat(retired.await(10, TimeUnit.SECONDS)).isTrue();
+
+        Future<?> passwordChange = executor.submit(() -> {
+            SecurityContextHolder.getContext().setAuthentication(
+                    UsernamePasswordAuthenticationToken.authenticated(user.getEmail(), null, java.util.List.of()));
+            try {
+                transaction().executeWithoutResult(status -> {
+                    waiterPid.set(jdbcTemplate.queryForObject("select pg_backend_pid()", Integer.class));
+                    userService.changeCurrentUserPassword(new PasswordChangeRequestDTO(
+                            "StrongPassword123!", "NewStrongPassword456!", "NewStrongPassword456!"));
+                });
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
+        });
+        assertThat(awaitAdvisoryWait(waiterPid)).isTrue();
+
+        commit.countDown();
+        retirement.get(10, TimeUnit.SECONDS);
+        assertThatThrownBy(() -> passwordChange.get(10, TimeUnit.SECONDS))
+                .hasRootCauseInstanceOf(UserNotFoundException.class);
+        shutdown(executor);
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                "select password, credential_version, deleted from users where id = ?", user.getId());
+        assertThat(row).containsEntry("password", originalPassword)
+                .containsEntry("credential_version", 0L)
+                .containsEntry("deleted", true);
+    }
+
     private User fixture() {
+        return fixture("encoded");
+    }
+
+    private User fixture(String encodedPassword) {
         User user = new User("profile-lifecycle-" + UUID.randomUUID() + "@example.com",
-                "encoded", "Original", "Person");
+                encodedPassword, "Original", "Person");
         user.addRole(roleRepository.findByName(SecurityConstants.ROLE_USER).orElseThrow());
         return userRepository.saveAndFlush(user);
     }

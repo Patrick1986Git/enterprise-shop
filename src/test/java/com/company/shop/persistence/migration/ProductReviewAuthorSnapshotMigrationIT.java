@@ -35,6 +35,7 @@ class ProductReviewAuthorSnapshotMigrationIT {
 
             Flyway upgraded = Flyway.configure()
                     .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                    .target(MigrationVersion.fromVersion("49"))
                     .load();
             assertThat(upgraded.migrate().migrationsExecuted).isOne();
 

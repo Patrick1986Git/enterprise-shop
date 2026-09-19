@@ -19,6 +19,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import com.company.shop.security.CredentialVersionUserDetails;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
@@ -50,6 +52,7 @@ class JwtTokenProviderTest {
         assertThat(token).isNotBlank();
         assertThat(provider.validate(token)).isTrue();
         assertThat(provider.getUsername(token)).isEqualTo(USERNAME);
+        assertThat(provider.getCredentialVersion(token)).isZero();
         assertThat(rolesFrom(rolesClaim)).containsExactlyInAnyOrder(ROLE_USER, ROLE_ADMIN);
         assertThat(claims.getHeader().getKeyId()).isEqualTo(KEY_ID);
         assertThat(claims.getPayload().getExpiration().getTime())
@@ -126,6 +129,15 @@ class JwtTokenProviderTest {
         String token = provider.generateToken(authentication(USERNAME, ROLE_USER));
 
         assertThat(provider.getRoles(token)).isEqualTo(ROLE_USER);
+    }
+
+    @Test
+    void getCredentialVersion_shouldFailClosedForMissingMalformedAndNegativeClaims() {
+        JwtTokenProvider provider = tokenProvider(60_000L);
+
+        assertThat(provider.getCredentialVersion(signedTokenWithCredentialVersion(null))).isNull();
+        assertThat(provider.getCredentialVersion(signedTokenWithCredentialVersion("0"))).isNull();
+        assertThat(provider.getCredentialVersion(signedTokenWithCredentialVersion(-1))).isNull();
     }
 
     @Test
@@ -226,6 +238,18 @@ class JwtTokenProviderTest {
                 .compact();
     }
 
+    private String signedTokenWithCredentialVersion(Object credentialVersion) {
+        var builder = Jwts.builder()
+                .header().keyId(KEY_ID).and()
+                .subject(USERNAME)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60_000L));
+        if (credentialVersion != null) {
+            builder.claim("credentialVersion", credentialVersion);
+        }
+        return builder.signWith(Keys.hmacShaKeyFor(KEY_BYTES)).compact();
+    }
+
     private Jws<Claims> parseWith(byte[] keyBytes, String token) {
         return Jwts.parser()
                 .verifyWith(Keys.hmacShaKeyFor(keyBytes))
@@ -245,7 +269,8 @@ class JwtTokenProviderTest {
 
     private Authentication authentication(String username, String... roles) {
         return new UsernamePasswordAuthenticationToken(
-                username,
+                new CredentialVersionUserDetails(username, "password", true, true,
+                        Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList(), 0),
                 "password",
                 Arrays.stream(roles).map(SimpleGrantedAuthority::new).toList());
     }

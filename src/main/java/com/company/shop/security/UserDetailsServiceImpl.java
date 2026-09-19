@@ -32,16 +32,15 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         User user = userRepository.findActiveByEmailWithRoles(normalizedEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        return new org.springframework.security.core.userdetails.User(
+        return new CredentialVersionUserDetails(
                 user.getEmail(),
                 user.getPassword(),
                 user.isEnabled(),
-                true,
-                true,
                 !user.isDeleted(),
                 user.getRoles().stream()
                         .map(role -> new SimpleGrantedAuthority(role.getName()))
-                        .collect(Collectors.toSet())
+                        .collect(Collectors.toSet()),
+                user.getCredentialVersion()
         );
     }
 }
