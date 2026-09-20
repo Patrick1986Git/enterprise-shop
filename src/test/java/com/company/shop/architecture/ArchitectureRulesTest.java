@@ -3,6 +3,7 @@ package com.company.shop.architecture;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,6 +27,14 @@ class ArchitectureRulesTest {
             "^com\\.company\\.shop\\.module\\.([^.]+)(?:\\..*)?$");
     private static final Set<String> BUSINESS_MODULES = Set.of(
             "cart", "category", "notification", "order", "product", "system", "user");
+    private static final Map<String, Set<String>> INTERNAL_API_CONSUMERS = Map.of(
+            "cart", Set.of("order"),
+            "category", Set.of("product"),
+            "product", Set.of("cart", "order"),
+            "user", Set.of("cart", "order", "product"));
+    private static final Map<String, Set<String>> NARROW_INTERNAL_API_CONSUMERS = Map.of(
+            "com.company.shop.module.user.api.internal.CurrentUserAssociationFacade",
+            Set.of("cart", "product"));
 
     @ArchTest
     static final ArchRule controllersMustNotAccessRepositoriesDirectly =
@@ -84,6 +93,24 @@ class ArchitectureRulesTest {
             classes()
                     .that().resideInAPackage("com.company.shop.module..")
                     .should(notDependOnRepositoryOrServiceOwnedByAnotherBusinessModule());
+
+    @ArchTest
+    static final ArchRule everyProductionBusinessModuleMustBeRegistered =
+            classes()
+                    .that().resideInAPackage("com.company.shop.module..")
+                    .should(belongToARegisteredBusinessModule());
+
+    @ArchTest
+    static final ArchRule internalApisMayOnlyBeUsedByDocumentedConsumerModules =
+            classes()
+                    .that().resideInAPackage("com.company.shop.module..")
+                    .should(onlyAccessInternalApisAllowedForTheirModule());
+
+    @ArchTest
+    static final ArchRule notificationMayOnlyAccessTheOrderOutboxBoundary =
+            classes()
+                    .that().resideInAPackage("com.company.shop.module.notification..")
+                    .should(onlyAccessOrderOutboxTypes());
 
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnProductEntities =
@@ -157,13 +184,91 @@ class ArchitectureRulesTest {
         };
     }
 
+    private static ArchCondition<JavaClass> belongToARegisteredBusinessModule() {
+        return new ArchCondition<>("belong to a registered business module") {
+            @Override
+            public void check(JavaClass javaClass, ConditionEvents events) {
+                String packageModule = packageModuleOf(javaClass);
+                if (packageModule != null && !BUSINESS_MODULES.contains(packageModule)) {
+                    String message = String.format(
+                            "%s belongs to unregistered module '%s'; add that module to BUSINESS_MODULES and "
+                                    + "intentionally review its ownership and internal API relationships",
+                            javaClass.getName(),
+                            packageModule);
+                    events.add(SimpleConditionEvent.violated(javaClass, message));
+                }
+            }
+        };
+    }
+
+    private static ArchCondition<JavaClass> onlyAccessInternalApisAllowedForTheirModule() {
+        return new ArchCondition<>("only access internal APIs through documented module relationships") {
+            @Override
+            public void check(JavaClass javaClass, ConditionEvents events) {
+                String sourceModule = businessModuleOf(javaClass);
+                if (sourceModule == null) {
+                    return;
+                }
+
+                for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
+                    JavaClass targetClass = dependency.getTargetClass();
+                    String targetModule = businessModuleOf(targetClass);
+                    if (targetModule != null
+                            && !sourceModule.equals(targetModule)
+                            && isInternalApiPackage(targetClass.getPackageName())
+                            && !allowedInternalApiConsumers(targetClass, targetModule).contains(sourceModule)) {
+                        String message = String.format(
+                                "%s in module '%s' depends on internal API %s owned by module '%s', but that "
+                                        + "owner/consumer relationship is not documented in INTERNAL_API_CONSUMERS",
+                                javaClass.getName(),
+                                sourceModule,
+                                targetClass.getName(),
+                                targetModule);
+                        events.add(SimpleConditionEvent.violated(dependency, message));
+                    }
+                }
+            }
+        };
+    }
+
+    private static ArchCondition<JavaClass> onlyAccessOrderOutboxTypes() {
+        return new ArchCondition<>("only access order through its outbox boundary") {
+            @Override
+            public void check(JavaClass javaClass, ConditionEvents events) {
+                for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
+                    JavaClass targetClass = dependency.getTargetClass();
+                    if ("order".equals(businessModuleOf(targetClass))
+                            && !targetClass.getPackageName().startsWith("com.company.shop.module.order.outbox")) {
+                        String message = String.format(
+                                "%s in module 'notification' depends on forbidden order type %s; notification "
+                                        + "may consume only com.company.shop.module.order.outbox",
+                                javaClass.getName(),
+                                targetClass.getName());
+                        events.add(SimpleConditionEvent.violated(dependency, message));
+                    }
+                }
+            }
+        };
+    }
+
     private static String businessModuleOf(JavaClass javaClass) {
+        String module = packageModuleOf(javaClass);
+        return module != null && BUSINESS_MODULES.contains(module) ? module : null;
+    }
+
+    private static String packageModuleOf(JavaClass javaClass) {
         Matcher matcher = BUSINESS_MODULE_PACKAGE.matcher(javaClass.getPackageName());
-        if (!matcher.matches()) {
-            return null;
-        }
-        String module = matcher.group(1);
-        return BUSINESS_MODULES.contains(module) ? module : null;
+        return matcher.matches() ? matcher.group(1) : null;
+    }
+
+    private static boolean isInternalApiPackage(String packageName) {
+        return packageName.endsWith(".api.internal") || packageName.contains(".api.internal.");
+    }
+
+    private static Set<String> allowedInternalApiConsumers(JavaClass targetClass, String targetModule) {
+        return NARROW_INTERNAL_API_CONSUMERS.getOrDefault(
+                targetClass.getName(),
+                INTERNAL_API_CONSUMERS.getOrDefault(targetModule, Set.of()));
     }
 
     private static boolean isRepositoryOrServicePackage(String packageName) {
