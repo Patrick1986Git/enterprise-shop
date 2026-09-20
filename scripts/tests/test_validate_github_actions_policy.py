@@ -32,7 +32,15 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             f"        uses: actions/checkout@{SHA}\n"
             "        with:\n"
             "          persist-credentials: false\n"
-            f"          ref: {ref}\n",
+            f"          ref: {ref}\n"
+            "      - name: Checkout protected-master OpenAPI baseline source\n"
+            "        if: github.event_name == 'pull_request'\n"
+            f"        uses: actions/checkout@{SHA}\n"
+            "        with:\n"
+            "          repository: ${{ github.event.pull_request.base.repo.full_name }}\n"
+            "          ref: ${{ github.event.pull_request.base.sha }}\n"
+            "          path: target/openapi-baseline-source\n"
+            "          persist-credentials: false\n",
         )
 
     def test_accepts_external_action_pinned_to_full_sha(self):
@@ -113,6 +121,15 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         )
         violations = self.validate(self.ci_workflow(expression), "ci.yml")
         self.assertTrue(any("workflow_dispatch" in violation for violation in violations))
+
+    def test_rejects_openapi_baseline_checkout_from_candidate_ref(self):
+        workflow = self.ci_workflow("${{ github.event_name == 'schedule' && 'master' || github.ref }}")
+        workflow = workflow.replace(
+            "ref: ${{ github.event.pull_request.base.sha }}",
+            "ref: ${{ github.event.pull_request.head.sha }}",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("OpenAPI baseline checkout" in violation for violation in violations))
 
 
 if __name__ == "__main__":

@@ -63,6 +63,7 @@ The repository must keep the GitHub Actions setting that permits `GITHUB_TOKEN` 
 | Migration verification tests | Flyway smoke checks and schema-hardening migrations including constraints, snapshots, outbox, and schema artifacts. |
 | ArchUnit architecture rules | Package/layering rules in `ArchitectureRulesTest`. |
 | Observability/config/security tests | Request correlation, OpenAPI smoke, actuator security, security filter behavior, config validation. |
+| OpenAPI compatibility tests | Structural regression fixtures plus a PR-only comparison of all generated JSON contracts against documents independently generated from the exact protected-base SHA. |
 | Outbox and notification tests | Outbox event recording/processing/polling/properties, notification entity/service/outbox handler/delivery processor/repository. |
 | Payment/webhook tests | Payment intent creation, webhook processing, webhook controller contract, and Stripe webhook persistence/idempotency. |
 
