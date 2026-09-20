@@ -25,6 +25,14 @@ SCHEDULE_CHECKOUT_REF = re.compile(
     r"^\$\{\{\s*github\.event_name\s*==\s*(['\"])schedule\1\s*&&\s*"
     r"(['\"])master\2\s*\|\|\s*github\.ref\s*\}\}$"
 )
+OPENAPI_BASELINE_CHECKOUT = re.compile(
+    r"(?ms)^      - name: Checkout protected-master OpenAPI baseline source\s*$\n"
+    r"(?P<body>.*?)(?=^      - |\Z)"
+)
+OPENAPI_BASELINE_GENERATION = re.compile(
+    r"(?ms)^      - name: Generate protected-master OpenAPI baseline\s*$\n"
+    r"(?P<body>.*?)(?=^      - |\Z)"
+)
 
 
 def workflow_files(workflows_dir):
@@ -119,6 +127,26 @@ def validate_workflows(workflows_dir):
                 violations.append(
                     f"{path}: container-security checkout must use master only for schedule "
                     "and github.ref for workflow_dispatch, pull_request, and push"
+                )
+            contents = path.read_text(encoding="utf-8")
+            baseline_checkout = OPENAPI_BASELINE_CHECKOUT.search(contents)
+            required = (
+                "if: github.event_name == 'pull_request'",
+                "repository: ${{ github.event.pull_request.base.repo.full_name }}",
+                "ref: ${{ github.event.pull_request.base.sha }}",
+                "path: target/openapi-baseline-source",
+                "persist-credentials: false",
+            )
+            if not baseline_checkout or any(item not in baseline_checkout.group("body") for item in required):
+                violations.append(
+                    f"{path}: OpenAPI baseline checkout must be PR-only, use the PR base repository/SHA, "
+                    "use the isolated baseline path, and disable persisted credentials"
+                )
+            baseline_generation = OPENAPI_BASELINE_GENERATION.search(contents)
+            if (not baseline_generation
+                    or "SPRING_PROFILES_ACTIVE: test" not in baseline_generation.group("body")):
+                violations.append(
+                    f"{path}: OpenAPI baseline generation must use the canonical test Spring profile"
                 )
     return violations
 

@@ -40,6 +40,8 @@ Because this repository is public, neither the CI artifact nor the source code i
 
 The Pages bundle is generated fail closed: its file set and index links are restricted to the approved public group, and semantic validation must reject ADMIN, actuator, customer-only, and webhook paths even if they are introduced under an unexpected filename. New or reclassified OpenAPI groups must not be added to Pages until this policy explicitly identifies them as public and regression coverage proves the resulting contract is public-safe.
 
+All generated JSON contracts—the default aggregate document plus `all-api`, `public-api`, `customer-api`, `admin-api`, `webhooks-api`, and `system-api`—are backward-compatibility surfaces. Pull-request CI generates their baseline from the exact protected-base commit and validates its provenance; it does not commit generated documents or depend on artifact retention. The structural policy and local reproduction procedure are documented in `docs/api/overview.md`. A compatibility failure detects a client-visible change but does not decide whether that change is desirable. No intentional-break bypass is authorized until repository owners define a reviewed approval policy; compatibility checking must not be globally or silently skipped.
+
 Both the public Pages specifications and the complete CI specifications remain uncommitted build outputs.
 
 ## Manual documentation scope
