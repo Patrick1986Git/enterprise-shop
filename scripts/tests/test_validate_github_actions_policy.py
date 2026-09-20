@@ -22,7 +22,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         return f"jobs:\n  test:\n    steps:\n      - uses: {reference}\n{extra}"
 
     def ci_workflow(self, ref):
-        return self.workflow(
+        workflow = self.workflow(
             f"actions/checkout@{SHA}",
             "        with:\n"
             "          persist-credentials: false\n"
@@ -47,6 +47,18 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          BASE_SHA: ${{ github.event.pull_request.base.sha }}\n"
             "          SPRING_PROFILES_ACTIVE: test\n"
             "        run: echo generate\n",
+        )
+        return workflow + (
+            "  restore-rehearsal:\n"
+            "    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'\n"
+            "    steps:\n"
+            "      - name: Checkout restore rehearsal source\n"
+            f"        uses: actions/checkout@{SHA}\n"
+            "        with:\n"
+            "          persist-credentials: false\n"
+            f"          ref: {ref}\n"
+            "      - name: Run synthetic PostgreSQL logical restore rehearsal\n"
+            "        run: ./scripts/restore-rehearsal.sh\n"
         )
 
     def test_accepts_external_action_pinned_to_full_sha(self):
@@ -127,6 +139,24 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         )
         violations = self.validate(self.ci_workflow(expression), "ci.yml")
         self.assertTrue(any("workflow_dispatch" in violation for violation in violations))
+
+    def test_rejects_restore_rehearsal_on_pull_requests(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+            "if: github.event_name == 'pull_request' || github.event_name == 'schedule'",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("restore-rehearsal must be limited" in violation for violation in violations))
+
+    def test_rejects_restore_rehearsal_schedule_from_candidate_ref(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            f"          ref: {expression}\n      - name: Run synthetic PostgreSQL logical restore rehearsal",
+            "          ref: ${{ github.ref }}\n      - name: Run synthetic PostgreSQL logical restore rehearsal",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("restore-rehearsal checkout" in violation for violation in violations))
 
     def test_rejects_openapi_baseline_checkout_from_candidate_ref(self):
         workflow = self.ci_workflow("${{ github.event_name == 'schedule' && 'master' || github.ref }}")

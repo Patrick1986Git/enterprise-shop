@@ -2,7 +2,7 @@
 
 ## Decision and ownership boundary
 
-Enterprise Shop uses a **combined model (Outcome C)**:
+Enterprise Shop uses a **combined model (Outcome B with a repository-owned command)**:
 
 - the production deployment owner must provide backup scheduling, retention, encryption, access control, integrity monitoring, geographic-failure protection, WAL archiving and point-in-time recovery (PITR) needed to meet its selected recovery-point objective (RPO) and recovery-time objective (RTO); and
 - this repository defines a portable logical-backup baseline and the application-specific restore checks that every deployment must rehearse.
@@ -99,9 +99,51 @@ Do not substitute the runtime, Flyway, or restore identity for the unresolved op
 boundary and required owner decisions are recorded in the
 [administrator lifecycle boundary](../architecture/administrator-lifecycle-boundary.md).
 
-## Rehearsal contract
+## Evidence levels and rehearsal contract
+
+Recovery evidence has three deliberately separate levels:
+
+1. **Repository synthetic logical restore rehearsal.** `./scripts/restore-rehearsal.sh` proves only that the current
+   PostgreSQL 18 schema, full custom-format logical dump, Flyway history, portable role/ownership contract, synthetic
+   recovery markers, and application startup survive a source-to-fresh-target cycle. CI runs it after protected-master
+   pushes, on the existing weekly schedule, and on explicit workflow dispatch. It is kept out of pull-request validation
+   to avoid duplicating two image builds and two database/application startups inside the existing 20-minute Docker job.
+2. **Deployment-specific logical/physical restore rehearsal.** The deployment owner must restore its real backup format,
+   provisioning, extensions, dictionaries, roles, secrets, encryption/key path, retention system, and provider procedure
+   into its isolated target, then retain dated evidence.
+3. **Production RPO/RTO/PITR readiness.** Only deployment measurements and successfully rehearsed physical/WAL/PITR,
+   geographic recovery, external-system reconciliation, operational alerting, and responsible operators can establish
+   this level.
+
+Passing repository CI establishes level 1 only. It is not level 2 or 3, is not a production RTO measurement, and does
+not weaken the deployment owner's requirement to retain dated recovery evidence.
 
 The deployment owner must run a restore rehearsal at a cadence derived from its RPO/RTO and after material PostgreSQL, backup-platform, role/ownership, extension/text-search, or migration changes. Because this repository has no production platform and this environment may not have Docker, no provider-shaped automation is added to every PR. The existing PostgreSQL/Testcontainers migration and production-identity tests remain component evidence, not a substitute for end-to-end restoration.
+
+The repository command builds the existing PostgreSQL and application images, creates isolated source and target
+containers with separately provisioned synthetic admin, migration, and `NOINHERIT` runtime roles, and runs production
+profile startup with the normal runtime/Flyway identity split. It applies current migrations to the source, loads the
+deterministic fixture in `scripts/restore-rehearsal-fixture.sql` through the runtime role, creates an unfiltered
+`pg_dump --format=custom`, validates its table of contents, and records its SHA-256 digest. It then performs an
+owner-preserving restore as the synthetic administrator after recreating the original role names. This mode most
+faithfully exercises the documented portable owner and ACL contract; `--no-owner` is not used because it would replace
+that evidence with restore-session ownership.
+
+The target checks Flyway history through V50, extensions and Polish search, owners and owner-specific default ACLs,
+ordinary runtime DML, all three V45 history protections with SQLSTATE `42501`, migration maintenance, UUID generation,
+and deterministic recovery markers for identity/roles, catalog/image/stock/version, cart, snapshots, payment/provider,
+webhook, reservation recovery, outbox, notification, and ADMIN history state. Finally, production-profile startup must
+pass Flyway validation, Hibernate validation, the ownership validator, and readiness. No authenticated API smoke is
+performed: the fixture is deliberately not an application login bootstrap and the unresolved administrator recovery
+boundary remains fail closed.
+
+The script emits only versions, commit, digest, size, durations, and pass/fail summaries. A trap removes both apps,
+both databases and their anonymous storage, the isolated network, and the temporary dump on success or failure. The
+dump is never uploaded as an artifact. Run it locally from the repository root with a working Docker daemon:
+
+```bash
+./scripts/restore-rehearsal.sh
+```
 
 A deterministic rehearsal must use synthetic data only: create an isolated PostgreSQL 18 source using the repository's custom image; apply all Flyway migrations as a synthetic migration role; add representative user/catalog/stock/cart/order/item/payment/webhook/reservation/outbox/notification/history records; take a full custom dump; restore to a fresh isolated target with separately provisioned synthetic roles; then execute steps 6–9 above. Retain only non-sensitive evidence: source/target/tool versions, commit/application version, dump digest, duration against the selected RTO, Flyway version/checksum result, invariant results, and operator/date. Never upload a realistic production dump to ordinary GitHub Actions artifacts.
 
