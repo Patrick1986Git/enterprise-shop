@@ -60,6 +60,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          SPRING_PROFILES_ACTIVE: test
         run: |
           set -euo pipefail
           test "${{ github.event.pull_request.base.repo.full_name }}" = "${{ github.repository }}"

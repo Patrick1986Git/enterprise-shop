@@ -17,8 +17,9 @@ DOCUMENTS = (
     "system-api",
 )
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
-LOWER_BOUNDS = ("minimum", "minLength", "minItems", "minProperties")
-UPPER_BOUNDS = ("maximum", "maxLength", "maxItems", "maxProperties")
+LOWER_BOUNDS = ("minimum", "exclusiveMinimum", "minLength", "minItems", "minProperties")
+UPPER_BOUNDS = ("maximum", "exclusiveMaximum", "maxLength", "maxItems", "maxProperties")
+COMPOSITIONS = ("allOf", "oneOf", "anyOf")
 
 
 class ContractError(ValueError):
@@ -47,15 +48,37 @@ def json_pointer(document, reference):
     return value
 
 
-def dereference(schema, document):
+def dereference(value, document, kind, allowed_prefixes, allow_siblings=False):
+    if not isinstance(value, dict):
+        raise ContractError(f"{kind} must be an object")
     seen = set()
-    while isinstance(schema, dict) and "$ref" in schema:
-        reference = schema["$ref"]
+    while "$ref" in value:
+        if not allow_siblings and set(value) != {"$ref"}:
+            raise ContractError(f"{kind} reference must not contain sibling fields")
+        reference = value["$ref"]
+        if not isinstance(reference, str) or not any(reference.startswith(prefix) for prefix in allowed_prefixes):
+            raise ContractError(f"unsupported {kind} reference: {reference!r}")
         if reference in seen:
-            break
+            raise ContractError(f"cyclic {kind} reference: {reference}")
         seen.add(reference)
-        schema = json_pointer(document, reference)
-    return schema if isinstance(schema, dict) else {}
+        target = json_pointer(document, reference)
+        if not isinstance(target, dict):
+            raise ContractError(f"resolved {kind} reference is not an object: {reference}")
+        siblings = {key: item for key, item in value.items() if key != "$ref"}
+        value = {**target, **siblings}
+    return value
+
+
+def schema(value, document):
+    return dereference(value, document, "schema", ("#/components/schemas/",), allow_siblings=True)
+
+
+def reference_object(value, document, kind, component):
+    return dereference(value, document, kind, (f"#/components/{component}/",))
+
+
+def path_item(value, document):
+    return dereference(value, document, "path item", ("#/paths/", "#/components/pathItems/"))
 
 
 def location(path, method, suffix=""):
@@ -64,8 +87,8 @@ def location(path, method, suffix=""):
 
 
 def compare_schema(old, new, old_doc, new_doc, where, direction, findings, visited=None):
-    old = dereference(old, old_doc)
-    new = dereference(new, new_doc)
+    old = schema(old, old_doc)
+    new = schema(new, new_doc)
     visited = visited or set()
     marker = (id(old), id(new), direction)
     if marker in visited:
@@ -73,38 +96,38 @@ def compare_schema(old, new, old_doc, new_doc, where, direction, findings, visit
     visited.add(marker)
 
     for keyword in ("type", "format"):
-        if keyword in old and old.get(keyword) != new.get(keyword):
+        if old.get(keyword) != new.get(keyword) and (keyword in old or keyword in new):
             findings.add(f"{where}: schema {keyword} changed from {old.get(keyword)!r} to {new.get(keyword)!r}")
-    if old.get("nullable") is True and new.get("nullable") is not True:
-        findings.add(f"{where}: nullable value became non-nullable")
+    if direction == "request" and old.get("nullable") is True and new.get("nullable") is not True:
+        findings.add(f"{where}: request value became non-nullable")
+    if direction == "response" and old.get("nullable") is not True and new.get("nullable") is True:
+        findings.add(f"{where}: response value became nullable")
 
     old_enum = old.get("enum")
     new_enum = new.get("enum")
-    if isinstance(old_enum, list) and isinstance(new_enum, list):
+    if direction == "request" and not isinstance(old_enum, list) and isinstance(new_enum, list):
+        findings.add(f"{where}: unrestricted request value gained an enum restriction")
+    elif direction == "response" and isinstance(old_enum, list) and not isinstance(new_enum, list):
+        findings.add(f"{where}: restricted response enum became unrestricted")
+    elif isinstance(old_enum, list) and isinstance(new_enum, list):
         old_values, new_values = set(map(repr, old_enum)), set(map(repr, new_enum))
         incompatible = old_values - new_values if direction == "request" else new_values - old_values
         if incompatible:
             change = "accepted enum values removed" if direction == "request" else "response enum values added"
             findings.add(f"{where}: {change}: {sorted(incompatible)}")
 
-    for keyword in LOWER_BOUNDS:
-        if keyword in new and (keyword not in old or new[keyword] > old[keyword]):
-            findings.add(f"{where}: {keyword} tightened from {old.get(keyword)!r} to {new[keyword]!r}")
-    for keyword in UPPER_BOUNDS:
-        if keyword in new and (keyword not in old or new[keyword] < old[keyword]):
-            findings.add(f"{where}: {keyword} tightened from {old.get(keyword)!r} to {new[keyword]!r}")
-    if new.get("exclusiveMinimum") is True and old.get("exclusiveMinimum") is not True:
-        findings.add(f"{where}: minimum became exclusive")
-    if new.get("exclusiveMaximum") is True and old.get("exclusiveMaximum") is not True:
-        findings.add(f"{where}: maximum became exclusive")
-    if "pattern" in new and old.get("pattern") != new.get("pattern"):
-        findings.add(f"{where}: string pattern was added or changed")
+    compare_bounds(old, new, where, direction, findings)
+    if old.get("pattern") != new.get("pattern") and ("pattern" in old or "pattern" in new):
+        findings.add(f"{where}: string pattern changed; regex subset compatibility cannot be proven")
 
     old_required = set(old.get("required", []))
     new_required = set(new.get("required", []))
     if direction == "request":
         for name in sorted(new_required - old_required):
             findings.add(f"{where}.{name}: request property became required")
+    else:
+        for name in sorted(old_required - new_required):
+            findings.add(f"{where}.{name}: response property became optional")
 
     old_properties = old.get("properties", {})
     new_properties = new.get("properties", {})
@@ -119,22 +142,67 @@ def compare_schema(old, new, old_doc, new_doc, where, direction, findings, visit
 
     if "items" in old and "items" in new:
         compare_schema(old["items"], new["items"], old_doc, new_doc, f"{where}[]", direction, findings, visited)
-    for composition in ("allOf", "oneOf", "anyOf"):
+    for composition in COMPOSITIONS:
         old_parts, new_parts = old.get(composition), new.get(composition)
-        if isinstance(old_parts, list):
-            if not isinstance(new_parts, list) or len(old_parts) != len(new_parts):
-                findings.add(f"{where}: {composition} alternatives changed")
-            else:
-                for index, (old_part, new_part) in enumerate(zip(old_parts, new_parts)):
-                    compare_schema(old_part, new_part, old_doc, new_doc,
-                                   f"{where}.{composition}[{index}]", direction, findings, visited)
+        if old_parts != new_parts and (composition in old or composition in new):
+            findings.add(f"{where}: {composition} changed; composition compatibility cannot be proven")
+        elif isinstance(old_parts, list):
+            for index, (old_part, new_part) in enumerate(zip(old_parts, new_parts)):
+                compare_schema(old_part, new_part, old_doc, new_doc,
+                               f"{where}.{composition}[{index}]", direction, findings, visited)
 
 
-def parameters(path_item, operation):
+def compare_bounds(old, new, where, direction, findings):
+    for keyword in LOWER_BOUNDS:
+        old_value, new_value = old.get(keyword), new.get(keyword)
+        if isinstance(old_value, bool) or isinstance(new_value, bool):
+            incompatible = (
+                (direction == "request" and new_value is True and old_value is not True)
+                or (direction == "response" and old_value is True and new_value is not True)
+            )
+            if incompatible:
+                findings.add(f"{where}: {keyword} changed incompatibly from {old_value!r} to {new_value!r}")
+            continue
+        incompatible = (
+            (direction == "request" and new_value is not None
+             and (old_value is None or new_value > old_value))
+            or (direction == "response" and old_value is not None
+                and (new_value is None or new_value < old_value))
+        )
+        if incompatible:
+            findings.add(f"{where}: {keyword} changed incompatibly from {old_value!r} to {new_value!r}")
+    for keyword in UPPER_BOUNDS:
+        old_value, new_value = old.get(keyword), new.get(keyword)
+        if isinstance(old_value, bool) or isinstance(new_value, bool):
+            incompatible = (
+                (direction == "request" and new_value is True and old_value is not True)
+                or (direction == "response" and old_value is True and new_value is not True)
+            )
+            if incompatible:
+                findings.add(f"{where}: {keyword} changed incompatibly from {old_value!r} to {new_value!r}")
+            continue
+        incompatible = (
+            (direction == "request" and new_value is not None
+             and (old_value is None or new_value < old_value))
+            or (direction == "response" and old_value is not None
+                and (new_value is None or new_value > old_value))
+        )
+        if incompatible:
+            findings.add(f"{where}: {keyword} changed incompatibly from {old_value!r} to {new_value!r}")
+
+
+def parameters(path_value, operation, document):
     result = {}
-    for parameter in [*path_item.get("parameters", []), *operation.get("parameters", [])]:
-        if isinstance(parameter, dict):
-            result[(parameter.get("in"), parameter.get("name"))] = parameter
+    for parameter in [*path_value.get("parameters", []), *operation.get("parameters", [])]:
+        parameter = reference_object(parameter, document, "parameter", "parameters")
+        name, parameter_in = parameter.get("name"), parameter.get("in")
+        if not isinstance(name, str) or parameter_in not in {"query", "header", "path", "cookie"}:
+            raise ContractError("parameter must contain a valid name and location")
+        if "content" in parameter:
+            raise ContractError(f"parameter {(parameter_in, name)!r} content form is not supported")
+        if "schema" not in parameter:
+            raise ContractError(f"parameter {(parameter_in, name)!r} does not contain a schema")
+        result[(parameter_in, name)] = parameter
     return result
 
 
@@ -162,8 +230,8 @@ def compare_operation(path, method, old_path_item, new_path_item, old_op, new_op
     if normalized_security(old_op, old_doc) != normalized_security(new_op, new_doc):
         findings.add(f"{where}: security requirements changed")
 
-    old_parameters = parameters(old_path_item, old_op)
-    new_parameters = parameters(new_path_item, new_op)
+    old_parameters = parameters(old_path_item, old_op, old_doc)
+    new_parameters = parameters(new_path_item, new_op, new_doc)
     for key in sorted(old_parameters.keys() - new_parameters.keys(), key=repr):
         findings.add(f"{where}: parameter {key!r} was removed")
     for key in sorted(new_parameters.keys() - old_parameters.keys(), key=repr):
@@ -177,6 +245,12 @@ def compare_operation(path, method, old_path_item, new_path_item, old_op, new_op
                        old_doc, new_doc, f"{where} parameter {key!r}", "request", findings)
 
     old_body, new_body = old_op.get("requestBody"), new_op.get("requestBody")
+    if old_body is not None:
+        old_body = reference_object(old_body, old_doc, "request body", "requestBodies")
+    if new_body is not None:
+        new_body = reference_object(new_body, new_doc, "request body", "requestBodies")
+    if isinstance(old_body, dict) and new_body is None:
+        findings.add(f"{where}: request body was removed")
     if isinstance(new_body, dict) and new_body.get("required") is True and not (
             isinstance(old_body, dict) and old_body.get("required") is True):
         findings.add(f"{where}: required request body was added")
@@ -189,8 +263,8 @@ def compare_operation(path, method, old_path_item, new_path_item, old_op, new_op
     for status in sorted(old_responses.keys() - new_responses.keys()):
         findings.add(f"{where}: documented response {status!r} was removed")
     for status in sorted(old_responses.keys() & new_responses.keys()):
-        old_response = dereference(old_responses[status], old_doc)
-        new_response = dereference(new_responses[status], new_doc)
+        old_response = reference_object(old_responses[status], old_doc, "response", "responses")
+        new_response = reference_object(new_responses[status], new_doc, "response", "responses")
         compare_content(old_response.get("content"), new_response.get("content"), old_doc, new_doc,
                         f"{where} response {status}", "response", findings)
 
@@ -203,7 +277,8 @@ def compare_documents(old_doc, new_doc):
     for path in sorted(old_paths.keys() - new_paths.keys()):
         findings.add(f"{path}: path was removed")
     for path in sorted(old_paths.keys() & new_paths.keys()):
-        old_path_item, new_path_item = old_paths[path], new_paths[path]
+        old_path_item = path_item(old_paths[path], old_doc)
+        new_path_item = path_item(new_paths[path], new_doc)
         for method in sorted(HTTP_METHODS & old_path_item.keys() - new_path_item.keys()):
             findings.add(f"{location(path, method)}: operation was removed")
         for method in sorted(HTTP_METHODS & old_path_item.keys() & new_path_item.keys()):

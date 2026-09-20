@@ -53,6 +53,23 @@ class OpenApiCompatibilityTest(unittest.TestCase):
         mutate(candidate)
         return COMPATIBILITY.compare_documents(baseline, candidate)
 
+    def request_schema(self, value):
+        return value["paths"]["/orders/{id}"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+
+    def response_schema(self, value):
+        return value["paths"]["/orders/{id}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+
+    def property_findings(self, direction, old_property, new_property, required=()):
+        baseline = contract()
+        candidate = copy.deepcopy(baseline)
+        accessor = self.request_schema if direction == "request" else self.response_schema
+        old_schema, new_schema = accessor(baseline), accessor(candidate)
+        old_schema["properties"] = {"value": old_property}
+        new_schema["properties"] = {"value": new_property}
+        old_schema["required"] = list(required[0]) if required else []
+        new_schema["required"] = list(required[1]) if required else []
+        return COMPATIBILITY.compare_documents(baseline, candidate)
+
     def test_detects_removed_operation(self):
         findings = self.findings(lambda value: value["paths"]["/orders/{id}"].pop("get"))
         self.assertTrue(any("operation was removed" in finding for finding in findings))
@@ -91,6 +108,123 @@ class OpenApiCompatibilityTest(unittest.TestCase):
             response["properties"]["label"] = {"type": "string"}
             value["paths"]["/health"] = {"get": {"operationId": "health", "responses": {"200": {"description": "OK"}}}}
         self.assertEqual(set(), self.findings(mutate))
+
+    def test_request_variance_rejects_narrowing(self):
+        cases = (
+            ({"type": "string", "nullable": True}, {"type": "string"}, "non-nullable"),
+            ({"type": "string"}, {"type": "string", "enum": ["A"]}, "enum restriction"),
+            ({"type": "string", "enum": ["A", "B"]}, {"type": "string", "enum": ["A"]}, "enum values removed"),
+            ({"type": "number", "minimum": 1}, {"type": "number", "minimum": 2}, "minimum"),
+            ({"type": "number", "maximum": 10}, {"type": "number", "maximum": 9}, "maximum"),
+            ({"type": "string", "minLength": 1}, {"type": "string", "minLength": 2}, "minLength"),
+            ({"type": "array", "maxItems": 4}, {"type": "array", "maxItems": 3}, "maxItems"),
+            ({"type": "object", "minProperties": 1}, {"type": "object", "minProperties": 2}, "minProperties"),
+        )
+        for old, new, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in finding for finding in self.property_findings("request", old, new)))
+        findings = self.property_findings(
+            "request", {"type": "string"}, {"type": "string"}, ((), ("value",)))
+        self.assertTrue(any("request property became required" in finding for finding in findings))
+
+    def test_request_variance_allows_broadening(self):
+        cases = (
+            ({"type": "string"}, {"type": "string", "nullable": True}),
+            ({"type": "string", "enum": ["A"]}, {"type": "string"}),
+            ({"type": "number", "minimum": 2}, {"type": "number", "minimum": 1}),
+            ({"type": "number", "minimum": 2}, {"type": "number"}),
+            ({"type": "number", "maximum": 9}, {"type": "number", "maximum": 10}),
+            ({"type": "number", "maximum": 9}, {"type": "number"}),
+        )
+        for old, new in cases:
+            with self.subTest(old=old, new=new):
+                self.assertEqual(set(), self.property_findings("request", old, new))
+
+    def test_response_variance_rejects_widening(self):
+        cases = (
+            ({"type": "string"}, {"type": "string", "nullable": True}, "became nullable"),
+            ({"type": "string", "enum": ["A"]}, {"type": "string", "enum": ["A", "B"]}, "enum values added"),
+            ({"type": "string", "enum": ["A"]}, {"type": "string"}, "became unrestricted"),
+            ({"type": "number", "minimum": 2}, {"type": "number", "minimum": 1}, "minimum"),
+            ({"type": "number", "minimum": 2}, {"type": "number"}, "minimum"),
+            ({"type": "number", "maximum": 9}, {"type": "number", "maximum": 10}, "maximum"),
+            ({"type": "number", "maximum": 9}, {"type": "number"}, "maximum"),
+            ({"type": "array", "minItems": 2}, {"type": "array", "minItems": 1}, "minItems"),
+            ({"type": "object", "maxProperties": 2}, {"type": "object", "maxProperties": 3}, "maxProperties"),
+            ({"type": "string"}, {"type": "integer"}, "schema type changed"),
+        )
+        for old, new, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertTrue(any(expected in finding for finding in self.property_findings("response", old, new)))
+        findings = self.property_findings(
+            "response", {"type": "string"}, {"type": "string"}, (("value",), ()))
+        self.assertTrue(any("response property became optional" in finding for finding in findings))
+
+    def test_response_variance_allows_narrowing(self):
+        cases = (
+            ({"type": "string", "nullable": True}, {"type": "string"}),
+            ({"type": "string", "enum": ["A", "B"]}, {"type": "string", "enum": ["A"]}),
+            ({"type": "number", "minimum": 1}, {"type": "number", "minimum": 2}),
+            ({"type": "number", "maximum": 10}, {"type": "number", "maximum": 9}),
+        )
+        for old, new in cases:
+            with self.subTest(old=old, new=new):
+                self.assertEqual(set(), self.property_findings("response", old, new))
+        self.assertEqual(set(), self.property_findings(
+            "response", {"type": "string"}, {"type": "string"}, ((), ("value",))))
+
+    def test_pattern_and_composition_changes_fail_closed_in_both_directions(self):
+        for direction in ("request", "response"):
+            with self.subTest(direction=direction, constraint="pattern"):
+                findings = self.property_findings(
+                    direction, {"type": "string", "pattern": "[A-Z]+"}, {"type": "string"})
+                self.assertTrue(any("regex subset compatibility cannot be proven" in finding for finding in findings))
+            with self.subTest(direction=direction, constraint="oneOf"):
+                findings = self.property_findings(
+                    direction,
+                    {"oneOf": [{"type": "string"}]},
+                    {"oneOf": [{"type": "integer"}]},
+                )
+                self.assertTrue(any("composition compatibility cannot be proven" in finding for finding in findings))
+
+    def test_supports_local_schema_response_parameter_request_body_and_path_item_references(self):
+        baseline = contract()
+        baseline["components"] = {
+            "schemas": {"Order": self.response_schema(baseline)},
+            "responses": {"OrderResponse": {"content": {"application/json": {"schema": {
+                "$ref": "#/components/schemas/Order", "description": "Schema siblings apply in OpenAPI 3.1"
+            }}}}},
+            "parameters": {"OrderId": baseline["paths"]["/orders/{id}"]["get"]["parameters"][0]},
+            "requestBodies": {"OrderUpdate": baseline["paths"]["/orders/{id}"]["post"]["requestBody"]},
+            "pathItems": {"Orders": baseline["paths"]["/orders/{id}"]},
+        }
+        baseline["paths"]["/orders/{id}"] = {"$ref": "#/components/pathItems/Orders"}
+        path = baseline["components"]["pathItems"]["Orders"]
+        path["get"]["parameters"] = [{"$ref": "#/components/parameters/OrderId"}]
+        path["get"]["responses"]["200"] = {"$ref": "#/components/responses/OrderResponse"}
+        path["post"]["requestBody"] = {"$ref": "#/components/requestBodies/OrderUpdate"}
+        candidate = copy.deepcopy(baseline)
+        self.assertEqual(set(), COMPATIBILITY.compare_documents(baseline, candidate))
+        candidate["components"]["schemas"]["Order"]["properties"]["id"]["type"] = "integer"
+        self.assertTrue(any("schema type changed" in finding
+                            for finding in COMPATIBILITY.compare_documents(baseline, candidate)))
+
+    def test_rejects_external_malformed_and_sibling_references(self):
+        mutations = (
+            lambda value: value["paths"]["/orders/{id}"]["get"]["responses"]["200"].update({"$ref": "https://example.test/response"}),
+            lambda value: value["paths"]["/orders/{id}"]["get"]["parameters"].__setitem__(0, {"$ref": "#/components/parameters/Missing"}),
+            lambda value: value["paths"]["/orders/{id}"]["get"]["parameters"].__setitem__(0, {
+                "name": "id", "in": "path", "required": True,
+                "content": {"application/json": {"schema": {"type": "string"}}},
+            }),
+            lambda value: value["paths"]["/orders/{id}"]["post"].__setitem__("requestBody", {"$ref": "#/components/requestBodies/Body", "required": True}),
+            lambda value: value["paths"].__setitem__("/orders/{id}", {"$ref": "#/components/schemas/NotAPath"}),
+        )
+        for mutate in mutations:
+            baseline, candidate = contract(), contract()
+            mutate(candidate)
+            with self.subTest(mutate=mutate), self.assertRaises(COMPATIBILITY.ContractError):
+                COMPATIBILITY.compare_documents(baseline, candidate)
 
     def test_fails_closed_for_missing_document_and_bad_provenance(self):
         with tempfile.TemporaryDirectory() as root:

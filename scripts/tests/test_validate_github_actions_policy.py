@@ -40,7 +40,13 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          repository: ${{ github.event.pull_request.base.repo.full_name }}\n"
             "          ref: ${{ github.event.pull_request.base.sha }}\n"
             "          path: target/openapi-baseline-source\n"
-            "          persist-credentials: false\n",
+            "          persist-credentials: false\n"
+            "      - name: Generate protected-master OpenAPI baseline\n"
+            "        if: github.event_name == 'pull_request'\n"
+            "        env:\n"
+            "          BASE_SHA: ${{ github.event.pull_request.base.sha }}\n"
+            "          SPRING_PROFILES_ACTIVE: test\n"
+            "        run: echo generate\n",
         )
 
     def test_accepts_external_action_pinned_to_full_sha(self):
@@ -130,6 +136,22 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         )
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("OpenAPI baseline checkout" in violation for violation in violations))
+
+    def test_rejects_openapi_baseline_generation_without_test_profile(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "          SPRING_PROFILES_ACTIVE: test\n", ""
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("canonical test Spring profile" in violation for violation in violations))
+
+    def test_rejects_openapi_baseline_generation_with_different_profile(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "SPRING_PROFILES_ACTIVE: test", "SPRING_PROFILES_ACTIVE: default"
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("canonical test Spring profile" in violation for violation in violations))
 
 
 if __name__ == "__main__":
