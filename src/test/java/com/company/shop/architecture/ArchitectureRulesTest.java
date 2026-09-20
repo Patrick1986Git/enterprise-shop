@@ -4,6 +4,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,6 +21,11 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 
 @AnalyzeClasses(packages = "com.company.shop", importOptions = ImportOption.DoNotIncludeTests.class)
 class ArchitectureRulesTest {
+
+    private static final Pattern BUSINESS_MODULE_PACKAGE = Pattern.compile(
+            "^com\\.company\\.shop\\.module\\.([^.]+)(?:\\..*)?$");
+    private static final Set<String> BUSINESS_MODULES = Set.of(
+            "cart", "category", "notification", "order", "product", "system", "user");
 
     @ArchTest
     static final ArchRule controllersMustNotAccessRepositoriesDirectly =
@@ -73,25 +80,10 @@ class ArchitectureRulesTest {
 
 
     @ArchTest
-    static final ArchRule orderModuleMustNotDependOnProductRepository =
-            noClasses()
-                    .that().resideInAPackage("com.company.shop.module.order..")
-                    .should().dependOnClassesThat()
-                    .resideInAPackage("com.company.shop.module.product.repository..");
-
-    @ArchTest
-    static final ArchRule productModuleMustNotDependOnCategoryRepositories =
-            noClasses()
-                    .that().resideInAPackage("com.company.shop.module.product..")
-                    .should().dependOnClassesThat()
-                    .resideInAPackage("com.company.shop.module.category.repository..");
-
-    @ArchTest
-    static final ArchRule cartModuleMustNotDependOnProductRepositories =
-            noClasses()
-                    .that().resideInAPackage("com.company.shop.module.cart..")
-                    .should().dependOnClassesThat()
-                    .resideInAPackage("com.company.shop.module.product.repository..");
+    static final ArchRule businessModulesMustNotAccessForeignRepositoriesOrServices =
+            classes()
+                    .that().resideInAPackage("com.company.shop.module..")
+                    .should(notDependOnRepositoryOrServiceOwnedByAnotherBusinessModule());
 
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnProductEntities =
@@ -106,30 +98,6 @@ class ArchitectureRulesTest {
                     .that().resideInAPackage("com.company.shop.module.order..")
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.company.shop.module.user.entity..");
-
-    @ArchTest
-    static final ArchRule orderModuleMustNotDependOnUserService =
-            noClasses()
-                    .that().resideInAPackage("com.company.shop.module.order..")
-                    .should().dependOnClassesThat()
-                    .resideInAPackage("com.company.shop.module.user.service..");
-
-    @ArchTest
-    static final ArchRule cartAndProductModulesMustNotDependOnUserServices =
-            noClasses()
-                    .that().resideInAnyPackage(
-                            "com.company.shop.module.cart..",
-                            "com.company.shop.module.product..")
-                    .should().dependOnClassesThat()
-                    .resideInAPackage("com.company.shop.module.user.service..");
-
-
-    @ArchTest
-    static final ArchRule orderModuleMustNotDependOnCartServices =
-            noClasses()
-                    .that().resideInAPackage("com.company.shop.module.order..")
-                    .should().dependOnClassesThat()
-                    .resideInAPackage("com.company.shop.module.cart.service..");
 
     @ArchTest
     static final ArchRule orderModuleMustNotDependOnCartEntities =
@@ -158,5 +126,50 @@ class ArchitectureRulesTest {
                 }
             }
         };
+    }
+
+    private static ArchCondition<JavaClass> notDependOnRepositoryOrServiceOwnedByAnotherBusinessModule() {
+        return new ArchCondition<>("not depend on another business module's repository or service package") {
+            @Override
+            public void check(JavaClass javaClass, ConditionEvents events) {
+                String sourceModule = businessModuleOf(javaClass);
+                if (sourceModule == null) {
+                    return;
+                }
+
+                for (Dependency dependency : javaClass.getDirectDependenciesFromSelf()) {
+                    JavaClass targetClass = dependency.getTargetClass();
+                    String targetModule = businessModuleOf(targetClass);
+                    if (targetModule != null
+                            && !sourceModule.equals(targetModule)
+                            && isRepositoryOrServicePackage(targetClass.getPackageName())) {
+                        String message = String.format(
+                                "%s in module '%s' directly depends on forbidden %s owned by module '%s'; "
+                                        + "use the target module's documented internal API instead",
+                                javaClass.getName(),
+                                sourceModule,
+                                targetClass.getName(),
+                                targetModule);
+                        events.add(SimpleConditionEvent.violated(dependency, message));
+                    }
+                }
+            }
+        };
+    }
+
+    private static String businessModuleOf(JavaClass javaClass) {
+        Matcher matcher = BUSINESS_MODULE_PACKAGE.matcher(javaClass.getPackageName());
+        if (!matcher.matches()) {
+            return null;
+        }
+        String module = matcher.group(1);
+        return BUSINESS_MODULES.contains(module) ? module : null;
+    }
+
+    private static boolean isRepositoryOrServicePackage(String packageName) {
+        return packageName.endsWith(".repository")
+                || packageName.contains(".repository.")
+                || packageName.endsWith(".service")
+                || packageName.contains(".service.");
     }
 }
