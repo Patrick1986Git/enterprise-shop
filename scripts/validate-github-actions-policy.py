@@ -20,6 +20,9 @@ CONTAINER_SECURITY_JOB = re.compile(
 RESTORE_REHEARSAL_JOB = re.compile(
     r"(?ms)^  restore-rehearsal:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
+RESTORE_PR_SCOPE_JOB = re.compile(
+    r"(?ms)^  restore-pr-scope:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
+)
 CHECKOUT_STEP = re.compile(
     r"(?ms)^      - name: Checkout\s*$\n(?P<body>.*?)(?=^      - |\Z)"
 )
@@ -27,6 +30,11 @@ CHECKOUT_REF = re.compile(r"(?m)^          ref:\s*(?P<value>.+?)\s*$")
 SCHEDULE_CHECKOUT_REF = re.compile(
     r"^\$\{\{\s*github\.event_name\s*==\s*(['\"])schedule\1\s*&&\s*"
     r"(['\"])master\2\s*\|\|\s*github\.ref\s*\}\}$"
+)
+RESTORE_CHECKOUT_REF = re.compile(
+    r"^\$\{\{\s*github\.event_name\s*==\s*(['\"])schedule\1\s*&&\s*"
+    r"(['\"])master\2\s*\|\|\s*github\.event_name\s*==\s*(['\"])pull_request\3\s*&&\s*"
+    r"github\.sha\s*\|\|\s*github\.ref\s*\}\}$"
 )
 OPENAPI_BASELINE_CHECKOUT = re.compile(
     r"(?ms)^      - name: Checkout protected-master OpenAPI baseline source\s*$\n"
@@ -118,6 +126,17 @@ def resolve_container_security_checkout_ref(expression, event_name, github_ref):
     return "master" if event_name == "schedule" else github_ref
 
 
+def resolve_restore_checkout_ref(expression, event_name, github_ref, github_sha):
+    """Resolve the protected schedule, immutable PR candidate, and selected-ref policy."""
+    if not expression or not RESTORE_CHECKOUT_REF.fullmatch(expression):
+        raise ValueError("unsupported restore-rehearsal checkout ref expression")
+    if event_name == "schedule":
+        return "master"
+    if event_name == "pull_request":
+        return github_sha
+    return github_ref
+
+
 def validate_workflows(workflows_dir):
     violations = []
     for path in workflow_files(workflows_dir):
@@ -140,6 +159,8 @@ def validate_workflows(workflows_dir):
                 )
         if path.name == "ci.yml":
             contents = path.read_text(encoding="utf-8")
+            if not re.search(r"(?m)^permissions:\s*$\n  contents: read\s*$", contents):
+                violations.append(f"{path}: default workflow permissions must remain contents: read")
             checkout_ref = container_security_checkout_ref(path)
             if not checkout_ref or not SCHEDULE_CHECKOUT_REF.fullmatch(checkout_ref):
                 violations.append(
@@ -147,19 +168,44 @@ def validate_workflows(workflows_dir):
                     "and github.ref for workflow_dispatch, pull_request, and push"
                 )
             rehearsal_ref = restore_rehearsal_checkout_ref(path)
-            if not rehearsal_ref or not SCHEDULE_CHECKOUT_REF.fullmatch(rehearsal_ref):
+            if not rehearsal_ref or not RESTORE_CHECKOUT_REF.fullmatch(rehearsal_ref):
                 violations.append(
                     f"{path}: restore-rehearsal checkout must use protected master for schedule "
-                    "and github.ref for protected push and explicit workflow_dispatch refs"
+                    "the immutable candidate SHA for pull requests, and github.ref for protected "
+                    "push and explicit workflow_dispatch refs"
+                )
+            scope = RESTORE_PR_SCOPE_JOB.search(contents)
+            scope_requirements = (
+                "if: github.event_name == 'pull_request'",
+                "run_restore: ${{ steps.scope.outputs.run_restore }}",
+                "persist-credentials: false",
+                "fetch-depth: 0",
+                "ref: ${{ github.event.pull_request.head.sha }}",
+                "BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+                "python scripts/restore_pr_scope.py",
+                '--base-sha "$BASE_SHA"',
+                '--head-sha "$HEAD_SHA"',
+            )
+            if not scope or any(item not in scope.group("body") for item in scope_requirements):
+                violations.append(
+                    f"{path}: restore PR scope detection must use the complete immutable base/head "
+                    "history, disable persisted credentials, and publish the repository-owned decision"
                 )
             rehearsal = RESTORE_REHEARSAL_JOB.search(contents)
             if (not rehearsal
-                    or "if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" not in rehearsal.group("body")
+                    or "needs: restore-pr-scope" not in rehearsal.group("body")
+                    or "always()" not in rehearsal.group("body")
+                    or "github.event_name == 'push'" not in rehearsal.group("body")
+                    or "github.event_name == 'schedule'" not in rehearsal.group("body")
+                    or "github.event_name == 'workflow_dispatch'" not in rehearsal.group("body")
+                    or "github.event_name == 'pull_request'" not in rehearsal.group("body")
+                    or "needs.restore-pr-scope.outputs.run_restore == 'true'" not in rehearsal.group("body")
                     or "run: ./scripts/restore-rehearsal.sh" not in rehearsal.group("body")
                     or "run: ./scripts/historical-forward-restore-rehearsal.sh" not in rehearsal.group("body")):
                 violations.append(
-                    f"{path}: restore-rehearsal must be limited to push, schedule, and workflow_dispatch "
-                    "and invoke both repository-owned restore scripts"
+                    f"{path}: restore-rehearsal must run for push, schedule, explicit dispatch, and "
+                    "restore-relevant PRs, and invoke both repository-owned restore scripts"
                 )
             baseline_checkout = OPENAPI_BASELINE_CHECKOUT.search(contents)
             required = (
