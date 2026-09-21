@@ -46,7 +46,18 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "        env:\n"
             "          BASE_SHA: ${{ github.event.pull_request.base.sha }}\n"
             "          SPRING_PROFILES_ACTIVE: test\n"
-            "        run: echo generate\n",
+            "        run: echo generate\n"
+            "      - name: Enforce Flyway rolling-compatibility decision boundary\n"
+            "        if: github.event_name == 'pull_request'\n"
+            "        env:\n"
+            "          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}\n"
+            "          BASE_SHA: ${{ github.event.pull_request.base.sha }}\n"
+            "        run: |\n"
+            "          test \"$BASE_REPOSITORY\" = \"${{ github.repository }}\"\n"
+            "          test \"$(git -C target/openapi-baseline-source rev-parse HEAD)\" = \"$BASE_SHA\"\n"
+            "          python scripts/validate_migration_compatibility.py \\\n"
+            "            --base target/openapi-baseline-source \\\n"
+            "            --candidate .\n",
         )
         return workflow + (
             "  restore-pr-scope:\n"
@@ -253,6 +264,23 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         )
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("canonical test Spring profile" in violation for violation in violations))
+
+    def test_rejects_missing_flyway_compatibility_boundary(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression)
+        start = workflow.index("      - name: Enforce Flyway rolling-compatibility decision boundary\n")
+        end = workflow.index("  restore-pr-scope:\n", start)
+        violations = self.validate(workflow[:start] + workflow[end:], "ci.yml")
+        self.assertTrue(any("Flyway compatibility policy" in violation for violation in violations))
+
+    def test_rejects_flyway_compatibility_against_mutable_base(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "BASE_SHA: ${{ github.event.pull_request.base.sha }}\n",
+            "BASE_SHA: ${{ github.base_ref }}\n",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("Flyway compatibility policy" in violation for violation in violations))
 
 
 if __name__ == "__main__":

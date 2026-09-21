@@ -70,6 +70,19 @@ jobs:
           printf '{"repository":"%s","sha":"%s"}\n' "${{ github.repository }}" "$BASE_SHA" \
             > target/openapi-baseline-source/target/generated-docs/openapi/baseline-provenance.json
 
+      - name: Enforce Flyway rolling-compatibility decision boundary
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          test "$BASE_REPOSITORY" = "${{ github.repository }}"
+          test "$(git -C target/openapi-baseline-source rev-parse HEAD)" = "$BASE_SHA"
+          python scripts/validate_migration_compatibility.py \
+            --base target/openapi-baseline-source \
+            --candidate .
+
       - name: Enforce OpenAPI backward compatibility
         if: github.event_name == 'pull_request'
         env:

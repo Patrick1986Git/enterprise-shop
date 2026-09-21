@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "migrations": {
+    "V48": {
+      "classification": "rolling-safe",
+      "rationale": "The backfill retained all images, and the preceding mapping already wrote integer sort_order values; the existing default remained zero.",
+      "previousRevisionEvidence": "Historical source and SQL review; the preceding writer's inserts remain valid after NOT NULL enforcement.",
+      "ownerReview": "Retrospective classification recorded by the rolling-compatibility audit."
+    },
+    "V49": {
+      "classification": "rolling-safe",
+      "rationale": "The author snapshot remained nullable and retained the existing user relationship.",
+      "previousRevisionEvidence": "Historical source and SQL review; old writes can continue to leave the snapshot null.",
+      "ownerReview": "Retrospective classification recorded by the rolling-compatibility audit."
+    },
+    "V50": {
+      "classification": "rolling-safe",
+      "rationale": "The non-null credential version supplies a database default for preceding-version inserts.",
+      "previousRevisionEvidence": "Historical source and SQL review; old inserts receive credential_version zero.",
+      "ownerReview": "Retrospective classification recorded by the rolling-compatibility audit."
+    }
+  }
+}
