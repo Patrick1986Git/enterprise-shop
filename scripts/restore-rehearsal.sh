@@ -21,6 +21,9 @@ export POSTGRES_USER="$ADMIN_USER" POSTGRES_PASSWORD="$ADMIN_PASSWORD" POSTGRES_
 export DATABASE_USERNAME="$RUNTIME_USER" DATABASE_PASSWORD="$RUNTIME_PASSWORD"
 export FLYWAY_USER="$MIGRATION_USER" FLYWAY_PASSWORD="$MIGRATION_PASSWORD"
 
+# shellcheck source=scripts/lib/postgres-readiness.sh
+source scripts/lib/postgres-readiness.sh
+
 cleanup() {
   docker rm -f "$SOURCE_APP" "$TARGET_APP" "$SOURCE_CONTAINER" "$TARGET_CONTAINER" >/dev/null 2>&1 || true
   docker network rm "$NETWORK" >/dev/null 2>&1 || true
@@ -41,20 +44,12 @@ docker network create "$NETWORK" >/dev/null
 docker build --tag "$POSTGRES_IMAGE" docker/postgres >/dev/null
 docker build --tag "$APP_IMAGE" . >/dev/null
 
-wait_for_postgres() {
-  local container=$1
-  for _ in {1..60}; do
-    if docker exec "$container" pg_isready --username "$ADMIN_USER" --dbname postgres >/dev/null 2>&1; then return 0; fi
-    sleep 1
-  done
-  fail "PostgreSQL did not become ready in $container"
-}
-
 start_database() {
   local container=$1
   docker run -d --name "$container" --network "$NETWORK" \
     --env POSTGRES_USER --env POSTGRES_PASSWORD --env POSTGRES_DB "$POSTGRES_IMAGE" >/dev/null
-  wait_for_postgres "$container"
+  wait_for_final_postgres "$container" "$ADMIN_USER" \
+    || fail "final PostgreSQL server did not become ready in $container"
   docker exec -i "$container" psql --username "$ADMIN_USER" --dbname postgres \
     --set=ON_ERROR_STOP=1 --set=migration_user="$MIGRATION_USER" \
     --set=migration_password="$MIGRATION_PASSWORD" --set=runtime_user="$RUNTIME_USER" \
