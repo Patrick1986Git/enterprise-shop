@@ -64,6 +64,12 @@ candidate with an isolated checkout of the exact PR base repository and SHA, rej
 migrations, and fails closed when a new migration has no classification, rationale, previous-revision evidence plan, or
 owner review. This is a governance boundary, not an automated proof that arbitrary SQL is safe.
 
+Once a decision exists on protected `master`, the complete decision is historical evidence and is immutable: it may not
+be deleted or have its classification, rationale, previous-revision evidence, or owner-review context rewritten in a
+later pull request. This repository has no amendment bypass. If a future correction is genuinely required, its narrowly
+reviewed amendment mechanism must be established explicitly before changing historical evidence; labels, commit text,
+mutable allowlists, and unrelated manifest edits are not authorization.
+
 ### Classification contract
 
 | Change | Minimum classification |
