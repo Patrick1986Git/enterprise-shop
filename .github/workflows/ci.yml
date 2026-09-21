@@ -271,8 +271,39 @@ jobs:
         if: always()
         run: docker compose --profile full down --volumes --remove-orphans
 
+  restore-pr-scope:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_restore: ${{ steps.scope.outputs.run_restore }}
+
+    steps:
+      - name: Checkout candidate source for restore scope detection
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Determine whether the PR affects restore execution
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/restore_pr_scope.py \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA"
+
   restore-rehearsal:
-    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: restore-pr-scope
+    if: >-
+      always() &&
+      (github.event_name == 'push' ||
+       github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'pull_request' && needs.restore-pr-scope.outputs.run_restore == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -281,7 +312,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'schedule' && 'master' || github.ref }}
+          ref: ${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}
 
       - name: Validate restore rehearsal script syntax
         run: |
