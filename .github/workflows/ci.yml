@@ -284,10 +284,15 @@ jobs:
           ref: ${{ github.event_name == 'schedule' && 'master' || github.ref }}
 
       - name: Validate restore rehearsal script syntax
-        run: bash -n scripts/restore-rehearsal.sh
+        run: |
+          bash -n scripts/restore-rehearsal.sh
+          bash -n scripts/historical-forward-restore-rehearsal.sh
 
       - name: Run synthetic PostgreSQL logical restore rehearsal
         run: ./scripts/restore-rehearsal.sh
+
+      - name: Run historical-forward PostgreSQL restore rehearsal
+        run: ./scripts/historical-forward-restore-rehearsal.sh
 
   container-security:
     runs-on: ubuntu-latest

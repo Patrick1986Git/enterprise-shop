@@ -155,10 +155,11 @@ def validate_workflows(workflows_dir):
             rehearsal = RESTORE_REHEARSAL_JOB.search(contents)
             if (not rehearsal
                     or "if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" not in rehearsal.group("body")
-                    or "run: ./scripts/restore-rehearsal.sh" not in rehearsal.group("body")):
+                    or "run: ./scripts/restore-rehearsal.sh" not in rehearsal.group("body")
+                    or "run: ./scripts/historical-forward-restore-rehearsal.sh" not in rehearsal.group("body")):
                 violations.append(
                     f"{path}: restore-rehearsal must be limited to push, schedule, and workflow_dispatch "
-                    "and invoke the repository-owned script"
+                    "and invoke both repository-owned restore scripts"
                 )
             baseline_checkout = OPENAPI_BASELINE_CHECKOUT.search(contents)
             required = (
