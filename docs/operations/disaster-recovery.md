@@ -101,26 +101,33 @@ boundary and required owner decisions are recorded in the
 
 ## Evidence levels and rehearsal contract
 
-Recovery evidence has three deliberately separate levels:
+Recovery evidence has four deliberately separate levels:
 
-1. **Repository synthetic logical restore rehearsal.** `./scripts/restore-rehearsal.sh` proves only that the current
-   PostgreSQL 18 schema, full custom-format logical dump, Flyway history, portable role/ownership contract, synthetic
-   recovery markers, and application startup survive a source-to-fresh-target cycle. CI runs it after protected-master
-   pushes, on the existing weekly schedule, and on explicit workflow dispatch. It is kept out of pull-request validation
-   to avoid duplicating two image builds and two database/application startups inside the existing 20-minute Docker job.
-2. **Deployment-specific logical/physical restore rehearsal.** The deployment owner must restore its real backup format,
+1. **Repository exact-version restore evidence.** `./scripts/restore-rehearsal.sh` proves only that the current PostgreSQL
+   18 schema, full custom-format logical dump, Flyway history, portable role/ownership contract, synthetic recovery
+   markers, and current application startup survive a source-to-fresh-target cycle.
+2. **Repository historical-forward restore evidence.**
+   `./scripts/historical-forward-restore-rehearsal.sh` deterministically creates the named
+   `product-review-and-credential-version-upgrade` source at Flyway V48, takes and restores an unfiltered custom dump,
+   and starts the current application so Flyway validates history and applies the pending migrations. V48 is an explicit
+   high-value checkpoint, not “latest minus two”: it exercises V49's review-author data transformation and constraints
+   plus V50's security-relevant user credential version. It does not claim that every historical application or Flyway
+   version is supported. Both repository scenarios run in the same operational job after protected-master pushes, on
+   the weekly schedule, and on explicit workflow dispatch; they remain outside pull-request CI to keep PR time bounded.
+3. **Deployment-specific logical/physical restore rehearsal.** The deployment owner must restore its real backup format,
    provisioning, extensions, dictionaries, roles, secrets, encryption/key path, retention system, and provider procedure
    into its isolated target, then retain dated evidence.
-3. **Production RPO/RTO/PITR readiness.** Only deployment measurements and successfully rehearsed physical/WAL/PITR,
+4. **Production RPO/RTO/PITR readiness.** Only deployment measurements and successfully rehearsed physical/WAL/PITR,
    geographic recovery, external-system reconciliation, operational alerting, and responsible operators can establish
    this level.
 
-Passing repository CI establishes level 1 only. It is not level 2 or 3, is not a production RTO measurement, and does
-not weaken the deployment owner's requirement to retain dated recovery evidence.
+Passing both repository scenarios establishes levels 1 and 2 only. It is not deployment-specific rehearsal or
+production RPO/RTO/PITR evidence and does not weaken the deployment owner's requirement to retain dated recovery
+evidence.
 
 The deployment owner must run a restore rehearsal at a cadence derived from its RPO/RTO and after material PostgreSQL, backup-platform, role/ownership, extension/text-search, or migration changes. Because this repository has no production platform and this environment may not have Docker, no provider-shaped automation is added to every PR. The existing PostgreSQL/Testcontainers migration and production-identity tests remain component evidence, not a substitute for end-to-end restoration.
 
-The repository command builds the existing PostgreSQL and application images, creates isolated source and target
+The exact-version repository command builds the existing PostgreSQL and application images, creates isolated source and target
 containers with separately provisioned synthetic admin, migration, and `NOINHERIT` runtime roles, and runs production
 profile startup with the normal runtime/Flyway identity split. It applies current migrations to the source, loads the
 deterministic fixture in `scripts/restore-rehearsal-fixture.sql` through the runtime role, creates an unfiltered
@@ -143,7 +150,19 @@ dump is never uploaded as an artifact. Run it locally from the repository root w
 
 ```bash
 ./scripts/restore-rehearsal.sh
+./scripts/historical-forward-restore-rehearsal.sh
 ```
+
+The historical-forward command uses the current application's bundled Flyway with an explicit V48 target to construct
+a genuine history containing only V1–V48. Its V48 fixture predates `author_name` and `credential_version` and contains
+named and blank-name review authors plus the broader exact-version recovery markers. Before current startup it proves
+the fresh target is still V48, the V49/V50 columns are absent, the rows exist, and migration ownership/runtime
+non-ownership survived. Current production-profile startup must then apply exactly the migration inventory after V48
+(currently V49 and V50), preserve historical checksum fingerprints, backfill `Alex Morgan` and `Anonymous`, enforce
+the author-name and non-negative credential-version constraints, retain the broader business data and V45 protections,
+preserve owner/default-privilege boundaries, pass normal Hibernate validation, and become ready. A final isolated
+startup after deliberate V48 checksum corruption must fail closed; the script never repairs, baselines, or edits history
+to obtain a successful startup.
 
 A deterministic rehearsal must use synthetic data only: create an isolated PostgreSQL 18 source using the repository's custom image; apply all Flyway migrations as a synthetic migration role; add representative user/catalog/stock/cart/order/item/payment/webhook/reservation/outbox/notification/history records; take a full custom dump; restore to a fresh isolated target with separately provisioned synthetic roles; then execute steps 6–9 above. Retain only non-sensitive evidence: source/target/tool versions, commit/application version, dump digest, duration against the selected RTO, Flyway version/checksum result, invariant results, and operator/date. Never upload a realistic production dump to ordinary GitHub Actions artifacts.
 

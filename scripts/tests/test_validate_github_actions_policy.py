@@ -59,6 +59,8 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             f"          ref: {ref}\n"
             "      - name: Run synthetic PostgreSQL logical restore rehearsal\n"
             "        run: ./scripts/restore-rehearsal.sh\n"
+            "      - name: Run historical-forward PostgreSQL restore rehearsal\n"
+            "        run: ./scripts/historical-forward-restore-rehearsal.sh\n"
         )
 
     def test_accepts_external_action_pinned_to_full_sha(self):
@@ -148,6 +150,16 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         )
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("restore-rehearsal must be limited" in violation for violation in violations))
+
+    def test_rejects_restore_rehearsal_without_historical_forward_scenario(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "      - name: Run historical-forward PostgreSQL restore rehearsal\n"
+            "        run: ./scripts/historical-forward-restore-rehearsal.sh\n",
+            "",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("both repository-owned restore scripts" in violation for violation in violations))
 
     def test_rejects_restore_rehearsal_schedule_from_candidate_ref(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
