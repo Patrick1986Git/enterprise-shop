@@ -271,6 +271,24 @@ jobs:
         if: always()
         run: docker compose --profile full down --volumes --remove-orphans
 
+  restore-rehearsal:
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout restore rehearsal source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'schedule' && 'master' || github.ref }}
+
+      - name: Validate restore rehearsal script syntax
+        run: bash -n scripts/restore-rehearsal.sh
+
+      - name: Run synthetic PostgreSQL logical restore rehearsal
+        run: ./scripts/restore-rehearsal.sh
+
   container-security:
     runs-on: ubuntu-latest
     timeout-minutes: 25

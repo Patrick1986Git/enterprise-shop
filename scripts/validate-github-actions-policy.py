@@ -17,6 +17,9 @@ PERSIST_LINE = re.compile(
 CONTAINER_SECURITY_JOB = re.compile(
     r"(?ms)^  container-security:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
+RESTORE_REHEARSAL_JOB = re.compile(
+    r"(?ms)^  restore-rehearsal:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
+)
 CHECKOUT_STEP = re.compile(
     r"(?ms)^      - name: Checkout\s*$\n(?P<body>.*?)(?=^      - |\Z)"
 )
@@ -94,6 +97,20 @@ def container_security_checkout_ref(path):
     return ref_match.group("value").strip() if ref_match else None
 
 
+def restore_rehearsal_checkout_ref(path):
+    contents = path.read_text(encoding="utf-8")
+    job_match = RESTORE_REHEARSAL_JOB.search(contents)
+    if not job_match:
+        return None
+    checkout_match = CHECKOUT_STEP.search(job_match.group("body").replace(
+        "- name: Checkout restore rehearsal source", "- name: Checkout"
+    ))
+    if not checkout_match:
+        return None
+    ref_match = CHECKOUT_REF.search(checkout_match.group("body"))
+    return ref_match.group("value").strip() if ref_match else None
+
+
 def resolve_container_security_checkout_ref(expression, event_name, github_ref):
     """Resolve the supported schedule-only checkout expression for policy tests."""
     if not expression or not SCHEDULE_CHECKOUT_REF.fullmatch(expression):
@@ -122,13 +139,27 @@ def validate_workflows(workflows_dir):
                     "persist-credentials: false"
                 )
         if path.name == "ci.yml":
+            contents = path.read_text(encoding="utf-8")
             checkout_ref = container_security_checkout_ref(path)
             if not checkout_ref or not SCHEDULE_CHECKOUT_REF.fullmatch(checkout_ref):
                 violations.append(
                     f"{path}: container-security checkout must use master only for schedule "
                     "and github.ref for workflow_dispatch, pull_request, and push"
                 )
-            contents = path.read_text(encoding="utf-8")
+            rehearsal_ref = restore_rehearsal_checkout_ref(path)
+            if not rehearsal_ref or not SCHEDULE_CHECKOUT_REF.fullmatch(rehearsal_ref):
+                violations.append(
+                    f"{path}: restore-rehearsal checkout must use protected master for schedule "
+                    "and github.ref for protected push and explicit workflow_dispatch refs"
+                )
+            rehearsal = RESTORE_REHEARSAL_JOB.search(contents)
+            if (not rehearsal
+                    or "if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" not in rehearsal.group("body")
+                    or "run: ./scripts/restore-rehearsal.sh" not in rehearsal.group("body")):
+                violations.append(
+                    f"{path}: restore-rehearsal must be limited to push, schedule, and workflow_dispatch "
+                    "and invoke the repository-owned script"
+                )
             baseline_checkout = OPENAPI_BASELINE_CHECKOUT.search(contents)
             required = (
                 "if: github.event_name == 'pull_request'",
