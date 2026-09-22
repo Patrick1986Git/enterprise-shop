@@ -61,7 +61,11 @@ public class NotificationDeliveryConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(NotificationSender.class)
-    NoopNotificationSender noopNotificationSender() {
+    NoopNotificationSender noopNotificationSender(NotificationDeliveryProperties deliveryProperties) {
+        if (deliveryProperties.enabled()) {
+            throw new IllegalStateException(
+                    "Notification delivery is enabled but no delivery transport is configured");
+        }
         return new NoopNotificationSender();
     }
 }

@@ -1,16 +1,11 @@
 package com.company.shop.module.notification.delivery;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.company.shop.module.notification.entity.Notification;
 
 public class NoopNotificationSender implements NotificationSender {
 
-    private static final Logger log = LoggerFactory.getLogger(NoopNotificationSender.class);
-
     @Override
     public void send(Notification notification) {
-        log.info("Skipping notification delivery for notification {} because no sender is configured", notification.getId());
+        throw new IllegalStateException("Notification delivery transport is not configured");
     }
 }

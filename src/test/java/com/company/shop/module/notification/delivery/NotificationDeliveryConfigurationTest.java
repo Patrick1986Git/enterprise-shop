@@ -49,6 +49,34 @@ class NotificationDeliveryConfigurationTest {
     }
 
     @Test
+    void configuration_shouldFailClosedWhenDeliveryEnabledWithoutTransport() {
+        contextRunner
+                .withPropertyValues(
+                        "app.notification.delivery.enabled=true",
+                        "spring.mail.password=diagnostic-secret")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(stackTrace(context.getStartupFailure()))
+                            .contains("Notification delivery is enabled but no delivery transport is configured")
+                            .doesNotContain("diagnostic-secret", "notification body");
+                });
+    }
+
+    @Test
+    void configuration_shouldStartWhenDeliveryAndSmtpTransportAreEnabled() {
+        contextRunner
+                .withPropertyValues(
+                        "app.notification.delivery.enabled=true",
+                        "app.notification.smtp.enabled=true",
+                        "spring.mail.host=unresolvable.invalid")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(SmtpNotificationSender.class);
+                    assertThat(context).doesNotHaveBean(NoopNotificationSender.class);
+                });
+    }
+
+    @Test
     void configuration_shouldFailClosedWhenSmtpEnabledWithoutMailHost() {
         contextRunner
                 .withPropertyValues(

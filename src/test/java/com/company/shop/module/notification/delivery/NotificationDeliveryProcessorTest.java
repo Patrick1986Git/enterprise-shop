@@ -79,6 +79,23 @@ class NotificationDeliveryProcessorTest {
     }
 
     @Test
+    void processPendingBatch_shouldNotFinalizeSuccessWhenNoopTransportIsUsed() {
+        Notification notification = pendingNotification();
+        UUID token = stubClaim(notification);
+        processor = new NotificationDeliveryProcessor(transactionalWorker, new NoopNotificationSender());
+        when(transactionalWorker.finalizeFailure(
+                notification.getId(), token, "Notification delivery transport is not configured")).thenReturn(true);
+
+        NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
+
+        verify(transactionalWorker, never()).finalizeSuccess(notification.getId(), token);
+        verify(transactionalWorker).finalizeFailure(
+                notification.getId(), token, "Notification delivery transport is not configured");
+        assertThat(result.sentCount()).isZero();
+        assertThat(result.failedCount()).isEqualTo(1);
+    }
+
+    @Test
     void processPendingBatch_shouldNotCountFailureWhenClaimCanNoLongerBeFinalized() {
         Notification notification = pendingNotification();
         UUID token = stubClaim(notification);

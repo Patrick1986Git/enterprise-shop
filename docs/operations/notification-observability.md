@@ -20,7 +20,7 @@ The admin notification observability endpoints help administrators and admin UI 
 `GET /api/v1/admin/notifications/summary` returns counts that are useful for a quick delivery health check:
 
 - `pendingCount`: number of notifications currently waiting for delivery.
-- `sentCount`: number of notifications that have been sent.
+- `sentCount`: number of notifications whose configured transport call returned successfully and whose token-guarded claim was finalized. It does not prove recipient receipt.
 - `failedCount`: number of notifications currently in a failed state.
 - `duePendingCount`: number of pending notifications that are due for delivery now.
 - `scheduledPendingCount`: number of pending notifications scheduled for future delivery.
@@ -223,3 +223,7 @@ An expired claim is abandoned work and will be reclaimed by a poller (or changed
 growing population of expired claims indicates worker termination, sender latency
 greater than the configured claim duration, or finalization failures. `PENDING`
 continues to distinguish due work from a scheduled retry through `next_attempt_at`.
+
+## Delivery configuration signals
+
+A disabled delivery worker leaves work pending/actionable; the actionable gauges distinguish that backlog from terminal failures. Startup fails when delivery is enabled without a real transport, separating unavailable or misconfigured transport from an intentionally disabled worker. Attempted transport failures remain visible through retry scheduling, `lastError`, actionable gauges, and terminal-failure gauges. No metric uses notification, recipient, user, order, or provider identifiers as tags. SMTP acceptance and successful local finalization produce `SENT`, but do not prove human receipt; external delivery remains at-least-once.

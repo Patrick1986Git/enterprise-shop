@@ -14,6 +14,7 @@ class NotificationSmtpDockerConfigurationTest {
     void defaultComposeConfiguration_shouldKeepSmtpDisabledWithoutActivatingSpringMail() throws IOException {
         String compose = Files.readString(Path.of("docker-compose.yml"));
 
+        assertThat(compose).contains("APP_NOTIFICATION_DELIVERY_ENABLED: ${NOTIFICATION_DELIVERY_ENABLED:-false}");
         assertThat(compose).contains("APP_NOTIFICATION_SMTP_ENABLED: ${NOTIFICATION_SMTP_ENABLED:-false}");
         assertThat(compose).doesNotContain("SPRING_MAIL_HOST:", "SPRING_MAIL_PORT:");
     }
