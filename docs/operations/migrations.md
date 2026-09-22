@@ -44,6 +44,68 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V36 | `V36__add_notification_requeue_count_last_requeued_at_index.sql` | Adds a notification index for requeue count with last-requeued timestamp filters. |
 | V37 | `V37__add_outbox_retry_dead_letter_foundation.sql` | Adds nullable outbox retry/dead-letter foundation columns, allows the `DEAD_LETTER` status, and adds a status/next-attempt index. |
 | V38 | `V38__add_outbox_event_version.sql` | Adds positive `event_version` metadata to outbox events with a default version of `1` for existing and new rows. |
+| V39-V47 | `V39__...sql` through `V47__...sql` | Adds checkout/reservation recovery, append-only administration evidence, and Stripe conflict evidence. See the migration files for the authoritative SQL. |
+| V48 | `V48__normalize_product_image_gallery_order.sql` | Backfills deterministic product-image positions, makes the position required, and replaces the gallery lookup index. |
+| V49 | `V49__snapshot_product_review_author_name.sql` | Adds and backfills an optional review-author snapshot used when a user is retired. |
+| V50 | `V50__add_user_credential_version.sql` | Adds a non-null credential version with a default of zero. |
+
+## Rolling schema compatibility boundary
+
+Restore compatibility and rolling schema compatibility are different claims. A restore rehearsal proves that historical
+data can be restored and migrated forward for the current application. Rolling compatibility means the immediately
+previous supported application can continue serving against the database after the candidate's migrations have run.
+Neither claim proves the other.
+
+Production startup applies Flyway through the migration identity before Hibernate `validate`, application readiness,
+and traffic admission. Because a deployment can retain an old ready replica while starting a replacement, the first new
+replica can migrate the shared database while the old revision is still serving. The repository therefore requires every
+new migration to make a durable explicit decision in `.github/database-migration-compatibility.json`. PR CI compares the
+candidate with an isolated checkout of the exact PR base repository and SHA, rejects changed or deleted historical
+migrations, and fails closed when a new migration has no classification, rationale, previous-revision evidence plan, or
+owner review. This is a governance boundary, not an automated proof that arbitrary SQL is safe.
+
+Once a decision exists on protected `master`, the complete decision is historical evidence and is immutable: it may not
+be deleted or have its classification, rationale, previous-revision evidence, or owner-review context rewritten in a
+later pull request. This repository has no amendment bypass. If a future correction is genuinely required, its narrowly
+reviewed amendment mechanism must be established explicitly before changing historical evidence; labels, commit text,
+mutable allowlists, and unrelated manifest edits are not authorization.
+
+### Classification contract
+
+| Change | Minimum classification |
+| --- | --- |
+| Nullable columns, or columns with an old-writer-safe default | Potentially `rolling-safe`; review reads, writes, ORM validation, locks, and data semantics. |
+| Indexes and non-validating constraints | Potentially `rolling-safe`; production build/lock duration remains deployment-owned. |
+| Backfills, changed defaults, grants/ownership, or trigger/function replacement | `owner-review`; old-reader and old-writer semantics and privilege behavior need explicit evidence. |
+| Required columns | `expand-contract`: add nullable/defaulted storage, deploy compatible readers/writers, backfill, then enforce in a later release. A one-step default plus `NOT NULL` is rolling-safe only with explicit evidence that old inserts remain valid. |
+| Renames, destructive drops, incompatible type changes, enum/status narrowing | `expand-contract`; retain the old representation until no supported old revision uses it. |
+| Transformations that invalidate old application assumptions | `expand-contract` when dual behavior is possible; otherwise `coordinated-maintenance`. |
+| Changes that cannot preserve simultaneous old/new behavior | `coordinated-maintenance`; stop traffic/workers and do not describe the release as ordinary rolling-safe. |
+
+An additive statement is not safe merely because it contains `ADD`. Unique/check constraints can reject writes, index
+creation can block, defaults can change old-write meaning, triggers can change behavior, and a backfill can invalidate an
+old reader's assumptions. SQL text classification is intentionally not used as a substitute for owner review.
+
+### Evidence and limitations
+
+For a `rolling-safe` decision, the PR must describe representative synthetic data and operations, the previous
+application's startup/readiness and affected operations after migration, candidate startup with Hibernate validation and
+readiness, Flyway history/checksums, and migration-owner/runtime-role separation. When those checks cannot be automated
+trustworthily, classify the change as `owner-review`, `expand-contract`, or `coordinated-maintenance`; do not infer safety
+from a green current-version migration test.
+
+V48 is compatible with its predecessor: it retained every image, normalized the existing integer `sort_order`, retained
+the zero default, and the preceding mapping already wrote non-null primitive integer values. The index replacement can
+still lock production work and therefore does not prove a deployment-owned duration bound.
+V49 is compatible with its predecessor: the nullable snapshot and backfill do not remove the existing user relationship,
+and old writes may leave the snapshot null. V50 is compatible with its predecessor because the required integer has a
+database default for old inserts and does not narrow existing data. Current-version migration tests and restore rehearsal
+prove the current application after V48-V50, not mixed-version production behavior; no historical mixed-version
+rehearsal was recorded for those already-applied migrations.
+
+Load-balancer timing, replica count, production SQL and lock duration, orchestration, and maintenance scheduling remain
+deployment-owned. The repository owns application startup/readiness, migration ordering and identity, schema validation,
+and the fail-closed review decision only; it does not invent a production topology or duration SLO.
 
 ## Rules for future migrations
 

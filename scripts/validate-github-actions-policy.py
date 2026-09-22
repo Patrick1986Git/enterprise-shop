@@ -44,6 +44,10 @@ OPENAPI_BASELINE_GENERATION = re.compile(
     r"(?ms)^      - name: Generate protected-master OpenAPI baseline\s*$\n"
     r"(?P<body>.*?)(?=^      - |\Z)"
 )
+MIGRATION_COMPATIBILITY = re.compile(
+    r"(?ms)^      - name: Enforce Flyway rolling-compatibility decision boundary\s*$\n"
+    r"(?P<body>.*?)(?=^      - |\Z)"
+)
 
 
 def workflow_files(workflows_dir):
@@ -225,6 +229,23 @@ def validate_workflows(workflows_dir):
                     or "SPRING_PROFILES_ACTIVE: test" not in baseline_generation.group("body")):
                 violations.append(
                     f"{path}: OpenAPI baseline generation must use the canonical test Spring profile"
+                )
+            compatibility = MIGRATION_COMPATIBILITY.search(contents)
+            compatibility_required = (
+                "if: github.event_name == 'pull_request'",
+                "BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}",
+                "BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                'test "$BASE_REPOSITORY" = "${{ github.repository }}"',
+                "git -C target/openapi-baseline-source rev-parse HEAD",
+                "python scripts/validate_migration_compatibility.py",
+                "--base target/openapi-baseline-source",
+                "--candidate .",
+            )
+            if not compatibility or any(
+                    item not in compatibility.group("body") for item in compatibility_required):
+                violations.append(
+                    f"{path}: Flyway compatibility policy must fail closed against the exact "
+                    "pull-request base repository and SHA"
                 )
     return violations
 
