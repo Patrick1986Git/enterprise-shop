@@ -119,6 +119,8 @@ app:
       batch-size: ${ORDER_RESERVATION_BATCH_SIZE:25}
       max-attempts: ${ORDER_RESERVATION_MAX_ATTEMPTS:10}
   notification:
+    delivery:
+      enabled: ${NOTIFICATION_DELIVERY_ENABLED:false}
     smtp:
       enabled: ${NOTIFICATION_SMTP_ENABLED:false}
       from: ${NOTIFICATION_SMTP_FROM:no-reply@enterprise-shop.local}
