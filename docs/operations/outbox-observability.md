@@ -4,6 +4,16 @@
 
 The admin outbox observability endpoints help administrators and admin UI consumers inspect transactional outbox health in this modular monolith. They provide read-focused visibility into event processing state, failed processing attempts, scheduled retry timing, dead-letter state, requeue history, and admin action logs without changing the outbox architecture or introducing external brokers.
 
+## Processing-state interpretation
+
+- Intentionally disabled processing performs no handler work or row mutation. It is a deployment choice; use `shop.outbox.actionable.count` and `shop.outbox.actionable.oldest.age.seconds` to distinguish that maintenance state from an empty outbox and to alert on an actionable backlog.
+- A `PENDING` row with no `nextAttemptAt`, or one whose timestamp is due, is actionable. A future `nextAttemptAt` is a scheduled retry and is deliberately excluded from the actionable gauges until due.
+- Non-null `lastAttemptAt` and `lastError` on `PENDING` record an attempted retryable processing failure; these values are durable row evidence, not metric tags.
+- `DEAD_LETTER` is terminal under automatic processing. `shop.outbox.dead_letter.count` and `shop.outbox.dead_letter.oldest.age.seconds` expose the aggregate condition without event IDs, order IDs, user data, payloads, or arbitrary error text as tags.
+- `PROCESSED` with `processedAt` records successful completion through the transactional worker path. The admin summary and list/detail filters provide processed counts and timestamps.
+
+Configuration validity is repository-owned and invalid batch, schedule, retry-delay, or attempt values fail startup. Whether to enable the worker is deployment-owned and independent of notification delivery enablement.
+
 ## Endpoints
 
 | Method | Path | Purpose |

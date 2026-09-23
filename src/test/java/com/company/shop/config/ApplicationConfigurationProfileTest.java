@@ -54,6 +54,22 @@ class ApplicationConfigurationProfileTest {
     }
 
     @Test
+    void prodConfiguration_shouldExplicitlyExposeOutboxProcessingPolicy() {
+        Properties properties = loadProperties("application-prod.yml");
+
+        assertThat(properties.getProperty("app.outbox.processing.enabled"))
+                .isEqualTo("${OUTBOX_PROCESSING_ENABLED:false}");
+        assertThat(properties.getProperty("app.outbox.processing.batch-size"))
+                .isEqualTo("${OUTBOX_PROCESSING_BATCH_SIZE:25}");
+        assertThat(properties.getProperty("app.outbox.processing.fixed-delay"))
+                .isEqualTo("${OUTBOX_PROCESSING_FIXED_DELAY:PT10S}");
+        assertThat(properties.getProperty("app.outbox.processing.retry-delay"))
+                .isEqualTo("${OUTBOX_PROCESSING_RETRY_DELAY:PT1M}");
+        assertThat(properties.getProperty("app.outbox.processing.max-attempts"))
+                .isEqualTo("${OUTBOX_PROCESSING_MAX_ATTEMPTS:3}");
+    }
+
+    @Test
     void prodConfiguration_shouldNotTrustForwardedHeaders() {
         Properties properties = loadProperties("application-prod.yml");
 
