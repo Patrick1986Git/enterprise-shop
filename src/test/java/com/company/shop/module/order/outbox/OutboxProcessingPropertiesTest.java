@@ -47,6 +47,35 @@ class OutboxProcessingPropertiesTest {
                 });
     }
 
+    @Test
+    void binding_shouldFailClosedForNonPositiveBatchSize() {
+        assertInvalid("app.outbox.processing.batch-size=0");
+        assertInvalid("app.outbox.processing.batch-size=-1");
+    }
+
+    @Test
+    void binding_shouldFailClosedForNonPositiveFixedDelay() {
+        assertInvalid("app.outbox.processing.fixed-delay=PT0S");
+        assertInvalid("app.outbox.processing.fixed-delay=-PT1S");
+    }
+
+    @Test
+    void binding_shouldFailClosedForNonPositiveRetryDelay() {
+        assertInvalid("app.outbox.processing.retry-delay=PT0S");
+        assertInvalid("app.outbox.processing.retry-delay=-PT1S");
+    }
+
+    @Test
+    void binding_shouldFailClosedForNonPositiveMaxAttempts() {
+        assertInvalid("app.outbox.processing.max-attempts=0");
+        assertInvalid("app.outbox.processing.max-attempts=-1");
+    }
+
+    private void assertInvalid(String propertyValue) {
+        contextRunner.withPropertyValues(propertyValue)
+                .run(context -> assertThat(context).hasFailed());
+    }
+
     @Configuration
     @EnableConfigurationProperties(OutboxProcessingProperties.class)
     static class TestConfiguration {
