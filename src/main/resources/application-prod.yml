@@ -128,6 +128,11 @@ app:
   notification:
     delivery:
       enabled: ${NOTIFICATION_DELIVERY_ENABLED:false}
+      batch-size: ${NOTIFICATION_DELIVERY_BATCH_SIZE:25}
+      fixed-delay: ${NOTIFICATION_DELIVERY_FIXED_DELAY:PT10S}
+      max-attempts: ${NOTIFICATION_DELIVERY_MAX_ATTEMPTS:3}
+      retry-delay: ${NOTIFICATION_DELIVERY_RETRY_DELAY:PT1M}
+      claim-duration: ${NOTIFICATION_DELIVERY_CLAIM_DURATION:PT5M}
     smtp:
       enabled: ${NOTIFICATION_SMTP_ENABLED:false}
       from: ${NOTIFICATION_SMTP_FROM:no-reply@enterprise-shop.local}
