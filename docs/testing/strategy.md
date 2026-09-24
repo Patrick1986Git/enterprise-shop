@@ -64,7 +64,7 @@ The repository must keep the GitHub Actions setting that permits `GITHUB_TOKEN` 
 | ArchUnit architecture rules | Package/layering rules in `ArchitectureRulesTest`. |
 | Observability/config/security tests | Request correlation, OpenAPI smoke, actuator security, security filter behavior, config validation. |
 | OpenAPI compatibility tests | Structural regression fixtures plus a PR-only comparison of all generated JSON contracts against documents independently generated from the exact protected-base SHA. |
-| Outbox and notification tests | Outbox event recording/processing/polling/properties, notification entity/service/outbox handler/delivery processor/repository. |
+| Outbox and notification tests | Focused component tests cover event recording, processing, retry/dead-letter behavior, polling/properties, notification handling, delivery, and claim fencing. Repository integration tests cover their PostgreSQL queries and constraints. `OrderNotificationPipelineIT` provides the full durable composition proof from committed checkout through the real outbox handler and delivery worker to `SENT`, including ordinary replay idempotency; only Stripe and the external notification transport are deterministic test doubles, so provider behavior remains outside its scope. |
 | Payment/webhook tests | Payment intent creation, webhook processing, webhook controller contract, and Stripe webhook persistence/idempotency. |
 
 ## Recommended commands
