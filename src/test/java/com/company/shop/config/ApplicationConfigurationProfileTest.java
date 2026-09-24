@@ -70,6 +70,24 @@ class ApplicationConfigurationProfileTest {
     }
 
     @Test
+    void prodConfiguration_shouldExplicitlyExposeNotificationDeliveryPolicy() {
+        Properties properties = loadProperties("application-prod.yml");
+
+        assertThat(properties.getProperty("app.notification.delivery.enabled"))
+                .isEqualTo("${NOTIFICATION_DELIVERY_ENABLED:false}");
+        assertThat(properties.getProperty("app.notification.delivery.batch-size"))
+                .isEqualTo("${NOTIFICATION_DELIVERY_BATCH_SIZE:25}");
+        assertThat(properties.getProperty("app.notification.delivery.fixed-delay"))
+                .isEqualTo("${NOTIFICATION_DELIVERY_FIXED_DELAY:PT10S}");
+        assertThat(properties.getProperty("app.notification.delivery.max-attempts"))
+                .isEqualTo("${NOTIFICATION_DELIVERY_MAX_ATTEMPTS:3}");
+        assertThat(properties.getProperty("app.notification.delivery.retry-delay"))
+                .isEqualTo("${NOTIFICATION_DELIVERY_RETRY_DELAY:PT1M}");
+        assertThat(properties.getProperty("app.notification.delivery.claim-duration"))
+                .isEqualTo("${NOTIFICATION_DELIVERY_CLAIM_DURATION:PT5M}");
+    }
+
+    @Test
     void prodConfiguration_shouldNotTrustForwardedHeaders() {
         Properties properties = loadProperties("application-prod.yml");
 
