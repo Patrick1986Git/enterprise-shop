@@ -39,6 +39,14 @@ The supplied Docker Hub references are multi-platform OCI index digests, and CI 
 
 Dependabot checks Docker dependencies weekly in `/` and `/docker/postgres`. This covers both Eclipse Temurin stages in the application Dockerfile and the PostgreSQL 18 Alpine base in the PostgreSQL Dockerfile. Updates are proposed for review with the `build(deps)` prefix and are never merged automatically. The root Docker configuration ignores only semantic-major updates of `eclipse-temurin`; it does not affect the separate PostgreSQL image, Maven dependencies, or GitHub Actions.
 
+## Maven build-bootstrap integrity
+
+The repository uses Maven Wrapper 3.3.4 in `only-script` mode to download Maven 3.9.16. The wrapper properties pin the SHA-256 digest of `apache-maven-3.9.16-bin.zip`; the checked-in Unix and Windows wrapper scripts verify that digest before extracting or executing a newly downloaded distribution. CI validates that the checksum is present, is a 64-character hexadecimal value, the distribution URL uses HTTPS, and the reviewed archive and digest remain paired. Docker builds, CI, CodeQL, local development, and release verification all use the checked-in wrapper and therefore inherit this control without a separate download or build.
+
+Apache publishes the release archive and its SHA-512 checksum at `https://downloads.apache.org/maven/maven-3/3.9.16/binaries/`. The pinned SHA-256 value was computed only after the configured `apache-maven-3.9.16-bin.zip` matched Apache's published SHA-512 value. A Maven upgrade must repeat that authoritative verification and update both the wrapper properties and the focused policy expectation in the same reviewed change.
+
+Maven Enforcer separately requires Java in `[21,22)` and Maven in `[3.9.15,)`; it checks build-tool compatibility after Maven starts, while the wrapper checksum protects the downloaded Maven archive before execution. This checksum is an integrity pin for the expected Maven distribution, not package signing or end-to-end provenance. It does not establish Apache account or release-process integrity, Maven plugin or dependency integrity, Maven Central availability, reproducible application bytecode, or vulnerability safety. Dependency and container vulnerability controls remain separate concerns.
+
 ## Java platform baseline
 
 Java 21 LTS is the application compilation and runtime baseline. Maven compiles Java 21 source to Java 21 bytecode, GitHub Actions installs Temurin 21, and the application Dockerfile uses a Temurin 21 JDK builder and Temurin 21 JRE runtime. Maven Enforcer admits only JDK versions in `[21,22)`, so a build fails early if any build environment drifts to another Java feature release. After the security job builds the final application image, CI also runs `java` inside that image, prints its version information, and requires `java.specification.version` to equal `21` before scanning it.
