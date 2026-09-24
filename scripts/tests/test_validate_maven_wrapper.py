@@ -17,6 +17,12 @@ class MavenWrapperPolicyTest(unittest.TestCase):
             path.write_text(contents, encoding="utf-8")
             return VALIDATOR.validate(path)
 
+    def validate_dockerfile(self, contents):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "Dockerfile"
+            path.write_text(contents, encoding="utf-8")
+            return VALIDATOR.validate_dockerfile(path)
+
     def valid_properties(self):
         return (
             "wrapperVersion=3.3.4\n"
@@ -54,6 +60,22 @@ class MavenWrapperPolicyTest(unittest.TestCase):
         properties = self.valid_properties().replace("3.9.16", "3.9.17")
 
         self.assertIn("reviewed archive", " ".join(self.validate(properties)))
+
+    def test_accepts_builder_unzip_install_before_wrapper_invocation(self):
+        dockerfile = (
+            "FROM eclipse-temurin:21-jdk-jammy AS builder\n"
+            f"{VALIDATOR.BUILDER_UNZIP_INSTALL}\n"
+            "RUN ./mvnw -B -DskipTests dependency:go-offline\n"
+        )
+
+        self.assertEqual([], self.validate_dockerfile(dockerfile))
+
+    def test_rejects_missing_or_late_builder_unzip_install(self):
+        missing = "FROM eclipse-temurin:21-jdk-jammy AS builder\nRUN ./mvnw --version\n"
+        late = f"{missing}{VALIDATOR.BUILDER_UNZIP_INSTALL}\n"
+
+        self.assertIn("install unzip", " ".join(self.validate_dockerfile(missing)))
+        self.assertIn("install unzip", " ".join(self.validate_dockerfile(late)))
 
 
 if __name__ == "__main__":

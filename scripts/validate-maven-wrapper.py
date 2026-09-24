@@ -8,9 +8,13 @@ from urllib.parse import urlparse
 
 
 PROPERTIES = Path(".mvn/wrapper/maven-wrapper.properties")
+DOCKERFILE = Path("Dockerfile")
 EXPECTED_ARCHIVE = "apache-maven-3.9.16-bin.zip"
 EXPECTED_SHA256 = "5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce"
 SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+BUILDER_UNZIP_INSTALL = """RUN apt-get update \\
+    && apt-get install --no-install-recommends -y unzip \\
+    && rm -rf /var/lib/apt/lists/*"""
 
 
 def read_properties(path):
@@ -54,8 +58,24 @@ def validate(path=PROPERTIES):
     return violations
 
 
+def validate_dockerfile(path=DOCKERFILE):
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except OSError as error:
+        return [str(error)]
+
+    first_wrapper_invocation = contents.find("./mvnw")
+    unzip_install = contents.find(BUILDER_UNZIP_INSTALL)
+    if unzip_install == -1 or not 0 <= unzip_install < first_wrapper_invocation:
+        return [
+            "Dockerfile builder must install unzip without recommended packages before "
+            "its first ./mvnw invocation"
+        ]
+    return []
+
+
 def main():
-    violations = validate()
+    violations = validate() + validate_dockerfile()
     if violations:
         print("Maven Wrapper integrity policy violations:", file=sys.stderr)
         for violation in violations:
