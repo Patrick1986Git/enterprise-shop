@@ -113,7 +113,8 @@ Recovery evidence has four deliberately separate levels:
    high-value checkpoint, not “latest minus two”: it exercises V49's review-author data transformation and constraints
    plus V50's security-relevant user credential version. It does not claim that every historical application or Flyway
    version is supported. Both repository scenarios run in the same operational job after protected-master pushes, on
-   the weekly schedule, and on explicit workflow dispatch; they remain outside pull-request CI to keep PR time bounded.
+   the weekly schedule, and on explicit workflow dispatch. Pull requests run that job only when the repository-owned
+   `restore-pr-scope` check selects a restore-relevant change, keeping unrelated pull-request time bounded.
 3. **Deployment-specific logical/physical restore rehearsal.** The deployment owner must restore its real backup format,
    provisioning, extensions, dictionaries, roles, secrets, encryption/key path, retention system, and provider procedure
    into its isolated target, then retain dated evidence.
