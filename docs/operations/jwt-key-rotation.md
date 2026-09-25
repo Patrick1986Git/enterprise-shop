@@ -10,6 +10,8 @@ The application uses one active HMAC signing key and at most one previous verifi
 - Key material remains RFC 4648 Base64 encoding of at least 32 random bytes.
 - Key IDs are operator-owned identifiers limited to 1-64 characters from `A-Z`, `a-z`, `0-9`, dot, underscore, and hyphen.
 - The previous key is verification-only. It never signs new tokens.
+- Production access tokens have a repository-owned fixed lifetime of exactly one hour (`3600000` milliseconds). A
+  production-only startup validator rejects any effective property-source override away from that value.
 - Enterprise Shop issues access tokens only. There is no refresh-token exchange, server-side session store, refresh-token persistence, revocation list, JWKS, KMS, or database key store. Adding refresh tokens would require a separately reviewed security and session-lifecycle design.
 
 JJWT's supported JWS-specific key-locator API selects the verification key from the protected JWT header before claims are returned or the signature is accepted. Authorization still reloads the current account and roles from PostgreSQL on every authenticated request.
@@ -20,7 +22,9 @@ The first deployment must keep the existing active signing-key bytes unchanged.
 
 When no previous key is configured, the new application accepts a legacy JWT with no `kid` using the active key. Old replicas also continue to accept newly issued `kid` tokens because they verify JWS signatures with the same unchanged key.
 
-After every replica runs the new version, wait at least the maximum access-token lifetime (currently one hour) before beginning a signing-key rotation. Once a previous key is configured, no-`kid` fallback is disabled.
+After every replica runs the new version, wait at least the production access-token lifetime of one hour before beginning
+a signing-key rotation. This full hour is measured from the last time any old replica could issue a token. Once a previous
+key is configured, no-`kid` fallback is disabled.
 
 ## Planned zero-downtime rotation
 
@@ -46,7 +50,9 @@ During the rolling deployment, phase-1 replicas sign A and verify A/B while phas
 
 ### Phase 3 — retire A
 
-After every replica is on phase 2 and at least one maximum access-token lifetime has elapsed since the last replica could issue A, remove both previous-key properties and redeploy.
+After every replica is on phase 2 and at least one full hour has elapsed since the last replica could issue A, remove both
+previous-key properties and redeploy. Never retire A earlier: every legitimately issued token that depends on A must have
+expired first.
 
 Do not retain old keys beyond the bounded overlap needed for outstanding access tokens and rollout allowance.
 
@@ -79,5 +85,9 @@ Optional rollover properties, configured together:
 
 - `JWT_PREVIOUS_KEY_ID`
 - `JWT_PREVIOUS_SECRET`
+
+`security.jwt.expiration` is not a deployment setting or environment placeholder. Production fixes it to one hour and
+fails startup if the effective bound value differs, including when a relaxed environment name attempts to override it.
+Increasing or reducing the lifetime requires a reviewed security and deployment policy change, not performance tuning.
 
 Duplicate active/previous IDs, invalid IDs, malformed Base64, weak key material, or only one previous-key property cause startup failure without logging secret material.

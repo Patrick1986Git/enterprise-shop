@@ -2,12 +2,15 @@ package com.company.shop.security.jwt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 
 class JwtProductionConfigurationTest {
 
@@ -31,6 +34,33 @@ class JwtProductionConfigurationTest {
             assertThat(context.getBean(JwtProperties.class).getKeyId()).isEqualTo("current-2026-09");
             assertThat(context.getBean(JwtProperties.class).getExpiration()).isEqualTo(3_600_000L);
         });
+    }
+
+    @Test
+    void productionJwtConfiguration_shouldBindRelaxedEnvironmentOverrideBeforePolicyValidation() {
+        new ApplicationContextRunner()
+                .withInitializer(new ConfigDataApplicationContextInitializer())
+                .withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
+                        new SystemEnvironmentPropertySource("test-environment",
+                                Map.of("SECURITY_JWT_EXPIRATION", "7200000"))))
+                .withUserConfiguration(PropertiesOnlyConfiguration.class)
+                .withPropertyValues("spring.profiles.active=prod")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(JwtProperties.class).getExpiration()).isEqualTo(7_200_000L);
+                });
+    }
+
+    @Test
+    void productionJwtConfiguration_shouldFailForRelaxedEnvironmentLifetimeOverride() {
+        contextRunner.withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(
+                        new SystemEnvironmentPropertySource("test-environment",
+                                Map.of("SECURITY_JWT_EXPIRATION", "7200000"))))
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasRootCauseMessage(
+                            "security.jwt.expiration must be exactly 3600000 milliseconds in production");
+                });
     }
 
     @Test
@@ -113,7 +143,12 @@ class JwtProductionConfigurationTest {
 
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(JwtProperties.class)
-    @Import(JwtTokenProvider.class)
+    @Import({JwtTokenProvider.class, ProductionJwtExpirationPolicy.class})
     static class TestConfiguration {
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(JwtProperties.class)
+    static class PropertiesOnlyConfiguration {
     }
 }
