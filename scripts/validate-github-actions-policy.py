@@ -51,6 +51,9 @@ MIGRATION_COMPATIBILITY = re.compile(
 DEPENDENCY_REVIEW_JOB = re.compile(
     r"(?ms)^  dependency-review:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
+BUILD_JOB = re.compile(
+    r"(?ms)^  build:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
+)
 
 
 def workflow_files(workflows_dir):
@@ -168,6 +171,13 @@ def validate_workflows(workflows_dir):
             contents = path.read_text(encoding="utf-8")
             if not re.search(r"(?m)^permissions:\s*$\n  contents: read\s*$", contents):
                 violations.append(f"{path}: default workflow permissions must remain contents: read")
+            build = BUILD_JOB.search(contents)
+            if (not build or
+                    'python scripts/validate-master-protection.py --repository "${{ github.repository }}"'
+                    not in build.group("body")):
+                violations.append(
+                    f"{path}: required build job must validate the live protected-master policy"
+                )
             dependency_review = DEPENDENCY_REVIEW_JOB.search(contents)
             dependency_review_requirements = (
                 "if: github.event_name == 'pull_request'",

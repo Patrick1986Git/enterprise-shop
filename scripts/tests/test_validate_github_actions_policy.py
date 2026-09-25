@@ -55,10 +55,12 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          license-check: false\n"
             "          show-openssf-scorecard: false\n"
         )
-        workflow = "permissions:\n  contents: read\njobs:\n" + dependency_review + self.workflow(
+        build = self.workflow(
             f"actions/checkout@{SHA}",
             "        with:\n"
             "          persist-credentials: false\n"
+            "      - name: Validate live protected-master policy\n"
+            "        run: python scripts/validate-master-protection.py --repository \"${{ github.repository }}\"\n"
             "  container-security:\n"
             "    steps:\n"
             "      - name: Checkout\n"
@@ -91,7 +93,8 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          python scripts/validate_migration_compatibility.py \\\n"
             "            --base target/openapi-baseline-source \\\n"
             "            --candidate .\n",
-        ).removeprefix("jobs:\n")
+        ).removeprefix("jobs:\n").replace("  test:\n", "  build:\n", 1)
+        workflow = "permissions:\n  contents: read\njobs:\n" + dependency_review + build
         return workflow + (
             "  restore-pr-scope:\n"
             "    if: github.event_name == 'pull_request'\n"
@@ -253,6 +256,16 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         workflow = self.ci_workflow(expression).replace("permissions:\n  contents: read\n", "")
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("default workflow permissions" in violation for violation in violations))
+
+    def test_rejects_build_without_live_master_protection_validation(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "      - name: Validate live protected-master policy\n"
+            "        run: python scripts/validate-master-protection.py --repository \"${{ github.repository }}\"\n",
+            "",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("live protected-master policy" in violation for violation in violations))
 
     def test_rejects_dependency_review_without_exact_base_repository(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
