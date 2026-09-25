@@ -15,6 +15,16 @@ a nested fallback), and `empty-default` means `${VAR:}`. The `Runtime requiremen
 semantics. Missing required placeholders stop Spring startup. Invalid numbers, booleans, durations, URLs, or validated
 relationships also stop startup unless a row explicitly describes a later operational failure.
 
+## Repository-owned fixed policy
+
+The canonical inventory below intentionally contains only production `${...}` placeholders. The production access-token
+lifetime is instead repository-owned security policy: `security.jwt.expiration` is fixed at `3600000` milliseconds (one
+hour) in `application-prod.yml`. Spring's relaxed binding and property-source precedence can technically replace that
+literal through a higher-precedence source such as `SECURITY_JWT_EXPIRATION`, so a production-only startup validator
+requires the effective bound value to remain exactly one hour. An attempted override away from one hour fails startup;
+there is deliberately no deployment tuning placeholder. Changing this lifetime is a reviewed security and deployment
+decision because every previous signing key must remain available for verification until all tokens signed by it expire.
+
 ## Canonical inventory
 
 Keep exactly one row per variable. For a variable used by multiple properties, list its property paths in source order,
