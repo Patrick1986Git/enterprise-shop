@@ -22,7 +22,40 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         return f"jobs:\n  test:\n    steps:\n      - uses: {reference}\n{extra}"
 
     def ci_workflow(self, ref, container_ref="${{ github.event_name == 'schedule' && 'master' || github.ref }}"):
-        workflow = "permissions:\n  contents: read\n" + self.workflow(
+        dependency_review = (
+            "  dependency-review:\n"
+            "    if: github.event_name == 'pull_request'\n"
+            "    steps:\n"
+            "      - name: Checkout candidate source\n"
+            f"        uses: actions/checkout@{SHA}\n"
+            "        with:\n"
+            "          ref: ${{ github.event.pull_request.head.sha }}\n"
+            "          persist-credentials: false\n"
+            "      - name: Checkout exact protected-base source\n"
+            f"        uses: actions/checkout@{SHA}\n"
+            "        with:\n"
+            "          repository: ${{ github.event.pull_request.base.repo.full_name }}\n"
+            "          ref: ${{ github.event.pull_request.base.sha }}\n"
+            "          path: target/dependency-review-base\n"
+            "          persist-credentials: false\n"
+            "      - name: Validate dependency-review provenance\n"
+            "        env:\n"
+            "          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}\n"
+            "          BASE_SHA: ${{ github.event.pull_request.base.sha }}\n"
+            "          HEAD_SHA: ${{ github.event.pull_request.head.sha }}\n"
+            "        run: |\n"
+            "          test \"$BASE_REPOSITORY\" = \"${{ github.repository }}\"\n"
+            "          test \"$(git -C target/dependency-review-base rev-parse HEAD)\" = \"$BASE_SHA\"\n"
+            "          test \"$(git rev-parse HEAD)\" = \"$HEAD_SHA\"\n"
+            "      - name: Review dependency changes\n"
+            "        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294\n"
+            "        with:\n"
+            "          fail-on-severity: high\n"
+            "          fail-on-scopes: runtime, development, unknown\n"
+            "          license-check: false\n"
+            "          show-openssf-scorecard: false\n"
+        )
+        workflow = "permissions:\n  contents: read\njobs:\n" + dependency_review + self.workflow(
             f"actions/checkout@{SHA}",
             "        with:\n"
             "          persist-credentials: false\n"
@@ -58,7 +91,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          python scripts/validate_migration_compatibility.py \\\n"
             "            --base target/openapi-baseline-source \\\n"
             "            --candidate .\n",
-        )
+        ).removeprefix("jobs:\n")
         return workflow + (
             "  restore-pr-scope:\n"
             "    if: github.event_name == 'pull_request'\n"
@@ -220,6 +253,33 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         workflow = self.ci_workflow(expression).replace("permissions:\n  contents: read\n", "")
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("default workflow permissions" in violation for violation in violations))
+
+    def test_rejects_dependency_review_without_exact_base_repository(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "repository: ${{ github.event.pull_request.base.repo.full_name }}",
+            "repository: ${{ github.repository }}",
+            1,
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("dependency review" in violation for violation in violations))
+
+    def test_rejects_dependency_review_that_omits_development_scope(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "fail-on-scopes: runtime, development, unknown",
+            "fail-on-scopes: runtime",
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("dependency review" in violation for violation in violations))
+
+    def test_rejects_dependency_review_license_policy(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression).replace(
+            "license-check: false", "license-check: true"
+        )
+        violations = self.validate(workflow, "ci.yml")
+        self.assertTrue(any("license policy disabled" in violation for violation in violations))
 
     def test_rejects_restore_rehearsal_without_historical_forward_scenario(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"

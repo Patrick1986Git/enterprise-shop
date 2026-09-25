@@ -94,6 +94,18 @@ CodeQL examines source-level data flow and code patterns. Maven tests verify app
 
 The official CodeQL database extraction, query execution, GitHub code-scanning history, pull-request annotations, and SARIF upload require the GitHub-hosted workflow and cannot be reproduced fully by these Maven commands alone.
 
+## Pull-request dependency review
+
+CI uses GitHub's first-party dependency review on ordinary pull requests to compare the dependency graph at the immutable pull-request head with `github.event.pull_request.base.sha`. Before the review, read-only checkouts prove that the event's base repository is this repository and that both worktrees resolve to the exact event SHAs. The job uses only the workflow's default `contents: read` permission, disables persisted checkout credentials, and fails closed if this provenance cannot be established.
+
+The gate reports added, removed, and version-changed Maven components represented in GitHub's dependency graph, including transitive changes classified as runtime, development, or unknown. It blocks only newly introduced HIGH or CRITICAL advisories, matching the repository's container vulnerability threshold; vulnerabilities already present in the protected base are not newly introduced changes. Dependabot remains responsible for proposing version updates, CodeQL remains source analysis, and final-image Trivy remains the authority for operating-system and packaged runtime contents. The Trivy CycloneDX artifacts inventory the built application and PostgreSQL images rather than the complete Maven build graph, so they do not replace dependency review for test-only components.
+
+Maven build plugins and processors declared only inside plugin configuration are not guaranteed to appear in GitHub's dependency graph or the final runtime image. The current provided `hibernate-processor` dependency is graph-visible, but `mapstruct-processor` is configured only as an annotation processor path. Both processor paths and all build plugins execute during the existing Maven verification and remain version-updated by Dependabot where its Maven support recognizes them, but no repository-owned advisory engine is added for graph-invisible build tools. The workflow policy regression prevents silent removal or narrowing of the dependency-review job, including its all-scope HIGH/CRITICAL policy.
+
+The repository has no owner-approved dependency-license allowlist or denylist. Dependency review therefore disables license enforcement explicitly; adopting license governance remains a separate owner decision rather than an inferred security policy.
+
+Incremental PR cost is two shallow, read-only source checkouts and one GitHub dependency-graph comparison. It does not run Maven or resolve either dependency graph again, and it does not add a second `clean verify` or vulnerability database.
+
 Targeted examples:
 
 ```bash
