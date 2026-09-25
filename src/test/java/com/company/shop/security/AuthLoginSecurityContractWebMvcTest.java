@@ -99,7 +99,8 @@ class AuthLoginSecurityContractWebMvcTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(header().string("X-Request-Id", "login-success"))
                 .andExpect(jsonPath("$.token").value("jwt-value"))
-                .andExpect(jsonPath("$.type").value("Bearer"));
+                .andExpect(jsonPath("$.type").value("Bearer"))
+                .andExpect(jsonPath("$.refreshToken").doesNotExist());
     }
 
     @Test

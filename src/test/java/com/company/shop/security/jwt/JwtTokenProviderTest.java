@@ -264,7 +264,7 @@ class JwtTokenProviderTest {
     private JwtTokenProvider tokenProvider(String secret, String keyId, String previousSecret,
                                            String previousKeyId, long expiration) {
         return new JwtTokenProvider(
-                new JwtProperties(secret, keyId, previousSecret, previousKeyId, expiration, 120_000L));
+                new JwtProperties(secret, keyId, previousSecret, previousKeyId, expiration));
     }
 
     private Authentication authentication(String username, String... roles) {

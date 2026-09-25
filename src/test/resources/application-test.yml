@@ -24,7 +24,6 @@ security:
     previous-key-id:
     previous-secret:
     expiration: 3600000
-    refresh-expiration: 86400000
 
 stripe:
   api-key: sk_test_placeholder

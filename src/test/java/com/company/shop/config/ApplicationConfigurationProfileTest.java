@@ -25,6 +25,16 @@ class ApplicationConfigurationProfileTest {
     private static final String TEST_DATABASE_PROPERTIES = "DATABASE_URL=jdbc:postgresql://localhost:1/unavailable";
 
     @Test
+    void jwtProfiles_shouldExposeOnlyAccessTokenExpiration() {
+        for (String resource : new String[] { "application-dev.yml", "application-prod.yml", "application-test.yml" }) {
+            Properties properties = loadProperties(resource);
+
+            assertThat(properties).containsKey("security.jwt.expiration");
+            assertThat(properties).doesNotContainKey("security.jwt.refresh-expiration");
+        }
+    }
+
+    @Test
     void baseConfiguration_shouldNotActivateDevelopmentProfileOrDefineStripePlaceholders() {
         Properties properties = loadProperties("application.yml");
 

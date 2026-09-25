@@ -10,7 +10,7 @@ The application uses one active HMAC signing key and at most one previous verifi
 - Key material remains RFC 4648 Base64 encoding of at least 32 random bytes.
 - Key IDs are operator-owned identifiers limited to 1-64 characters from `A-Z`, `a-z`, `0-9`, dot, underscore, and hyphen.
 - The previous key is verification-only. It never signs new tokens.
-- No refresh-token, session, revocation-list, JWKS, KMS, or database key store is introduced.
+- Enterprise Shop issues access tokens only. There is no refresh-token exchange, server-side session store, refresh-token persistence, revocation list, JWKS, KMS, or database key store. Adding refresh tokens would require a separately reviewed security and session-lifecycle design.
 
 JJWT's supported JWS-specific key-locator API selects the verification key from the protected JWT header before claims are returned or the signature is accepted. Authorization still reloads the current account and roles from PostgreSQL on every authenticated request.
 

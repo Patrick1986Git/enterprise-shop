@@ -50,9 +50,8 @@ security:
     previous-key-id: ${JWT_PREVIOUS_KEY_ID:}
     previous-secret: ${JWT_PREVIOUS_SECRET:}
     
-    # Token Lifespan Management
+    # Access-token lifespan
     expiration: 3600000          # Access Token: 1h (in milliseconds)
-    refresh-expiration: 86400000 # Reserved; no refresh-token flow exists.
 
 # #############################################################################
 # INTEGRATIONS: STRIPE PAYMENT GATEWAY
