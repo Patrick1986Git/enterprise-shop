@@ -34,6 +34,9 @@ jobs:
       - name: Validate GitHub Actions policy
         run: python scripts/validate-github-actions-policy.py
 
+      - name: Validate Maven Wrapper integrity policy
+        run: python scripts/validate-maven-wrapper.py
+
       - name: Set up Java 21
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
