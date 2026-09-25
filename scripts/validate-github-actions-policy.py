@@ -48,6 +48,9 @@ MIGRATION_COMPATIBILITY = re.compile(
     r"(?ms)^      - name: Enforce Flyway rolling-compatibility decision boundary\s*$\n"
     r"(?P<body>.*?)(?=^      - |\Z)"
 )
+DEPENDENCY_REVIEW_JOB = re.compile(
+    r"(?ms)^  dependency-review:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
+)
 
 
 def workflow_files(workflows_dir):
@@ -165,6 +168,33 @@ def validate_workflows(workflows_dir):
             contents = path.read_text(encoding="utf-8")
             if not re.search(r"(?m)^permissions:\s*$\n  contents: read\s*$", contents):
                 violations.append(f"{path}: default workflow permissions must remain contents: read")
+            dependency_review = DEPENDENCY_REVIEW_JOB.search(contents)
+            dependency_review_requirements = (
+                "if: github.event_name == 'pull_request'",
+                "ref: ${{ github.event.pull_request.head.sha }}",
+                "repository: ${{ github.event.pull_request.base.repo.full_name }}",
+                "ref: ${{ github.event.pull_request.base.sha }}",
+                "path: target/dependency-review-base",
+                "persist-credentials: false",
+                "BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}",
+                "BASE_SHA: ${{ github.event.pull_request.base.sha }}",
+                "HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+                'test "$BASE_REPOSITORY" = "${{ github.repository }}"',
+                "git -C target/dependency-review-base rev-parse HEAD",
+                'test "$(git rev-parse HEAD)" = "$HEAD_SHA"',
+                "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+                "fail-on-severity: high",
+                "fail-on-scopes: runtime, development, unknown",
+                "license-check: false",
+                "show-openssf-scorecard: false",
+            )
+            if not dependency_review or any(
+                    item not in dependency_review.group("body")
+                    for item in dependency_review_requirements):
+                violations.append(
+                    f"{path}: dependency review must compare the immutable same-repository PR base/head, "
+                    "fail for HIGH/CRITICAL findings in every dependency scope, and leave license policy disabled"
+                )
             checkout_ref = container_security_checkout_ref(path)
             if not checkout_ref or not SCHEDULE_CHECKOUT_REF.fullmatch(checkout_ref):
                 violations.append(
