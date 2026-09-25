@@ -18,16 +18,14 @@ public class JwtProperties {
 	private final String previousKeyId;
 	@Positive
 	private final long expiration;
-	private final long refreshExpiration;
 
 	public JwtProperties(String secret, String keyId, String previousSecret, String previousKeyId,
-			long expiration, long refreshExpiration) {
+			long expiration) {
 		this.secret = secret;
 		this.keyId = keyId;
 		this.previousSecret = previousSecret;
 		this.previousKeyId = previousKeyId;
 		this.expiration = expiration;
-		this.refreshExpiration = refreshExpiration;
 	}
 
 	public String getSecret() {
@@ -48,9 +46,5 @@ public class JwtProperties {
 
 	public long getExpiration() {
 		return expiration;
-	}
-
-	public long getRefreshExpiration() {
-		return refreshExpiration;
 	}
 }

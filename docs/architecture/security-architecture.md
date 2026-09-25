@@ -88,7 +88,7 @@ Alternatives were rejected for this lifecycle:
 - A dedicated revocation or session store would add operational state and infrastructure for behavior already represented by the users and roles tables.
 - Allowing stale authorization until the one-hour access-token expiration would permit deleted administrators to retain privileges and does not satisfy immediate revocation.
 
-HTTP sessions remain stateless: the database lookup validates each independent bearer request and does not create a server-side login session. The configured `refresh-expiration` property is not used by a refresh-token issuance or exchange flow.
+HTTP sessions remain stateless: the database lookup validates each independent bearer request and does not create a server-side login session. Enterprise Shop issues access tokens only. It has no refresh-token exchange, server-side session store, or refresh-token persistence. Adding refresh tokens in the future would require a separately reviewed security and session-lifecycle design.
 
 ## Account and token lifecycle
 
