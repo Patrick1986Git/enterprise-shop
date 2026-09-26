@@ -197,7 +197,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         UUID pendingFutureAttemptId = UUID.randomUUID();
         UUID failedId = UUID.randomUUID();
         UUID pendingPastAttemptId = UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = notificationRepository.currentDatabaseTime();
 
         insertNotification(
                 pendingWithoutNextAttemptId,
@@ -213,7 +213,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 pendingFutureAttemptId,
                 NotificationStatus.PENDING,
                 Instant.parse("2026-01-01T10:02:00Z"),
-                now.plusSeconds(3600));
+                now.plusSeconds(600));
         insertNotification(
                 failedId,
                 NotificationStatus.FAILED,
@@ -223,7 +223,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 pendingPastAttemptId,
                 NotificationStatus.PENDING,
                 Instant.parse("2026-01-01T10:04:00Z"),
-                now.minusSeconds(3600));
+                now.minusSeconds(600));
 
         List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(10, 3);
 
@@ -238,7 +238,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
 
     @Test
     void countDuePending_shouldCountOnlyPendingNotificationsDueNow() {
-        Instant now = Instant.now();
+        Instant now = notificationRepository.currentDatabaseTime();
         UUID pendingWithoutNextAttemptId = UUID.randomUUID();
         UUID pendingPastAttemptId = UUID.randomUUID();
         UUID pendingFutureAttemptId = UUID.randomUUID();
@@ -250,12 +250,12 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 pendingPastAttemptId,
                 NotificationStatus.PENDING,
                 now.minusSeconds(240),
-                now.minusSeconds(60));
+                now.minusSeconds(300));
         insertNotification(
                 pendingFutureAttemptId,
                 NotificationStatus.PENDING,
                 now.minusSeconds(180),
-                now.plusSeconds(60));
+                now.plusSeconds(600));
         insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), null);
         insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), null);
 
@@ -266,7 +266,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
 
     @Test
     void countScheduledPending_shouldCountOnlyPendingNotificationsScheduledForFutureRetry() {
-        Instant now = Instant.now();
+        Instant now = notificationRepository.currentDatabaseTime();
         UUID pendingFutureAttemptId = UUID.randomUUID();
         UUID pendingWithoutNextAttemptId = UUID.randomUUID();
         UUID pendingPastAttemptId = UUID.randomUUID();
@@ -277,15 +277,15 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 pendingFutureAttemptId,
                 NotificationStatus.PENDING,
                 now.minusSeconds(300),
-                now.plusSeconds(60));
+                now.plusSeconds(600));
         insertNotification(pendingWithoutNextAttemptId, NotificationStatus.PENDING, now.minusSeconds(240), null);
         insertNotification(
                 pendingPastAttemptId,
                 NotificationStatus.PENDING,
                 now.minusSeconds(180),
-                now.minusSeconds(60));
-        insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), now.plusSeconds(60));
-        insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), now.plusSeconds(60));
+                now.minusSeconds(300));
+        insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), now.plusSeconds(600));
+        insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), now.plusSeconds(600));
 
         long scheduledPendingCount = notificationRepository.countScheduledPending();
 
@@ -294,58 +294,67 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
 
     @Test
     void backlogQueries_shouldIncludeDuePendingAndExpiredClaimsButExcludeFutureWork() {
-        Instant now = Instant.parse("2026-09-07T12:00:00Z");
+        Instant now = notificationRepository.currentDatabaseTime();
         UUID immediateId = UUID.randomUUID();
         UUID retryId = UUID.randomUUID();
         UUID futureId = UUID.randomUUID();
         UUID expiredClaimId = UUID.randomUUID();
         UUID activeClaimId = UUID.randomUUID();
 
-        insertNotification(immediateId, NotificationStatus.PENDING, now.minusSeconds(300), null);
-        insertNotification(retryId, NotificationStatus.PENDING, now.minusSeconds(600), now.minusSeconds(60));
-        insertNotification(futureId, NotificationStatus.PENDING, now.minusSeconds(900), now.plusSeconds(60));
+        insertNotification(immediateId, NotificationStatus.PENDING, now.minusSeconds(600), null);
+        insertNotification(retryId, NotificationStatus.PENDING, now.minusSeconds(900), now.minusSeconds(300));
+        insertNotification(futureId, NotificationStatus.PENDING, now.minusSeconds(1200), now.plusSeconds(600));
         insertNotification(expiredClaimId, NotificationStatus.PENDING, now.minusSeconds(1200), null);
         insertNotification(activeClaimId, NotificationStatus.PENDING, now.minusSeconds(1500), null);
         jdbcTemplate.update("""
                 UPDATE notifications SET status = 'PROCESSING', attempts = 1,
                   claim_token = ?, claim_expires_at = ?, next_attempt_at = NULL WHERE id = ?
-                """, UUID.randomUUID(), java.sql.Timestamp.from(now.minusSeconds(120)), expiredClaimId);
+                """, UUID.randomUUID(), java.sql.Timestamp.from(now.minusSeconds(300)), expiredClaimId);
         jdbcTemplate.update("""
                 UPDATE notifications SET status = 'PROCESSING', attempts = 1,
                   claim_token = ?, claim_expires_at = ?, next_attempt_at = NULL WHERE id = ?
-                """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(120)), activeClaimId);
+                """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(600)), activeClaimId);
 
-        assertThat(notificationRepository.countActionable()).isEqualTo(3);
-        assertThat(notificationRepository.findOldestActionableAt()).contains(now.minusSeconds(300));
+        List<UUID> actionableIds = notificationRepository.findClaimableBatchForUpdate(10, 3).stream()
+                .map(Notification::getId)
+                .toList();
+
+        assertThat(actionableIds).containsExactlyInAnyOrder(immediateId, retryId, expiredClaimId)
+                .doesNotContain(futureId, activeClaimId);
+        assertThat(notificationRepository.countDuePending()).isEqualTo(2);
+        assertThat(notificationRepository.countScheduledPending()).isOne();
+        assertThat(notificationRepository.countActionable()).isEqualTo(actionableIds.size());
+        assertThat(notificationRepository.findOldestActionableAt()).contains(now.minusSeconds(600));
     }
 
     @Test
-    void actionableAndClaimableQueries_shouldAgreeAtDueAndExpiredClaimBoundaries() {
-        Instant now = Instant.parse("2026-09-26T12:00:00Z");
-        UUID dueAtBoundaryId = UUID.randomUUID();
-        UUID scheduledAfterBoundaryId = UUID.randomUUID();
-        UUID expiredAtBoundaryId = UUID.randomUUID();
-        UUID activeAfterBoundaryId = UUID.randomUUID();
+    void actionableAndClaimableQueries_shouldAgreeForDueAndExpiredWork() {
+        Instant now = notificationRepository.currentDatabaseTime();
+        UUID dueId = UUID.randomUUID();
+        UUID scheduledId = UUID.randomUUID();
+        UUID expiredId = UUID.randomUUID();
+        UUID activeId = UUID.randomUUID();
 
-        insertNotification(dueAtBoundaryId, NotificationStatus.PENDING, now.minusSeconds(300), now);
-        insertNotification(scheduledAfterBoundaryId, NotificationStatus.PENDING,
-                now.minusSeconds(240), now.plusSeconds(1));
-        insertNotification(expiredAtBoundaryId, NotificationStatus.PENDING, now.minusSeconds(180), null);
-        insertNotification(activeAfterBoundaryId, NotificationStatus.PENDING, now.minusSeconds(120), null);
+        insertNotification(dueId, NotificationStatus.PENDING, now.minusSeconds(900), now.minusSeconds(300));
+        insertNotification(scheduledId, NotificationStatus.PENDING,
+                now.minusSeconds(600), now.plusSeconds(600));
+        insertNotification(expiredId, NotificationStatus.PENDING, now.minusSeconds(500), null);
+        insertNotification(activeId, NotificationStatus.PENDING, now.minusSeconds(400), null);
         jdbcTemplate.update("""
                 UPDATE notifications SET status = 'PROCESSING', attempts = 1,
                   claim_token = ?, claim_expires_at = ? WHERE id = ?
-                """, UUID.randomUUID(), java.sql.Timestamp.from(now), expiredAtBoundaryId);
+                """, UUID.randomUUID(), java.sql.Timestamp.from(now.minusSeconds(300)), expiredId);
         jdbcTemplate.update("""
                 UPDATE notifications SET status = 'PROCESSING', attempts = 1,
                   claim_token = ?, claim_expires_at = ? WHERE id = ?
-                """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(1)), activeAfterBoundaryId);
+                """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(600)), activeId);
 
         List<UUID> claimableIds = notificationRepository.findClaimableBatchForUpdate(10, 3).stream()
                 .map(Notification::getId)
                 .toList();
 
-        assertThat(claimableIds).containsExactlyInAnyOrder(dueAtBoundaryId, expiredAtBoundaryId);
+        assertThat(claimableIds).containsExactlyInAnyOrder(dueId, expiredId)
+                .doesNotContain(scheduledId, activeId);
         assertThat(notificationRepository.countActionable()).isEqualTo(claimableIds.size());
     }
 

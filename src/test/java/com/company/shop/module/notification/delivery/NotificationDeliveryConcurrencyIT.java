@@ -113,7 +113,7 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
         Notification notification = save("recover@example.com");
         ClaimedNotification oldClaim = transactionalWorker.claimBatch(1).getFirst();
         jdbcTemplate.update("UPDATE notifications SET claim_expires_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now().minusSeconds(1)), notification.getId());
+                Timestamp.from(databaseTime().minusSeconds(300)), notification.getId());
 
         ClaimedNotification newClaim = transactionalWorker.claimBatch(1).getFirst();
 
@@ -122,7 +122,7 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
         assertThat(recovered.get("status")).isEqualTo("PROCESSING");
         assertThat(recovered.get("claim_token")).isEqualTo(newClaim.token());
         assertThat(((Number) recovered.get("attempts")).intValue()).isEqualTo(2);
-        assertThat(((Timestamp) recovered.get("claim_expires_at")).toInstant()).isAfter(Instant.now());
+        assertThat(((Timestamp) recovered.get("claim_expires_at")).toInstant()).isAfter(databaseTime());
 
         assertThat(transactionalWorker.finalizeSuccess(notification.getId(), oldClaim.token())).isFalse();
         assertThat(transactionalWorker.finalizeFailure(notification.getId(), oldClaim.token(), "stale")).isFalse();
@@ -143,7 +143,7 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
         Notification notification = save("exhausted@example.com");
         transactionalWorker.claimBatch(1);
         jdbcTemplate.update("UPDATE notifications SET attempts = ?, claim_expires_at = ? WHERE id = ?",
-                properties.maxAttempts(), Timestamp.from(Instant.now().minusSeconds(1)), notification.getId());
+                properties.maxAttempts(), Timestamp.from(databaseTime().minusSeconds(300)), notification.getId());
 
         assertThat(transactionalWorker.claimBatch(1)).isEmpty();
 
