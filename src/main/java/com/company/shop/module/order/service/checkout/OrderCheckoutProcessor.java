@@ -146,7 +146,8 @@ public class OrderCheckoutProcessor {
     private Order createPendingOrder(CurrentUserSnapshot currentUser, String idempotencyKey,
             OrderCheckoutRequestDTO request) {
         log.info("Checkout started for userId={}", currentUser.id());
-        Instant checkoutTime = clock.instant();
+        Instant discountEvaluationInstant = clock.instant();
+        Instant reservationStartTime = expirationWorkRepository.findCurrentTimestamp();
         CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(currentUser.id());
 
         if (cart.isEmpty()) {
@@ -154,7 +155,7 @@ public class OrderCheckoutProcessor {
         }
 
         Order order = new Order(currentUser.id(), currentUser.email(), idempotencyKey,
-                checkoutTime.plus(expirationProperties.duration()));
+                reservationStartTime.plus(expirationProperties.duration()));
 
         Map<UUID, CheckoutProduct> reservedProducts = new HashMap<>();
         for (CartCheckoutItem cartItem : cart.items().stream()
@@ -186,7 +187,7 @@ public class OrderCheckoutProcessor {
             DiscountCode dc = discountCodeRepo.findByCodeIgnoreCase(normalizedDiscountCode)
                     .orElseThrow(() -> new DiscountCodeInvalidException(normalizedDiscountCode));
 
-            LocalDateTime discountEvaluationTime = LocalDateTime.ofInstant(checkoutTime, clock.getZone());
+            LocalDateTime discountEvaluationTime = LocalDateTime.ofInstant(discountEvaluationInstant, clock.getZone());
             if (!dc.canBeUsed(discountEvaluationTime)) {
                 throw new DiscountCodeInvalidException(normalizedDiscountCode);
             }

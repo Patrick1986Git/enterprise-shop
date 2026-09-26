@@ -65,6 +65,7 @@ import com.company.shop.module.user.api.internal.CurrentUserSnapshot;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplCheckoutTest {
 	private static final Instant CHECKOUT_NOW = Instant.parse("2026-08-15T12:00:00Z");
+	private static final Instant DATABASE_NOW = Instant.parse("2026-08-15T14:00:00Z");
 
 	@Mock
 	private OrderRepository orderRepository;
@@ -93,6 +94,9 @@ class OrderServiceImplCheckoutTest {
 	@Mock
 	private OrderOutboxEventRecorder orderOutboxEventRecorder;
 
+	@Mock
+	private com.company.shop.module.order.expiration.ReservationExpirationWorkRepository expirationWorkRepository;
+
 	private SimpleMeterRegistry meterRegistry;
 	private OrderServiceImpl service;
 	private Clock clock;
@@ -101,6 +105,7 @@ class OrderServiceImplCheckoutTest {
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
 		clock = spy(Clock.fixed(CHECKOUT_NOW, ZoneOffset.UTC));
+		org.mockito.Mockito.lenient().when(expirationWorkRepository.findCurrentTimestamp()).thenReturn(DATABASE_NOW);
 		@SuppressWarnings("unchecked")
 		org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager>
 				transactionManagers = mock(org.springframework.beans.factory.ObjectProvider.class);
@@ -109,7 +114,7 @@ class OrderServiceImplCheckoutTest {
 				paymentRepository, discountCodeRepository, currentUserFacade, cartCheckoutFacade, orderMapper,
 				paymentService, orderOutboxEventRecorder, meterRegistry,
 				new com.company.shop.module.order.expiration.ReservationExpirationProperties(),
-				mock(com.company.shop.module.order.expiration.ReservationExpirationWorkRepository.class),
+				expirationWorkRepository,
 				clock, transactionManagers);
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
@@ -171,7 +176,13 @@ class OrderServiceImplCheckoutTest {
 			assertThat(savedOrder.getItems().get(1).getQuantity()).isEqualTo(3);
 			assertThat(savedOrder.getItems().get(1).getPrice()).isEqualByComparingTo("5.00");
 			assertThat(savedOrder.getTotalAmount()).isEqualByComparingTo("35.00");
-			assertThat(savedOrder.getReservationExpiresAt()).isEqualTo(CHECKOUT_NOW.plusSeconds(30 * 60));
+			assertThat(savedOrder.getReservationExpiresAt()).isEqualTo(DATABASE_NOW.plusSeconds(30 * 60));
+			ArgumentCaptor<com.company.shop.module.order.expiration.ReservationExpirationWork> workCaptor =
+					ArgumentCaptor.forClass(com.company.shop.module.order.expiration.ReservationExpirationWork.class);
+			verify(expirationWorkRepository).save(workCaptor.capture());
+			assertThat(workCaptor.getValue().getDueAt()).isEqualTo(savedOrder.getReservationExpiresAt());
+			assertThat(workCaptor.getValue().getNextAttemptAt()).isEqualTo(savedOrder.getReservationExpiresAt());
+			verify(expirationWorkRepository).findCurrentTimestamp();
 
 			ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
 			verify(paymentRepository).save(paymentCaptor.capture());

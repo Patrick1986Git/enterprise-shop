@@ -7,9 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +39,7 @@ class LegacyReservationServiceTest {
     void setUp() {
         org.mockito.Mockito.lenient().when(currentUserProvider.getCurrentUserEmail())
                 .thenReturn("admin@example.com");
+        org.mockito.Mockito.lenient().when(workRepository.findCurrentTimestamp()).thenReturn(NOW);
     }
 
     @Test
@@ -162,7 +161,7 @@ class LegacyReservationServiceTest {
 
     private LegacyReservationService service() {
         return new LegacyReservationService(orderRepository, workRepository, actionLogRepository,
-                currentUserProvider, Clock.fixed(NOW, ZoneOffset.UTC));
+                currentUserProvider);
     }
 
     private void assertSort(Pageable requested, Sort expected) {
