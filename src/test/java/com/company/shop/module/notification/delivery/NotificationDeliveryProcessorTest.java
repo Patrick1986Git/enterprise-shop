@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.company.shop.module.notification.entity.Notification;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 @ExtendWith(MockitoExtension.class)
 class NotificationDeliveryProcessorTest {
 
@@ -29,10 +31,12 @@ class NotificationDeliveryProcessorTest {
     private NotificationSender notificationSender;
 
     private NotificationDeliveryProcessor processor;
+    private SimpleMeterRegistry meters;
 
     @BeforeEach
     void setUp() {
-        processor = new NotificationDeliveryProcessor(transactionalWorker, notificationSender);
+        meters = new SimpleMeterRegistry();
+        processor = new NotificationDeliveryProcessor(transactionalWorker, notificationSender, meters);
     }
 
     @Test
@@ -49,6 +53,7 @@ class NotificationDeliveryProcessorTest {
         verify(transactionalWorker, never()).finalizeFailure(notification.getId(), token, "sender failed");
         assertThat(result.sentCount()).isEqualTo(1);
         assertThat(result.failedCount()).isZero();
+        assertOutcome("provider_returned_success_finalized", 1);
     }
 
     @Test
@@ -61,6 +66,27 @@ class NotificationDeliveryProcessorTest {
 
         assertThat(result.sentCount()).isZero();
         assertThat(result.failedCount()).isZero();
+        assertOutcome("provider_returned_success_finalization_rejected", 1);
+    }
+
+    @Test
+    void processPendingBatch_shouldSendAgainWhenExpiredClaimIsReplacedAfterAmbiguousSuccess() {
+        Notification notification = pendingNotification();
+        UUID expiredToken = UUID.randomUUID();
+        UUID replacementToken = UUID.randomUUID();
+        when(transactionalWorker.claimBatch(1)).thenReturn(
+                List.of(new ClaimedNotification(notification, expiredToken)),
+                List.of(new ClaimedNotification(notification, replacementToken)),
+                List.of());
+        when(transactionalWorker.finalizeSuccess(notification.getId(), expiredToken)).thenReturn(false);
+        when(transactionalWorker.finalizeSuccess(notification.getId(), replacementToken)).thenReturn(true);
+
+        NotificationDeliveryResult result = processor.processPendingBatch(BATCH_SIZE);
+
+        verify(notificationSender, times(2)).send(notification);
+        assertThat(result.sentCount()).isEqualTo(1);
+        assertOutcome("provider_returned_success_finalization_rejected", 1);
+        assertOutcome("provider_returned_success_finalized", 1);
     }
 
     @Test
@@ -76,13 +102,15 @@ class NotificationDeliveryProcessorTest {
         verify(transactionalWorker, never()).finalizeSuccess(notification.getId(), token);
         assertThat(result.sentCount()).isZero();
         assertThat(result.failedCount()).isEqualTo(1);
+        assertOutcome("provider_call_exception", 1);
+        assertOutcome("provider_exception_finalized", 1);
     }
 
     @Test
     void processPendingBatch_shouldNotFinalizeSuccessWhenNoopTransportIsUsed() {
         Notification notification = pendingNotification();
         UUID token = stubClaim(notification);
-        processor = new NotificationDeliveryProcessor(transactionalWorker, new NoopNotificationSender());
+        processor = new NotificationDeliveryProcessor(transactionalWorker, new NoopNotificationSender(), meters);
         when(transactionalWorker.finalizeFailure(
                 notification.getId(), token, "Notification delivery transport is not configured")).thenReturn(true);
 
@@ -106,6 +134,8 @@ class NotificationDeliveryProcessorTest {
 
         assertThat(result.sentCount()).isZero();
         assertThat(result.failedCount()).isZero();
+        assertOutcome("provider_call_exception", 1);
+        assertOutcome("provider_exception_finalization_rejected", 1);
     }
 
     @Test
@@ -155,6 +185,11 @@ class NotificationDeliveryProcessorTest {
     private Notification pendingNotification() {
         return Notification.pending("ORDER_PLACED_EMAIL", "customer@example.com", "Order placed",
                 "Your order has been placed.", UUID.randomUUID());
+    }
+
+    private void assertOutcome(String outcome, double expected) {
+        assertThat(meters.get("shop.notification.delivery.attempt.total")
+                .tag("outcome", outcome).counter().count()).isEqualTo(expected);
     }
 
     private static final class NullMessageException extends RuntimeException {
