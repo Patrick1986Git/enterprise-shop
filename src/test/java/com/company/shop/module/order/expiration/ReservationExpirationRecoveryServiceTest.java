@@ -4,9 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +33,8 @@ class ReservationExpirationRecoveryServiceTest {
     void setUp() {
         meters = new SimpleMeterRegistry();
         service = new ReservationExpirationRecoveryService(workRepository, orderRepository, currentUserProvider,
-                actionLogRepository, meters, Clock.fixed(NOW, ZoneOffset.UTC));
+                actionLogRepository, meters);
+        lenient().when(workRepository.findCurrentTimestamp()).thenReturn(NOW);
         lenient().when(currentUserProvider.getCurrentUserEmail()).thenReturn("admin@example.com");
     }
 

@@ -1,6 +1,5 @@
 package com.company.shop.module.order.expiration;
 
-import java.time.Clock;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,21 +27,20 @@ public class ReservationExpirationProcessor {
     private final OrderRepository orderRepository;
     private final PaymentTerminalTransitionService transitions;
     private final MeterRegistry meters;
-    private final Clock clock;
     private final PaymentService paymentService;
 
     public ReservationExpirationProcessor(ReservationExpirationWorkRepository workRepository,
             ReservationExpirationClaimService claimService, ReservationExpirationProperties properties,
             StripePaymentIntentGateway stripeGateway, PaymentRepository paymentRepository, OrderRepository orderRepository,
-            PaymentTerminalTransitionService transitions, MeterRegistry meters, Clock clock,
+            PaymentTerminalTransitionService transitions, MeterRegistry meters,
             PaymentService paymentService) {
         this.workRepository = workRepository; this.claimService = claimService; this.properties = properties;
         this.stripeGateway = stripeGateway; this.paymentRepository = paymentRepository; this.orderRepository = orderRepository;
-        this.transitions = transitions; this.meters = meters; this.clock = clock;
+        this.transitions = transitions; this.meters = meters;
         this.paymentService = paymentService;
     }
     public void processDueBatch() {
-        workRepository.findDueCandidateIds(clock.instant(), properties.batchSize()).forEach(id ->
+        workRepository.findDueCandidateIds(properties.batchSize()).forEach(id ->
                 claimService.claim(id).ifPresent(this::processClaim));
     }
     private void processClaim(ReservationExpirationClaim claim) {

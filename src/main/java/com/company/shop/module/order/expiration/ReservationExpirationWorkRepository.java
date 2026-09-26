@@ -24,19 +24,22 @@ public interface ReservationExpirationWorkRepository extends JpaRepository<Reser
     @Query(value = """
             SELECT w.id FROM reservation_expiration_work w JOIN orders o ON o.id = w.order_id
             WHERE o.status = 'NEW' AND o.deleted = false
-              AND ((w.status = 'PENDING' AND w.next_attempt_at <= :now)
-                OR (w.status = 'CLAIMED' AND w.claim_until <= :now))
+              AND ((w.status = 'PENDING' AND w.next_attempt_at <= statement_timestamp())
+                OR (w.status = 'CLAIMED' AND w.claim_until <= statement_timestamp()))
             ORDER BY w.next_attempt_at, w.id LIMIT :batchSize
             """, nativeQuery = true)
-    List<UUID> findDueCandidateIds(@Param("now") Instant now, @Param("batchSize") int batchSize);
+    List<UUID> findDueCandidateIds(@Param("batchSize") int batchSize);
 
     @Query(value = """
             SELECT * FROM reservation_expiration_work
-            WHERE id = :id AND ((status = 'PENDING' AND next_attempt_at <= :now)
-              OR (status = 'CLAIMED' AND claim_until <= :now))
+            WHERE id = :id AND ((status = 'PENDING' AND next_attempt_at <= statement_timestamp())
+              OR (status = 'CLAIMED' AND claim_until <= statement_timestamp()))
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    Optional<ReservationExpirationWork> findClaimableForUpdate(@Param("id") UUID id, @Param("now") Instant now);
+    Optional<ReservationExpirationWork> findClaimableForUpdate(@Param("id") UUID id);
+
+    @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
+    Instant findCurrentTimestamp();
 
     @Query(value = "SELECT * FROM reservation_expiration_work WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<ReservationExpirationWork> findByIdForUpdate(@Param("id") UUID id);

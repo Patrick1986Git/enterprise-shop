@@ -100,6 +100,37 @@ class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
         assertThat(operationalState(firstWorkId)).isEqualTo(before);
     }
 
+    @Test
+    void dueQueries_shouldAgreeAtInclusiveRetryBoundaryAndExcludeFutureWork() {
+        Instant databaseTime = repository.findCurrentTimestamp();
+        jdbcTemplate.update("""
+                UPDATE reservation_expiration_work
+                SET status = 'PENDING', next_attempt_at = ?, claim_token = NULL, claim_until = NULL
+                WHERE id = ?
+                """, sqlTimestamp(databaseTime), firstWorkId);
+        jdbcTemplate.update("""
+                UPDATE reservation_expiration_work
+                SET status = 'PENDING', next_attempt_at = ?, claim_token = NULL, claim_until = NULL
+                WHERE id = ?
+                """, sqlTimestamp(databaseTime.plusSeconds(3600)), secondWorkId);
+        entityManager.clear();
+
+        assertThat(repository.findDueCandidateIds(10)).contains(firstWorkId).doesNotContain(secondWorkId);
+        assertThat(repository.findClaimableForUpdate(firstWorkId)).isPresent();
+        assertThat(repository.findClaimableForUpdate(secondWorkId)).isEmpty();
+    }
+
+    @Test
+    void dueQueries_shouldAgreeAtInclusiveExpiredClaimBoundary() {
+        Instant databaseTime = repository.findCurrentTimestamp();
+        jdbcTemplate.update("UPDATE reservation_expiration_work SET claim_until = ? WHERE id = ?",
+                sqlTimestamp(databaseTime), thirdWorkId);
+        entityManager.clear();
+
+        assertThat(repository.findDueCandidateIds(10)).contains(thirdWorkId);
+        assertThat(repository.findClaimableForUpdate(thirdWorkId)).isPresent();
+    }
+
     private void insertOrder(UUID orderId, UUID userId, String email) {
         jdbcTemplate.update("""
                 INSERT INTO orders (id, user_id, user_email, status, total_amount)

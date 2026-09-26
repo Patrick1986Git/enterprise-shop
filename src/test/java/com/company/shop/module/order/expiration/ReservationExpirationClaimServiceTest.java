@@ -1,11 +1,9 @@
 package com.company.shop.module.order.expiration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +24,8 @@ class ReservationExpirationClaimServiceTest {
     @BeforeEach
     void setUp() {
         properties = new ReservationExpirationProperties();
-        service = new ReservationExpirationClaimService(repository, properties, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new ReservationExpirationClaimService(repository, properties);
+        lenient().when(repository.findCurrentTimestamp()).thenReturn(NOW);
     }
 
     @Test
@@ -57,6 +56,23 @@ class ReservationExpirationClaimServiceTest {
     }
 
     @Test
+    void retry_shouldStartDelayFromDatabaseTimeSampledAfterLockAcquisition() {
+        Instant finalizationTime = NOW.plusSeconds(45);
+        ReservationExpirationWork work = new ReservationExpirationWork(ORDER_ID, NOW.minusSeconds(60));
+        UUID token = work.claim(NOW.minusSeconds(30), NOW.plusSeconds(30));
+        ReservationExpirationClaim claim = new ReservationExpirationClaim(WORK_ID, ORDER_ID, token);
+        when(repository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.of(work));
+        when(repository.findCurrentTimestamp()).thenReturn(finalizationTime);
+
+        service.retry(claim, "provider unavailable");
+
+        var ordered = inOrder(repository);
+        ordered.verify(repository).findByIdForUpdate(WORK_ID);
+        ordered.verify(repository).findCurrentTimestamp();
+        assertThat(work.getNextAttemptAt()).isEqualTo(finalizationTime.plus(properties.retryDelay()));
+    }
+
+    @Test
     void retry_shouldReturnFalseWhenWorkWasAlreadyRemoved() {
         ReservationExpirationClaim claim = new ReservationExpirationClaim(WORK_ID, ORDER_ID, UUID.randomUUID());
         when(repository.findByIdForUpdate(WORK_ID)).thenReturn(Optional.empty());
@@ -69,7 +85,7 @@ class ReservationExpirationClaimServiceTest {
         ReservationExpirationWork work = new ReservationExpirationWork(ORDER_ID, NOW.minusSeconds(60));
         work.claim(NOW.minusSeconds(60), NOW.minusSeconds(1));
         properties.setMaxAttempts(1);
-        when(repository.findClaimableForUpdate(WORK_ID, NOW)).thenReturn(Optional.of(work));
+        when(repository.findClaimableForUpdate(WORK_ID)).thenReturn(Optional.of(work));
 
         assertThat(service.claim(WORK_ID)).isEmpty();
         assertThat(work.getStatus()).isEqualTo(ReservationExpirationWorkStatus.FAILED);
@@ -81,13 +97,28 @@ class ReservationExpirationClaimServiceTest {
     }
 
     @Test
+    void claim_shouldStartLeaseFromDatabaseTimeSampledAfterClaimLockAcquisition() {
+        Instant claimTime = NOW.plusSeconds(45);
+        ReservationExpirationWork work = new ReservationExpirationWork(ORDER_ID, NOW.minusSeconds(60));
+        when(repository.findClaimableForUpdate(WORK_ID)).thenReturn(Optional.of(work));
+        when(repository.findCurrentTimestamp()).thenReturn(claimTime);
+
+        assertThat(service.claim(WORK_ID)).isPresent();
+
+        var ordered = inOrder(repository);
+        ordered.verify(repository).findClaimableForUpdate(WORK_ID);
+        ordered.verify(repository).findCurrentTimestamp();
+        assertThat(work.getClaimUntil()).isEqualTo(claimTime.plus(properties.claimLease()));
+    }
+
+    @Test
     void claim_shouldAllowOneAdditionalAttemptAfterAdminRecovery() {
         ReservationExpirationWork work = new ReservationExpirationWork(ORDER_ID, NOW.minusSeconds(60));
         UUID oldToken = work.claim(NOW.minusSeconds(60), NOW.minusSeconds(30));
         work.retry(oldToken, NOW.minusSeconds(20), NOW.minusSeconds(10), "provider unavailable", 1);
         work.requeueFailed(NOW.minusSeconds(5), "admin@example.com");
         properties.setMaxAttempts(1);
-        when(repository.findClaimableForUpdate(WORK_ID, NOW)).thenReturn(Optional.of(work));
+        when(repository.findClaimableForUpdate(WORK_ID)).thenReturn(Optional.of(work));
 
         assertThat(service.claim(WORK_ID)).isPresent();
         assertThat(work.getAttempts()).isEqualTo(2);
@@ -102,7 +133,7 @@ class ReservationExpirationClaimServiceTest {
         work.requeueFailed(NOW.minusSeconds(50), "admin@example.com");
         work.claim(NOW.minusSeconds(40), NOW.minusSeconds(1));
         properties.setMaxAttempts(1);
-        when(repository.findClaimableForUpdate(WORK_ID, NOW)).thenReturn(Optional.of(work));
+        when(repository.findClaimableForUpdate(WORK_ID)).thenReturn(Optional.of(work));
 
         assertThat(service.claim(WORK_ID)).isEmpty();
         assertThat(work.getStatus()).isEqualTo(ReservationExpirationWorkStatus.FAILED);
