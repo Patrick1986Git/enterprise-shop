@@ -1,6 +1,8 @@
 package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
 import static org.mockito.Mockito.when;
 
 import java.util.UUID;
@@ -58,7 +60,7 @@ class OutboxEventAdminCommandServiceConcurrencyIT extends PostgresContainerSuppo
     @Test
     void requeueFailedEvent_shouldSerializeConcurrentRequeuesOnSingleOutboxRow() throws Exception {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.markDeadLetter("boom", "attempt limit reached");
+        event.markDeadLetter("boom", "attempt limit reached", Instant.parse("2026-01-01T00:00:00Z"));
         UUID eventId = outboxEventRepository.saveAndFlush(event).getId();
 
         CountDownLatch firstTransactionLockedEvent = new CountDownLatch(1);

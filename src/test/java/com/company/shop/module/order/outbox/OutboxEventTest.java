@@ -58,8 +58,8 @@ class OutboxEventTest {
     @Test
     void markProcessed_shouldSetProcessedStatusProcessedAtLastAttemptAtAndClearFailureState() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.scheduleRetry("temporary failure", Instant.now().plusSeconds(60));
-        event.markDeadLetter("final failure", "attempt limit reached");
+        event.scheduleRetry("temporary failure", Instant.parse("2026-01-01T00:00:00Z"), Instant.now().plusSeconds(60));
+        event.markDeadLetter("final failure", "attempt limit reached", Instant.parse("2026-01-01T00:00:00Z"));
 
         event.markProcessed();
 
@@ -127,13 +127,14 @@ class OutboxEventTest {
     @Test
     void scheduleRetry_shouldSetPendingIncrementAttemptsStoreFailureStateAndNextAttemptAt() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
+        Instant attemptTime = Instant.parse("2026-01-01T10:00:00Z");
         Instant nextAttemptAt = Instant.now().plusSeconds(300);
 
-        event.scheduleRetry("publisher unavailable", nextAttemptAt);
+        event.scheduleRetry("publisher unavailable", attemptTime, nextAttemptAt);
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getAttempts()).isEqualTo(1);
-        assertThat(event.getLastAttemptAt()).isNotNull();
+        assertThat(event.getLastAttemptAt()).isEqualTo(attemptTime);
         assertThat(event.getLastError()).isEqualTo("publisher unavailable");
         assertThat(event.getNextAttemptAt()).isEqualTo(nextAttemptAt);
         assertThat(event.getProcessedAt()).isNull();
@@ -143,9 +144,9 @@ class OutboxEventTest {
     @Test
     void markDeadLetter_shouldSetDeadLetterStoreFailureAndReasonAndClearNextAttemptAt() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.scheduleRetry("temporary failure", Instant.now().plusSeconds(300));
+        event.scheduleRetry("temporary failure", Instant.parse("2026-01-01T00:00:00Z"), Instant.now().plusSeconds(300));
 
-        event.markDeadLetter("publisher unavailable", "attempt limit reached");
+        event.markDeadLetter("publisher unavailable", "attempt limit reached", Instant.parse("2026-01-01T00:00:00Z"));
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.DEAD_LETTER);
         assertThat(event.getAttempts()).isEqualTo(2);

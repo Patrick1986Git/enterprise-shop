@@ -80,6 +80,7 @@ class OutboxEventProcessorTransactionIT extends PostgresContainerSupport {
         assertThat(retried.getAttempts()).isEqualTo(1);
         assertThat(retried.getLastError()).isEqualTo("intentional transactional dependency failure");
         assertThat(retried.getNextAttemptAt()).isAfter(beforeProcessing);
+        assertThat(retried.getNextAttemptAt()).isEqualTo(retried.getLastAttemptAt().plusSeconds(60));
         assertThat(retried.getProcessedAt()).isNull();
         assertThat(retried.getDeadLetterReason()).isNull();
     }

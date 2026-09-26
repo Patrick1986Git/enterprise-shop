@@ -88,7 +88,7 @@ class OutboxEventAdminCommandServiceTest {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
         setId(event, eventId);
-        event.markDeadLetter("boom", "attempt limit reached");
+        event.markDeadLetter("boom", "attempt limit reached", Instant.parse("2026-01-01T00:00:00Z"));
         setInstantField(event, "nextAttemptAt", Instant.parse("2026-01-01T10:06:30Z"));
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
         when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
