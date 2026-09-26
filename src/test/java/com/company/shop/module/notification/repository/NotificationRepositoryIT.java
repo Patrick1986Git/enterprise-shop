@@ -320,6 +320,36 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void actionableAndClaimableQueries_shouldAgreeAtDueAndExpiredClaimBoundaries() {
+        Instant now = Instant.parse("2026-09-26T12:00:00Z");
+        UUID dueAtBoundaryId = UUID.randomUUID();
+        UUID scheduledAfterBoundaryId = UUID.randomUUID();
+        UUID expiredAtBoundaryId = UUID.randomUUID();
+        UUID activeAfterBoundaryId = UUID.randomUUID();
+
+        insertNotification(dueAtBoundaryId, NotificationStatus.PENDING, now.minusSeconds(300), now);
+        insertNotification(scheduledAfterBoundaryId, NotificationStatus.PENDING,
+                now.minusSeconds(240), now.plusSeconds(1));
+        insertNotification(expiredAtBoundaryId, NotificationStatus.PENDING, now.minusSeconds(180), null);
+        insertNotification(activeAfterBoundaryId, NotificationStatus.PENDING, now.minusSeconds(120), null);
+        jdbcTemplate.update("""
+                UPDATE notifications SET status = 'PROCESSING', attempts = 1,
+                  claim_token = ?, claim_expires_at = ? WHERE id = ?
+                """, UUID.randomUUID(), java.sql.Timestamp.from(now), expiredAtBoundaryId);
+        jdbcTemplate.update("""
+                UPDATE notifications SET status = 'PROCESSING', attempts = 1,
+                  claim_token = ?, claim_expires_at = ? WHERE id = ?
+                """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(1)), activeAfterBoundaryId);
+
+        List<UUID> claimableIds = notificationRepository.findClaimableBatchForUpdate(10, now, 3).stream()
+                .map(Notification::getId)
+                .toList();
+
+        assertThat(claimableIds).containsExactlyInAnyOrder(dueAtBoundaryId, expiredAtBoundaryId);
+        assertThat(notificationRepository.countActionable(now)).isEqualTo(claimableIds.size());
+    }
+
+    @Test
     void failedBacklogQueries_shouldUseTerminalAttemptTime() {
         Instant now = Instant.parse("2026-09-07T12:00:00Z");
         notificationWithLastAttemptAt("old@example.com", now.minusSeconds(300),

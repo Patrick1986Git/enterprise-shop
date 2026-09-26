@@ -10,6 +10,9 @@ import org.junit.jupiter.api.Test;
 
 class NotificationTest {
 
+    private static final Instant CLAIMED_AT = Instant.parse("2026-09-26T12:00:00Z");
+    private static final Instant COMPLETED_AT = Instant.parse("2026-09-26T12:00:30Z");
+
     @Test
     void pending_shouldCreatePendingNotification() {
         UUID sourceEventId = UUID.randomUUID();
@@ -151,11 +154,16 @@ class NotificationTest {
         Notification notification = pendingNotification(UUID.randomUUID());
         UUID token = claim(notification);
 
-        assertThat(notification.finalizeSent(UUID.randomUUID())).isFalse();
+        assertThat(notification.finalizeSent(UUID.randomUUID(), COMPLETED_AT)).isFalse();
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PROCESSING);
-        assertThat(notification.finalizeSent(token)).isTrue();
+        assertThat(notification.getSentAt()).isNull();
+        assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
+
+        assertThat(notification.finalizeSent(token, COMPLETED_AT)).isTrue();
+
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
-        assertThat(notification.getSentAt()).isNotNull();
+        assertThat(notification.getSentAt()).isEqualTo(COMPLETED_AT);
+        assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
         assertThat(notification.getClaimToken()).isNull();
         assertThat(notification.getClaimExpiresAt()).isNull();
         assertThat(notification.getLastError()).isNull();
@@ -172,6 +180,7 @@ class NotificationTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isEqualTo(1);
+        assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
         assertThat(notification.getLastError()).isEqualTo("sender failed");
         assertThat(notification.getNextAttemptAt()).isEqualTo(nextAttemptAt);
         assertThat(notification.getClaimToken()).isNull();
@@ -204,14 +213,17 @@ class NotificationTest {
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PROCESSING);
         assertThat(notification.getClaimToken()).isEqualTo(token);
+        assertThat(notification.getClaimExpiresAt()).isEqualTo(CLAIMED_AT.plusSeconds(60));
+        assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
+        assertThat(notification.getNextAttemptAt()).isNull();
+        assertThat(notification.getSentAt()).isNull();
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getAttempts()).isEqualTo(1);
     }
 
     private UUID claim(Notification notification) {
         UUID token = UUID.randomUUID();
-        Instant now = Instant.now();
-        notification.claim(token, now, now.plusSeconds(60));
+        notification.claim(token, CLAIMED_AT, CLAIMED_AT.plusSeconds(60));
         return token;
     }
 

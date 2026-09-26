@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.delivery;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -12,16 +13,18 @@ import com.company.shop.module.notification.repository.NotificationRepository;
 public class NotificationDeliveryTransactionalWorker {
     private final NotificationRepository repository;
     private final NotificationDeliveryProperties properties;
+    private final Clock clock;
 
     public NotificationDeliveryTransactionalWorker(NotificationRepository repository,
-            NotificationDeliveryProperties properties) {
+            NotificationDeliveryProperties properties, Clock clock) {
         this.repository = repository;
         this.properties = properties;
+        this.clock = clock;
     }
 
     @Transactional
     public List<ClaimedNotification> claimBatch(int batchSize) {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         repository.failExhaustedExpiredClaims(now, properties.maxAttempts());
         return repository.findClaimableBatchForUpdate(batchSize, now, properties.maxAttempts()).stream()
                 .map(notification -> claim(notification, now))
@@ -36,14 +39,21 @@ public class NotificationDeliveryTransactionalWorker {
 
     @Transactional
     public boolean finalizeSuccess(UUID id, UUID token) {
-        return repository.findByIdForUpdate(id).map(n -> n.finalizeSent(token)).orElse(false);
+        return repository.findByIdForUpdate(id).map(notification -> {
+            if (!notification.ownsClaim(token)) return false;
+            return notification.finalizeSent(token, clock.instant());
+        }).orElse(false);
     }
 
     @Transactional
     public boolean finalizeFailure(UUID id, UUID token, String error) {
         return repository.findByIdForUpdate(id)
-                .map(n -> n.finalizeFailed(token, error, properties.maxAttempts(),
-                        Instant.now().plus(properties.retryDelay())))
+                .map(notification -> {
+                    if (!notification.ownsClaim(token)) return false;
+                    Instant failedAt = clock.instant();
+                    return notification.finalizeFailed(token, error, properties.maxAttempts(),
+                            failedAt.plus(properties.retryDelay()));
+                })
                 .orElse(false);
     }
 }
