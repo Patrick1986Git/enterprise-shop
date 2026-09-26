@@ -142,15 +142,10 @@ public class Order extends SoftDeleteEntity {
      * </p>
      *
      * @param discountCode the discount code to be applied.
-     * @throws IllegalStateException if the discount code is expired or usage limits are exceeded.
      */
     public void applyDiscount(DiscountCode discountCode) {
         if (discountCode == null) {
             return;
-        }
-
-        if (!discountCode.canBeUsed()) {
-            throw new IllegalStateException("Discount code cannot be used (expired or limit reached)");
         }
 
         BigDecimal multiplier = BigDecimal.valueOf(100 - discountCode.getDiscountPercent())

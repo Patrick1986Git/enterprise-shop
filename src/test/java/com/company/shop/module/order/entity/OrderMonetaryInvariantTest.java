@@ -88,7 +88,6 @@ class OrderMonetaryInvariantTest {
 
     private DiscountCode usableDiscount(int percent) {
         DiscountCode discount = mock(DiscountCode.class);
-        when(discount.canBeUsed()).thenReturn(true);
         when(discount.getDiscountPercent()).thenReturn(percent);
         return discount;
     }

@@ -3,6 +3,7 @@ package com.company.shop.module.order.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.company.shop.persistence.support.PostgresContainerSupport;
+import com.company.shop.module.order.entity.DiscountCode;
 
 import jakarta.persistence.EntityManager;
 
@@ -43,6 +45,29 @@ class DiscountCodeLockTimeoutIT extends PostgresContainerSupport {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Test
+    @Timeout(20)
+    void findByCodeIgnoreCase_shouldSerializeConsumptionOfFinalUsageSlot() throws Exception {
+        String code = "FINAL-" + UUID.randomUUID().toString().substring(0, 8);
+        insertDiscountCode(code);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Boolean> first = executor.submit(() -> consumeIfEligible(code, start));
+            Future<Boolean> second = executor.submit(() -> consumeIfEligible(code, start));
+            start.countDown();
+
+            assertThat(java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(true, false);
+        }
+
+        Number usedCount = (Number) entityManager.createNativeQuery(
+                "SELECT used_count FROM discount_codes WHERE code = :code")
+                .setParameter("code", code)
+                .getSingleResult();
+        assertThat(usedCount.intValue()).isEqualTo(1);
+    }
 
     @Test
     @Timeout(20)
@@ -91,9 +116,21 @@ class DiscountCodeLockTimeoutIT extends PostgresContainerSupport {
         }
     }
 
+    private boolean consumeIfEligible(String code, CountDownLatch start) {
+        await(start);
+        return transactionTemplate.execute(status -> {
+            DiscountCode discountCode = discountCodeRepository.findByCodeIgnoreCase(code).orElseThrow();
+            boolean eligible = discountCode.canBeUsed(LocalDateTime.of(2026, Month.SEPTEMBER, 26, 12, 0));
+            if (eligible) {
+                discountCode.incrementUsage();
+            }
+            return eligible;
+        });
+    }
+
     private void insertDiscountCode(String code) {
         transactionTemplate.executeWithoutResult(status -> {
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.of(2026, Month.SEPTEMBER, 26, 12, 0);
             entityManager.createNativeQuery("""
                     INSERT INTO discount_codes (
                         id, code, discount_percent, valid_from, valid_to, usage_limit, used_count, active,
