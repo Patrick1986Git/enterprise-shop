@@ -148,15 +148,17 @@ explicitly. A claim uses one sample for expired-claim terminalization, claim sel
 expired-claim comparisons are inclusive (`next_attempt_at <= now` and
 `claim_expires_at <= now`), so a row becomes eligible exactly at its boundary.
 
-The external send occurs after the claim transaction commits. Success completion and
-failure completion therefore take fresh `Clock` samples rather than reusing claim time.
-On success, `sent_at` and `last_attempt_at` record the observed completion time. On a
-retryable provider failure, `next_attempt_at` is the observed failure-finalization time
-plus `retry-delay`; it is intentionally not claim time plus the delay. A terminal
-failure preserves the claim-start `last_attempt_at`, as does terminalization of an
-expired final claim. Administrative requeue is immediately eligible because it clears
-`next_attempt_at`; its direct JVM timestamp is requeue audit metadata and does not
-control eligibility.
+The external send occurs after the claim transaction commits. `last_attempt_at` remains
+the claim-start instant (`Tclaim`) throughout every claimed attempt, regardless of its
+outcome. After the finalization transaction acquires the row lock and confirms token
+ownership, success samples `Tsuccess` and stores it only in `sent_at`. A retryable
+provider failure samples `Tfailure` at that same boundary and sets `next_attempt_at` to
+exactly `Tfailure + retry-delay`; it intentionally does not use claim time. Sampling
+after lock acquisition prevents lock wait from consuming the configured post-failure
+delay, and stale tokens cause no time sample or transition. A terminal failure and an
+expired final claim both preserve `Tclaim`. Administrative requeue is immediately
+eligible because it clears `next_attempt_at`; its direct JVM timestamp is requeue audit
+metadata and does not control eligibility.
 
 Using the application `Clock` consistently prevents a configured application clock
 from making claim selection disagree with actionable metrics or administrative due

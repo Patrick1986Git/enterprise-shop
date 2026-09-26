@@ -39,16 +39,21 @@ public class NotificationDeliveryTransactionalWorker {
 
     @Transactional
     public boolean finalizeSuccess(UUID id, UUID token) {
-        Instant completedAt = clock.instant();
-        return repository.findByIdForUpdate(id).map(n -> n.finalizeSent(token, completedAt)).orElse(false);
+        return repository.findByIdForUpdate(id).map(notification -> {
+            if (!notification.ownsClaim(token)) return false;
+            return notification.finalizeSent(token, clock.instant());
+        }).orElse(false);
     }
 
     @Transactional
     public boolean finalizeFailure(UUID id, UUID token, String error) {
-        Instant failedAt = clock.instant();
         return repository.findByIdForUpdate(id)
-                .map(n -> n.finalizeFailed(token, error, properties.maxAttempts(),
-                        failedAt.plus(properties.retryDelay())))
+                .map(notification -> {
+                    if (!notification.ownsClaim(token)) return false;
+                    Instant failedAt = clock.instant();
+                    return notification.finalizeFailed(token, error, properties.maxAttempts(),
+                            failedAt.plus(properties.retryDelay()));
+                })
                 .orElse(false);
     }
 }

@@ -178,7 +178,8 @@ counter remains broader by design. No unresolved-conflict gauge exists because o
 a repository-defined open/resolved workflow.
 
 Notification `last_attempt_at` consistently means the delivery-attempt instant. A claimed delivery writes it when the
-claim begins; `finalizeFailed` later preserves that instant whether it schedules a retry or enters FAILED. The legacy
+claim begins; token-owned success later stores its completion instant in `sent_at` without replacing that claim-start
+value, and `finalizeFailed` preserves the claim-start instant whether it schedules a retry or enters FAILED. The legacy
 `markFailed` and `markDeliveryAttemptFailed` paths write it as they record their failed attempt. Expired PROCESSING
 claims terminalized after exhausting attempts also preserve the earlier claim-attempt instant. ADMIN requeue leaves
 FAILED and clears `last_attempt_at`. Consequently the FAILED gauge deliberately reports oldest last-attempt age rather
