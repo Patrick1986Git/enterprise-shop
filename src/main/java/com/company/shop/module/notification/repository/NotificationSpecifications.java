@@ -20,7 +20,10 @@ public final class NotificationSpecifications {
     }
 
     public static Specification<Notification> adminFilters(NotificationAdminSearchCriteria criteria) {
-        return adminFilters(criteria, criteria.deliveryState() == null ? null : Instant.now());
+        if (criteria.deliveryState() != null) {
+            throw new IllegalArgumentException("Delivery-state filters require an authoritative observation time");
+        }
+        return adminFilters(criteria, null);
     }
 
     public static Specification<Notification> adminFilters(NotificationAdminSearchCriteria criteria, Instant now) {

@@ -1,6 +1,5 @@
 package com.company.shop.module.notification.service;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -31,13 +30,10 @@ public class NotificationQueryService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationMapper notificationMapper;
-    private final Clock clock;
 
-    public NotificationQueryService(NotificationRepository notificationRepository, NotificationMapper notificationMapper,
-            Clock clock) {
+    public NotificationQueryService(NotificationRepository notificationRepository, NotificationMapper notificationMapper) {
         this.notificationRepository = notificationRepository;
         this.notificationMapper = notificationMapper;
-        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -49,13 +45,12 @@ public class NotificationQueryService {
 
     @Transactional(readOnly = true)
     public NotificationSummaryDTO getSummary() {
-        Instant now = clock.instant();
         return new NotificationSummaryDTO(
                 notificationRepository.countByStatus(NotificationStatus.PENDING),
                 notificationRepository.countByStatus(NotificationStatus.SENT),
                 notificationRepository.countByStatus(NotificationStatus.FAILED),
-                notificationRepository.countDuePending(now),
-                notificationRepository.countScheduledPending(now),
+                notificationRepository.countDuePending(),
+                notificationRepository.countScheduledPending(),
                 notificationRepository.countByRequeueCountGreaterThan(0),
                 notificationRepository.sumRequeueCount());
     }
@@ -93,7 +88,7 @@ public class NotificationQueryService {
 
         Specification<Notification> specification = normalizedCriteria.deliveryState() == null
                 ? NotificationSpecifications.adminFilters(normalizedCriteria)
-                : NotificationSpecifications.adminFilters(normalizedCriteria, clock.instant());
+                : NotificationSpecifications.adminFilters(normalizedCriteria, notificationRepository.currentDatabaseTime());
 
         return notificationRepository.findAll(
                 specification,

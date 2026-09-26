@@ -140,13 +140,15 @@ without a database transaction or row lock. A separate short transaction changes
 row to `SENT`, or durably records a retry/terminal failure, only when the claim token
 still owns the row.
 
-Notification eligibility is application-time owned, unlike outbox retry eligibility,
-which is PostgreSQL-time owned. The delivery worker, operational summary, and actionable
-gauges all sample the repository `Clock`; repository predicates receive that sample
-explicitly. A claim uses one sample for expired-claim terminalization, claim selection,
-`last_attempt_at`, and the lease boundary in `claim_expires_at`. Both due and
-expired-claim comparisons are inclusive (`next_attempt_at <= now` and
-`claim_expires_at <= now`), so a row becomes eligible exactly at its boundary.
+PostgreSQL wall time owns durable notification coordination. Eligibility and operational
+counts use `statement_timestamp()` in each statement. After claim selection has locked
+the row, the worker samples `clock_timestamp()` as `Tclaim` and uses that one instant
+for `last_attempt_at` and `claim_expires_at = Tclaim + claim-duration`. Both due and
+expired-claim comparisons are inclusive (`next_attempt_at <= statement_timestamp()` and
+`claim_expires_at <= statement_timestamp()`), so a row becomes eligible exactly at its
+boundary. Administrative delivery-state filtering obtains its observation instant from
+PostgreSQL, and actionable age gauges calculate age in PostgreSQL; application replicas
+therefore do not classify the same durable state using different host clocks.
 
 The external send occurs after the claim transaction commits. `last_attempt_at` remains
 the claim-start instant (`Tclaim`) throughout every claimed attempt, regardless of its
@@ -154,20 +156,27 @@ outcome. After the finalization transaction acquires the row lock and confirms t
 ownership, success samples `Tsuccess` and stores it only in `sent_at`. A retryable
 provider failure samples `Tfailure` at that same boundary and sets `next_attempt_at` to
 exactly `Tfailure + retry-delay`; it intentionally does not use claim time. Sampling
-after lock acquisition prevents lock wait from consuming the configured post-failure
-delay, and stale tokens cause no time sample or transition. A terminal failure and an
-expired final claim both preserve `Tclaim`. Administrative requeue is immediately
-eligible because it clears `next_attempt_at`; its direct JVM timestamp is requeue audit
-metadata and does not control eligibility.
+`clock_timestamp()` after lock acquisition prevents connection or row-lock wait from
+consuming the configured post-failure delay. `CURRENT_TIMESTAMP` is deliberately not
+used because PostgreSQL fixes it at transaction start; `statement_timestamp()` is
+appropriate for statement-local eligibility, while `clock_timestamp()` represents the
+post-lock claim or finalization event. Stale tokens cause no time sample or transition.
+A terminal failure and an expired final claim both preserve `Tclaim`. Administrative
+requeue is immediately eligible because it clears `next_attempt_at`; its direct JVM
+timestamp is requeue audit metadata and does not control eligibility.
 
-Using the application `Clock` consistently prevents a configured application clock
-from making claim selection disagree with actionable metrics or administrative due
-classification. PostgreSQL never evaluates its own current time for notification
-eligibility, so application/database wall-clock skew does not change this lifecycle.
-This intentionally differs from outbox processing: outbox handling and retry recording
-remain inside database transactions and use PostgreSQL time, while notification claims
-bracket external provider I/O and model application-observed claim and completion
-moments.
+The previous application-clock contract was unsafe across replicas without an enforced
+clock-skew bound, and this repository provides no deployment configuration, monitoring,
+or alert that establishes such a bound. If replica B is ahead of claiming replica A by
+`delta = TB - TA`, B observes A's lease and retry boundaries after approximately
+`L - delta` and `R - delta` of real time; a replica behind by `|delta|` observes them
+after `L + |delta|` and `R + |delta|`. Positive skew at least as large as the remaining
+lease can therefore overlap provider sends, while negative skew delays recovery without
+a repository-owned bound. PostgreSQL ownership removes application-host skew from these
+decisions. It aligns with the outbox and reservation workers because they share the same
+durable coordination requirement, not merely for architectural symmetry. Display and
+audit timestamps that do not control delivery may continue to use the application
+clock or direct JVM time.
 
 An unexpired claim cannot be stolen. An expired claim is eligible for a new worker;
 the new token prevents the stale worker from finalizing over that recovery attempt.

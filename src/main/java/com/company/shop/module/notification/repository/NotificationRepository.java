@@ -32,42 +32,59 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             SELECT COUNT(*)
             FROM notifications
             WHERE status = 'PENDING'
-              AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
+              AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp())
             """, nativeQuery = true)
-    long countDuePending(@Param("now") Instant now);
+    long countDuePending();
 
     @Query(value = """
             SELECT COUNT(*)
             FROM notifications
             WHERE status = 'PENDING'
-              AND next_attempt_at > :now
+              AND next_attempt_at > statement_timestamp()
             """, nativeQuery = true)
-    long countScheduledPending(@Param("now") Instant now);
+    long countScheduledPending();
 
     @Query(value = """
             SELECT COUNT(*) FROM notifications
-            WHERE (status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= :now))
-               OR (status = 'PROCESSING' AND claim_expires_at <= :now)
+            WHERE (status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp()))
+               OR (status = 'PROCESSING' AND claim_expires_at <= statement_timestamp())
             """, nativeQuery = true)
-    long countActionable(@Param("now") Instant now);
+    long countActionable();
 
     @Query(value = """
             SELECT MIN(CASE WHEN status = 'PROCESSING' THEN claim_expires_at
                             ELSE COALESCE(next_attempt_at, created_at) END)
             FROM notifications
-            WHERE (status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= :now))
-               OR (status = 'PROCESSING' AND claim_expires_at <= :now)
+            WHERE (status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp()))
+               OR (status = 'PROCESSING' AND claim_expires_at <= statement_timestamp())
             """, nativeQuery = true)
-    Optional<Instant> findOldestActionableAt(@Param("now") Instant now);
+    Optional<Instant> findOldestActionableAt();
+
+    @Query(value = """
+            SELECT COALESCE(EXTRACT(EPOCH FROM GREATEST(
+                statement_timestamp() - MIN(CASE WHEN status = 'PROCESSING' THEN claim_expires_at
+                    ELSE COALESCE(next_attempt_at, created_at) END), INTERVAL '0 seconds')), 0)
+            FROM notifications
+            WHERE (status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp()))
+               OR (status = 'PROCESSING' AND claim_expires_at <= statement_timestamp())
+            """, nativeQuery = true)
+    double findOldestActionableAgeSeconds();
 
     @Query("select min(n.lastAttemptAt) from Notification n where n.status = 'FAILED'")
     Optional<Instant> findOldestFailedLastAttemptAt();
 
     @Query(value = """
+            SELECT COALESCE(EXTRACT(EPOCH FROM GREATEST(
+                statement_timestamp() - MIN(last_attempt_at), INTERVAL '0 seconds')), 0)
+            FROM notifications WHERE status = 'FAILED'
+            """, nativeQuery = true)
+    double findOldestFailedLastAttemptAgeSeconds();
+
+    @Query(value = """
             SELECT *
             FROM notifications
-            WHERE ((status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= :now))
-                   OR (status = 'PROCESSING' AND claim_expires_at <= :now))
+            WHERE ((status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp()))
+                   OR (status = 'PROCESSING' AND claim_expires_at <= statement_timestamp()))
               AND attempts < :maxAttempts
             ORDER BY
               COALESCE(next_attempt_at, created_at) ASC,
@@ -76,13 +93,16 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
     List<Notification> findClaimableBatchForUpdate(@Param("batchSize") int batchSize,
-            @Param("now") Instant now, @Param("maxAttempts") int maxAttempts);
+            @Param("maxAttempts") int maxAttempts);
 
     @Modifying
     @Query(value = """
             UPDATE notifications SET status = 'FAILED', claim_token = NULL, claim_expires_at = NULL,
               last_error = 'Delivery claim expired after maximum attempts'
-            WHERE status = 'PROCESSING' AND claim_expires_at <= :now AND attempts >= :maxAttempts
+            WHERE status = 'PROCESSING' AND claim_expires_at <= statement_timestamp() AND attempts >= :maxAttempts
             """, nativeQuery = true)
-    int failExhaustedExpiredClaims(@Param("now") Instant now, @Param("maxAttempts") int maxAttempts);
+    int failExhaustedExpiredClaims(@Param("maxAttempts") int maxAttempts);
+
+    @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
+    Instant currentDatabaseTime();
 }

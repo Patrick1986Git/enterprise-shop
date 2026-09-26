@@ -5,8 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class NotificationTest {
 
@@ -30,6 +34,19 @@ class NotificationTest {
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getLastAttemptAt()).isNull();
         assertThat(notification.getNextAttemptAt()).isNull();
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidRequiredFields")
+    void pending_shouldRejectMissingRequiredText(
+            String type,
+            String recipient,
+            String subject,
+            String body,
+            String expectedMessage) {
+        assertThatThrownBy(() -> Notification.pending(type, recipient, subject, body, UUID.randomUUID()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage(expectedMessage);
     }
 
     @Test
@@ -234,5 +251,16 @@ class NotificationTest {
                 "Order placed",
                 "Your order has been placed.",
                 sourceEventId);
+    }
+
+    private static Stream<Arguments> invalidRequiredFields() {
+        return Stream.of(
+                Arguments.of(null, "customer@example.com", "Order placed", "Body", "Notification type is required"),
+                Arguments.of("ORDER_PLACED_EMAIL", " ", "Order placed", "Body",
+                        "Notification recipient is required"),
+                Arguments.of("ORDER_PLACED_EMAIL", "customer@example.com", "", "Body",
+                        "Notification subject is required"),
+                Arguments.of("ORDER_PLACED_EMAIL", "customer@example.com", "Order placed", null,
+                        "Notification body is required"));
     }
 }

@@ -26,12 +26,12 @@ class NotificationDeliveryMetricsTest {
 
     @Test
     void constructor_shouldRegisterExactUntaggedGaugeSetWithCurrentState() {
-        when(repository.countActionable(NOW)).thenReturn(5L);
-        when(repository.findOldestActionableAt(NOW)).thenReturn(Optional.of(NOW.minusSeconds(120)));
+        when(repository.countActionable()).thenReturn(5L);
+        when(repository.findOldestActionableAgeSeconds()).thenReturn(120.0);
         when(repository.countByStatus(NotificationStatus.FAILED)).thenReturn(3L);
-        when(repository.findOldestFailedLastAttemptAt()).thenReturn(Optional.of(NOW.minusSeconds(600)));
+        when(repository.findOldestFailedLastAttemptAgeSeconds()).thenReturn(600.0);
 
-        new NotificationDeliveryMetrics(repository, meters, clock);
+        new NotificationDeliveryMetrics(repository, meters);
 
         assertGauge("shop.notification.actionable.count", 5);
         assertGauge("shop.notification.actionable.oldest.age.seconds", 120);
@@ -42,10 +42,10 @@ class NotificationDeliveryMetricsTest {
 
     @Test
     void ageGauges_shouldReturnZeroForNoWorkAndClockAnomalies() {
-        when(repository.findOldestActionableAt(NOW)).thenReturn(Optional.empty());
-        when(repository.findOldestFailedLastAttemptAt()).thenReturn(Optional.of(NOW.plusSeconds(30)));
+        when(repository.findOldestActionableAgeSeconds()).thenReturn(0.0);
+        when(repository.findOldestFailedLastAttemptAgeSeconds()).thenReturn(0.0);
 
-        new NotificationDeliveryMetrics(repository, meters, clock);
+        new NotificationDeliveryMetrics(repository, meters);
 
         assertGauge("shop.notification.actionable.oldest.age.seconds", 0);
         assertGauge("shop.notification.failed.oldest.last_attempt.age.seconds", 0);
