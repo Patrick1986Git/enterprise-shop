@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -102,7 +101,6 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
     @Autowired StripeWebhookEventRegistrar webhookEventRegistrar;
     @Autowired PaymentTerminalTransitionService terminalTransitions;
     @Autowired TransactionTemplate transactionTemplate;
-    @Autowired Clock clock;
     @MockitoBean CurrentUserFacade currentUserFacade;
     @MockitoBean CurrentUserProvider currentUserProvider;
     @MockitoBean StripePaymentIntentGateway stripeGateway;
@@ -130,12 +128,17 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
         assertThat(legacyState.paymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(legacyState.providerPaymentAttached()).isTrue();
 
+        Instant databaseTimeBeforeAdoption = workRepository.findCurrentTimestamp();
         LegacyReservationAdoptionResult result = legacyReservationService.adopt(legacy.order().getId());
+        Instant databaseTimeAfterAdoption = workRepository.findCurrentTimestamp();
 
         assertThat(result.adopted()).isTrue();
         assertThat(orderRepository.findById(legacy.order().getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.NEW);
-        assertThat(orderRepository.findById(legacy.order().getId()).orElseThrow().getReservationExpiresAt()).isNotNull();
+        Instant reservationDeadline = orderRepository.findById(legacy.order().getId()).orElseThrow()
+                .getReservationExpiresAt();
         ReservationExpirationWork work = workRepository.findByOrderId(legacy.order().getId()).orElseThrow();
+        assertThat(reservationDeadline).isBetween(databaseTimeBeforeAdoption, databaseTimeAfterAdoption);
+        assertThat(work.getDueAt()).isEqualTo(reservationDeadline);
         assertThat(work.getNextAttemptAt()).isEqualTo(work.getDueAt());
         assertThat(work.getAttempts()).isZero();
         assertThat(work.isRecoveryAuthorized()).isFalse();
@@ -537,14 +540,14 @@ class ReservationExpirationWorkflowIT extends PostgresContainerSupport {
 
     @Test
     void expiration_shouldCancelProviderThenRestoreInventoryAndRejectSameCheckoutKey() throws Exception {
-        Instant beforeCheckout = clock.instant();
+        Instant databaseTimeBeforeCheckout = workRepository.findCurrentTimestamp();
         Fixture fixture = checkout("expiration", 1);
-        Instant afterCheckout = clock.instant();
+        Instant databaseTimeAfterCheckout = workRepository.findCurrentTimestamp();
         Order order = fixture.order();
         assertThat(order.getReservationExpiresAt()).isNotNull();
         assertThat(order.getReservationExpiresAt()).isBetween(
-                beforeCheckout.plus(expirationProperties.duration()),
-                afterCheckout.plus(expirationProperties.duration()));
+                databaseTimeBeforeCheckout.plus(expirationProperties.duration()),
+                databaseTimeAfterCheckout.plus(expirationProperties.duration()));
         assertThat(stock(fixture.product().getId())).isZero();
 
         makeDue(order);

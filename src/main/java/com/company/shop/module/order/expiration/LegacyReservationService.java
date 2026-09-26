@@ -1,6 +1,5 @@
 package com.company.shop.module.order.expiration;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.Set;
@@ -25,17 +24,15 @@ public class LegacyReservationService {
     private final ReservationExpirationWorkRepository workRepository;
     private final ReservationExpirationAdminActionLogRepository actionLogRepository;
     private final CurrentUserProvider currentUserProvider;
-    private final Clock clock;
 
     public LegacyReservationService(OrderRepository orderRepository,
             ReservationExpirationWorkRepository workRepository,
             ReservationExpirationAdminActionLogRepository actionLogRepository,
-            CurrentUserProvider currentUserProvider, Clock clock) {
+            CurrentUserProvider currentUserProvider) {
         this.orderRepository = orderRepository;
         this.workRepository = workRepository;
         this.actionLogRepository = actionLogRepository;
         this.currentUserProvider = currentUserProvider;
-        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -62,7 +59,7 @@ public class LegacyReservationService {
                     "reservation deadline and work state are inconsistent");
         }
 
-        Instant dueAt = clock.instant();
+        Instant dueAt = workRepository.findCurrentTimestamp();
         order.adoptLegacyReservation(dueAt);
         ReservationExpirationWork work = workRepository.save(new ReservationExpirationWork(orderId, dueAt));
         actionLogRepository.save(ReservationExpirationAdminActionLog.adoption(

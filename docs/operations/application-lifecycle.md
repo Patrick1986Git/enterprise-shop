@@ -53,10 +53,25 @@ Notification delivery commits a tokenized `PROCESSING` claim before provider I/O
 
 Reservation expiration commits a tokenized five-minute claim lease before Stripe work. Stripe calls occur outside the claim transaction, and terminal transitions are convergent. Its in-flight invocation receives the scheduler phase budget, independently of HTTP draining. The deployment must account conservatively for every configured attempt (connect plus read timeout) and Stripe Java's backoff when ensuring the total call policy is shorter than the claim lease and compatible with the termination allowance; the lease is not a target network timeout. If the process disappears, another replica can reclaim the work after the lease, subject to the retry delay and attempt budget. Provider idempotency and terminal-state convergence protect payment and inventory state when termination occurs between a provider response and local finalization.
 
-PostgreSQL is the shared authority for reservation-work eligibility, leases, retries, and
-worker finalization timestamps. The initial `due_at` is the persisted business deadline
-created with the repository application `Clock`; after it is stored, every replica compares
-that same value only with PostgreSQL time. Candidate discovery and locked claim acquisition independently use
+PostgreSQL is the shared authority for reservation creation, work eligibility, leases, retries, and
+worker finalization timestamps. After the checkout idempotency lock proves that no durable order
+already exists, checkout samples PostgreSQL wall-clock time with `clock_timestamp()` immediately
+before reading the cart. `reservation_expires_at` is that sample plus the configured reservation
+duration, and the new work row's `due_at` and `next_attempt_at` are the identical instant. Cart reads,
+discount validation, product locking and inventory reservation, order/payment/work/outbox persistence,
+and commit therefore consume part of the configured duration; request admission, database connection
+acquisition, and idempotency serialization do not. An idempotent retry reuses the existing deadline and
+does not sample a new reservation start. Stripe PaymentIntent creation begins only after commit, so it
+runs while the reservation countdown is already active.
+
+Discount eligibility remains a separate business observation sampled from the application `Clock`.
+It is not derived from PostgreSQL reservation time, and changing reservation authority therefore does
+not change the established deterministic discount-time contract. Legacy adoption samples
+`clock_timestamp()` after locking and validating the order and persists that same instant as both the
+order deadline and work due time, making the unmanaged reservation immediately eligible according to
+the worker's PostgreSQL clock without granting a fresh reservation duration.
+
+Candidate discovery and locked claim acquisition independently use
 the PostgreSQL statement start time and inclusive `next_attempt_at <= now` and
 `claim_until <= now` predicates. They can disagree only when time legitimately advances
 across the two statements or another transaction changes the row; the locked statement
