@@ -225,7 +225,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 Instant.parse("2026-01-01T10:04:00Z"),
                 now.minusSeconds(3600));
 
-        List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(10, Instant.now(), 3);
+        List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(10, 3);
 
         assertThat(pendingNotifications)
                 .extracting(Notification::getId)
@@ -259,7 +259,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), null);
         insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), null);
 
-        long duePendingCount = notificationRepository.countDuePending(now);
+        long duePendingCount = notificationRepository.countDuePending();
 
         assertThat(duePendingCount).isEqualTo(2L);
     }
@@ -287,7 +287,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         insertNotification(sentId, NotificationStatus.SENT, now.minusSeconds(120), now.plusSeconds(60));
         insertNotification(failedId, NotificationStatus.FAILED, now.minusSeconds(60), now.plusSeconds(60));
 
-        long scheduledPendingCount = notificationRepository.countScheduledPending(now);
+        long scheduledPendingCount = notificationRepository.countScheduledPending();
 
         assertThat(scheduledPendingCount).isEqualTo(1L);
     }
@@ -315,8 +315,8 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                   claim_token = ?, claim_expires_at = ?, next_attempt_at = NULL WHERE id = ?
                 """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(120)), activeClaimId);
 
-        assertThat(notificationRepository.countActionable(now)).isEqualTo(3);
-        assertThat(notificationRepository.findOldestActionableAt(now)).contains(now.minusSeconds(300));
+        assertThat(notificationRepository.countActionable()).isEqualTo(3);
+        assertThat(notificationRepository.findOldestActionableAt()).contains(now.minusSeconds(300));
     }
 
     @Test
@@ -341,12 +341,12 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                   claim_token = ?, claim_expires_at = ? WHERE id = ?
                 """, UUID.randomUUID(), java.sql.Timestamp.from(now.plusSeconds(1)), activeAfterBoundaryId);
 
-        List<UUID> claimableIds = notificationRepository.findClaimableBatchForUpdate(10, now, 3).stream()
+        List<UUID> claimableIds = notificationRepository.findClaimableBatchForUpdate(10, 3).stream()
                 .map(Notification::getId)
                 .toList();
 
         assertThat(claimableIds).containsExactlyInAnyOrder(dueAtBoundaryId, expiredAtBoundaryId);
-        assertThat(notificationRepository.countActionable(now)).isEqualTo(claimableIds.size());
+        assertThat(notificationRepository.countActionable()).isEqualTo(claimableIds.size());
     }
 
     @Test
@@ -373,7 +373,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 """, java.sql.Timestamp.from(claimAttemptAt), UUID.randomUUID(),
                 java.sql.Timestamp.from(now.minusSeconds(60)), notificationId);
 
-        assertThat(notificationRepository.failExhaustedExpiredClaims(now, 3)).isOne();
+        assertThat(notificationRepository.failExhaustedExpiredClaims(3)).isOne();
 
         Map<String, Object> failed = jdbcTemplate.queryForMap(
                 "SELECT status, last_attempt_at FROM notifications WHERE id = ?", notificationId);
@@ -390,7 +390,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         insertNotification(firstPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:00:00Z"), null);
         insertNotification(secondPendingId, NotificationStatus.PENDING, Instant.parse("2026-01-01T10:01:00Z"), null);
 
-        List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(1, Instant.now(), 3);
+        List<Notification> pendingNotifications = notificationRepository.findClaimableBatchForUpdate(1, 3);
 
         assertThat(pendingNotifications)
                 .extracting(Notification::getId)

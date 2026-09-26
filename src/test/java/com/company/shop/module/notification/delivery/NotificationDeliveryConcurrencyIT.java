@@ -3,7 +3,9 @@ package com.company.shop.module.notification.delivery;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -152,6 +154,31 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
         assertThat(sender.sentRecipients()).isEmpty();
     }
 
+    @Test
+    void claimAndRetryTiming_shouldFollowPostgresDespiteSkewedApplicationClock() {
+        Notification notification = save("database-time@example.com");
+        Instant beforeClaim = databaseTime();
+
+        ClaimedNotification claim = transactionalWorker.claimBatch(1).getFirst();
+        Instant afterClaim = databaseTime();
+        Map<String, Object> claimed = row(notification.getId());
+        Instant lastAttemptAt = ((Timestamp) claimed.get("last_attempt_at")).toInstant();
+        Instant claimExpiresAt = ((Timestamp) claimed.get("claim_expires_at")).toInstant();
+
+        assertThat(lastAttemptAt).isBetween(beforeClaim, afterClaim);
+        assertThat(claimExpiresAt).isEqualTo(lastAttemptAt.plus(properties.claimDuration()));
+        assertThat(lastAttemptAt).isBefore(ClockSkewConfiguration.APPLICATION_TIME.minusSeconds(60));
+
+        Instant beforeFailure = databaseTime();
+        assertThat(transactionalWorker.finalizeFailure(notification.getId(), claim.token(), "retry")).isTrue();
+        Instant afterFailure = databaseTime();
+        Instant nextAttemptAt = ((Timestamp) row(notification.getId()).get("next_attempt_at")).toInstant();
+
+        assertThat(nextAttemptAt).isBetween(
+                beforeFailure.plus(properties.retryDelay()),
+                afterFailure.plus(properties.retryDelay()));
+    }
+
     private Notification save(String recipient) {
         return repository.saveAndFlush(Notification.pending("ORDER_PLACED_EMAIL", recipient, "Order placed",
                 "Your order has been placed.", UUID.randomUUID()));
@@ -159,9 +186,13 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
 
     private Map<String, Object> row(UUID id) {
         return jdbcTemplate.queryForMap("""
-                SELECT status, claim_token, claim_expires_at, attempts, last_error
+                SELECT status, claim_token, claim_expires_at, attempts, last_error, last_attempt_at, next_attempt_at
                 FROM notifications WHERE id = ?
                 """, id);
+    }
+
+    private Instant databaseTime() {
+        return jdbcTemplate.queryForObject("SELECT clock_timestamp()", Timestamp.class).toInstant();
     }
 
     @TestConfiguration
@@ -170,6 +201,17 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
         @Primary
         BlockingSender blockingSender() {
             return new BlockingSender();
+        }
+    }
+
+    @TestConfiguration
+    static class ClockSkewConfiguration {
+        private static final Instant APPLICATION_TIME = Instant.parse("2099-01-01T00:00:00Z");
+
+        @Bean
+        @Primary
+        Clock skewedApplicationClock() {
+            return Clock.fixed(APPLICATION_TIME, ZoneOffset.UTC);
         }
     }
 

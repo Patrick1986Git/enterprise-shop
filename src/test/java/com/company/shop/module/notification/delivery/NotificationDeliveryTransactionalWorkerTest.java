@@ -1,14 +1,10 @@
 package com.company.shop.module.notification.delivery;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -34,9 +30,6 @@ class NotificationDeliveryTransactionalWorkerTest {
 
     @Mock
     private NotificationRepository repository;
-    @Mock
-    private Clock clock;
-
     private NotificationDeliveryProperties properties;
     private NotificationDeliveryTransactionalWorker worker;
 
@@ -44,20 +37,20 @@ class NotificationDeliveryTransactionalWorkerTest {
     void setUp() {
         properties = new NotificationDeliveryProperties();
         properties.setClaimDuration(Duration.ofMinutes(2));
-        worker = new NotificationDeliveryTransactionalWorker(repository, properties, clock);
+        worker = new NotificationDeliveryTransactionalWorker(repository, properties);
     }
 
     @Test
     void claimBatch_shouldClaimDueNotificationAndCountOneAttempt() {
         Notification notification = pendingNotification();
-        when(clock.instant()).thenReturn(NOW);
-        when(repository.findClaimableBatchForUpdate(eq(1), any(), eq(properties.maxAttempts())))
+        when(repository.currentDatabaseTime()).thenReturn(NOW);
+        when(repository.findClaimableBatchForUpdate(1, properties.maxAttempts()))
                 .thenReturn(List.of(notification));
 
         List<ClaimedNotification> claims = worker.claimBatch(1);
 
-        verify(repository).failExhaustedExpiredClaims(NOW, properties.maxAttempts());
-        verify(repository).findClaimableBatchForUpdate(1, NOW, properties.maxAttempts());
+        verify(repository).failExhaustedExpiredClaims(properties.maxAttempts());
+        verify(repository).findClaimableBatchForUpdate(1, properties.maxAttempts());
         assertThat(claims).hasSize(1);
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PROCESSING);
         assertThat(notification.getClaimToken()).isEqualTo(claims.getFirst().token());
@@ -71,13 +64,13 @@ class NotificationDeliveryTransactionalWorkerTest {
         Notification notification = pendingNotification();
         UUID token = claim(notification);
         when(repository.findByIdForUpdate(notification.getId())).thenReturn(Optional.of(notification));
-        when(clock.instant()).thenReturn(NOW);
+        when(repository.currentDatabaseTime()).thenReturn(NOW);
 
         assertThat(worker.finalizeSuccess(notification.getId(), token)).isTrue();
 
-        InOrder finalizationOrder = inOrder(repository, clock);
+        InOrder finalizationOrder = inOrder(repository);
         finalizationOrder.verify(repository).findByIdForUpdate(notification.getId());
-        finalizationOrder.verify(clock).instant();
+        finalizationOrder.verify(repository).currentDatabaseTime();
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         assertThat(notification.getSentAt()).isEqualTo(NOW);
         assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
@@ -98,7 +91,7 @@ class NotificationDeliveryTransactionalWorkerTest {
         assertThat(notification.getClaimExpiresAt()).isEqualTo(CLAIMED_AT.plusSeconds(60));
         assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
         assertThat(notification.getSentAt()).isNull();
-        verifyNoInteractions(clock);
+        verify(repository, org.mockito.Mockito.never()).currentDatabaseTime();
     }
 
     @Test
@@ -112,7 +105,7 @@ class NotificationDeliveryTransactionalWorkerTest {
         assertThat(notification.getClaimToken()).isEqualTo(ownerToken);
         assertThat(notification.getLastError()).isNull();
         assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
-        verifyNoInteractions(clock);
+        verify(repository, org.mockito.Mockito.never()).currentDatabaseTime();
     }
 
     @Test
@@ -120,13 +113,13 @@ class NotificationDeliveryTransactionalWorkerTest {
         Notification notification = pendingNotification();
         UUID token = claim(notification);
         when(repository.findByIdForUpdate(notification.getId())).thenReturn(Optional.of(notification));
-        when(clock.instant()).thenReturn(NOW);
+        when(repository.currentDatabaseTime()).thenReturn(NOW);
 
         assertThat(worker.finalizeFailure(notification.getId(), token, "provider unavailable")).isTrue();
 
-        InOrder finalizationOrder = inOrder(repository, clock);
+        InOrder finalizationOrder = inOrder(repository);
         finalizationOrder.verify(repository).findByIdForUpdate(notification.getId());
-        finalizationOrder.verify(clock).instant();
+        finalizationOrder.verify(repository).currentDatabaseTime();
         assertThat(notification.getLastAttemptAt()).isEqualTo(CLAIMED_AT);
         assertThat(notification.getNextAttemptAt()).isEqualTo(NOW.plus(properties.retryDelay()));
         assertThat(notification.getClaimToken()).isNull();
