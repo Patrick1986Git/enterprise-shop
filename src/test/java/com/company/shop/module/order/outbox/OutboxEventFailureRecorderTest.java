@@ -17,6 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class OutboxEventFailureRecorderTest {
 
+    private static final Instant ATTEMPT_TIME = Instant.parse("2026-09-07T12:00:00Z");
+
     @Mock
     private OutboxEventRepository outboxEventRepository;
 
@@ -34,8 +36,8 @@ class OutboxEventFailureRecorderTest {
     void recordRetryableFailure_shouldScheduleRetryBeforeMaxAttempts() {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = pendingEvent();
-        Instant beforeRecording = Instant.now();
         when(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findCurrentTimestamp()).thenReturn(ATTEMPT_TIME);
 
         OutboxEventProcessingOutcome outcome = recorder.recordRetryableFailure(eventId, new IllegalStateException("handler failed"));
 
@@ -43,7 +45,8 @@ class OutboxEventFailureRecorderTest {
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
         assertThat(event.getAttempts()).isEqualTo(1);
         assertThat(event.getLastError()).isEqualTo("handler failed");
-        assertThat(event.getNextAttemptAt()).isBetween(beforeRecording.plusSeconds(30), Instant.now().plusSeconds(30));
+        assertThat(event.getLastAttemptAt()).isEqualTo(ATTEMPT_TIME);
+        assertThat(event.getNextAttemptAt()).isEqualTo(ATTEMPT_TIME.plusSeconds(30));
         assertThat(event.getDeadLetterReason()).isNull();
     }
 
@@ -51,9 +54,10 @@ class OutboxEventFailureRecorderTest {
     void recordRetryableFailure_shouldDeadLetterAtMaxAttempts() {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = pendingEvent();
-        event.scheduleRetry("first", Instant.now().minusSeconds(60));
-        event.scheduleRetry("second", Instant.now().minusSeconds(60));
+        event.scheduleRetry("first", Instant.parse("2026-01-01T00:00:00Z"), Instant.now().minusSeconds(60));
+        event.scheduleRetry("second", Instant.parse("2026-01-01T00:00:00Z"), Instant.now().minusSeconds(60));
         when(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findCurrentTimestamp()).thenReturn(ATTEMPT_TIME);
 
         OutboxEventProcessingOutcome outcome = recorder.recordRetryableFailure(eventId, new IllegalStateException("final failure"));
 
@@ -63,6 +67,7 @@ class OutboxEventFailureRecorderTest {
         assertThat(event.getLastError()).isEqualTo("final failure");
         assertThat(event.getDeadLetterReason()).isEqualTo("Max attempts exceeded");
         assertThat(event.getNextAttemptAt()).isNull();
+        assertThat(event.getLastAttemptAt()).isEqualTo(ATTEMPT_TIME);
     }
 
     @Test
@@ -70,6 +75,7 @@ class OutboxEventFailureRecorderTest {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = pendingEvent();
         when(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findCurrentTimestamp()).thenReturn(ATTEMPT_TIME);
 
         OutboxEventProcessingOutcome outcome = recorder.recordNonRetryableFailure(
                 eventId,
@@ -80,6 +86,7 @@ class OutboxEventFailureRecorderTest {
         assertThat(event.getAttempts()).isEqualTo(1);
         assertThat(event.getLastError()).isEqualTo("bad payload");
         assertThat(event.getDeadLetterReason()).isEqualTo("Non-retryable processing failure");
+        assertThat(event.getLastAttemptAt()).isEqualTo(ATTEMPT_TIME);
     }
 
     @Test

@@ -14,9 +14,9 @@ public class OutboxEventMetrics {
 
     public OutboxEventMetrics(OutboxEventRepository repository, MeterRegistry meters, Clock clock) {
         meters.gauge("shop.outbox.actionable.count", repository,
-                value -> value.countActionable(clock.instant()));
+                OutboxEventRepository::countActionable);
         meters.gauge("shop.outbox.actionable.oldest.age.seconds", repository,
-                value -> ageSeconds(value.findOldestActionableAt(clock.instant()), clock));
+                value -> ageSeconds(value.findOldestActionableAt(), clock));
         meters.gauge("shop.outbox.dead_letter.count", repository,
                 value -> value.countByStatus(OutboxEventStatus.DEAD_LETTER));
         meters.gauge("shop.outbox.dead_letter.oldest.age.seconds", repository,

@@ -43,16 +43,19 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
     @Query(value = """
             SELECT COUNT(*) FROM outbox_events
             WHERE status = 'PENDING'
-              AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
             """, nativeQuery = true)
-    long countActionable(@Param("now") Instant now);
+    long countActionable();
 
     @Query(value = """
             SELECT MIN(COALESCE(next_attempt_at, created_at)) FROM outbox_events
             WHERE status = 'PENDING'
-              AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
+              AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
             """, nativeQuery = true)
-    Optional<Instant> findOldestActionableAt(@Param("now") Instant now);
+    Optional<Instant> findOldestActionableAt();
+
+    @Query(value = "SELECT CURRENT_TIMESTAMP", nativeQuery = true)
+    Instant findCurrentTimestamp();
 
     @Query("select min(e.lastAttemptAt) from OutboxEvent e where e.status = 'DEAD_LETTER'")
     Optional<Instant> findOldestDeadLetterAt();

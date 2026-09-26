@@ -36,19 +36,21 @@ public class OutboxEventFailureRecorder {
             NonRetryableOutboxEventException exception) {
         return outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(eventId)
                 .map(event -> {
-                    event.markDeadLetter(errorMessage(exception), NON_RETRYABLE_FAILURE_REASON);
+                    Instant attemptTime = outboxEventRepository.findCurrentTimestamp();
+                    event.markDeadLetter(errorMessage(exception), NON_RETRYABLE_FAILURE_REASON, attemptTime);
                     return OutboxEventProcessingOutcome.FAILED;
                 })
                 .orElse(OutboxEventProcessingOutcome.SKIPPED);
     }
 
     private OutboxEventProcessingOutcome recordFailedAttempt(OutboxEvent event, String errorMessage) {
+        Instant attemptTime = outboxEventRepository.findCurrentTimestamp();
         if (event.getAttempts() + 1 >= properties.maxAttempts()) {
-            event.markDeadLetter(errorMessage, MAX_ATTEMPTS_EXCEEDED_REASON);
+            event.markDeadLetter(errorMessage, MAX_ATTEMPTS_EXCEEDED_REASON, attemptTime);
             return OutboxEventProcessingOutcome.FAILED;
         }
 
-        event.scheduleRetry(errorMessage, Instant.now().plus(properties.retryDelay()));
+        event.scheduleRetry(errorMessage, attemptTime, attemptTime.plus(properties.retryDelay()));
         return OutboxEventProcessingOutcome.FAILED;
     }
 

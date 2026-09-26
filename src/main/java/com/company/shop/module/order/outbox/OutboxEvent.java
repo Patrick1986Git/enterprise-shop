@@ -117,21 +117,20 @@ public class OutboxEvent extends BaseEntity {
         this.processedAt = null;
     }
 
-    public void scheduleRetry(String errorMessage, Instant nextAttemptAt) {
-        Instant now = Instant.now();
+    public void scheduleRetry(String errorMessage, Instant attemptTime, Instant nextAttemptAt) {
         this.status = OutboxEventStatus.PENDING;
         this.attempts += 1;
-        this.lastAttemptAt = now;
+        this.lastAttemptAt = attemptTime;
         this.lastError = errorMessage;
         this.nextAttemptAt = nextAttemptAt;
         this.processedAt = null;
         this.deadLetterReason = null;
     }
 
-    public void markDeadLetter(String errorMessage, String deadLetterReason) {
+    public void markDeadLetter(String errorMessage, String deadLetterReason, Instant attemptTime) {
         this.status = OutboxEventStatus.DEAD_LETTER;
         this.attempts += 1;
-        this.lastAttemptAt = Instant.now();
+        this.lastAttemptAt = attemptTime;
         this.lastError = errorMessage;
         this.deadLetterReason = deadLetterReason;
         this.nextAttemptAt = null;

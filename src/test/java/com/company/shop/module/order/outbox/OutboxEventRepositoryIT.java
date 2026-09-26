@@ -218,8 +218,27 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
+    void dueSelection_shouldUseInclusiveDatabaseTimestampBoundary() {
+        Instant databaseTime = outboxEventRepository.findCurrentTimestamp();
+        UUID boundaryId = UUID.randomUUID();
+        UUID immediatelyAfterBoundaryId = UUID.randomUUID();
+
+        insertOutboxEventWithNextAttemptAt(
+                boundaryId, OutboxEventStatus.PENDING, databaseTime.minusSeconds(10), databaseTime);
+        insertOutboxEventWithNextAttemptAt(
+                immediatelyAfterBoundaryId, OutboxEventStatus.PENDING,
+                databaseTime.minusSeconds(10), databaseTime.plusNanos(1));
+
+        assertThat(outboxEventRepository.findDuePendingCandidateIds(10))
+                .contains(boundaryId)
+                .doesNotContain(immediatelyAfterBoundaryId);
+        assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(boundaryId)).isPresent();
+        assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(immediatelyAfterBoundaryId)).isEmpty();
+    }
+
+    @Test
     void backlogQueries_shouldUseDueTimeAndDeadLetterAttemptTime() {
-        Instant now = Instant.parse("2026-09-07T12:00:00Z");
+        Instant now = outboxEventRepository.findCurrentTimestamp();
         UUID immediateId = UUID.randomUUID();
         UUID retryId = UUID.randomUUID();
         UUID futureId = UUID.randomUUID();
@@ -236,8 +255,8 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         insertOutboxEventWithAttemptMetadata(newestDeadLetterId, OutboxEventStatus.DEAD_LETTER,
                 now.minusSeconds(900), now.minusSeconds(120), 3);
 
-        assertThat(outboxEventRepository.countActionable(now)).isEqualTo(2);
-        assertThat(outboxEventRepository.findOldestActionableAt(now)).contains(now.minusSeconds(300));
+        assertThat(outboxEventRepository.countActionable()).isEqualTo(2);
+        assertThat(outboxEventRepository.findOldestActionableAt()).contains(now.minusSeconds(300));
         assertThat(outboxEventRepository.countByStatus(OutboxEventStatus.DEAD_LETTER)).isEqualTo(2);
         assertThat(outboxEventRepository.findOldestDeadLetterAt()).contains(now.minusSeconds(240));
     }

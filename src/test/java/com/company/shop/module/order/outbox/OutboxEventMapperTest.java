@@ -22,7 +22,7 @@ class OutboxEventMapperTest {
         UUID aggregateId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", aggregateId, "OrderPlaced", "{\"orderId\":1}");
         Instant nextAttemptAt = Instant.parse("2026-01-01T10:05:00Z");
-        event.scheduleRetry("boom", nextAttemptAt);
+        event.scheduleRetry("boom", Instant.parse("2026-01-01T00:00:00Z"), nextAttemptAt);
         setId(event, eventId);
 
         OutboxEventResponseDTO result = outboxEventMapper.toDto(event);
@@ -53,7 +53,7 @@ class OutboxEventMapperTest {
         UUID aggregateId = UUID.randomUUID();
         String payload = "{\"orderId\":1}";
         OutboxEvent event = OutboxEvent.pending("Order", aggregateId, "OrderPlaced", payload);
-        event.markDeadLetter("boom", "Maximum retry attempts exhausted");
+        event.markDeadLetter("boom", "Maximum retry attempts exhausted", Instant.parse("2026-01-01T00:00:00Z"));
         setId(event, eventId);
 
         OutboxEventDetailResponseDTO result = outboxEventMapper.toDetailDto(event);

@@ -23,8 +23,8 @@ class OutboxEventMetricsTest {
 
     @Test
     void constructor_shouldRegisterExactUntaggedGaugeSetWithCurrentState() {
-        when(repository.countActionable(NOW)).thenReturn(4L);
-        when(repository.findOldestActionableAt(NOW)).thenReturn(Optional.of(NOW.minusSeconds(90)));
+        when(repository.countActionable()).thenReturn(4L);
+        when(repository.findOldestActionableAt()).thenReturn(Optional.of(NOW.minusSeconds(90)));
         when(repository.countByStatus(OutboxEventStatus.DEAD_LETTER)).thenReturn(2L);
         when(repository.findOldestDeadLetterAt()).thenReturn(Optional.of(NOW.minusSeconds(300)));
 
@@ -39,7 +39,7 @@ class OutboxEventMetricsTest {
 
     @Test
     void ageGauges_shouldReturnZeroForNoWorkAndClockAnomalies() {
-        when(repository.findOldestActionableAt(NOW)).thenReturn(Optional.empty());
+        when(repository.findOldestActionableAt()).thenReturn(Optional.empty());
         when(repository.findOldestDeadLetterAt()).thenReturn(Optional.of(NOW.plusSeconds(30)));
 
         new OutboxEventMetrics(repository, meters, clock);
