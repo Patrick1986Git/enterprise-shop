@@ -1,5 +1,6 @@
 package com.company.shop.module.notification.service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -30,10 +31,13 @@ public class NotificationQueryService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationMapper notificationMapper;
+    private final Clock clock;
 
-    public NotificationQueryService(NotificationRepository notificationRepository, NotificationMapper notificationMapper) {
+    public NotificationQueryService(NotificationRepository notificationRepository, NotificationMapper notificationMapper,
+            Clock clock) {
         this.notificationRepository = notificationRepository;
         this.notificationMapper = notificationMapper;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -45,7 +49,7 @@ public class NotificationQueryService {
 
     @Transactional(readOnly = true)
     public NotificationSummaryDTO getSummary() {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         return new NotificationSummaryDTO(
                 notificationRepository.countByStatus(NotificationStatus.PENDING),
                 notificationRepository.countByStatus(NotificationStatus.SENT),
@@ -89,7 +93,7 @@ public class NotificationQueryService {
 
         Specification<Notification> specification = normalizedCriteria.deliveryState() == null
                 ? NotificationSpecifications.adminFilters(normalizedCriteria)
-                : NotificationSpecifications.adminFilters(normalizedCriteria, Instant.now());
+                : NotificationSpecifications.adminFilters(normalizedCriteria, clock.instant());
 
         return notificationRepository.findAll(
                 specification,

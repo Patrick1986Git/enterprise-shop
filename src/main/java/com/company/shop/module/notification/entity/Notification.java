@@ -86,12 +86,7 @@ public class Notification extends BaseEntity {
     }
 
     public void markSent() {
-        Instant now = Instant.now();
-        this.status = NotificationStatus.SENT;
-        this.sentAt = now;
-        this.lastAttemptAt = now;
-        this.lastError = null;
-        this.nextAttemptAt = null;
+        markSent(Instant.now());
     }
 
     public void claim(UUID token, Instant now, Instant expiresAt) {
@@ -108,10 +103,22 @@ public class Notification extends BaseEntity {
     }
 
     public boolean finalizeSent(UUID token) {
+        return finalizeSent(token, Instant.now());
+    }
+
+    public boolean finalizeSent(UUID token, Instant completedAt) {
         if (!ownsClaim(token)) return false;
-        markSent();
+        markSent(completedAt);
         clearClaim();
         return true;
+    }
+
+    private void markSent(Instant completedAt) {
+        this.status = NotificationStatus.SENT;
+        this.sentAt = java.util.Objects.requireNonNull(completedAt);
+        this.lastAttemptAt = completedAt;
+        this.lastError = null;
+        this.nextAttemptAt = null;
     }
 
     public boolean finalizeFailed(UUID token, String errorMessage, int maxAttempts, Instant nextAttempt) {

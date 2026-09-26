@@ -140,6 +140,33 @@ without a database transaction or row lock. A separate short transaction changes
 row to `SENT`, or durably records a retry/terminal failure, only when the claim token
 still owns the row.
 
+Notification eligibility is application-time owned, unlike outbox retry eligibility,
+which is PostgreSQL-time owned. The delivery worker, operational summary, and actionable
+gauges all sample the repository `Clock`; repository predicates receive that sample
+explicitly. A claim uses one sample for expired-claim terminalization, claim selection,
+`last_attempt_at`, and the lease boundary in `claim_expires_at`. Both due and
+expired-claim comparisons are inclusive (`next_attempt_at <= now` and
+`claim_expires_at <= now`), so a row becomes eligible exactly at its boundary.
+
+The external send occurs after the claim transaction commits. Success completion and
+failure completion therefore take fresh `Clock` samples rather than reusing claim time.
+On success, `sent_at` and `last_attempt_at` record the observed completion time. On a
+retryable provider failure, `next_attempt_at` is the observed failure-finalization time
+plus `retry-delay`; it is intentionally not claim time plus the delay. A terminal
+failure preserves the claim-start `last_attempt_at`, as does terminalization of an
+expired final claim. Administrative requeue is immediately eligible because it clears
+`next_attempt_at`; its direct JVM timestamp is requeue audit metadata and does not
+control eligibility.
+
+Using the application `Clock` consistently prevents a configured application clock
+from making claim selection disagree with actionable metrics or administrative due
+classification. PostgreSQL never evaluates its own current time for notification
+eligibility, so application/database wall-clock skew does not change this lifecycle.
+This intentionally differs from outbox processing: outbox handling and retry recording
+remain inside database transactions and use PostgreSQL time, while notification claims
+bracket external provider I/O and model application-observed claim and completion
+moments.
+
 An unexpired claim cannot be stolen. An expired claim is eligible for a new worker;
 the new token prevents the stale worker from finalizing over that recovery attempt.
 An expired final allowed attempt becomes `FAILED`. Operators may requeue only

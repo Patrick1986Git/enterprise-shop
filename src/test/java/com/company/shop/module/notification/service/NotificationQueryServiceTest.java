@@ -7,7 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +45,9 @@ import com.company.shop.module.notification.repository.NotificationSpecification
 @ExtendWith(MockitoExtension.class)
 class NotificationQueryServiceTest {
 
+    private static final Instant NOW = Instant.parse("2026-09-26T12:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
+
     @Mock
     private NotificationRepository notificationRepository;
 
@@ -51,7 +56,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotification_shouldReturnNotificationWhenExists() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         UUID notificationId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
         Notification notification = Notification.pending(
@@ -73,7 +78,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotification_shouldThrowWhenMissing() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         UUID notificationId = UUID.randomUUID();
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
 
@@ -87,7 +92,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getSummary_shouldReturnCountsFromRepository() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         when(notificationRepository.countByStatus(NotificationStatus.PENDING)).thenReturn(3L);
         when(notificationRepository.countByStatus(NotificationStatus.SENT)).thenReturn(5L);
         when(notificationRepository.countByStatus(NotificationStatus.FAILED)).thenReturn(7L);
@@ -121,7 +126,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldMapPagedResultsAndNormalizeFilters() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         UUID notificationId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
         Notification notification = Notification.pending(
@@ -191,7 +196,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldIgnoreBlankStringFilters() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         Pageable pageable = PageRequest.of(0, 10);
         Specification<Notification> specification = (root, query, cb) -> null;
         when(notificationRepository.findAll(specification, pageable))
@@ -225,7 +230,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldPassDeliveryStateCriteriaToSpecificationsWithNow() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         Pageable pageable = PageRequest.of(0, 10);
         Specification<Notification> specification = (root, query, cb) -> null;
         when(notificationRepository.findAll(specification, pageable))
@@ -265,7 +270,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectLastAttemptFromAfterLastAttemptTo() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteria(
@@ -284,7 +289,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldPassValidLastAttemptFiltersToSpecifications() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         Pageable pageable = PageRequest.of(0, 10);
         Specification<Notification> specification = (root, query, cb) -> null;
         when(notificationRepository.findAll(specification, pageable))
@@ -312,7 +317,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectLastRequeuedFromAfterLastRequeuedTo() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteriaWithLastRequeuedRange(
@@ -324,7 +329,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldPassValidLastRequeuedFiltersToSpecifications() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         Pageable pageable = PageRequest.of(0, 10);
         Specification<Notification> specification = (root, query, cb) -> null;
         when(notificationRepository.findAll(specification, pageable))
@@ -350,7 +355,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectCreatedFromAfterCreatedTo() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteriaWithCreatedRange(
@@ -362,7 +367,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldPassValidCreatedFiltersToSpecifications() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         Pageable pageable = PageRequest.of(0, 10);
         Specification<Notification> specification = (root, query, cb) -> null;
         when(notificationRepository.findAll(specification, pageable))
@@ -389,7 +394,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectSentFromAfterSentTo() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteriaWithSentRange(
@@ -401,7 +406,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldPassValidSentFiltersToSpecifications() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
         Pageable pageable = PageRequest.of(0, 10);
         Specification<Notification> specification = (root, query, cb) -> null;
         when(notificationRepository.findAll(specification, pageable))
@@ -427,7 +432,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectNegativeAttemptsMin() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteria(null, null, null, null, null, -1, null), Pageable.unpaged()))
@@ -436,7 +441,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectNegativeAttemptsMax() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteria(null, null, null, null, null, null, -1), Pageable.unpaged()))
@@ -445,7 +450,7 @@ class NotificationQueryServiceTest {
 
     @Test
     void getNotifications_shouldRejectAttemptsMinGreaterThanAttemptsMax() {
-        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper);
+        NotificationQueryService service = new NotificationQueryService(notificationRepository, notificationMapper, CLOCK);
 
         assertThatThrownBy(() -> service.getNotifications(
                 criteria(null, null, null, null, null, 5, 2), Pageable.unpaged()))
