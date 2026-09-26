@@ -218,22 +218,36 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     }
 
     @Test
-    void dueSelection_shouldUseInclusiveDatabaseTimestampBoundary() {
+    void dueSelection_shouldUseInclusiveDatabaseTimestampBoundaryAtPostgresPrecision() {
         Instant databaseTime = outboxEventRepository.findCurrentTimestamp();
         UUID boundaryId = UUID.randomUUID();
-        UUID immediatelyAfterBoundaryId = UUID.randomUUID();
+        UUID subMicrosecondId = UUID.randomUUID();
+        UUID firstRepresentableInstantAfterBoundaryId = UUID.randomUUID();
 
         insertOutboxEventWithNextAttemptAt(
                 boundaryId, OutboxEventStatus.PENDING, databaseTime.minusSeconds(10), databaseTime);
         insertOutboxEventWithNextAttemptAt(
-                immediatelyAfterBoundaryId, OutboxEventStatus.PENDING,
+                subMicrosecondId, OutboxEventStatus.PENDING,
                 databaseTime.minusSeconds(10), databaseTime.plusNanos(1));
+        insertOutboxEventWithNextAttemptAt(
+                firstRepresentableInstantAfterBoundaryId, OutboxEventStatus.PENDING,
+                databaseTime.minusSeconds(10), databaseTime.plus(1, ChronoUnit.MICROS));
+
+        Instant persistedBoundary = findNextAttemptAt(boundaryId);
+        Instant persistedSubMicrosecond = findNextAttemptAt(subMicrosecondId);
+        Instant persistedFirstRepresentableInstant = findNextAttemptAt(firstRepresentableInstantAfterBoundaryId);
+
+        assertThat(persistedBoundary).isEqualTo(databaseTime);
+        assertThat(persistedSubMicrosecond).isEqualTo(databaseTime);
+        assertThat(persistedFirstRepresentableInstant).isEqualTo(databaseTime.plus(1, ChronoUnit.MICROS));
 
         assertThat(outboxEventRepository.findDuePendingCandidateIds(10))
-                .contains(boundaryId)
-                .doesNotContain(immediatelyAfterBoundaryId);
+                .contains(boundaryId, subMicrosecondId)
+                .doesNotContain(firstRepresentableInstantAfterBoundaryId);
         assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(boundaryId)).isPresent();
-        assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(immediatelyAfterBoundaryId)).isEmpty();
+        assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(subMicrosecondId)).isPresent();
+        assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(firstRepresentableInstantAfterBoundaryId))
+                .isEmpty();
     }
 
     @Test
@@ -1251,6 +1265,13 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         jdbcTemplate.update(
                 "UPDATE outbox_events SET next_attempt_at = CAST(? AS timestamptz) WHERE id = ?",
                 nextAttemptAt.toString(),
+                eventId);
+    }
+
+    private Instant findNextAttemptAt(UUID eventId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT next_attempt_at FROM outbox_events WHERE id = ?",
+                Instant.class,
                 eventId);
     }
 
