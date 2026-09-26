@@ -4,9 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,12 +42,11 @@ class ReservationExpirationProcessorTest {
     @BeforeEach
     void setUp() {
         var properties = new ReservationExpirationProperties();
-        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         meters = new SimpleMeterRegistry();
         processor = new ReservationExpirationProcessor(workRepository, claimService, properties, stripeGateway,
-                paymentRepository, orderRepository, transitions, meters, clock, mock(com.company.shop.module.order.service.PaymentService.class));
+                paymentRepository, orderRepository, transitions, meters, mock(com.company.shop.module.order.service.PaymentService.class));
         claim = new ReservationExpirationClaim(WORK_ID, ORDER_ID, UUID.randomUUID());
-        when(workRepository.findDueCandidateIds(NOW, 25)).thenReturn(List.of(WORK_ID));
+        when(workRepository.findDueCandidateIds(25)).thenReturn(List.of(WORK_ID));
         when(claimService.claim(WORK_ID)).thenReturn(Optional.of(claim));
         Order order = new Order(UUID.randomUUID(), "buyer@example.com", "key", NOW);
         setId(order, ORDER_ID);

@@ -53,6 +53,40 @@ Notification delivery commits a tokenized `PROCESSING` claim before provider I/O
 
 Reservation expiration commits a tokenized five-minute claim lease before Stripe work. Stripe calls occur outside the claim transaction, and terminal transitions are convergent. Its in-flight invocation receives the scheduler phase budget, independently of HTTP draining. The deployment must account conservatively for every configured attempt (connect plus read timeout) and Stripe Java's backoff when ensuring the total call policy is shorter than the claim lease and compatible with the termination allowance; the lease is not a target network timeout. If the process disappears, another replica can reclaim the work after the lease, subject to the retry delay and attempt budget. Provider idempotency and terminal-state convergence protect payment and inventory state when termination occurs between a provider response and local finalization.
 
+PostgreSQL is the shared authority for reservation-work eligibility, leases, retries, and
+worker finalization timestamps. The initial `due_at` is the persisted business deadline
+created with the repository application `Clock`; after it is stored, every replica compares
+that same value only with PostgreSQL time. Candidate discovery and locked claim acquisition independently use
+the PostgreSQL statement start time and inclusive `next_attempt_at <= now` and
+`claim_until <= now` predicates. They can disagree only when time legitimately advances
+across the two statements or another transaction changes the row; the locked statement
+remains authoritative. Application-replica clock skew cannot make one replica steal a
+still-valid claim or defer a due retry.
+
+After a claim row is acquired with `FOR UPDATE SKIP LOCKED`, the claim transaction samples
+PostgreSQL wall-clock time with `clock_timestamp()`. `claim_until` is exactly that
+post-lock `Tclaim` plus the configured claim lease. A locked row is skipped rather than
+waited for, while connection-pool acquisition occurs before the eligibility statement;
+neither delay is charged against the lease before ownership is established. The commit
+itself can consume a small part of the durable lease, so the lease remains a recovery
+bound rather than an exactly five-minute post-commit guarantee.
+
+Provider work then runs without a row lock or database transaction. Completion acquires
+the token-owned row and records PostgreSQL `completed_at` after the lock. Failure
+finalization also acquires the row first, then samples `Tfailure` with
+`clock_timestamp()`: `failed_at` is that instant on terminal exhaustion, while a retry's
+`next_attempt_at` is exactly `Tfailure + retry-delay`. Ordinary `FOR UPDATE` wait and
+connection acquisition therefore cannot shorten the configured post-finalization delay.
+The PostgreSQL transaction timestamp (`CURRENT_TIMESTAMP`) is deliberately not used for
+these post-lock samples because it is fixed at transaction start and could predate a row
+lock wait; `clock_timestamp()` returns actual wall time at the sampling statement.
+
+ADMIN recovery locks both work and order state before sampling the same database clock.
+It either completes work for an already-terminal order or immediately requeues a `NEW`
+order by setting `next_attempt_at` and `last_recovered_at` to that recovery boundary.
+Recovery authorization, attempt budgeting, unique claim tokens, stale-token rejection,
+and `FOR UPDATE SKIP LOCKED` behavior are unchanged.
+
 ## Partial failures
 
 - **PostgreSQL outage:** aggregate health and production readiness fail; liveness remains healthy while the application process itself is viable. This drains business traffic without asking the platform to churn every replica.

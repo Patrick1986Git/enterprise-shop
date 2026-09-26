@@ -26,9 +26,20 @@ PaymentIntent creation uses `order-payment-intent-{orderId}`. Checkout preparati
 
 Retrieval is a read and is inherently safe to repeat. Reservation expiration uses it after committing its durable claim and outside a database transaction. Retries can improve tolerance of transient failures but multiply worker occupancy by attempt timeouts and backoff, so the deployment must include the full policy in its claim and shutdown analysis.
 
+An expired lease permits overlapping provider observations: a replacement owner can
+retrieve while the original owner is still blocked or completing. The read itself is
+harmless to duplicate. Token checks prevent the stale owner from finalizing over the
+replacement claim, but the worker is at-least-once rather than exactly-once.
+
 ### Cancel
 
 Abandoned reservation cancellation uses `order-reservation-expiration-{orderId}`. SDK retries preserve that key. If cancellation succeeds at Stripe but its response is lost, the claim is retried; a later retrieve observes `canceled` and converges local payment, order, and inventory state. A signed `payment_intent.canceled` webhook converges through the same terminal transition. Repeating cancel with the same key cannot authorize a distinct cancellation operation.
+
+Two owners can therefore repeat the same keyed cancellation after lease expiry without
+authorizing a second logical cancellation. Payment creation uses its separate stable
+order key, and terminal payment/order transitions converge under database locks.
+Inventory restoration occurs only through that convergent canceled transition, so an
+overlap does not release inventory twice even though provider calls can overlap.
 
 ### Webhooks and health
 

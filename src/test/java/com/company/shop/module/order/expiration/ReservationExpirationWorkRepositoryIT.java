@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
 
@@ -98,6 +99,47 @@ class ReservationExpirationWorkRepositoryIT extends PostgresContainerSupport {
         entityManager.flush();
 
         assertThat(operationalState(firstWorkId)).isEqualTo(before);
+    }
+
+    @Test
+    void dueQueries_shouldAgreeForAlreadyDueAndFuturePendingWork() {
+        Instant databaseTime = repository.findCurrentTimestamp().truncatedTo(ChronoUnit.MICROS);
+        Instant alreadyDue = databaseTime.minus(1, ChronoUnit.MICROS);
+        Instant future = databaseTime.plusSeconds(3600);
+        jdbcTemplate.update("""
+                UPDATE reservation_expiration_work
+                SET status = 'PENDING', next_attempt_at = ?, claim_token = NULL, claim_until = NULL
+                WHERE id = ?
+                """, sqlTimestamp(alreadyDue), firstWorkId);
+        jdbcTemplate.update("""
+                UPDATE reservation_expiration_work
+                SET status = 'PENDING', next_attempt_at = ?, claim_token = NULL, claim_until = NULL
+                WHERE id = ?
+                """, sqlTimestamp(future), secondWorkId);
+        entityManager.clear();
+
+        assertThat(repository.findDueCandidateIds(10)).contains(firstWorkId).doesNotContain(secondWorkId);
+        assertThat(repository.findClaimableForUpdate(firstWorkId)).isPresent();
+        assertThat(repository.findClaimableForUpdate(secondWorkId)).isEmpty();
+    }
+
+    @Test
+    void dueQueries_shouldAgreeForExpiredAndUnexpiredClaimedWork() {
+        Instant databaseTime = repository.findCurrentTimestamp().truncatedTo(ChronoUnit.MICROS);
+        Instant expired = databaseTime.minus(1, ChronoUnit.MICROS);
+        Instant unexpired = databaseTime.plusSeconds(3600);
+        jdbcTemplate.update("UPDATE reservation_expiration_work SET claim_until = ? WHERE id = ?",
+                sqlTimestamp(expired), thirdWorkId);
+        jdbcTemplate.update("""
+                UPDATE reservation_expiration_work
+                SET status = 'CLAIMED', claim_token = ?, claim_until = ?
+                WHERE id = ?
+                """, UUID.randomUUID(), sqlTimestamp(unexpired), secondWorkId);
+        entityManager.clear();
+
+        assertThat(repository.findDueCandidateIds(10)).contains(thirdWorkId).doesNotContain(secondWorkId);
+        assertThat(repository.findClaimableForUpdate(thirdWorkId)).isPresent();
+        assertThat(repository.findClaimableForUpdate(secondWorkId)).isEmpty();
     }
 
     private void insertOrder(UUID orderId, UUID userId, String email) {

@@ -1,6 +1,5 @@
 package com.company.shop.module.order.expiration;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,15 +14,14 @@ public class ReservationExpirationClaimService {
             "Claim lease expired after the reservation expiration attempt budget was exhausted";
     private final ReservationExpirationWorkRepository repository;
     private final ReservationExpirationProperties properties;
-    private final Clock clock;
     public ReservationExpirationClaimService(ReservationExpirationWorkRepository repository,
-            ReservationExpirationProperties properties, Clock clock) {
-        this.repository = repository; this.properties = properties; this.clock = clock;
+            ReservationExpirationProperties properties) {
+        this.repository = repository; this.properties = properties;
     }
     @Transactional
     public Optional<ReservationExpirationClaim> claim(UUID workId) {
-        Instant now = clock.instant();
-        return repository.findClaimableForUpdate(workId, now).flatMap(work -> {
+        return repository.findClaimableForUpdate(workId).flatMap(work -> {
+            Instant now = repository.findCurrentTimestamp();
             if (!work.hasClaimBudget(properties.maxAttempts())) {
                 work.failClaimBudgetExhausted(now, EXPIRED_CLAIM_BUDGET_EXHAUSTED);
                 return Optional.empty();
@@ -34,12 +32,13 @@ public class ReservationExpirationClaimService {
     }
     @Transactional
     public void complete(ReservationExpirationClaim claim) {
-        repository.findByIdForUpdate(claim.workId()).ifPresent(work -> work.complete(claim.claimToken(), clock.instant()));
+        repository.findByIdForUpdate(claim.workId()).ifPresent(work ->
+                work.complete(claim.claimToken(), repository.findCurrentTimestamp()));
     }
     @Transactional
     public boolean retry(ReservationExpirationClaim claim, String error) {
-        Instant now = clock.instant();
         return repository.findByIdForUpdate(claim.workId()).map(work -> {
+            Instant now = repository.findCurrentTimestamp();
             work.retry(claim.claimToken(), now, now.plus(properties.retryDelay()), error, properties.maxAttempts());
             return work.getStatus() == ReservationExpirationWorkStatus.FAILED;
         }).orElse(false);

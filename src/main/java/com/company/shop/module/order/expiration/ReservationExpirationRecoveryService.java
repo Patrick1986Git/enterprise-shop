@@ -1,6 +1,5 @@
 package com.company.shop.module.order.expiration;
 
-import java.time.Clock;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,18 +21,16 @@ public class ReservationExpirationRecoveryService {
     private final CurrentUserProvider currentUserProvider;
     private final ReservationExpirationAdminActionLogRepository actionLogRepository;
     private final MeterRegistry meters;
-    private final Clock clock;
 
     public ReservationExpirationRecoveryService(ReservationExpirationWorkRepository workRepository,
             OrderRepository orderRepository, CurrentUserProvider currentUserProvider,
             ReservationExpirationAdminActionLogRepository actionLogRepository,
-            MeterRegistry meters, Clock clock) {
+            MeterRegistry meters) {
         this.workRepository = workRepository;
         this.orderRepository = orderRepository;
         this.currentUserProvider = currentUserProvider;
         this.actionLogRepository = actionLogRepository;
         this.meters = meters;
-        this.clock = clock;
     }
 
     @Transactional
@@ -45,14 +42,15 @@ public class ReservationExpirationRecoveryService {
         }
         String actor = normalizedActor();
         Order order = orderRepository.findByIdForUpdate(work.getOrderId()).orElse(null);
+        var recoveryTime = workRepository.findCurrentTimestamp();
         String outcome;
         ReservationExpirationAdminActionOutcome auditOutcome;
         if (order == null || order.getStatus() != OrderStatus.NEW) {
-            work.completeFailedForTerminalOrder(clock.instant(), actor);
+            work.completeFailedForTerminalOrder(recoveryTime, actor);
             outcome = "terminal_noop";
             auditOutcome = ReservationExpirationAdminActionOutcome.TERMINAL_NOOP;
         } else {
-            work.requeueFailed(clock.instant(), actor);
+            work.requeueFailed(recoveryTime, actor);
             outcome = "requeued";
             auditOutcome = ReservationExpirationAdminActionOutcome.REQUEUED;
         }
