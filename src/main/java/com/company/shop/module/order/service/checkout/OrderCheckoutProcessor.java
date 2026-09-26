@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -144,6 +146,7 @@ public class OrderCheckoutProcessor {
     private Order createPendingOrder(CurrentUserSnapshot currentUser, String idempotencyKey,
             OrderCheckoutRequestDTO request) {
         log.info("Checkout started for userId={}", currentUser.id());
+        Instant checkoutTime = clock.instant();
         CartCheckoutSnapshot cart = cartCheckoutFacade.getCartForCheckout(currentUser.id());
 
         if (cart.isEmpty()) {
@@ -151,7 +154,7 @@ public class OrderCheckoutProcessor {
         }
 
         Order order = new Order(currentUser.id(), currentUser.email(), idempotencyKey,
-                clock.instant().plus(expirationProperties.duration()));
+                checkoutTime.plus(expirationProperties.duration()));
 
         Map<UUID, CheckoutProduct> reservedProducts = new HashMap<>();
         for (CartCheckoutItem cartItem : cart.items().stream()
@@ -183,7 +186,8 @@ public class OrderCheckoutProcessor {
             DiscountCode dc = discountCodeRepo.findByCodeIgnoreCase(normalizedDiscountCode)
                     .orElseThrow(() -> new DiscountCodeInvalidException(normalizedDiscountCode));
 
-            if (!dc.canBeUsed()) {
+            LocalDateTime discountEvaluationTime = LocalDateTime.ofInstant(checkoutTime, clock.getZone());
+            if (!dc.canBeUsed(discountEvaluationTime)) {
                 throw new DiscountCodeInvalidException(normalizedDiscountCode);
             }
 

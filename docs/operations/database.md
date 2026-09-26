@@ -12,6 +12,12 @@
 | Runtime application user | `${APP_DB_USER:-shop_dev}` |
 | Volume | `enterprise_shop_postgres18_volume` |
 
+Discount-code `valid_from` and `valid_to` values retain their historical PostgreSQL `TIMESTAMP` (without time zone)
+storage. They are UTC wall-clock values: checkout takes one instant from the repository-wide UTC application `Clock`,
+converts that same sample to a UTC `LocalDateTime`, and uses it for the complete eligibility decision. Both boundaries
+are inclusive (`validFrom <= evaluationTime <= validTo`). This explicit interpretation avoids dependence on the JVM
+default time zone without changing or migrating existing stored values.
+
 The host may separately run a system PostgreSQL instance on `localhost:5432`; Docker PostgreSQL intentionally uses port `5433` by default. The custom PostgreSQL image preserves the Polish full-text-search dictionary files required by Flyway migration V5.
 
 The `dev` profile keeps Hibernate in `ddl-auto: validate`. Schema changes must come from Flyway, not Hibernate auto-DDL. Local Flyway uses the admin/bootstrap identity by default through `spring.flyway.url`, `spring.flyway.user`, and `spring.flyway.password`; the application datasource uses the least-privilege runtime identity.

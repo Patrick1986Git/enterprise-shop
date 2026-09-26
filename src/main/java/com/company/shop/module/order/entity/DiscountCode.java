@@ -62,20 +62,21 @@ public class DiscountCode extends SoftDeleteEntity {
     /**
      * Checks if the current date is outside the validity range of the discount code.
      *
+     * @param evaluationTime repository-owned wall-clock time used for this decision.
      * @return {@code true} if the code is either not yet valid or has already expired.
      */
-    public boolean isExpired() {
-        LocalDateTime now = LocalDateTime.now();
-        return now.isBefore(validFrom) || now.isAfter(validTo);
+    public boolean isExpired(LocalDateTime evaluationTime) {
+        return evaluationTime.isBefore(validFrom) || evaluationTime.isAfter(validTo);
     }
 
     /**
      * Validates if the code is eligible for use based on status, dates, and limits.
      *
+     * @param evaluationTime repository-owned wall-clock time used for this decision.
      * @return {@code true} if the code is active, not expired, and has not reached its usage limit.
      */
-    public boolean canBeUsed() {
-        return active && !isExpired() && (usageLimit == null || usedCount < usageLimit);
+    public boolean canBeUsed(LocalDateTime evaluationTime) {
+        return active && !isExpired(evaluationTime) && (usageLimit == null || usedCount < usageLimit);
     }
 
     /**

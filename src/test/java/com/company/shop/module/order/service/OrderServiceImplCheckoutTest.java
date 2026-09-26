@@ -5,14 +5,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -93,10 +95,12 @@ class OrderServiceImplCheckoutTest {
 
 	private SimpleMeterRegistry meterRegistry;
 	private OrderServiceImpl service;
+	private Clock clock;
 
 	@BeforeEach
 	void setUp() {
 		meterRegistry = new SimpleMeterRegistry();
+		clock = spy(Clock.fixed(CHECKOUT_NOW, ZoneOffset.UTC));
 		@SuppressWarnings("unchecked")
 		org.springframework.beans.factory.ObjectProvider<org.springframework.transaction.PlatformTransactionManager>
 				transactionManagers = mock(org.springframework.beans.factory.ObjectProvider.class);
@@ -106,7 +110,7 @@ class OrderServiceImplCheckoutTest {
 				paymentService, orderOutboxEventRecorder, meterRegistry,
 				new com.company.shop.module.order.expiration.ReservationExpirationProperties(),
 				mock(com.company.shop.module.order.expiration.ReservationExpirationWorkRepository.class),
-				java.time.Clock.fixed(CHECKOUT_NOW, ZoneOffset.UTC), transactionManagers);
+				clock, transactionManagers);
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}
@@ -190,7 +194,7 @@ class OrderServiceImplCheckoutTest {
 			Product product = product(3, 10, BigDecimal.valueOf(100));
 			CartCheckoutSnapshot cart = cart(user, product, 1);
 			DiscountCode discountCode = mock(DiscountCode.class);
-			when(discountCode.canBeUsed()).thenReturn(true);
+			when(discountCode.canBeUsed(LocalDateTime.ofInstant(CHECKOUT_NOW, ZoneOffset.UTC))).thenReturn(true);
 			when(discountCode.getDiscountPercent()).thenReturn(10);
 
 			OrderCheckoutRequestDTO request = new OrderCheckoutRequestDTO(" SAVE10 ", null);
@@ -227,6 +231,9 @@ class OrderServiceImplCheckoutTest {
 			assertThat(paymentCaptor.getValue().getAmount()).isEqualByComparingTo("90.00");
 
 			verify(discountCodeRepository).findByCodeIgnoreCase("SAVE10");
+			verify(discountCode).canBeUsed(LocalDateTime.ofInstant(CHECKOUT_NOW, ZoneOffset.UTC));
+			verify(clock).instant();
+			verify(clock).getZone();
 			verify(paymentService).createPaymentIntent(savedOrder);
 			verify(orderMapper).toDto(savedOrder);
 		}
@@ -393,7 +400,7 @@ class OrderServiceImplCheckoutTest {
 			Product product = product(8, 9, BigDecimal.valueOf(30));
 			CartCheckoutSnapshot cart = cart(user, product, 2);
 			DiscountCode discountCode = mock(DiscountCode.class);
-			when(discountCode.canBeUsed()).thenReturn(false);
+			when(discountCode.canBeUsed(LocalDateTime.ofInstant(CHECKOUT_NOW, ZoneOffset.UTC))).thenReturn(false);
 
 			when(currentUserFacade.getCurrentUser()).thenReturn(snapshot(user));
 			stubUnseenCheckoutKey(user);
