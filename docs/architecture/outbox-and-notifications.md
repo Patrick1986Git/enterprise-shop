@@ -189,6 +189,24 @@ provider-side idempotency contract: if the provider accepts a message and the pr
 fails before local success finalization, lease recovery can send it again. The system
 therefore does not promise exactly-once external delivery.
 
+For the SMTP adapter, `NotificationSender.send(...)` returning means only that Jakarta
+Mail returned without an exception; it does not prove human delivery and supplies no
+provider acknowledgement identifier or reconciliation API. An exception, including a
+socket timeout, likewise does not prove that the SMTP server rejected the message.
+Consequently, both an exception and a successful provider return whose token-guarded
+finalization is rejected are operationally ambiguous. The processor records the bounded
+`shop.notification.delivery.attempt.total` counter with an `outcome` tag that distinguishes
+provider-call exceptions, finalized successes/failures, and rejected success/failure
+finalizations. Warning logs for ambiguous outcomes include only the repository notification
+and claim identifiers and exception type; they do not include recipient, subject, or body.
+Operators should correlate these warnings with SMTP-provider evidence before manually
+requeueing a terminal failure, because retry can duplicate a message the provider accepted.
+The current generic SMTP transport has neither an idempotency key nor a repository-usable
+reconciliation contract. A deterministic `Message-ID` or application correlation header
+could aid tracing, but would not provide duplicate suppression; the adapter therefore keeps
+`SimpleMailMessage` and the `void` sender contract rather than representing false provider
+precision or changing content construction.
+
 The default claim lease is five minutes. The application maps its finite connection,
 read, and write timeouts to Jakarta Mail's `mail.smtp.connectiontimeout`,
 `mail.smtp.timeout`, and `mail.smtp.writetimeout` millisecond properties. Each defaults

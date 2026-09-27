@@ -80,6 +80,7 @@ clamp age to zero if the application clock is behind a stored timestamp.
 | `shop.outbox.actionable.oldest.age.seconds` | Gauge | `OutboxEventMetrics` | none | Time since the oldest current event became actionable: `next_attempt_at` for retries, otherwise `created_at`. |
 | `shop.outbox.dead_letter.count` | Gauge | `OutboxEventMetrics` | none | Current DEAD_LETTER events requiring operator investigation or requeue. |
 | `shop.outbox.dead_letter.oldest.age.seconds` | Gauge | `OutboxEventMetrics` | none | Time since the oldest current dead letter's terminal `last_attempt_at`. |
+| `shop.notification.delivery.attempt.total` | Counter | `NotificationDeliveryProcessor` | `outcome`: `provider_returned_success_finalized`, `provider_returned_success_finalization_rejected`, `provider_call_exception`, `provider_exception_finalized`, `provider_exception_finalization_rejected` | Provider-call and local-finalization lifecycle observations around delivery attempts. Outcomes are not mutually exclusive: one provider attempt can increment more than one series, so the sum across outcomes is not a provider-attempt count. |
 | `shop.notification.actionable.count` | Gauge | `NotificationDeliveryMetrics` | none | Current due PENDING notifications plus PROCESSING notifications with expired claims. Future deliveries and live claims are excluded. |
 | `shop.notification.actionable.oldest.age.seconds` | Gauge | `NotificationDeliveryMetrics` | none | Time since the oldest matching notification became actionable: due/retry time (or creation) for PENDING, claim expiry for PROCESSING. |
 | `shop.notification.failed.count` | Gauge | `NotificationDeliveryMetrics` | none | Current terminal FAILED notifications requiring operator investigation or requeue. |
@@ -158,6 +159,22 @@ availability or guarantee end-to-end provider delivery. The deployment owns chec
 success, webhook delay, outbox delay, notification delay, and reservation recovery objectives and must combine these
 application signals with traffic/platform evidence appropriate to its environment.
 
+For notification delivery, `provider_returned_success_finalized` means the provider call returned and the claim owner
+committed local success; it does not prove human receipt. `provider_returned_success_finalization_rejected` means the
+provider call returned but local ownership was lost before success finalization, so an external side effect may have
+occurred and a later retry may duplicate it. `provider_call_exception` records an exception or timeout from the provider
+call and does not prove provider rejection. That observation is followed by either `provider_exception_finalized` when
+the owning claim durably records retry or terminal failure, or `provider_exception_finalization_rejected` when the
+failure finalization also loses ownership and combines external uncertainty with uncertain local recovery. Thus one
+provider attempt can increment both `provider_call_exception` and one provider-exception finalization outcome; never sum
+all outcome series as an attempt count. Deployment owners should monitor rates of the ambiguous and rejected-finalization
+outcomes according to their own objectives rather than deriving a repository-defined threshold or SLO.
+
+The notification-delivery `outcome` vocabulary is fixed and bounded. Notification ids and claim tokens are not metric
+tags, nor are recipients, subjects, bodies, email addresses, exception messages, or arbitrary provider values.
+Notification and claim identifiers remain logs-only correlation fields for distinguishing individual attempts and stale
+owners; notification content and recipient data are not logged by the delivery processor.
+
 ## Query cost and operator diagnostics
 
 Each backlog gauge executes a scalar `COUNT` or `MIN`; no entity, JSON outbox payload, notification body, recipient, or
@@ -166,10 +183,11 @@ error body is loaded. Existing indexes support the predicates: outbox `(status, 
 `(claim_expires_at)`, and `(status, last_attempt_at)`. No migration or additional write-amplifying index is required.
 
 Current reservation retry exhaustion and Stripe failures have warning/error logs with identifiers useful for
-investigation. Outbox and notification failures persist bounded workflow state and error details for protected ADMIN
-inspection but do not currently emit dedicated failure logs. This avoids logging outbox payloads, notification bodies,
-recipients, raw webhook bodies, secrets, or client secrets; metrics provide the proactive signal and protected records
-provide drill-down context.
+investigation. Outbox failures persist bounded workflow state and error details for protected ADMIN inspection without
+dedicated failure logs. Notification provider exceptions and rejected finalizations emit the sanitized correlation logs
+described above, while their bounded workflow state and error details remain available through protected ADMIN
+inspection. Neither path logs outbox payloads, notification bodies, recipients, raw webhook bodies, secrets, or client
+secrets; metrics provide the proactive signal and protected records provide drill-down context.
 
 Terminal Stripe success contradictions additionally persist immutable, sanitized observations for protected ADMIN
 list/detail inspection. Alert on the finite-reason conflict counter according to deployment-owned objectives, then use
