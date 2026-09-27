@@ -219,27 +219,27 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
 
     @Test
     void dueSelection_shouldUseInclusiveDatabaseTimestampBoundaryAtPostgresPrecision() {
-        Instant databaseTime = outboxEventRepository.findCurrentTimestamp();
+        Instant dueBoundary = currentTransactionTimestamp();
         UUID boundaryId = UUID.randomUUID();
         UUID subMicrosecondId = UUID.randomUUID();
         UUID firstRepresentableInstantAfterBoundaryId = UUID.randomUUID();
 
         insertOutboxEventWithNextAttemptAt(
-                boundaryId, OutboxEventStatus.PENDING, databaseTime.minusSeconds(10), databaseTime);
+                boundaryId, OutboxEventStatus.PENDING, dueBoundary.minusSeconds(10), dueBoundary);
         insertOutboxEventWithNextAttemptAt(
                 subMicrosecondId, OutboxEventStatus.PENDING,
-                databaseTime.minusSeconds(10), databaseTime.plusNanos(1));
+                dueBoundary.minusSeconds(10), dueBoundary.plusNanos(1));
         insertOutboxEventWithNextAttemptAt(
                 firstRepresentableInstantAfterBoundaryId, OutboxEventStatus.PENDING,
-                databaseTime.minusSeconds(10), databaseTime.plus(1, ChronoUnit.MICROS));
+                dueBoundary.minusSeconds(10), dueBoundary.plus(1, ChronoUnit.MICROS));
 
         Instant persistedBoundary = findNextAttemptAt(boundaryId);
         Instant persistedSubMicrosecond = findNextAttemptAt(subMicrosecondId);
         Instant persistedFirstRepresentableInstant = findNextAttemptAt(firstRepresentableInstantAfterBoundaryId);
 
-        assertThat(persistedBoundary).isEqualTo(databaseTime);
-        assertThat(persistedSubMicrosecond).isEqualTo(databaseTime);
-        assertThat(persistedFirstRepresentableInstant).isEqualTo(databaseTime.plus(1, ChronoUnit.MICROS));
+        assertThat(persistedBoundary).isEqualTo(dueBoundary);
+        assertThat(persistedSubMicrosecond).isEqualTo(dueBoundary);
+        assertThat(persistedFirstRepresentableInstant).isEqualTo(dueBoundary.plus(1, ChronoUnit.MICROS));
 
         assertThat(outboxEventRepository.findDuePendingCandidateIds(10))
                 .contains(boundaryId, subMicrosecondId)
@@ -248,6 +248,21 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
         assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(subMicrosecondId)).isPresent();
         assertThat(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(firstRepresentableInstantAfterBoundaryId))
                 .isEmpty();
+    }
+
+    @Test
+    void postgresTimeFunctions_shouldSeparateStableTransactionTimeFromAdvancingWallClockTime() {
+        Instant transactionTimestampBeforeWork = currentTransactionTimestamp();
+        Instant wallClockTimestampBeforeWork = currentWallClockTimestamp();
+
+        insertOutboxEvent(UUID.randomUUID(), OutboxEventStatus.PENDING, transactionTimestampBeforeWork);
+
+        Instant transactionTimestampAfterWork = currentTransactionTimestamp();
+        Instant wallClockTimestampAfterWork = currentWallClockTimestamp();
+
+        assertThat(transactionTimestampAfterWork).isEqualTo(transactionTimestampBeforeWork);
+        assertThat(wallClockTimestampAfterWork).isAfter(wallClockTimestampBeforeWork);
+        assertThat(wallClockTimestampAfterWork).isAfter(transactionTimestampAfterWork);
     }
 
     @Test
@@ -1275,6 +1290,14 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
                 "SELECT next_attempt_at FROM outbox_events WHERE id = ?",
                 Instant.class,
                 eventId);
+    }
+
+    private Instant currentTransactionTimestamp() {
+        return jdbcTemplate.queryForObject("SELECT CURRENT_TIMESTAMP", Instant.class);
+    }
+
+    private Instant currentWallClockTimestamp() {
+        return jdbcTemplate.queryForObject("SELECT clock_timestamp()", Instant.class);
     }
 
     private void insertOutboxEvent(
