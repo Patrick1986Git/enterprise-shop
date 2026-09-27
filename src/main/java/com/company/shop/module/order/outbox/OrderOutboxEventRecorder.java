@@ -22,12 +22,14 @@ public class OrderOutboxEventRecorder {
 
     public void recordOrderPlaced(Order order) {
         OrderPlacedEventPayload payload = OrderPlacedEventPayload.from(order);
+        var createdAt = outboxEventRepository.findCurrentTimestamp();
         outboxEventRepository.save(OutboxEvent.pending(
                 ORDER_AGGREGATE_TYPE,
                 order.getId(),
                 OrderOutboxEventTypes.ORDER_PLACED,
                 OrderOutboxEventVersions.ORDER_PLACED_V1,
-                serialize(payload)));
+                serialize(payload),
+                createdAt));
     }
 
     private String serialize(OrderPlacedEventPayload payload) {

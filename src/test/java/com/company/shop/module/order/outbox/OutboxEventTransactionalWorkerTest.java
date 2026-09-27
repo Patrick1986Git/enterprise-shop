@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,14 +34,18 @@ class OutboxEventTransactionalWorkerTest {
 
     @Test
     void processEvent_shouldMarkEventProcessedOnHandlerSuccess() {
+        Instant databaseNow = Instant.parse("2026-09-27T12:00:00Z");
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = pendingEvent("OrderPlaced");
         when(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(eventId)).thenReturn(Optional.of(event));
+        when(outboxEventRepository.findCurrentTimestamp()).thenReturn(databaseNow);
 
         OutboxEventProcessingOutcome outcome = worker.processEvent(eventId);
 
         assertThat(outcome).isEqualTo(OutboxEventProcessingOutcome.PROCESSED);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PROCESSED);
+        assertThat(event.getProcessedAt()).isEqualTo(databaseNow);
+        assertThat(event.getLastAttemptAt()).isEqualTo(databaseNow);
         assertThat(handler.handledEvents).containsExactly(event);
     }
 
@@ -61,7 +66,6 @@ class OutboxEventTransactionalWorkerTest {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = pendingEvent("OrderPaid");
         when(outboxEventRepository.findDuePendingByIdForUpdateSkipLocked(eventId)).thenReturn(Optional.of(event));
-
         assertThatThrownBy(() -> worker.processEvent(eventId))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("No outbox handler registered for event type: OrderPaid");

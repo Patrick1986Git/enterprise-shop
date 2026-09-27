@@ -106,7 +106,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void saveAndLoad_shouldPreserveRequeueMetadataAfterRequeueTransition() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        event.markFailed("boom");
+        event.markFailed("boom", Instant.now());
         event.requeueForProcessing("admin@example.com");
         Instant requeuedAt = event.getLastRequeuedAt();
 
@@ -124,7 +124,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void saveAndLoad_shouldPreserveLastAttemptAtAfterFailedTransition() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        event.markFailed("boom");
+        event.markFailed("boom", Instant.now());
         Instant lastAttemptAt = event.getLastAttemptAt();
 
         UUID savedId = outboxEventRepository.saveAndFlush(event).getId();
@@ -139,7 +139,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void saveAndLoad_shouldPreserveLastAttemptAtAfterProcessedTransition() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        event.markProcessed();
+        event.markProcessed(Instant.now());
         Instant lastAttemptAt = event.getLastAttemptAt();
 
         UUID savedId = outboxEventRepository.saveAndFlush(event).getId();
@@ -271,8 +271,10 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
 
         assertThat(outboxEventRepository.countActionable()).isEqualTo(2);
         assertThat(outboxEventRepository.findOldestActionableAt()).contains(now.minusSeconds(300));
+        assertThat(outboxEventRepository.findOldestActionableAgeSeconds()).isBetween(290.0, 320.0);
         assertThat(outboxEventRepository.countByStatus(OutboxEventStatus.DEAD_LETTER)).isEqualTo(2);
         assertThat(outboxEventRepository.findOldestDeadLetterAt()).contains(now.minusSeconds(240));
+        assertThat(outboxEventRepository.findOldestDeadLetterAgeSeconds()).isBetween(230.0, 260.0);
     }
 
     @Test
@@ -328,10 +330,10 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void findNewestAttemptAt_shouldReturnNewestLastAttemptAtAcrossAllEvents() {
         OutboxEvent processedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        processedEvent.markProcessed();
+        processedEvent.markProcessed(Instant.now());
 
         OutboxEvent failedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
-        failedEvent.markFailed("boom");
+        failedEvent.markFailed("boom", Instant.now());
         Instant newerAttemptAt = failedEvent.getLastAttemptAt();
 
         outboxEventRepository.saveAllAndFlush(List.of(processedEvent, failedEvent));
@@ -350,9 +352,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void findNewestAttemptAtByStatus_shouldReturnNewestProcessedAttemptTimestamp() {
         OutboxEvent olderProcessedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        olderProcessedEvent.markProcessed();
+        olderProcessedEvent.markProcessed(Instant.now());
         OutboxEvent newestProcessedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
-        newestProcessedEvent.markProcessed();
+        newestProcessedEvent.markProcessed(Instant.now());
         Instant newestProcessedAttemptAt = newestProcessedEvent.getLastAttemptAt();
 
         outboxEventRepository.saveAllAndFlush(List.of(olderProcessedEvent, newestProcessedEvent));
@@ -364,9 +366,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void findNewestAttemptAtByStatus_shouldReturnNewestFailedAttemptTimestamp() {
         OutboxEvent olderFailedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        olderFailedEvent.markFailed("older");
+        olderFailedEvent.markFailed("older", Instant.now());
         OutboxEvent newestFailedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
-        newestFailedEvent.markFailed("newer");
+        newestFailedEvent.markFailed("newer", Instant.now());
         Instant newestFailedAttemptAt = newestFailedEvent.getLastAttemptAt();
 
         outboxEventRepository.saveAllAndFlush(List.of(olderFailedEvent, newestFailedEvent));
@@ -378,11 +380,11 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void findNewestAttemptAtByStatus_shouldIgnoreEventsOfOtherStatuses() {
         OutboxEvent processedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
-        processedEvent.markProcessed();
+        processedEvent.markProcessed(Instant.now());
         Instant processedAttemptAt = processedEvent.getLastAttemptAt();
 
         OutboxEvent failedEvent = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
-        failedEvent.markFailed("boom");
+        failedEvent.markFailed("boom", Instant.now());
 
         outboxEventRepository.saveAllAndFlush(List.of(processedEvent, failedEvent));
 
@@ -461,9 +463,9 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void findAll_shouldFilterByLastErrorContainsIgnoreCaseAndTrimInput() {
         OutboxEvent timeout = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":1}");
-        timeout.markFailed("SMTP TIMEOUT while sending email");
+        timeout.markFailed("SMTP TIMEOUT while sending email", Instant.now());
         OutboxEvent serialization = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":2}");
-        serialization.markFailed("Serialization failed");
+        serialization.markFailed("Serialization failed", Instant.now());
         OutboxEvent withoutError = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":3}");
         outboxEventRepository.saveAllAndFlush(List.of(timeout, serialization, withoutError));
 
@@ -480,16 +482,16 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     @Test
     void findAll_shouldCombineLastErrorContainsWithStatusAndAttemptsFilters() {
         OutboxEvent matching = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":1}");
-        matching.markFailed("Connection timeout");
-        matching.markFailed("Connection timeout");
+        matching.markFailed("Connection timeout", Instant.now());
+        matching.markFailed("Connection timeout", Instant.now());
         OutboxEvent wrongStatus = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":2}");
-        wrongStatus.markFailed("Connection timeout");
-        wrongStatus.markProcessed();
+        wrongStatus.markFailed("Connection timeout", Instant.now());
+        wrongStatus.markProcessed(Instant.now());
         OutboxEvent wrongAttempts = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":3}");
-        wrongAttempts.markFailed("Connection timeout");
+        wrongAttempts.markFailed("Connection timeout", Instant.now());
         OutboxEvent wrongError = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{\"id\":4}");
-        wrongError.markFailed("Serialization failed");
-        wrongError.markFailed("Serialization failed");
+        wrongError.markFailed("Serialization failed", Instant.now());
+        wrongError.markFailed("Serialization failed", Instant.now());
         outboxEventRepository.saveAllAndFlush(List.of(matching, wrongStatus, wrongAttempts, wrongError));
 
         Page<OutboxEvent> result = outboxEventRepository.findAll(
@@ -757,7 +759,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     void findAll_shouldCombineRequeuedOnlyWithStatus() {
         OutboxEvent matching = requeuedEvent(1);
         OutboxEvent wrongStatus = requeuedEvent(1);
-        wrongStatus.markProcessed();
+        wrongStatus.markProcessed(Instant.now());
         OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":3}");
         outboxEventRepository.saveAllAndFlush(List.of(matching, wrongStatus, neverRequeued));
 
@@ -998,7 +1000,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     void findAll_shouldCombineLastAttemptRangeWithRequeuedOnly() {
         OutboxEvent matching = requeuedEvent(1);
         OutboxEvent neverRequeued = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":2}");
-        neverRequeued.markFailed("boom");
+        neverRequeued.markFailed("boom", Instant.now());
         outboxEventRepository.saveAllAndFlush(List.of(matching, neverRequeued));
         Instant lowerBound = Instant.parse("2026-06-01T00:00:00Z");
         Instant upperBound = Instant.parse("2026-06-30T23:59:59Z");
@@ -1122,12 +1124,12 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     void findAll_shouldCombineAttemptsRangeWithStatusLastAttemptAndRequeuedOnly() {
         OutboxEvent matching = attemptedEvent(3);
         matching.requeueForProcessing("admin@example.com");
-        matching.markFailed("boom");
+        matching.markFailed("boom", Instant.now());
         OutboxEvent wrongStatus = attemptedEvent(3);
-        wrongStatus.markProcessed();
+        wrongStatus.markProcessed(Instant.now());
         OutboxEvent wrongAttempts = attemptedEvent(0);
         wrongAttempts.requeueForProcessing("admin@example.com");
-        wrongAttempts.markFailed("boom");
+        wrongAttempts.markFailed("boom", Instant.now());
         OutboxEvent wrongRequeued = attemptedEvent(3);
         outboxEventRepository.saveAllAndFlush(List.of(matching, wrongStatus, wrongAttempts, wrongRequeued));
         Instant lowerBound = Instant.parse("2026-06-01T00:00:00Z");
@@ -1386,7 +1388,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     private OutboxEvent requeuedEvent(int requeueCount) {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
         for (int i = 0; i < requeueCount; i++) {
-            event.markFailed("boom");
+            event.markFailed("boom", Instant.now());
             event.requeueForProcessing("admin@example.com");
         }
         return event;
@@ -1395,7 +1397,7 @@ class OutboxEventRepositoryIT extends PostgresContainerSupport {
     private OutboxEvent attemptedEvent(int attempts) {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "TestEvent", "{\"id\":1}");
         for (int i = 0; i < attempts; i++) {
-            event.markFailed("boom");
+            event.markFailed("boom", Instant.now());
         }
         return event;
     }

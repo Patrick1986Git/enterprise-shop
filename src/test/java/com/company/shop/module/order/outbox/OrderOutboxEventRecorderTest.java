@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -43,6 +44,7 @@ class OrderOutboxEventRecorderTest {
 
     @Test
     void recordOrderPlaced_shouldPersistPendingOrderPlacedEventWithSnapshotPayload() throws Exception {
+        Instant databaseNow = Instant.parse("2026-05-31T10:15:31Z");
         UUID orderId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
@@ -52,6 +54,7 @@ class OrderOutboxEventRecorderTest {
         setEntityId(order, orderId);
         setCreatedAt(order, createdAt);
         when(outboxEventRepository.save(any(OutboxEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(outboxEventRepository.findCurrentTimestamp()).thenReturn(databaseNow);
 
         recorder.recordOrderPlaced(order);
 
@@ -63,6 +66,7 @@ class OrderOutboxEventRecorderTest {
         assertThat(event.getEventType()).isEqualTo(OrderOutboxEventTypes.ORDER_PLACED);
         assertThat(event.getEventVersion()).isEqualTo(OrderOutboxEventVersions.ORDER_PLACED_V1);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(event.getCreatedAt()).isEqualTo(databaseNow);
 
         JsonNode payload = objectMapper.readTree(event.getPayload());
         assertThat(payload.has("eventVersion")).isFalse();

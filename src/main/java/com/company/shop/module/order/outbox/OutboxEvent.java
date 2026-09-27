@@ -71,7 +71,8 @@ public class OutboxEvent extends BaseEntity {
     protected OutboxEvent() {
     }
 
-    private OutboxEvent(String aggregateType, UUID aggregateId, String eventType, int eventVersion, String payload) {
+    private OutboxEvent(
+            String aggregateType, UUID aggregateId, String eventType, int eventVersion, String payload, Instant createdAt) {
         validateEventVersion(eventVersion);
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
@@ -79,7 +80,7 @@ public class OutboxEvent extends BaseEntity {
         this.eventVersion = eventVersion;
         this.payload = payload;
         this.status = OutboxEventStatus.PENDING;
-        this.createdAt = Instant.now();
+        this.createdAt = createdAt;
         this.attempts = 0;
     }
 
@@ -89,7 +90,12 @@ public class OutboxEvent extends BaseEntity {
 
     public static OutboxEvent pending(
             String aggregateType, UUID aggregateId, String eventType, int eventVersion, String payload) {
-        return new OutboxEvent(aggregateType, aggregateId, eventType, eventVersion, payload);
+        return pending(aggregateType, aggregateId, eventType, eventVersion, payload, Instant.now());
+    }
+
+    public static OutboxEvent pending(
+            String aggregateType, UUID aggregateId, String eventType, int eventVersion, String payload, Instant createdAt) {
+        return new OutboxEvent(aggregateType, aggregateId, eventType, eventVersion, payload, createdAt);
     }
 
     private static void validateEventVersion(int eventVersion) {
@@ -98,21 +104,19 @@ public class OutboxEvent extends BaseEntity {
         }
     }
 
-    public void markProcessed() {
-        Instant now = Instant.now();
+    public void markProcessed(Instant attemptTime) {
         this.status = OutboxEventStatus.PROCESSED;
-        this.processedAt = now;
-        this.lastAttemptAt = now;
+        this.processedAt = attemptTime;
+        this.lastAttemptAt = attemptTime;
         this.lastError = null;
         this.nextAttemptAt = null;
         this.deadLetterReason = null;
     }
 
-    public void markFailed(String errorMessage) {
-        Instant now = Instant.now();
+    public void markFailed(String errorMessage, Instant attemptTime) {
         this.status = OutboxEventStatus.FAILED;
         this.attempts += 1;
-        this.lastAttemptAt = now;
+        this.lastAttemptAt = attemptTime;
         this.lastError = errorMessage;
         this.processedAt = null;
     }

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -58,6 +59,8 @@ class OutboxEventQueryServiceTest {
     @BeforeEach
     void setUp() {
         outboxEventQueryService = new OutboxEventQueryService(outboxEventRepository, outboxEventMapper);
+        lenient().when(outboxEventRepository.findCurrentTimestamp())
+                .thenReturn(Instant.parse("2026-09-27T12:00:00Z"));
     }
 
     @Test
@@ -119,6 +122,7 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.oldestDeadLetterCreatedAt()).isEqualTo(oldestDeadLetterCreatedAt);
         assertThat(summary.newestDeadLetterAttemptAt()).isEqualTo(newestDeadLetterAttemptAt);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PENDING);
+        verify(outboxEventRepository).findCurrentTimestamp();
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.FAILED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.DEAD_LETTER);
@@ -184,6 +188,7 @@ class OutboxEventQueryServiceTest {
         assertThat(summary.oldestDeadLetterCreatedAt()).isNull();
         assertThat(summary.newestDeadLetterAttemptAt()).isNull();
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PENDING);
+        verify(outboxEventRepository).findCurrentTimestamp();
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.PROCESSED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.FAILED);
         verify(outboxEventRepository).countByStatus(OutboxEventStatus.DEAD_LETTER);
@@ -221,9 +226,7 @@ class OutboxEventQueryServiceTest {
         when(outboxEventRepository.findNewestAttemptAt()).thenReturn(Optional.empty());
         when(outboxEventRepository.findNewestAttemptAtByStatus(any())).thenReturn(Optional.empty());
 
-        Instant beforeCall = Instant.now().minusSeconds(901);
         OutboxEventSummaryDTO summary = outboxEventQueryService.getSummary();
-        Instant afterCall = Instant.now().minusSeconds(899);
 
         assertThat(summary.stalePendingCount()).isEqualTo(7L);
         assertThat(summary.staleFailedCount()).isEqualTo(8L);
@@ -238,8 +241,8 @@ class OutboxEventQueryServiceTest {
         verify(outboxEventRepository).countByStatusAndLastAttemptAtLessThanEqual(
                 eq(OutboxEventStatus.FAILED), staleFailedThresholdCaptor.capture());
         verify(outboxEventRepository).countByStatusAndAttemptsGreaterThanEqual(OutboxEventStatus.FAILED, 3);
-        assertThat(stalePendingThresholdCaptor.getValue()).isBetween(beforeCall, afterCall);
-        assertThat(staleFailedThresholdCaptor.getValue()).isBetween(beforeCall, afterCall);
+        assertThat(stalePendingThresholdCaptor.getValue()).isEqualTo(Instant.parse("2026-09-27T11:45:00Z"));
+        assertThat(staleFailedThresholdCaptor.getValue()).isEqualTo(Instant.parse("2026-09-27T11:45:00Z"));
     }
 
     @Test
@@ -402,7 +405,6 @@ class OutboxEventQueryServiceTest {
         OutboxEventAdminSearchCriteria criteria = criteriaWithProblemType(OutboxEventProblemType.STALE_FAILED);
         when(outboxEventRepository.findAll(specification, expectedPageable)).thenReturn(Page.empty(expectedPageable));
 
-        Instant beforeExpectedThreshold = Instant.now().minus(Duration.ofMinutes(15));
         try (MockedStatic<OutboxEventSpecifications> specifications =
                 org.mockito.Mockito.mockStatic(OutboxEventSpecifications.class)) {
             specifications.when(() -> OutboxEventSpecifications.adminFilters(
@@ -414,11 +416,11 @@ class OutboxEventQueryServiceTest {
             ArgumentCaptor<Instant> thresholdCaptor = ArgumentCaptor.forClass(Instant.class);
             specifications.verify(() -> OutboxEventSpecifications.adminFilters(
                     eq(criteria), thresholdCaptor.capture(), eq(3)));
-            Instant afterExpectedThreshold = Instant.now().minus(Duration.ofMinutes(15));
-            assertThat(thresholdCaptor.getValue()).isBetween(beforeExpectedThreshold, afterExpectedThreshold);
+            assertThat(thresholdCaptor.getValue()).isEqualTo(Instant.parse("2026-09-27T11:45:00Z"));
         }
 
         verify(outboxEventRepository).findAll(specification, expectedPageable);
+        verify(outboxEventRepository).findCurrentTimestamp();
         verifyNoInteractions(outboxEventMapper, outboxEventProcessor);
     }
 

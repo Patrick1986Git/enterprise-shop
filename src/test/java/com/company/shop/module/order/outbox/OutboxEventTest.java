@@ -61,7 +61,7 @@ class OutboxEventTest {
         event.scheduleRetry("temporary failure", Instant.parse("2026-01-01T00:00:00Z"), Instant.now().plusSeconds(60));
         event.markDeadLetter("final failure", "attempt limit reached", Instant.parse("2026-01-01T00:00:00Z"));
 
-        event.markProcessed();
+        event.markProcessed(Instant.now());
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PROCESSED);
         assertThat(event.getProcessedAt()).isNotNull();
@@ -75,10 +75,10 @@ class OutboxEventTest {
     @Test
     void requeueForProcessing_shouldChangeFailedEventToPendingClearFailureStateAndPreserveAttempts() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.markFailed("first failure");
-        event.markFailed("second failure");
-        event.markProcessed();
-        event.markFailed("third failure");
+        event.markFailed("first failure", Instant.now());
+        event.markFailed("second failure", Instant.now());
+        event.markProcessed(Instant.now());
+        event.markFailed("third failure", Instant.now());
         int attempts = event.getAttempts();
         var lastAttemptAt = event.getLastAttemptAt();
 
@@ -99,9 +99,9 @@ class OutboxEventTest {
     @Test
     void requeueForProcessing_shouldIncrementCountAndUpdateActorForMultipleRequeues() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.markFailed("first failure");
+        event.markFailed("first failure", Instant.now());
         event.requeueForProcessing("first-admin@example.com");
-        event.markFailed("second failure");
+        event.markFailed("second failure", Instant.now());
 
         event.requeueForProcessing(" second-admin@example.com ");
 
@@ -115,7 +115,7 @@ class OutboxEventTest {
     void markFailed_shouldSetFailedStatusIncrementAttemptsStoreLastErrorAndKeepProcessedAtNull() {
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
 
-        event.markFailed("publisher unavailable");
+        event.markFailed("publisher unavailable", Instant.now());
 
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.FAILED);
         assertThat(event.getAttempts()).isEqualTo(1);
