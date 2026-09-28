@@ -56,7 +56,7 @@ class OutboxEventAdminCommandServiceTest {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
         setId(event, eventId);
-        event.markFailed("boom");
+        event.markFailed("boom", Instant.now());
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
         when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");
@@ -155,7 +155,7 @@ class OutboxEventAdminCommandServiceTest {
     void requeueFailedEvent_shouldThrowWhenEventIsProcessed() {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
-        event.markProcessed();
+        event.markProcessed(Instant.now());
         when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
 
         assertThatThrownBy(() -> outboxEventAdminCommandService.requeueFailedEvent(eventId))
@@ -173,7 +173,7 @@ class OutboxEventAdminCommandServiceTest {
         UUID eventId = UUID.randomUUID();
         OutboxEvent event = OutboxEvent.pending("Order", UUID.randomUUID(), "OrderPlaced", "{}");
         setId(event, eventId);
-        event.markFailed("boom");
+        event.markFailed("boom", Instant.now());
         OutboxEventResponseDTO response = response(eventId, OutboxEventStatus.PENDING);
         when(outboxEventRepository.findByIdForManualRequeueUpdate(eventId)).thenReturn(Optional.of(event));
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(" admin@example.com ");

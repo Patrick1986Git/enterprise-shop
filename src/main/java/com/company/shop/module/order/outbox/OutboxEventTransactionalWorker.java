@@ -35,7 +35,7 @@ public class OutboxEventTransactionalWorker {
         }
 
         handler.handle(event);
-        event.markProcessed();
+        event.markProcessed(outboxEventRepository.findCurrentTimestamp());
         return OutboxEventProcessingOutcome.PROCESSED;
     }
 

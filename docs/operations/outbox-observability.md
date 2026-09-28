@@ -11,6 +11,8 @@ The admin outbox observability endpoints help administrators and admin UI consum
 - Non-null `lastAttemptAt` and `lastError` on `PENDING` record an attempted retryable processing failure; these values are durable row evidence, not metric tags.
 - `DEAD_LETTER` is terminal under automatic processing. `shop.outbox.dead_letter.count` and `shop.outbox.dead_letter.oldest.age.seconds` expose the aggregate condition without event IDs, order IDs, user data, payloads, or arbitrary error text as tags.
 - `PROCESSED` with `processedAt` records successful completion through the transactional worker path. The admin summary and list/detail filters provide processed counts and timestamps.
+- PostgreSQL owns `createdAt`, successful and failed `lastAttemptAt`, `processedAt`, retry `nextAttemptAt`, stale boundaries, and operational age calculations. Summary and problem filters use the same inclusive 15-minute boundary semantics, so replicas observing the same committed rows do not disagree because of host-clock skew.
+- `lastRequeuedAt` and action-log `createdAt` are audit/display timestamps from the handling application replica. They do not affect processing, staleness, metrics, authorization, or requeue eligibility and may reflect replica skew when comparing audit entries.
 
 Configuration validity is repository-owned and invalid batch, schedule, retry-delay, or attempt values fail startup. Whether to enable the worker is deployment-owned and independent of notification delivery enablement.
 

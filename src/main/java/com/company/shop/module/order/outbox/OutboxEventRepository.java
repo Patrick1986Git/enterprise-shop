@@ -54,8 +54,25 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID>,
             """, nativeQuery = true)
     Optional<Instant> findOldestActionableAt();
 
-    @Query(value = "SELECT CURRENT_TIMESTAMP", nativeQuery = true)
+    @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
     Instant findCurrentTimestamp();
+
+    @Query(value = """
+            SELECT COALESCE(EXTRACT(EPOCH FROM GREATEST(
+                statement_timestamp() - MIN(COALESCE(next_attempt_at, created_at)), INTERVAL '0 seconds')), 0)
+            FROM outbox_events
+            WHERE status = 'PENDING'
+              AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp())
+            """, nativeQuery = true)
+    double findOldestActionableAgeSeconds();
+
+    @Query(value = """
+            SELECT COALESCE(EXTRACT(EPOCH FROM GREATEST(
+                statement_timestamp() - MIN(last_attempt_at), INTERVAL '0 seconds')), 0)
+            FROM outbox_events
+            WHERE status = 'DEAD_LETTER'
+            """, nativeQuery = true)
+    double findOldestDeadLetterAgeSeconds();
 
     @Query("select min(e.lastAttemptAt) from OutboxEvent e where e.status = 'DEAD_LETTER'")
     Optional<Instant> findOldestDeadLetterAt();

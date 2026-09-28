@@ -346,7 +346,7 @@ class OutboxEventProcessorTransactionIT extends PostgresContainerSupport {
 
         @Transactional
         public void markProcessedThenThrow(OutboxEvent event) {
-            event.markProcessed();
+            event.markProcessed(Instant.now());
             throw new IllegalStateException("intentional transactional dependency failure");
         }
     }

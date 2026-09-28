@@ -4,11 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.Optional;
-
 import org.junit.jupiter.api.Test;
 
 import io.micrometer.core.instrument.Gauge;
@@ -16,19 +11,17 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 class OutboxEventMetricsTest {
 
-    private static final Instant NOW = Instant.parse("2026-09-07T12:00:00Z");
-    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     private final OutboxEventRepository repository = mock(OutboxEventRepository.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
     @Test
     void constructor_shouldRegisterExactUntaggedGaugeSetWithCurrentState() {
         when(repository.countActionable()).thenReturn(4L);
-        when(repository.findOldestActionableAt()).thenReturn(Optional.of(NOW.minusSeconds(90)));
+        when(repository.findOldestActionableAgeSeconds()).thenReturn(90.0);
         when(repository.countByStatus(OutboxEventStatus.DEAD_LETTER)).thenReturn(2L);
-        when(repository.findOldestDeadLetterAt()).thenReturn(Optional.of(NOW.minusSeconds(300)));
+        when(repository.findOldestDeadLetterAgeSeconds()).thenReturn(300.0);
 
-        new OutboxEventMetrics(repository, meters, clock);
+        new OutboxEventMetrics(repository, meters);
 
         assertGauge("shop.outbox.actionable.count", 4);
         assertGauge("shop.outbox.actionable.oldest.age.seconds", 90);
@@ -39,10 +32,10 @@ class OutboxEventMetricsTest {
 
     @Test
     void ageGauges_shouldReturnZeroForNoWorkAndClockAnomalies() {
-        when(repository.findOldestActionableAt()).thenReturn(Optional.empty());
-        when(repository.findOldestDeadLetterAt()).thenReturn(Optional.of(NOW.plusSeconds(30)));
+        when(repository.findOldestActionableAgeSeconds()).thenReturn(0.0);
+        when(repository.findOldestDeadLetterAgeSeconds()).thenReturn(0.0);
 
-        new OutboxEventMetrics(repository, meters, clock);
+        new OutboxEventMetrics(repository, meters);
 
         assertGauge("shop.outbox.actionable.oldest.age.seconds", 0);
         assertGauge("shop.outbox.dead_letter.oldest.age.seconds", 0);

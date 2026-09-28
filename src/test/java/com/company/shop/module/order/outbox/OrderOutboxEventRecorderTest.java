@@ -1,12 +1,16 @@
 package com.company.shop.module.order.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -19,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
 
 import com.company.shop.common.model.AuditableEntity;
 import com.company.shop.common.model.BaseEntity;
@@ -43,6 +48,7 @@ class OrderOutboxEventRecorderTest {
 
     @Test
     void recordOrderPlaced_shouldPersistPendingOrderPlacedEventWithSnapshotPayload() throws Exception {
+        Instant databaseNow = Instant.parse("2026-05-31T10:15:31Z");
         UUID orderId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
@@ -52,6 +58,7 @@ class OrderOutboxEventRecorderTest {
         setEntityId(order, orderId);
         setCreatedAt(order, createdAt);
         when(outboxEventRepository.save(any(OutboxEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(outboxEventRepository.findCurrentTimestamp()).thenReturn(databaseNow);
 
         recorder.recordOrderPlaced(order);
 
@@ -63,6 +70,7 @@ class OrderOutboxEventRecorderTest {
         assertThat(event.getEventType()).isEqualTo(OrderOutboxEventTypes.ORDER_PLACED);
         assertThat(event.getEventVersion()).isEqualTo(OrderOutboxEventVersions.ORDER_PLACED_V1);
         assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.PENDING);
+        assertThat(event.getCreatedAt()).isEqualTo(databaseNow);
 
         JsonNode payload = objectMapper.readTree(event.getPayload());
         assertThat(payload.has("eventVersion")).isFalse();
@@ -79,6 +87,25 @@ class OrderOutboxEventRecorderTest {
         assertThat(payload.get("items").get(0).get("productSku").asText()).isEqualTo("SKU-1");
         assertThat(payload.get("items").get(0).get("price").decimalValue()).isEqualByComparingTo("12.50");
         assertThat(payload.get("items").get(0).get("quantity").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    void recordOrderPlaced_shouldRejectSerializationFailureWithoutPersistingOutboxEvent() throws Exception {
+        Order order = new Order(UUID.randomUUID(), "john@example.com");
+        setEntityId(order, UUID.randomUUID());
+        setCreatedAt(order, LocalDateTime.of(2026, 5, 31, 10, 15, 30));
+        ObjectMapper failingObjectMapper = mock(ObjectMapper.class);
+        JacksonException serializationFailure = mock(JacksonException.class);
+        when(failingObjectMapper.writeValueAsString(any(OrderPlacedEventPayload.class)))
+                .thenThrow(serializationFailure);
+        recorder = new OrderOutboxEventRecorder(outboxEventRepository, failingObjectMapper);
+
+        assertThatThrownBy(() -> recorder.recordOrderPlaced(order))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Failed to serialize OrderPlaced outbox payload")
+                .hasCause(serializationFailure);
+
+        verify(outboxEventRepository, never()).save(any(OutboxEvent.class));
     }
 
     private void setEntityId(Object entity, UUID id) throws Exception {

@@ -62,7 +62,7 @@ values. Spring Boot sanitization is not the control for these endpoints; non-exp
 
 Counters are monotonic process-lifetime event totals. Calculate rates in the monitoring/query layer; a counter is not a
 current backlog measurement. Gauges are point-in-time database state, return zero when no matching row exists, and
-clamp age to zero if the application clock is behind a stored timestamp.
+calculate operational ages against PostgreSQL statement time, clamping future timestamp anomalies to zero.
 
 | Metric | Type | Producer | Tags and finite values | Meaning |
 | --- | --- | --- | --- | --- |

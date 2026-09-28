@@ -39,7 +39,7 @@ public class OutboxEventQueryService {
 
     @Transactional(readOnly = true)
     public OutboxEventSummaryDTO getSummary() {
-        Instant staleThreshold = Instant.now().minus(STALE_THRESHOLD_DURATION);
+        Instant staleThreshold = outboxEventRepository.findCurrentTimestamp().minus(STALE_THRESHOLD_DURATION);
 
         return new OutboxEventSummaryDTO(
                 outboxEventRepository.countByStatus(OutboxEventStatus.PENDING),
@@ -107,7 +107,9 @@ public class OutboxEventQueryService {
         Specification<OutboxEvent> specification = criteria.problemType() == null
                 ? OutboxEventSpecifications.adminFilters(criteria)
                 : OutboxEventSpecifications.adminFilters(
-                        criteria, Instant.now().minus(STALE_THRESHOLD_DURATION), HIGH_FAILED_ATTEMPTS_THRESHOLD);
+                        criteria,
+                        outboxEventRepository.findCurrentTimestamp().minus(STALE_THRESHOLD_DURATION),
+                        HIGH_FAILED_ATTEMPTS_THRESHOLD);
         Pageable effectivePageable = withDefaultSort(pageable);
 
         return outboxEventRepository.findAll(specification, effectivePageable)
