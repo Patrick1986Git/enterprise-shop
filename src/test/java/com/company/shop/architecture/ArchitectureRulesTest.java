@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -153,6 +154,26 @@ class ArchitectureRulesTest {
     @ArchTest
     static final ArchRule durableCoordinationMustNotReadReplicaLocalWallTime =
             classes().should(notReadReplicaLocalWallTimeInDurableCoordination());
+
+    @ArchTest
+    static void everyDurableCoordinationTypeMustResolve(JavaClasses productionClasses) {
+        assertDurableCoordinationRegistryIntegrity(productionClasses, DURABLE_COORDINATION_TYPES);
+    }
+
+    static void assertDurableCoordinationRegistryIntegrity(JavaClasses productionClasses, Set<String> registry) {
+        for (String registeredType : registry.stream().sorted().toList()) {
+            long matches = productionClasses.stream()
+                    .filter(javaClass -> javaClass.getName().equals(registeredType))
+                    .count();
+            if (matches != 1) {
+                throw new AssertionError(String.format(
+                        "Durable coordination registry entry %s resolved to %d imported production classes; "
+                                + "a rename, move, or removal requires intentional registry review",
+                        registeredType,
+                        matches));
+            }
+        }
+    }
 
     static ArchCondition<JavaClass> notReadReplicaLocalWallTimeInDurableCoordination() {
         return replicaLocalWallTimeCondition(true);

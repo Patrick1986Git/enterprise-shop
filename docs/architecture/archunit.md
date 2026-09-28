@@ -33,7 +33,8 @@ This is the first lightweight quality gate for our modular monolith. The goal is
     unrestricted, while an undocumented cross-module dependency reports both modules and types.
 13. Notification may depend on order only through `com.company.shop.module.order.outbox`; order repositories, services,
     entities, and other implementation packages are forbidden.
-14. The explicit durable-coordination type registry may not call zero-argument JVM wall-clock sources (`now()`,
+14. Every entry in the explicit durable-coordination type registry must resolve to exactly one imported production
+    class, and each resolved class may not call zero-argument JVM wall-clock sources (`now()`,
     `System.currentTimeMillis()`, or `new Date()`) or the timestamp-implicit outbox factory. The registry covers the
     reviewed outbox creation/processing/observation, notification delivery, reservation-deadline/expiration, and
     recovery boundaries without imposing a global time API ban.
@@ -46,6 +47,12 @@ repository/database time boundary. The registry is intentionally type-based rath
 modules also contain valid audit, display, security, and business-observation timestamps. When a new component makes a
 time-sensitive durable eligibility, retry, claim, recovery, deadline, stale-state, or operational metric decision,
 maintainers must add its fully qualified type to `DURABLE_COORDINATION_TYPES` and review its authority explicitly.
+
+The gate has two independent protections. Registry integrity requires every declared fully qualified name to resolve
+to exactly one class in the production ArchUnit import, so a rename, move, removal, or typo left in the registry fails
+CI. Call-level authority then checks each resolved registered class for forbidden replica-local wall-clock reads.
+Integrity is fail-closed for the declared boundary; static analysis does not infer that an entirely new class has
+durable coordination semantics, so expanding the boundary still requires an intentional architecture review.
 
 Application-owned observations remain valid where that is the reviewed contract. In particular, `Instant.now(clock)`
 and `clock.instant()` are allowed, preserving deterministic injected-`Clock` behavior such as discount eligibility.

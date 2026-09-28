@@ -2,6 +2,8 @@ package com.company.shop.architecture;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Set;
+
 import org.junit.jupiter.api.Test;
 
 import com.company.shop.module.category.archfixture.ForbiddenInternalApiConsumer;
@@ -58,5 +60,18 @@ class ArchitectureRuleRegressionTest {
                 .should(ArchitectureRulesTest.notReadReplicaLocalWallTimeInDurableCoordinationForRegression());
 
         rule.check(classes);
+    }
+
+    @Test
+    void durableCoordinationRegistryRule_shouldRejectMissingRegisteredType() {
+        String missingType = "com.company.shop.module.order.outbox.MissingDurableCoordinationType";
+        var classes = importer.importClasses(InjectedClockBusinessObservation.class);
+
+        assertThatThrownBy(() -> ArchitectureRulesTest.assertDurableCoordinationRegistryIntegrity(
+                classes, Set.of(missingType)))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(missingType)
+                .hasMessageContaining("Durable coordination registry")
+                .hasMessageContaining("rename, move, or removal requires intentional registry review");
     }
 }
