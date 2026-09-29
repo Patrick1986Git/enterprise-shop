@@ -35,9 +35,9 @@ This is the first lightweight quality gate for our modular monolith. The goal is
     entities, and other implementation packages are forbidden.
 14. Every entry in the explicit durable-coordination type registry must resolve to exactly one imported production
     class, and each resolved class may not call zero-argument JVM wall-clock sources (`now()`,
-    `System.currentTimeMillis()`, or `new Date()`) or the timestamp-implicit outbox factory. The registry covers the
+    `System.currentTimeMillis()`, or `new Date()`) or timestamp-implicit outbox and notification factories. The registry covers the
     reviewed outbox creation/processing/observation, notification delivery, reservation-deadline/expiration, and
-    recovery boundaries without imposing a global time API ban.
+    recovery boundaries, including notification creation, without imposing a global time API ban.
 
 ## Durable coordination time authority
 
@@ -64,9 +64,10 @@ administrator action-log creation timestamps, and Stripe conflict disposition ob
 HTTP error/status metadata, soft-delete timestamps, webhook registration metadata, and JWT/security time, which have
 separate semantics. The timestamp-implicit `OutboxEvent.pending(...)` overload remains a test/compatibility factory;
 production event recording uses the explicit timestamp overload, and registered coordination code is forbidden from
-calling the implicit form. Notification entity convenience methods are likewise outside the delivery coordination
-registry; their production reachability and creation/legacy mutation semantics should be audited separately rather
-than hidden behind a broad exception in this rule.
+calling the implicit form. The notification entity remains outside the registry because it also owns intentional
+audit/display behavior. `NotificationService` is registered as the production creation boundary and may call only the
+explicit-created-time notification factory. Legacy mutation helpers accept explicit timestamps, preventing them from
+becoming hidden local wall-clock sources without imposing a broad entity-time ban.
 
 This check is only the first layer of temporal protection:
 

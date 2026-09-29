@@ -77,6 +77,12 @@ GET /api/v1/admin/notifications?deliveryState=SCHEDULED_PENDING&type=ORDER_PLACE
 
 Use `createdFrom` and `createdTo` to filter by `createdAt`: `createdFrom` matches notifications created at or after the timestamp, and `createdTo` matches notifications created at or before the timestamp. These inclusive filters are useful when investigating notifications created during a specific operational time window and can be combined with `status`, `sourceEventId`, `recipient`, `type`, pagination, and sorting.
 
+`createdAt` is sampled from PostgreSQL `clock_timestamp()` once when a new notification row is required. It therefore
+matches the database-observed notification creation timeline used by claim ordering and actionable-age metrics rather
+than an individual application replica's clock. Replaying an already materialized source event preserves the original
+value. In contrast, `lastRequeuedAt` remains application-clock audit/display metadata and must not be interpreted as a
+delivery eligibility or retry boundary.
+
 ```http
 GET /api/v1/admin/notifications?createdFrom=2026-06-21T00:00:00Z&createdTo=2026-06-21T23:59:59Z
 ```

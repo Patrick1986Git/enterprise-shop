@@ -42,6 +42,7 @@ class ArchitectureRulesTest {
             "com.company.shop.module.notification.delivery.NotificationDeliveryMetrics",
             "com.company.shop.module.notification.delivery.NotificationDeliveryProcessor",
             "com.company.shop.module.notification.delivery.NotificationDeliveryTransactionalWorker",
+            "com.company.shop.module.notification.service.NotificationService",
             "com.company.shop.module.order.expiration.ReservationExpirationClaimService",
             "com.company.shop.module.order.expiration.ReservationExpirationMetrics",
             "com.company.shop.module.order.expiration.ReservationExpirationProcessor",
@@ -209,9 +210,16 @@ class ArchitectureRulesTest {
                     && method.equals("currentTimeMillis") && noArguments;
             boolean implicitOutboxTimestamp = owner.equals("com.company.shop.module.order.outbox.OutboxEvent")
                     && method.equals("pending") && call.getTarget().getRawParameterTypes().size() < 6;
-            if (temporalNow || currentTimeMillis || implicitOutboxTimestamp) {
+            boolean implicitNotificationTimestamp = owner.equals("com.company.shop.module.notification.entity.Notification")
+                    && method.equals("pending") && call.getTarget().getRawParameterTypes().size() < 6;
+            if (temporalNow || currentTimeMillis || implicitOutboxTimestamp || implicitNotificationTimestamp) {
                 if (implicitOutboxTimestamp) {
                     addLocalTimeViolation(javaClass, call, "OutboxEvent.pending(...) without an explicit createdAt",
+                            events);
+                    continue;
+                }
+                if (implicitNotificationTimestamp) {
+                    addLocalTimeViolation(javaClass, call, "Notification.pending(...) without an explicit createdAt",
                             events);
                     continue;
                 }

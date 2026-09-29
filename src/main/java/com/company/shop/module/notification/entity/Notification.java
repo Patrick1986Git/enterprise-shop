@@ -70,23 +70,39 @@ public class Notification extends BaseEntity {
     protected Notification() {
     }
 
-    private Notification(String type, String recipient, String subject, String body, UUID sourceEventId) {
+    private Notification(
+            String type,
+            String recipient,
+            String subject,
+            String body,
+            UUID sourceEventId,
+            Instant createdAt) {
         this.type = requireText(type, "Notification type is required");
         this.recipient = requireText(recipient, "Notification recipient is required");
         this.subject = requireText(subject, "Notification subject is required");
         this.body = requireText(body, "Notification body is required");
         this.status = NotificationStatus.PENDING;
         this.sourceEventId = sourceEventId;
-        this.createdAt = Instant.now();
+        this.createdAt = java.util.Objects.requireNonNull(createdAt, "Notification creation timestamp is required");
         this.attempts = 0;
     }
 
     public static Notification pending(String type, String recipient, String subject, String body, UUID sourceEventId) {
-        return new Notification(type, recipient, subject, body, sourceEventId);
+        return pending(type, recipient, subject, body, sourceEventId, Instant.now());
     }
 
-    public void markSent() {
-        Instant now = Instant.now();
+    public static Notification pending(
+            String type,
+            String recipient,
+            String subject,
+            String body,
+            UUID sourceEventId,
+            Instant createdAt) {
+        return new Notification(type, recipient, subject, body, sourceEventId, createdAt);
+    }
+
+    public void markSent(Instant completedAt) {
+        Instant now = java.util.Objects.requireNonNull(completedAt, "Notification completion timestamp is required");
         status = NotificationStatus.SENT;
         sentAt = now;
         lastAttemptAt = now;
@@ -141,17 +157,21 @@ public class Notification extends BaseEntity {
         claimExpiresAt = null;
     }
 
-    public void markFailed(String errorMessage) {
+    public void markFailed(String errorMessage, Instant failedAt) {
         this.status = NotificationStatus.FAILED;
         this.lastError = errorMessage;
         this.sentAt = null;
         this.nextAttemptAt = null;
-        this.lastAttemptAt = Instant.now();
+        this.lastAttemptAt = java.util.Objects.requireNonNull(failedAt, "Notification failure timestamp is required");
     }
 
-    public void markDeliveryAttemptFailed(String errorMessage, int maxAttempts, Instant nextAttemptAt) {
+    public void markDeliveryAttemptFailed(
+            String errorMessage,
+            int maxAttempts,
+            Instant nextAttemptAt,
+            Instant failedAt) {
         this.attempts += 1;
-        this.lastAttemptAt = Instant.now();
+        this.lastAttemptAt = java.util.Objects.requireNonNull(failedAt, "Notification failure timestamp is required");
         this.lastError = errorMessage;
         this.sentAt = null;
         if (this.attempts >= maxAttempts) {

@@ -56,9 +56,29 @@ PostgreSQL also owns the outbox operational observation timeline. Creation sampl
 | Source event | Outbox event id. |
 | Initial status | `PENDING` |
 
+For a new source event, the service first completes the idempotency lookup, builds the notification content, and then
+samples PostgreSQL `clock_timestamp()` immediately before entity construction and persistence. That single observation
+is the notification's durable `created_at`; it is distinct from the source outbox event's creation time. An idempotent
+replay returns the existing row before sampling database time, so replay cannot rewrite the creation instant or move
+the notification in delivery order.
+
+This authority is correctness-relevant rather than stylistic. Immediately actionable pending work is ordered by
+`COALESCE(next_attempt_at, created_at)` and then `created_at`; actionable age also falls back to `created_at`.
+PostgreSQL ownership therefore prevents opposite replica clock skews from reversing durable creation order, making new
+work appear old or old work appear new, distorting backlog age, or moving rows across ADMIN `createdFrom`/`createdTo`
+windows relative to database-observed creation. A finite claim batch can still delay newer work under sustained older
+backlog by design, but replica clock skew no longer introduces that fairness distortion.
+
 ## Notification delivery
 
 Notification delivery is represented by a `NotificationSender` abstraction.
+
+Notification timestamps intentionally have separate authorities. PostgreSQL owns durable notification creation,
+delivery claim/attempt time, claim expiry, retry scheduling, and successful completion. The token-fenced delivery path
+passes these explicit database observations through `claim(...)`, `finalizeSent(...)`, and `finalizeFailed(...)`.
+Legacy direct mutation helpers require an explicit timestamp and therefore cannot silently sample replica-local time.
+Manual `last_requeued_at` remains application-clock audit/display metadata: requeue clears `next_attempt_at`, so that
+value does not control ordering, eligibility, retry timing, authorization, or operational age.
 
 - `NotificationDeliveryPoller` can periodically invoke `NotificationDeliveryProcessor` when `app.notification.delivery.enabled=true`.
 - `NotificationDeliveryProcessor` claims pending notifications in batches, calls `NotificationSender`, and finalizes a claim as `SENT` only when the configured transport returns successfully. `SENT` therefore records local transport acceptance, not human receipt. Sender failures follow the existing retry path and eventually become terminal `FAILED` after the configured attempt budget.

@@ -26,6 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.company.shop.module.notification.entity.Notification;
 import com.company.shop.module.notification.entity.NotificationStatus;
 import com.company.shop.module.notification.repository.NotificationRepository;
+import com.company.shop.module.notification.service.NotificationService;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
 @SpringBootTest
@@ -34,6 +35,8 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
 
     @Autowired
     private NotificationRepository repository;
+    @Autowired
+    private NotificationService notificationService;
     @Autowired
     private NotificationDeliveryProcessor processor;
     @Autowired
@@ -177,6 +180,29 @@ class NotificationDeliveryConcurrencyIT extends PostgresContainerSupport {
         assertThat(nextAttemptAt).isBetween(
                 beforeFailure.plus(properties.retryDelay()),
                 afterFailure.plus(properties.retryDelay()));
+    }
+
+    @Test
+    void creationAndIdempotentReplay_shouldUseAndPreservePostgresTime() {
+        UUID sourceEventId = UUID.randomUUID();
+        Instant beforeCreation = databaseTime();
+
+        Notification created = notificationService.createOrderPlacedNotification(
+                UUID.randomUUID(), "creation-time@example.com", java.math.BigDecimal.TEN, sourceEventId);
+        repository.flush();
+        Instant afterCreation = databaseTime();
+
+        assertThat(created.getCreatedAt()).isBetween(beforeCreation, afterCreation);
+        assertThat(created.getCreatedAt()).isBefore(ClockSkewConfiguration.APPLICATION_TIME.minusSeconds(60));
+        assertThat(repository.findOldestActionableAt()).contains(created.getCreatedAt());
+        assertThat(repository.findOldestActionableAgeSeconds()).isBetween(0.0, 10.0);
+
+        Notification replayed = notificationService.createOrderPlacedNotification(
+                UUID.randomUUID(), "ignored@example.com", java.math.BigDecimal.ONE, sourceEventId);
+
+        assertThat(replayed.getId()).isEqualTo(created.getId());
+        assertThat(replayed.getCreatedAt()).isEqualTo(created.getCreatedAt());
+        assertThat(repository.count()).isOne();
     }
 
     private Notification save(String recipient) {

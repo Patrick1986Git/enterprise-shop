@@ -36,6 +36,16 @@ class NotificationTest {
         assertThat(notification.getNextAttemptAt()).isNull();
     }
 
+    @Test
+    void pending_shouldUseExplicitCreationTimestamp() {
+        Instant createdAt = Instant.parse("2026-09-29T18:00:00Z");
+
+        Notification notification = Notification.pending(
+                "ORDER_PLACED_EMAIL", "customer@example.com", "Order placed", "Body", UUID.randomUUID(), createdAt);
+
+        assertThat(notification.getCreatedAt()).isEqualTo(createdAt);
+    }
+
     @ParameterizedTest
     @MethodSource("invalidRequiredFields")
     void pending_shouldRejectMissingRequiredText(
@@ -52,9 +62,9 @@ class NotificationTest {
     @Test
     void markSent_shouldMarkNotificationSentClearLastErrorAndNextAttemptAtAndKeepAttempts() {
         Notification notification = pendingNotification(UUID.randomUUID());
-        notification.markDeliveryAttemptFailed("temporary failure", 3, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("temporary failure", 3, Instant.now().plusSeconds(60), Instant.now());
 
-        notification.markSent();
+        notification.markSent(Instant.now());
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.SENT);
         assertThat(notification.getSentAt()).isNotNull();
@@ -70,7 +80,7 @@ class NotificationTest {
         Notification notification = pendingNotification(UUID.randomUUID());
         Instant nextAttemptAt = Instant.now().plusSeconds(60);
 
-        notification.markDeliveryAttemptFailed("temporary failure", 3, nextAttemptAt);
+        notification.markDeliveryAttemptFailed("temporary failure", 3, nextAttemptAt, Instant.now());
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getAttempts()).isEqualTo(1);
@@ -83,9 +93,9 @@ class NotificationTest {
     @Test
     void markDeliveryAttemptFailed_shouldMarkNotificationFailedAndClearNextAttemptAtWhenAttemptsReachMaxAttempts() {
         Notification notification = pendingNotification(UUID.randomUUID());
-        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60), Instant.now());
 
-        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60), Instant.now());
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getAttempts()).isEqualTo(2);
@@ -98,9 +108,9 @@ class NotificationTest {
     @Test
     void markFailed_shouldMarkNotificationFailedStoreLastErrorAndClearNextAttemptAt() {
         Notification notification = pendingNotification(UUID.randomUUID());
-        notification.markDeliveryAttemptFailed("temporary failure", 3, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("temporary failure", 3, Instant.now().plusSeconds(60), Instant.now());
 
-        notification.markFailed("delivery failed");
+        notification.markFailed("delivery failed", Instant.now());
 
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.FAILED);
         assertThat(notification.getAttempts()).isEqualTo(1);
@@ -113,8 +123,8 @@ class NotificationTest {
     @Test
     void requeueForDelivery_shouldResetFailedNotificationForImmediateDelivery() {
         Notification notification = pendingNotification(UUID.randomUUID());
-        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60));
-        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60), Instant.now());
+        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60), Instant.now());
 
         Instant beforeRequeue = Instant.now();
 
@@ -135,11 +145,11 @@ class NotificationTest {
     @Test
     void requeueForDelivery_shouldIncrementRequeueCountAcrossMultipleRequeues() {
         Notification notification = pendingNotification(UUID.randomUUID());
-        notification.markFailed("delivery failed");
+        notification.markFailed("delivery failed", Instant.now());
 
         notification.requeueForDelivery("first-admin@example.com");
         Instant firstRequeuedAt = notification.getLastRequeuedAt();
-        notification.markFailed("delivery failed again");
+        notification.markFailed("delivery failed again", Instant.now());
         notification.requeueForDelivery("second-admin@example.com");
 
         assertThat(notification.getRequeueCount()).isEqualTo(2);
