@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
@@ -35,6 +38,21 @@ class ArchitectureRulesTest {
     private static final Map<String, Set<String>> NARROW_INTERNAL_API_CONSUMERS = Map.of(
             "com.company.shop.module.user.api.internal.CurrentUserAssociationFacade",
             Set.of("cart", "product"));
+    private static final Set<String> DURABLE_COORDINATION_TYPES = Set.of(
+            "com.company.shop.module.notification.delivery.NotificationDeliveryMetrics",
+            "com.company.shop.module.notification.delivery.NotificationDeliveryProcessor",
+            "com.company.shop.module.notification.delivery.NotificationDeliveryTransactionalWorker",
+            "com.company.shop.module.order.expiration.ReservationExpirationClaimService",
+            "com.company.shop.module.order.expiration.ReservationExpirationMetrics",
+            "com.company.shop.module.order.expiration.ReservationExpirationProcessor",
+            "com.company.shop.module.order.expiration.ReservationExpirationRecoveryService",
+            "com.company.shop.module.order.outbox.OrderOutboxEventRecorder",
+            "com.company.shop.module.order.outbox.OutboxEventFailureRecorder",
+            "com.company.shop.module.order.outbox.OutboxEventMetrics",
+            "com.company.shop.module.order.outbox.OutboxEventProcessor",
+            "com.company.shop.module.order.outbox.OutboxEventQueryService",
+            "com.company.shop.module.order.outbox.OutboxEventTransactionalWorker",
+            "com.company.shop.module.order.service.checkout.OrderCheckoutProcessor");
 
     @ArchTest
     static final ArchRule controllersMustNotAccessRepositoriesDirectly =
@@ -132,6 +150,93 @@ class ArchitectureRulesTest {
                     .that().resideInAPackage("com.company.shop.module.order..")
                     .should().dependOnClassesThat()
                     .resideInAnyPackage("com.company.shop.module.cart.entity..");
+
+    @ArchTest
+    static final ArchRule durableCoordinationMustNotReadReplicaLocalWallTime =
+            classes().should(notReadReplicaLocalWallTimeInDurableCoordination());
+
+    @ArchTest
+    static void everyDurableCoordinationTypeMustResolve(JavaClasses productionClasses) {
+        assertDurableCoordinationRegistryIntegrity(productionClasses, DURABLE_COORDINATION_TYPES);
+    }
+
+    static void assertDurableCoordinationRegistryIntegrity(JavaClasses productionClasses, Set<String> registry) {
+        for (String registeredType : registry.stream().sorted().toList()) {
+            long matches = productionClasses.stream()
+                    .filter(javaClass -> javaClass.getName().equals(registeredType))
+                    .count();
+            if (matches != 1) {
+                throw new AssertionError(String.format(
+                        "Durable coordination registry entry %s resolved to %d imported production classes; "
+                                + "a rename, move, or removal requires intentional registry review",
+                        registeredType,
+                        matches));
+            }
+        }
+    }
+
+    static ArchCondition<JavaClass> notReadReplicaLocalWallTimeInDurableCoordination() {
+        return replicaLocalWallTimeCondition(true);
+    }
+
+    static ArchCondition<JavaClass> notReadReplicaLocalWallTimeInDurableCoordinationForRegression() {
+        return replicaLocalWallTimeCondition(false);
+    }
+
+    private static ArchCondition<JavaClass> replicaLocalWallTimeCondition(boolean restrictToRegistry) {
+        return new ArchCondition<>("use the repository/database time boundary, not replica-local wall time, "
+                + "in registered durable coordination types") {
+            @Override
+            public void check(JavaClass javaClass, ConditionEvents events) {
+                if (restrictToRegistry && !DURABLE_COORDINATION_TYPES.contains(javaClass.getName())) {
+                    return;
+                }
+                checkForbiddenMethodCalls(javaClass, events);
+                checkForbiddenConstructors(javaClass, events);
+            }
+        };
+    }
+
+    private static void checkForbiddenMethodCalls(JavaClass javaClass, ConditionEvents events) {
+        for (JavaMethodCall call : javaClass.getMethodCallsFromSelf()) {
+            String owner = call.getTarget().getOwner().getName();
+            String method = call.getTarget().getName();
+            boolean noArguments = call.getTarget().getRawParameterTypes().isEmpty();
+            boolean temporalNow = Set.of(
+                    "java.time.Instant", "java.time.LocalDateTime", "java.time.OffsetDateTime",
+                    "java.time.ZonedDateTime").contains(owner) && method.equals("now") && noArguments;
+            boolean currentTimeMillis = owner.equals("java.lang.System")
+                    && method.equals("currentTimeMillis") && noArguments;
+            boolean implicitOutboxTimestamp = owner.equals("com.company.shop.module.order.outbox.OutboxEvent")
+                    && method.equals("pending") && call.getTarget().getRawParameterTypes().size() < 6;
+            if (temporalNow || currentTimeMillis || implicitOutboxTimestamp) {
+                if (implicitOutboxTimestamp) {
+                    addLocalTimeViolation(javaClass, call, "OutboxEvent.pending(...) without an explicit createdAt",
+                            events);
+                    continue;
+                }
+                addLocalTimeViolation(javaClass, call, owner + "." + method + "()", events);
+            }
+        }
+    }
+
+    private static void checkForbiddenConstructors(JavaClass javaClass, ConditionEvents events) {
+        for (JavaConstructorCall call : javaClass.getConstructorCallsFromSelf()) {
+            if (call.getTarget().getOwner().getName().equals("java.util.Date")
+                    && call.getTarget().getRawParameterTypes().isEmpty()) {
+                addLocalTimeViolation(javaClass, call, "new java.util.Date()", events);
+            }
+        }
+    }
+
+    private static void addLocalTimeViolation(
+            JavaClass javaClass, Object call, String source, ConditionEvents events) {
+        String message = String.format(
+                "%s calls forbidden replica-local time source %s; durable coordination must obtain its "
+                        + "authoritative observation from the repository/database time boundary",
+                javaClass.getName(), source);
+        events.add(SimpleConditionEvent.violated(call, message));
+    }
 
     private static ArchCondition<JavaClass> notDependOnNonEnumClassesInEntityPackages() {
         return new ArchCondition<>("not depend on non-enum classes in ..entity.. packages") {
