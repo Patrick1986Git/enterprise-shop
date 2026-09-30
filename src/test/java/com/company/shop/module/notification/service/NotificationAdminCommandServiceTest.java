@@ -127,7 +127,7 @@ class NotificationAdminCommandServiceTest {
         NotificationAdminCommandService service = service();
         UUID notificationId = UUID.randomUUID();
         Notification notification = pendingNotification(UUID.randomUUID());
-        notification.markSent();
+        notification.markSent(Instant.now());
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
 
         assertThatThrownBy(() -> service.requeueFailedNotification(notificationId))
@@ -171,8 +171,8 @@ class NotificationAdminCommandServiceTest {
 
     private Notification failedNotification(UUID sourceEventId) {
         Notification notification = pendingNotification(sourceEventId);
-        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60));
-        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60));
+        notification.markDeliveryAttemptFailed("first temporary failure", 2, Instant.now().plusSeconds(60), Instant.now());
+        notification.markDeliveryAttemptFailed("delivery failed", 2, Instant.now().plusSeconds(60), Instant.now());
         return notification;
     }
 

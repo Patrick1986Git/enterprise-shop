@@ -1,6 +1,7 @@
 package com.company.shop.module.notification.service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -45,13 +46,15 @@ public class NotificationService {
             UUID sourceEventId) {
         String subject = "Order placed: " + orderId;
         String body = "Your order " + orderId + " has been placed. Total amount: " + totalAmount + ".";
+        Instant createdAt = notificationRepository.currentDatabaseTime();
 
         Notification notification = Notification.pending(
                 ORDER_PLACED_NOTIFICATION_TYPE,
                 userEmail,
                 subject,
                 body,
-                sourceEventId);
+                sourceEventId,
+                createdAt);
 
         return notificationRepository.save(notification);
     }

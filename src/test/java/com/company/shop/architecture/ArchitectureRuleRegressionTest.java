@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import com.company.shop.module.category.archfixture.ForbiddenInternalApiConsumer;
 import com.company.shop.architecture.archfixture.ForbiddenDurableCoordinationClock;
+import com.company.shop.architecture.archfixture.ForbiddenImplicitNotificationCreation;
 import com.company.shop.architecture.archfixture.InjectedClockBusinessObservation;
 import com.company.shop.module.future.archfixture.UnregisteredModuleType;
 import com.company.shop.module.user.api.internal.CurrentUserFacade;
@@ -60,6 +61,19 @@ class ArchitectureRuleRegressionTest {
                 .should(ArchitectureRulesTest.notReadReplicaLocalWallTimeInDurableCoordinationForRegression());
 
         rule.check(classes);
+    }
+
+    @Test
+    void durableCoordinationTimeRule_shouldRejectImplicitNotificationCreationTime() {
+        var classes = importer.importClasses(ForbiddenImplicitNotificationCreation.class);
+        var rule = ArchRuleDefinition.classes()
+                .should(ArchitectureRulesTest.notReadReplicaLocalWallTimeInDurableCoordinationForRegression());
+
+        assertThatThrownBy(() -> rule.check(classes))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining(ForbiddenImplicitNotificationCreation.class.getName())
+                .hasMessageContaining("Notification.pending(...) without an explicit createdAt")
+                .hasMessageContaining("repository/database time boundary");
     }
 
     @Test

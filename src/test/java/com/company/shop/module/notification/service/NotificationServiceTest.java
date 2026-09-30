@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,8 +32,10 @@ class NotificationServiceTest {
         NotificationService service = new NotificationService(notificationRepository);
         UUID orderId = UUID.randomUUID();
         UUID sourceEventId = UUID.randomUUID();
+        Instant databaseTime = Instant.parse("2026-09-29T18:00:00Z");
         ArgumentCaptor<Notification> notificationCaptor = ArgumentCaptor.forClass(Notification.class);
         when(notificationRepository.findBySourceEventId(sourceEventId)).thenReturn(Optional.empty());
+        when(notificationRepository.currentDatabaseTime()).thenReturn(databaseTime);
         when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Notification notification = service.createOrderPlacedNotification(
@@ -50,7 +53,8 @@ class NotificationServiceTest {
                 .isEqualTo("Your order " + orderId + " has been placed. Total amount: 42.50.");
         assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
         assertThat(notification.getSourceEventId()).isEqualTo(sourceEventId);
-        assertThat(notification.getCreatedAt()).isNotNull();
+        assertThat(notification.getCreatedAt()).isEqualTo(databaseTime);
+        verify(notificationRepository).currentDatabaseTime();
     }
 
     @Test
@@ -74,5 +78,6 @@ class NotificationServiceTest {
 
         assertThat(notification).isSameAs(existingNotification);
         verify(notificationRepository, never()).save(any(Notification.class));
+        verify(notificationRepository, never()).currentDatabaseTime();
     }
 }

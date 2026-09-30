@@ -88,7 +88,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.",
                 UUID.randomUUID());
         Instant beforeTransition = Instant.now();
-        notification.markSent();
+        notification.markSent(Instant.now());
         Instant lastAttemptAt = notification.getLastAttemptAt();
 
         Notification savedNotification = notificationRepository.saveAndFlush(notification);
@@ -112,7 +112,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        notification.markFailed("delivery failed");
+        notification.markFailed("delivery failed", Instant.now());
         Instant beforeRequeue = Instant.now();
         // PostgreSQL stores timestamps with microsecond precision, while Instant.now() may contain nanoseconds.
         Instant beforeRequeueLowerBound = beforeRequeue.truncatedTo(ChronoUnit.MICROS);
@@ -420,7 +420,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        sentNotification.markSent();
+        sentNotification.markSent(Instant.now());
         notificationRepository.saveAndFlush(sentNotification);
 
         List<Notification> notifications = notificationRepository.findAll(
@@ -522,7 +522,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 sourceEventId);
-        matchingNotification.markSent();
+        matchingNotification.markSent(Instant.now());
         notificationRepository.saveAndFlush(matchingNotification);
         notificationRepository.saveAndFlush(Notification.pending(
                 "ORDER_PLACED_EMAIL",
@@ -701,14 +701,14 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        matchingNotification.markFailed("SMTP Timeout while sending");
+        matchingNotification.markFailed("SMTP Timeout while sending", Instant.now());
         Notification otherErrorNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "authentication@example.com",
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        otherErrorNotification.markFailed("SMTP authentication failed");
+        otherErrorNotification.markFailed("SMTP authentication failed", Instant.now());
         Notification nullErrorNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "pending@example.com",
@@ -737,7 +737,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        failedTimeoutNotification.markFailed("SMTP timeout");
+        failedTimeoutNotification.markFailed("SMTP timeout", Instant.now());
         Notification pendingTimeoutNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "pending-timeout@example.com",
@@ -747,7 +747,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
         pendingTimeoutNotification.markDeliveryAttemptFailed(
                 "SMTP timeout",
                 3,
-                Instant.now().plus(5, ChronoUnit.MINUTES));
+                Instant.now().plus(5, ChronoUnit.MINUTES), Instant.now());
         notificationRepository.saveAllAndFlush(List.of(failedTimeoutNotification, pendingTimeoutNotification));
 
         List<Notification> notifications = notificationRepository.findAll(
@@ -769,14 +769,14 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.",
                 UUID.randomUUID());
         requeuedTimeoutNotification.requeueForDelivery("admin@example.com");
-        requeuedTimeoutNotification.markFailed("SMTP timeout");
+        requeuedTimeoutNotification.markFailed("SMTP timeout", Instant.now());
         Notification neverRequeuedTimeoutNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "never-requeued-timeout@example.com",
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        neverRequeuedTimeoutNotification.markFailed("SMTP timeout");
+        neverRequeuedTimeoutNotification.markFailed("SMTP timeout", Instant.now());
         notificationRepository.saveAllAndFlush(List.of(
                 requeuedTimeoutNotification,
                 neverRequeuedTimeoutNotification));
@@ -949,14 +949,14 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Your order has been placed.",
                 UUID.randomUUID());
         requeuedFailedNotification.requeueForDelivery("admin@example.com");
-        requeuedFailedNotification.markFailed("delivery failed");
+        requeuedFailedNotification.markFailed("delivery failed", Instant.now());
         Notification neverRequeuedFailedNotification = Notification.pending(
                 "ORDER_PLACED_EMAIL",
                 "failed@example.com",
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        neverRequeuedFailedNotification.markFailed("delivery failed");
+        neverRequeuedFailedNotification.markFailed("delivery failed", Instant.now());
         notificationRepository.saveAllAndFlush(List.of(
                 requeuedPendingNotification,
                 requeuedFailedNotification,
@@ -1153,7 +1153,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
     @Test
     void findAllWithAdminFilters_shouldCombineAttemptsRangeWithFailedStatus() {
         Notification failedInsideRange = notificationWithAttempts("failed-inside-range@example.com", 3, "SMTP timeout");
-        failedInsideRange.markFailed("SMTP timeout");
+        failedInsideRange.markFailed("SMTP timeout", Instant.now());
         Notification pendingInsideRange = notificationWithAttempts(
                 "pending-inside-range@example.com", 3, "SMTP timeout");
         notificationRepository.saveAllAndFlush(List.of(failedInsideRange, pendingInsideRange));
@@ -1868,7 +1868,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 "Order placed",
                 "Your order has been placed.",
                 UUID.randomUUID());
-        notification.markFailed("SMTP timeout");
+        notification.markFailed("SMTP timeout", Instant.now());
         Notification saved = notificationRepository.saveAndFlush(notification);
         jdbcTemplate.update(
                 "UPDATE notifications SET last_attempt_at = ? WHERE id = ?",
@@ -1887,7 +1887,7 @@ class NotificationRepositoryIT extends PostgresContainerSupport {
                 UUID.randomUUID());
         for (int i = 0; i < attempts; i++) {
             notification.markDeliveryAttemptFailed(
-                    errorMessage, attempts + 1, Instant.now().plus(5, ChronoUnit.MINUTES));
+                    errorMessage, attempts + 1, Instant.now().plus(5, ChronoUnit.MINUTES), Instant.now());
         }
         return notification;
     }
