@@ -16,6 +16,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.company.shop.module.order.entity.StripeWebhookEvent;
+import com.company.shop.module.order.repository.StripeWebhookEventRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
 
 @SpringBootTest
@@ -27,6 +29,9 @@ class StripeWebhookEventRegistrarIT extends PostgresContainerSupport {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private StripeWebhookEventRepository repository;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -41,6 +46,11 @@ class StripeWebhookEventRegistrarIT extends PostgresContainerSupport {
         LocalDateTime originalTimestamp = processedAt(eventId);
         LocalDateTime after = databaseUtcNow();
         assertThat(originalTimestamp).isBetween(before, after);
+
+        StripeWebhookEvent persistedEvent = repository.findById(rowId(eventId)).orElseThrow();
+        assertThat(persistedEvent.getStripeEventId()).isEqualTo(eventId);
+        assertThat(persistedEvent.getEventType()).isEqualTo("payment_intent.succeeded");
+        assertThat(persistedEvent.getProcessedAt()).isEqualTo(originalTimestamp);
 
         assertThat(registerInTransaction(eventId)).isFalse();
         assertThat(processedAt(eventId)).isEqualTo(originalTimestamp);
@@ -104,6 +114,13 @@ class StripeWebhookEventRegistrarIT extends PostgresContainerSupport {
         return jdbcTemplate.queryForObject(
                 "SELECT processed_at FROM stripe_webhook_events WHERE stripe_event_id = ?",
                 LocalDateTime.class,
+                eventId);
+    }
+
+    private UUID rowId(String eventId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM stripe_webhook_events WHERE stripe_event_id = ?",
+                UUID.class,
                 eventId);
     }
 
