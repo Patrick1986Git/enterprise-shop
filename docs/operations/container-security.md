@@ -150,6 +150,10 @@ CI run #490 detected `CVE-2026-54291` in `postgresql-42.7.11.jar`. The pgJDBC ad
 
 Spring Boot 4.1.0 dependency management supplied pgJDBC 42.7.11 through its `postgresql.version` property. Enterprise Shop overrides that supported property to 42.7.12; it retains the existing runtime dependency declaration and does not add a duplicate dependency or change the Spring Boot line. This patch-only remediation does not change JDBC URLs, database identities, PostgreSQL server behavior, Flyway, or persistence mappings.
 
+## Application OpenSSL CVE-2026-84782 remediation
+
+Protected-master CI run #1075 found HIGH `CVE-2026-84782` in `libssl3` and `openssl` version `3.0.2-0ubuntu1.29`, inherited from the current `eclipse-temurin:21-jre-jammy` runtime image. Ubuntu Jammy security repositories provide fixed version `3.0.2-0ubuntu1.30`, so the runtime package-install layer explicitly includes `libssl3` and `openssl` alongside `curl`. This updates only the affected packages to the current maintained Jammy candidates during image rebuilds; it does not pin a version that would prevent later security updates or perform a broad operating-system upgrade.
+
 ## PostgreSQL c-ares CVE-2026-33630 remediation
 
 CI run #496 found HIGH `CVE-2026-33630` in `c-ares 1.34.5-r0`, inherited by the PostgreSQL 18 Alpine image. Because Alpine provided the fixed `1.34.6-r0` package, the PostgreSQL Dockerfile applies a targeted `apk upgrade --no-cache c-ares` to the final image. No policy exception was added; CI rebuilds and rescans the final image through the existing raw-report, SBOM, and blocking-policy workflow.
