@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.title="Enterprise Shop" \
       org.opencontainers.image.licenses="UNLICENSED"
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y curl \
+    && apt-get install --no-install-recommends -y curl libssl3 openssl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app
