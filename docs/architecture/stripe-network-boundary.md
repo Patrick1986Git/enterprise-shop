@@ -43,4 +43,12 @@ overlap does not release inventory twice even though provider calls can overlap.
 
 ### Webhooks and health
 
-Webhook construction verifies the supplied signature locally before durable event-ID registration. Exact replay protection and succeeded, failed, or canceled terminal convergence are unchanged; transport timeouts do not apply to this boundary. Stripe remains excluded from readiness and liveness because replica admission and restart must not depend on an external provider. Durable request idempotency, webhook replay protection, claims, and terminal reconciliation—not a health probe—recover ambiguous outcomes and forced termination.
+Webhook construction verifies the supplied signature locally before durable event-ID registration. The unique
+`stripe_event_id` is the replay authority. Its insert and terminal convergence share the transactional webhook boundary,
+so a later failure rolls both back and permits a provider retry; a duplicate does not overwrite the original row. The
+row's `processed_at` is sampled by PostgreSQL in that insert and records UTC registration observation, not provider
+receipt, completion, or commit. Exact replay protection and succeeded, failed, or canceled terminal convergence are
+otherwise unchanged; transport timeouts do not apply to this boundary. Stripe remains excluded from readiness and
+liveness because replica admission and restart must not depend on an external provider. Durable request idempotency,
+webhook replay protection, claims, and terminal reconciliation—not a health probe—recover ambiguous outcomes and forced
+termination.

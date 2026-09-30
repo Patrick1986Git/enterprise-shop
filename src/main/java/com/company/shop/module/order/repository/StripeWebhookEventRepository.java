@@ -1,6 +1,5 @@
 package com.company.shop.module.order.repository;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,12 +14,11 @@ public interface StripeWebhookEventRepository extends JpaRepository<StripeWebhoo
     @Modifying
     @Query(value = """
             INSERT INTO stripe_webhook_events (id, stripe_event_id, event_type, processed_at)
-            VALUES (:id, :stripeEventId, :eventType, :processedAt)
+            VALUES (:id, :stripeEventId, :eventType, clock_timestamp() AT TIME ZONE 'UTC')
             ON CONFLICT (stripe_event_id) DO NOTHING
             """, nativeQuery = true)
     int insertIgnoreDuplicate(
             @Param("id") UUID id,
             @Param("stripeEventId") String stripeEventId,
-            @Param("eventType") String eventType,
-            @Param("processedAt") LocalDateTime processedAt);
+            @Param("eventType") String eventType);
 }

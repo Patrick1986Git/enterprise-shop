@@ -159,7 +159,8 @@ BEGIN
     RAISE EXCEPTION 'Polish text search is not operational';
   END IF;
   IF (SELECT count(*) FROM pg_constraint WHERE conname IN
-      ('fk_order_items_order', 'uq_payments_order_id', 'chk_outbox_events_event_version_positive')) <> 3
+      ('fk_order_items_order', 'uq_payments_order_id', 'chk_outbox_events_event_version_positive',
+       'uq_stripe_webhook_events_stripe_event_id')) <> 4
      OR (SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN
       ('idx_products_search_vector', 'idx_outbox_events_status_next_attempt_at',
        'idx_notifications_claim_recovery')) <> 3 THEN
@@ -175,7 +176,10 @@ BEGIN
      OR (SELECT count(*) FROM products WHERE id='30000000-0000-0000-0000-000000000001' AND stock=37 AND version=11) <> 1
      OR (SELECT count(*) FROM order_items WHERE id='51000000-0000-0000-0000-000000000001' AND product_name='Immutable synthetic product snapshot' AND product_sku='SYNTHETIC-SNAPSHOT-SKU') <> 1
      OR (SELECT count(*) FROM payments WHERE provider_payment_id='pi_synthetic_restore_only') <> 1
-     OR (SELECT count(*) FROM stripe_webhook_events WHERE stripe_event_id='evt_synthetic_restore_only') <> 1
+     OR (SELECT count(*) FROM stripe_webhook_events
+         WHERE stripe_event_id='evt_synthetic_restore_only'
+           AND event_type='payment_intent.synthetic'
+           AND processed_at=TIMESTAMP '2040-01-02 03:04:06') <> 1
      OR (SELECT count(*) FROM reservation_expiration_work WHERE id='70000000-0000-0000-0000-000000000001' AND attempts=3 AND recovery_count=1) <> 1
      OR (SELECT count(*) FROM outbox_events WHERE id='80000000-0000-0000-0000-000000000001' AND attempts=4 AND event_version=5) <> 1
      OR (SELECT count(*) FROM notifications WHERE id='90000000-0000-0000-0000-000000000001' AND attempts=6 AND requeue_count=2) <> 1 THEN

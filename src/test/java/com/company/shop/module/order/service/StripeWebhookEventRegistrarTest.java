@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -31,29 +30,29 @@ class StripeWebhookEventRegistrarTest {
 
     @Test
     void register_shouldReturnTrueWhenInsertReturnsOne() {
-        when(stripeWebhookEventRepository.insertIgnoreDuplicate(any(), any(), any(), any())).thenReturn(1);
+        when(stripeWebhookEventRepository.insertIgnoreDuplicate(any(), any(), any())).thenReturn(1);
 
         boolean result = registrar.register("evt_ok", "payment_intent.succeeded");
 
         assertThat(result).isTrue();
         verify(stripeWebhookEventRepository).insertIgnoreDuplicate(any(UUID.class), eq("evt_ok"),
-                eq("payment_intent.succeeded"), any(LocalDateTime.class));
+                eq("payment_intent.succeeded"));
     }
 
     @Test
     void register_shouldReturnFalseWhenInsertReturnsZero() {
-        when(stripeWebhookEventRepository.insertIgnoreDuplicate(any(), any(), any(), any())).thenReturn(0);
+        when(stripeWebhookEventRepository.insertIgnoreDuplicate(any(), any(), any())).thenReturn(0);
 
         boolean result = registrar.register("evt_duplicate", "payment_intent.succeeded");
 
         assertThat(result).isFalse();
         verify(stripeWebhookEventRepository).insertIgnoreDuplicate(any(UUID.class), eq("evt_duplicate"),
-                eq("payment_intent.succeeded"), any(LocalDateTime.class));
+                eq("payment_intent.succeeded"));
     }
 
     @Test
     void register_shouldReturnFalseWhenInsertReturnsUnexpectedValue() {
-        when(stripeWebhookEventRepository.insertIgnoreDuplicate(any(), any(), any(), any())).thenReturn(2);
+        when(stripeWebhookEventRepository.insertIgnoreDuplicate(any(), any(), any())).thenReturn(2);
 
         boolean result = registrar.register("evt_unexpected", "payment_intent.succeeded");
 
