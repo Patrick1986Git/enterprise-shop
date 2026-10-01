@@ -18,6 +18,15 @@ converts that same sample to a UTC `LocalDateTime`, and uses it for the complete
 are inclusive (`validFrom <= evaluationTime <= validTo`). This explicit interpretation avoids dependence on the JVM
 default time zone without changing or migrating existing stored values.
 
+`stripe_webhook_events.processed_at` also retains its historical plain `TIMESTAMP` schema, but new rows have an explicit
+UTC wall-clock contract. The replay-barrier `INSERT` samples PostgreSQL `clock_timestamp()` and converts that instant to
+a UTC local timestamp in the same statement. The value is the database's observation of successful event-ID
+registration near the beginning of webhook handling; it is not Stripe receipt time, processing completion time, or
+transaction commit time. Rows written before this contract used replica-local `LocalDateTime.now()` and have no
+repository-proven timezone, so they must not be silently reinterpreted or used for cross-replica ordering. The timestamp
+is auxiliary operational evidence: no application query, API, metric, index, or cleanup policy reads it. Exact replay
+protection belongs to the unique `stripe_event_id`.
+
 The host may separately run a system PostgreSQL instance on `localhost:5432`; Docker PostgreSQL intentionally uses port `5433` by default. The custom PostgreSQL image preserves the Polish full-text-search dictionary files required by Flyway migration V5.
 
 The `dev` profile keeps Hibernate in `ddl-auto: validate`. Schema changes must come from Flyway, not Hibernate auto-DDL. Local Flyway uses the admin/bootstrap identity by default through `spring.flyway.url`, `spring.flyway.user`, and `spring.flyway.password`; the application datasource uses the least-privilege runtime identity.
@@ -119,7 +128,7 @@ The production tree has the following explicit lock acquisition sites:
 | `NotificationRepository` claim query | Notification delivery claim coordination. | `FOR UPDATE SKIP LOCKED` deliberately avoids row-lock waits. |
 | `ProductCatalogFacadeImpl.restoreInventory` | Explicit JDBC `SELECT stock ... FOR UPDATE` before inventory restoration. | Inventory serialization, potentially unbounded. |
 
-`StripeWebhookEventRepository.registerIfAbsent` is the only native modifying query outside those repositories. Its
+`StripeWebhookEventRepository.insertIgnoreDuplicate` is the only native modifying query outside those repositories. Its
 `INSERT ... ON CONFLICT DO NOTHING` has no explicit lock clause, but PostgreSQL uniqueness/index conflict resolution can
 still wait for a concurrent transaction. Ordinary ORM inserts, updates, deletes, foreign-key checks, and unique checks
 can likewise wait even though no lock syntax appears in repository source. Consequently the explicit-lock list is not

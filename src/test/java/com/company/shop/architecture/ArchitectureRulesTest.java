@@ -53,6 +53,7 @@ class ArchitectureRulesTest {
             "com.company.shop.module.order.outbox.OutboxEventProcessor",
             "com.company.shop.module.order.outbox.OutboxEventQueryService",
             "com.company.shop.module.order.outbox.OutboxEventTransactionalWorker",
+            "com.company.shop.module.order.service.StripeWebhookEventRegistrar",
             "com.company.shop.module.order.service.checkout.OrderCheckoutProcessor");
 
     @ArchTest

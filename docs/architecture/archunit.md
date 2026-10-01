@@ -41,9 +41,9 @@ This is the first lightweight quality gate for our modular monolith. The goal is
 
 ## Durable coordination time authority
 
-PostgreSQL owns durable coordination observations in the registered outbox, notification delivery, and reservation
-paths. The architecture rule prevents those classes from silently substituting replica-local wall time for their
-repository/database time boundary. The registry is intentionally type-based rather than package-wide because the same
+PostgreSQL owns durable coordination observations in the registered outbox, notification delivery, reservation, and
+Stripe webhook replay-barrier paths. The architecture rule prevents those classes from silently substituting
+replica-local wall time for their repository/database time boundary. The registry is intentionally type-based rather than package-wide because the same
 modules also contain valid audit, display, security, and business-observation timestamps. When a new component makes a
 time-sensitive durable eligibility, retry, claim, recovery, deadline, stale-state, or operational metric decision,
 maintainers must add its fully qualified type to `DURABLE_COORDINATION_TYPES` and review its authority explicitly.

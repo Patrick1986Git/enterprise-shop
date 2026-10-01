@@ -64,6 +64,13 @@ webhook registrar inserts the event ID before handling it and treats a uniquenes
 duplicate. Deleting that row can make the same repeated, correctly signed Stripe event appear new
 again.
 
+`processed_at` is not a retention clock or part of replay correctness. For newly registered rows it is the UTC plain
+timestamp produced from PostgreSQL `clock_timestamp()` in the barrier insert: a database observation of registration,
+not provider receipt, successful processing completion, or commit. A duplicate leaves the first committed timestamp
+unchanged. Historical values written before this contract came from replica-local wall clocks and have no proven common
+timezone. Neither generation of values establishes a provider replay or reconciliation horizon, so no numeric purge
+boundary may be derived from this column.
+
 Order and payment terminal transitions converge in several repeated-delivery cases. That reduces
 the risk of repeated terminal mutation, but it is not a substitute for exact provider-event
 idempotency and does not establish a safe replay horizon.

@@ -1,6 +1,5 @@
 package com.company.shop.module.order.service;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -19,8 +18,7 @@ public class StripeWebhookEventRegistrar {
         int insertedRows = stripeWebhookEventRepository.insertIgnoreDuplicate(
                 UUID.randomUUID(),
                 eventId,
-                eventType,
-                LocalDateTime.now());
+                eventType);
         return insertedRows == 1;
     }
 }
