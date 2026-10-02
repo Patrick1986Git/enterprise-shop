@@ -35,6 +35,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
+import com.zaxxer.hikari.HikariDataSource;
+
 import com.company.shop.config.ProductionDatabaseWaitPolicyValidator;
 import com.company.shop.config.ProductionFlywayIdentityConfiguration;
 
@@ -89,6 +91,7 @@ class ProductionDatabaseIdentityIT {
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> 4);
         registry.add("spring.datasource.hikari.minimum-idle", () -> 0);
         registry.add("spring.datasource.hikari.connection-timeout", () -> 1_000);
+        registry.add("spring.datasource.hikari.data-source-properties.socketTimeout", () -> 30);
         registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
         registry.add("spring.flyway.user", () -> MIGRATION_USER);
         registry.add("spring.flyway.password", () -> MIGRATION_PASSWORD);
@@ -97,6 +100,8 @@ class ProductionDatabaseIdentityIT {
     @Test
     void prodStartup_shouldSeparateRuntimeAndMigrationIdentitiesAndValidateExistingSchema() throws SQLException {
         assertThat(currentUser(dataSource)).isEqualTo(RUNTIME_USER);
+        assertThat(String.valueOf(((HikariDataSource) dataSource)
+                .getDataSourceProperties().get("socketTimeout"))).isEqualTo("30");
         assertThat(currentUser(flyway.getConfiguration().getDataSource())).isEqualTo(MIGRATION_USER);
         assertThat(flyway.info().pending()).isEmpty();
 

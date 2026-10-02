@@ -70,19 +70,15 @@ class ProductionDatabaseWaitPolicyValidatorIT {
     }
 
     @Test
-    void validator_shouldFailClosedForOneOrMultipleDisabledEffectiveRuntimeSettings() throws SQLException {
-        try (Connection connection = runtimeConnection(); Statement statement = connection.createStatement()) {
-            statement.execute("SET statement_timeout = 0");
-            assertThatIllegalStateException()
-                    .isThrownBy(() -> validator(connection).run(null))
-                    .withMessageContaining("statement_timeout");
+    void validator_shouldIndependentlyRejectEachDisabledEffectiveRuntimeSetting() throws SQLException {
+        assertRejectedAfterSet("statement_timeout", "0", "statement_timeout");
+        assertRejectedAfterSet("lock_timeout", "0", "lock_timeout");
+        assertRejectedAfterSet("idle_in_transaction_session_timeout", "0", "idle_in_transaction_session_timeout");
+    }
 
-            statement.execute("SET lock_timeout = 0");
-            statement.execute("SET idle_in_transaction_session_timeout = 0");
-            assertThatIllegalStateException()
-                    .isThrownBy(() -> validator(connection).run(null))
-                    .withMessageContaining("statement_timeout");
-        }
+    @Test
+    void validator_shouldRejectLockTimeoutThatIsNotShorterThanStatementTimeout() throws SQLException {
+        assertRejectedAfterSet("lock_timeout", "9s", "lock_timeout must be shorter than statement_timeout");
     }
 
     private static void assertFiniteRuntimePolicy(Connection connection) {
@@ -96,6 +92,15 @@ class ProductionDatabaseWaitPolicyValidatorIT {
                 .containsEntry("statement_timeout", "9s")
                 .containsEntry("lock_timeout", "3s")
                 .containsEntry("idle_timeout", "7s");
+    }
+
+    private static void assertRejectedAfterSet(String setting, String value, String message) throws SQLException {
+        try (Connection connection = runtimeConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("SET " + setting + " = '" + value + "'");
+            assertThatIllegalStateException()
+                    .isThrownBy(() -> validator(connection).run(null))
+                    .withMessageContaining(message);
+        }
     }
 
     private static Map<String, Object> settings(String username) {

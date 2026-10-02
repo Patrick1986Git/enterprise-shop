@@ -59,6 +59,10 @@ SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLIC
 SELECT format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT PASSWORD %L',
               :'runtime_user', :'runtime_password') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', :'database', :'migration_user') \gexec
+SELECT format('ALTER ROLE %I SET statement_timeout = %L', :'runtime_user', '9s') \gexec
+SELECT format('ALTER ROLE %I SET lock_timeout = %L', :'runtime_user', '3s') \gexec
+SELECT format('ALTER ROLE %I IN DATABASE %I SET idle_in_transaction_session_timeout = %L',
+              :'runtime_user', :'database', '7s') \gexec
 SQL
   docker exec -i "$container" psql --username "$ADMIN_USER" --dbname "$DATABASE" \
     --set=ON_ERROR_STOP=1 --set=migration_user="$MIGRATION_USER" --set=runtime_user="$RUNTIME_USER" <<'SQL'
@@ -71,12 +75,38 @@ SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT EXECU
 SQL
 }
 
+verify_runtime_wait_policy() {
+  local container=$1
+  local runtime_policy migration_policy admin_policy
+  runtime_policy=$(docker exec --env PGPASSWORD="$RUNTIME_PASSWORD" "$container" psql --host 127.0.0.1 \
+    --username "$RUNTIME_USER" --dbname "$DATABASE" --tuples-only --no-align --set=ON_ERROR_STOP=1 --command \
+    "SELECT current_setting('statement_timeout')::interval > interval '0'
+         AND current_setting('lock_timeout')::interval > interval '0'
+         AND current_setting('lock_timeout')::interval < current_setting('statement_timeout')::interval
+         AND current_setting('idle_in_transaction_session_timeout')::interval > interval '0';")
+  [[ "$runtime_policy" == t ]] || fail "runtime effective database wait policy is unsafe in $container"
+
+  migration_policy=$(docker exec --env PGPASSWORD="$MIGRATION_PASSWORD" "$container" psql --host 127.0.0.1 \
+    --username "$MIGRATION_USER" --dbname "$DATABASE" --tuples-only --no-align --set=ON_ERROR_STOP=1 --command \
+    "SELECT current_setting('statement_timeout') = '0'
+         AND current_setting('lock_timeout') = '0'
+         AND current_setting('idle_in_transaction_session_timeout') = '0';")
+  [[ "$migration_policy" == t ]] || fail "migration identity unexpectedly inherited runtime wait policy in $container"
+  admin_policy=$(docker exec "$container" psql --username "$ADMIN_USER" --dbname "$DATABASE" \
+    --tuples-only --no-align --set=ON_ERROR_STOP=1 --command \
+    "SELECT current_setting('statement_timeout') = '0'
+         AND current_setting('lock_timeout') = '0'
+         AND current_setting('idle_in_transaction_session_timeout') = '0';")
+  [[ "$admin_policy" == t ]] || fail "administrative identity unexpectedly inherited runtime wait policy in $container"
+}
+
 app_environment() {
   local host=$1
   export SPRING_PROFILES_ACTIVE=prod
   export DATABASE_URL="jdbc:postgresql://${host}:5432/${DATABASE}"
   export FLYWAY_URL="$DATABASE_URL"
   export DATABASE_MAXIMUM_POOL_SIZE=4 DATABASE_MINIMUM_IDLE=0 DATABASE_CONNECTION_TIMEOUT_MILLISECONDS=30000
+  export DATABASE_SOCKET_TIMEOUT_SECONDS=30
   export SERVER_TOMCAT_THREADS_MAX=20 SERVER_TOMCAT_MAX_CONNECTIONS=100 SERVER_TOMCAT_ACCEPT_COUNT=20
   export SERVER_TOMCAT_CONNECTION_TIMEOUT=20s JWT_KEY_ID=historical-forward-rehearsal
   export JWT_SECRET=c3ludGhldGljLXJlc3RvcmUtcmVoZWFyc2FsLWtleS0zMi1ieXRlcyE=
@@ -91,6 +121,7 @@ start_app() {
   app_environment "$host"
   for variable in SPRING_PROFILES_ACTIVE DATABASE_URL DATABASE_USERNAME DATABASE_PASSWORD FLYWAY_URL FLYWAY_USER \
     FLYWAY_PASSWORD DATABASE_MAXIMUM_POOL_SIZE DATABASE_MINIMUM_IDLE DATABASE_CONNECTION_TIMEOUT_MILLISECONDS \
+    DATABASE_SOCKET_TIMEOUT_SECONDS \
     SERVER_TOMCAT_THREADS_MAX SERVER_TOMCAT_MAX_CONNECTIONS SERVER_TOMCAT_ACCEPT_COUNT \
     SERVER_TOMCAT_CONNECTION_TIMEOUT JWT_KEY_ID JWT_SECRET STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET \
     STRIPE_PUBLIC_KEY STRIPE_CONNECT_TIMEOUT STRIPE_READ_TIMEOUT STRIPE_MAX_NETWORK_RETRIES; do
@@ -143,6 +174,7 @@ mapfile -t EXPECTED_PENDING < <(printf '%s\n' "${ALL_VERSIONS[@]}" | awk -v chec
 
 start_database "$SOURCE_CONTAINER"
 source_version=$(docker exec "$SOURCE_CONTAINER" postgres --version)
+verify_runtime_wait_policy "$SOURCE_CONTAINER"
 
 # Use the current application's bundled Flyway with an explicit immutable target. Hibernate validation
 # is disabled only for this source-construction process because the current entity model is intentionally
@@ -189,6 +221,7 @@ dump_size=$(stat -c %s "$DUMP_FILE")
 
 start_database "$TARGET_CONTAINER"
 target_version=$(docker exec "$TARGET_CONTAINER" postgres --version)
+verify_runtime_wait_policy "$TARGET_CONTAINER"
 docker cp "$DUMP_FILE" "$TARGET_CONTAINER:/tmp/rehearsal.dump" >/dev/null
 restore_started=$(date +%s)
 docker exec "$TARGET_CONTAINER" pg_restore --username "$ADMIN_USER" --dbname "$DATABASE" \
@@ -333,6 +366,7 @@ timeout 90 docker run --name "$TARGET_APP" --network "$NETWORK" --read-only --tm
   --env SPRING_PROFILES_ACTIVE --env DATABASE_URL --env DATABASE_USERNAME --env DATABASE_PASSWORD \
   --env FLYWAY_URL --env FLYWAY_USER --env FLYWAY_PASSWORD \
   --env DATABASE_MAXIMUM_POOL_SIZE --env DATABASE_MINIMUM_IDLE --env DATABASE_CONNECTION_TIMEOUT_MILLISECONDS \
+  --env DATABASE_SOCKET_TIMEOUT_SECONDS \
   --env SERVER_TOMCAT_THREADS_MAX --env SERVER_TOMCAT_MAX_CONNECTIONS --env SERVER_TOMCAT_ACCEPT_COUNT \
   --env SERVER_TOMCAT_CONNECTION_TIMEOUT --env JWT_KEY_ID --env JWT_SECRET --env STRIPE_SECRET_KEY \
   --env STRIPE_WEBHOOK_SECRET --env STRIPE_PUBLIC_KEY --env STRIPE_CONNECT_TIMEOUT --env STRIPE_READ_TIMEOUT \

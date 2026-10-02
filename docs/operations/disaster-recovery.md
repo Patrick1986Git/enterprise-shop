@@ -130,7 +130,9 @@ The deployment owner must run a restore rehearsal at a cadence derived from its 
 
 The exact-version repository command builds the existing PostgreSQL and application images, creates isolated source and target
 containers with separately provisioned synthetic admin, migration, and `NOINHERIT` runtime roles, and runs production
-profile startup with the normal runtime/Flyway identity split. It applies current migrations to the source, loads the
+profile startup with the normal runtime/Flyway identity split. It provisions runtime-only wait policy and verifies its
+effective values through a fresh runtime session before startup; the numeric values in these synthetic rehearsals are
+test fixtures, not production recommendations. The application then applies current migrations before the script loads the
 deterministic fixture in `scripts/restore-rehearsal-fixture.sql` through the runtime role, creates an unfiltered
 `pg_dump --format=custom`, validates its table of contents, and records its SHA-256 digest. It then performs an
 owner-preserving restore as the synthetic administrator after recreating the original role names. This mode most
