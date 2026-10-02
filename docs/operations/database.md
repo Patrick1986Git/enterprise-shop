@@ -134,6 +134,45 @@ still wait for a concurrent transaction. Ordinary ORM inserts, updates, deletes,
 can likewise wait even though no lock syntax appears in repository source. Consequently the explicit-lock list is not
 a claim that all other SQL is non-blocking.
 
+### Stripe webhook wait and lock order
+
+Signature verification completes before the webhook transaction first borrows a connection. Once
+`PaymentServiceImpl.handleWebhook` enters its transaction, every supported event first executes the replay-barrier
+`INSERT ... ON CONFLICT DO NOTHING`. A concurrent uncommitted insert of the same Stripe event ID makes PostgreSQL wait
+for that transaction's unique-index decision. During that wait the request retains its Tomcat worker, one borrowed
+Hikari connection, and its open transaction. It holds no Order, Payment, Product, or Cart row lock yet. If the winner
+commits, the waiter returns duplicate and commits no other mutation; if the winner rolls back, the waiter inserts the
+barrier and continues. The integration contract proves both branches by observing the waiting backend in
+`pg_stat_activity`, without using a sleep as synchronization. No repository configuration bounds this wait.
+
+After a new supported terminal event passes the barrier, database work is ordered as follows:
+
+| Outcome | Ordered operations and possible waits | Locks already held at each wait |
+| --- | --- | --- |
+| Succeeded | replay insert; Order `FOR UPDATE`; Payment `FOR UPDATE`; provider/money validation and status writes; Cart `FOR UPDATE` when a Cart exists; Cart-item reconciliation; commit | The Payment wait holds the replay unique-key effect and Order lock. The Cart wait additionally holds Payment. On failure, the outer transaction rolls back barrier, statuses, provider attachment, and Cart changes. |
+| Canceled | replay insert; Order `FOR UPDATE`; Payment `FOR UPDATE`; sorted Product `FOR UPDATE` locks (including the explicit hidden-Product query); inventory/status writes; commit | Each Product wait holds the replay effect, Order and Payment locks, plus earlier Product locks in UUID order. Rollback removes the barrier and restores all pre-transaction financial and stock state. |
+| Payment failed | replay insert; Order `FOR UPDATE`; Payment `FOR UPDATE`; provider attachment/status write; commit | The Payment wait holds the replay effect and Order lock. Rollback removes both the barrier and mutations. |
+| Unsupported or non-deserializable | replay insert followed by commit, with no financial row lock | Only uniqueness resolution can wait. A thrown failure rolls the insert back. |
+| Duplicate | replay insert waits if the first delivery is unresolved, then returns zero after its commit | No later domain lock is acquired. A first-delivery rollback lets this transaction become the processing owner. |
+
+Dirty checking and commit itself can wait for WAL, foreign-key, index, or storage work even where source has no explicit
+lock call. Hikari acquisition precedes these operations but its connection timeout stops only pool acquisition; it does
+not time a statement after borrowing. Therefore *N* blocked webhook transactions can occupy *N* workers and *N*
+connections, up to deployment-selected capacities, while retaining their transactions and acquired locks.
+
+All terminal convergence entry points, including webhook and reservation expiration, acquire Order then Payment.
+PaymentIntent attachment also uses Order then Payment. Its preparation transaction locks Payment alone and commits
+before provider I/O; it never requests Order while holding that Payment lock. Cancellation then locks Products in
+sorted UUID order. Checkout locks its Cart before sorted Products but creates new Order/Payment rows rather than
+requesting locks on an existing terminal aggregate. Product mutation/retirement and inventory reservation/restoration
+lock Product (and, where applicable, Category) but never subsequently request Order or Payment. Success adds a Cart
+lock after Order and Payment; Cart mutation and checkout do not subsequently lock an existing Order or Payment.
+Reservation recovery uses Work then Order but does not call terminal convergence while retaining those locks. Thus the
+audited production paths contain no reachable `Payment -> Order`, `Product -> Order/Payment`, or `Cart -> Order/Payment`
+inverse edge, and no Order/Payment/Product deadlock cycle. PostgreSQL can still choose a deadlock victim for unrelated
+or future cycles; that failure aborts the statement and the transaction is rolled back, leaving its replay barrier
+retryable.
+
 ### User retirement and commerce
 
 User retirement, administrative enable/disable, mutable profile updates, and active current-user resolution share one transaction-scoped advisory lock derived from the User
@@ -189,7 +228,8 @@ runtime identity, PostgreSQL `lock_timeout` controls that wait on the server.
 
 ### Ownership decision
 
-The audit selects **Outcome B** for generic statement, lock-wait, transaction, and idle-in-transaction bounds. Safe
+The audit selects **Outcome A**: deployment-owned generic PostgreSQL policy remains correct for statement, lock-wait,
+transaction, and idle-in-transaction bounds. Safe
 values depend on measured query/lock latency, request and worker budgets, database performance, rollout/shutdown policy,
 and operational recovery. The repository intentionally does not invent universal numeric defaults. The checkout
 advisory lock and each row lock remain repository-owned correctness mechanisms, but their generic wait durations do

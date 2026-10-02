@@ -59,6 +59,13 @@ These layers are not interchangeable buffers. Large stacked queues retain socket
 
 BCrypt work occurs on Tomcat workers. Raising the worker ceiling without CPU evidence can admit more concurrent hashes than the CPU can progress, increasing runnable threads and latency for unrelated requests. Edge authentication throttling remains necessary because a thread ceiling is capacity isolation, not an abuse policy; BCrypt strength and authentication/registration responses remain unchanged.
 
+A webhook blocked on replay uniqueness or an Order, Payment, Product, or Cart lock keeps its Tomcat worker and its
+borrowed Hikari connection for the same interval. Neither `server.tomcat.connection-timeout` nor Hikari
+`connectionTimeout` bounds that post-admission database wait. With no repository-owned PostgreSQL lock or statement
+timeout, the duration remains deployment-owned; the capacity consequence is one worker and one pool connection per
+blocked webhook, not an independent queue. A client or edge deadline can stop waiting for the HTTP response without
+proving cancellation of the servlet transaction.
+
 ## Hikari interaction and overload semantics
 
 When Tomcat workers greatly outnumber available Hikari connections, as many DB-seeking request threads as the worker ceiling permits can block in Hikari (less workers doing non-DB work), each until the configured acquisition timeout. Their stacks and request state consume memory and the runnable/wakeup population adds scheduling cost. A timed-out acquisition becomes a request failure through the existing error handling; it is neither queue rejection nor `429`.

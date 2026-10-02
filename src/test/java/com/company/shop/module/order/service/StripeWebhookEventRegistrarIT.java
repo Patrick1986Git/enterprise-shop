@@ -7,7 +7,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.company.shop.module.order.entity.StripeWebhookEvent;
 import com.company.shop.module.order.repository.StripeWebhookEventRepository;
 import com.company.shop.persistence.support.PostgresContainerSupport;
+import com.zaxxer.hikari.HikariDataSource;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -35,6 +38,9 @@ class StripeWebhookEventRegistrarIT extends PostgresContainerSupport {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private HikariDataSource dataSource;
 
     @Test
     void register_shouldUseDatabaseUtcObservationAndKeepOriginalTimestampOnDuplicate() {
@@ -89,6 +95,83 @@ class StripeWebhookEventRegistrarIT extends PostgresContainerSupport {
         }
 
         assertThat(rowCount(eventId)).isOne();
+    }
+
+    @Test
+    void register_shouldWaitForUncommittedDuplicateAndReturnDuplicateAfterCommit() throws Exception {
+        String eventId = uniqueEventId("wait-commit");
+
+        assertConcurrentRegistrationOutcome(eventId, false, false);
+
+        assertThat(rowCount(eventId)).isOne();
+    }
+
+    @Test
+    void register_shouldWaitForUncommittedDuplicateAndInsertAfterRollback() throws Exception {
+        String eventId = uniqueEventId("wait-rollback");
+
+        assertConcurrentRegistrationOutcome(eventId, true, true);
+
+        assertThat(rowCount(eventId)).isOne();
+    }
+
+    private void assertConcurrentRegistrationOutcome(String eventId, boolean rollBackHolder,
+            boolean expectedContenderResult) throws Exception {
+        CountDownLatch holderInserted = new CountDownLatch(1);
+        CountDownLatch releaseHolder = new CountDownLatch(1);
+        AtomicInteger contenderPid = new AtomicInteger();
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<?> holder = executor.submit(() -> transactionTemplate.executeWithoutResult(status -> {
+                assertThat(registrar.register(eventId, "payment_intent.succeeded")).isTrue();
+                holderInserted.countDown();
+                await(releaseHolder);
+                if (rollBackHolder) {
+                    status.setRollbackOnly();
+                }
+            }));
+
+            assertThat(holderInserted.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<Boolean> contender = executor.submit(() -> transactionTemplate.execute(status -> {
+                contenderPid.set(jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                return registrar.register(eventId, "payment_intent.succeeded");
+            }));
+
+            assertThat(awaitDatabaseLockWait(contenderPid)).isTrue();
+            assertThat(contender).isNotDone();
+            assertThat(dataSource.getHikariPoolMXBean().getActiveConnections()).isGreaterThanOrEqualTo(2);
+
+            releaseHolder.countDown();
+            holder.get(10, TimeUnit.SECONDS);
+            assertThat(contender.get(10, TimeUnit.SECONDS)).isEqualTo(expectedContenderResult);
+        }
+    }
+
+    private boolean awaitDatabaseLockWait(AtomicInteger pid) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (pid.get() != 0 && Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                    SELECT EXISTS (
+                        SELECT 1 FROM pg_stat_activity
+                        WHERE pid = ? AND state = 'active' AND wait_event_type = 'Lock'
+                    )
+                    """, Boolean.class, pid.get()))) {
+                return true;
+            }
+            Thread.onSpinWait();
+        }
+        return false;
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("coordination timeout");
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(ex);
+        }
     }
 
     private boolean registerAfterBarrier(String eventId, CountDownLatch ready, CountDownLatch start)
