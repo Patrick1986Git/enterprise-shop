@@ -29,6 +29,11 @@ Run from repository root:
 
 ## 4) DB/Flyway safety when persistence changes
 
+- Verify a fresh least-privilege runtime session has finite effective `statement_timeout`, `lock_timeout`, and
+  `idle_in_transaction_session_timeout`, with `lock_timeout` shorter than `statement_timeout`, plus a positive pgJDBC
+  `socketTimeout`. Keep Flyway, administrative, backup/restore, and reviewed maintenance identities under separate
+  operational policy.
+
 - [ ] Schema changes are represented by a new migration under `src/main/resources/db/migration`.
 - [ ] Historical migrations were not edited.
 - [ ] Entity mappings and migrations remain aligned with Hibernate validation.

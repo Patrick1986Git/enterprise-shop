@@ -17,6 +17,9 @@ spring:
       maximum-pool-size: ${DATABASE_MAXIMUM_POOL_SIZE}
       minimum-idle: ${DATABASE_MINIMUM_IDLE}
       connection-timeout: ${DATABASE_CONNECTION_TIMEOUT_MILLISECONDS}
+      # pgJDBC network-read bound; separate from PostgreSQL server-side execution policy.
+      data-source-properties:
+        socketTimeout: ${DATABASE_SOCKET_TIMEOUT_SECONDS}
 
   # JPA & Hibernate: Production Settings
   # 'validate' ensures that no destructive schema changes occur.

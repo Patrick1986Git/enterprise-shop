@@ -165,7 +165,7 @@ class ApplicationConfigurationProfileTest {
     }
 
     @Test
-    void prodConfiguration_shouldRequireDeploymentOwnedHikariCapacityAndAcquisitionTimeout() {
+    void prodConfiguration_shouldRequireDeploymentOwnedHikariCapacityAndNetworkTimeouts() {
         Properties properties = loadProperties("application-prod.yml");
 
         assertThat(properties.getProperty("spring.datasource.hikari.maximum-pool-size"))
@@ -174,6 +174,8 @@ class ApplicationConfigurationProfileTest {
                 .isEqualTo("${DATABASE_MINIMUM_IDLE}");
         assertThat(properties.getProperty("spring.datasource.hikari.connection-timeout"))
                 .isEqualTo("${DATABASE_CONNECTION_TIMEOUT_MILLISECONDS}");
+        assertThat(properties.getProperty("spring.datasource.hikari.data-source-properties.socketTimeout"))
+                .isEqualTo("${DATABASE_SOCKET_TIMEOUT_SECONDS}");
     }
 
     @Test
@@ -308,7 +310,8 @@ class ApplicationConfigurationProfileTest {
                         "DATABASE_PASSWORD=runtime_password",
                         "DATABASE_MAXIMUM_POOL_SIZE=4",
                         "DATABASE_MINIMUM_IDLE=0",
-                        "DATABASE_CONNECTION_TIMEOUT_MILLISECONDS=1000");
+                        "DATABASE_CONNECTION_TIMEOUT_MILLISECONDS=1000",
+                        "DATABASE_SOCKET_TIMEOUT_SECONDS=30");
     }
 
     private static Properties loadProperties(String resourceName) {
