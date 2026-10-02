@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 
 PROPERTIES = Path(".mvn/wrapper/maven-wrapper.properties")
 DOCKERFILE = Path("Dockerfile")
-EXPECTED_ARCHIVE = "apache-maven-3.9.16-bin.zip"
-EXPECTED_SHA256 = "5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce"
+EXPECTED_ARCHIVE = "apache-maven-3.10.0-bin.zip"
+EXPECTED_SHA256 = "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff"
 SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 BUILDER_UNZIP_INSTALL = """RUN apt-get update \\
     && apt-get install --no-install-recommends -y unzip \\

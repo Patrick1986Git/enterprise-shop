@@ -28,7 +28,7 @@ class MavenWrapperPolicyTest(unittest.TestCase):
             "wrapperVersion=3.3.4\n"
             "distributionType=only-script\n"
             "distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/"
-            "apache-maven/3.9.16/apache-maven-3.9.16-bin.zip\n"
+            "apache-maven/3.10.0/apache-maven-3.10.0-bin.zip\n"
             f"distributionSha256Sum={VALIDATOR.EXPECTED_SHA256}\n"
         )
 
@@ -57,7 +57,7 @@ class MavenWrapperPolicyTest(unittest.TestCase):
         self.assertIn("must use HTTPS", " ".join(self.validate(properties)))
 
     def test_rejects_unreviewed_distribution_archive(self):
-        properties = self.valid_properties().replace("3.9.16", "3.9.17")
+        properties = self.valid_properties().replace("3.10.0", "3.10.1")
 
         self.assertIn("reviewed archive", " ".join(self.validate(properties)))
 
