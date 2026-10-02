@@ -29,6 +29,14 @@ For replacement of replica A while replica B remains available, the deployment p
 
 Spring can expose state and drain requests already admitted to Tomcat, but it cannot remove A from an external routing table. The deployment must account for its own polling interval and deregistration latency in addition to the application's multi-phase lifecycle allowance. Authenticated reads, checkout, order mutations, payment-intent creation, webhooks, and ADMIN commands all use the same server drain boundary; there is no endpoint-specific shutdown bypass.
 
+An admitted webhook blocked inside PostgreSQL is allowed to drain during the web phase, but the 30-second lifecycle
+phase does not itself cancel JDBC or establish a database statement deadline. If the platform ultimately terminates the
+JVM, its database sessions disconnect and PostgreSQL releases their row, uniqueness, and transaction-scoped locks;
+uncommitted replay registration and financial, inventory, and Cart mutations roll back. Stripe receives no successful
+acknowledgement from a terminated request and can retry, at which point the absent replay row permits processing.
+Reservation and notification claim leases are separate worker-recovery contracts and do not extend webhook request
+lifetime.
+
 Production Tomcat worker, connection, accept-backlog, and request-read limits are deployment-owned and mandatory as
 described in [HTTP admission capacity and backpressure](./http-capacity.md). Graceful shutdown pauses new connector
 admission; work already accepted or executing still consumes the 30-second web phase. Connector and OS queues do not
