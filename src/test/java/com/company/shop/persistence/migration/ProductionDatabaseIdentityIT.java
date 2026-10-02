@@ -35,6 +35,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
+import com.company.shop.config.ProductionDatabaseWaitPolicyValidator;
 import com.company.shop.config.ProductionFlywayIdentityConfiguration;
 
 @SpringBootTest(
@@ -285,6 +286,10 @@ class ProductionDatabaseIdentityIT {
                     + " LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '" + MIGRATION_PASSWORD + "'");
             statement.execute("CREATE ROLE " + RUNTIME_USER
                     + " LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '" + RUNTIME_PASSWORD + "'");
+            statement.execute("ALTER ROLE " + RUNTIME_USER + " SET statement_timeout = '9s'");
+            statement.execute("ALTER ROLE " + RUNTIME_USER + " SET lock_timeout = '3s'");
+            statement.execute("ALTER ROLE " + RUNTIME_USER
+                    + " IN DATABASE enterprise_shop_prod_test SET idle_in_transaction_session_timeout = '7s'");
             statement.execute("ALTER DATABASE enterprise_shop_prod_test OWNER TO " + MIGRATION_USER);
             statement.execute("ALTER SCHEMA public OWNER TO " + MIGRATION_USER);
             statement.execute("GRANT CONNECT ON DATABASE enterprise_shop_prod_test TO " + RUNTIME_USER);
@@ -302,7 +307,7 @@ class ProductionDatabaseIdentityIT {
 
     @Configuration(proxyBeanMethods = false)
     @EntityScan("com.company.shop")
-    @Import(ProductionFlywayIdentityConfiguration.class)
+    @Import({ ProductionFlywayIdentityConfiguration.class, ProductionDatabaseWaitPolicyValidator.class })
     @ImportAutoConfiguration({
             DataSourceAutoConfiguration.class,
             JdbcTemplateAutoConfiguration.class,

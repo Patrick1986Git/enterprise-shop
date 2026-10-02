@@ -83,6 +83,7 @@ import com.company.shop.security.jwt.JwtTokenProvider;
                 "spring.datasource.hikari.maximum-pool-size=4",
                 "spring.datasource.hikari.minimum-idle=0",
                 "spring.datasource.hikari.connection-timeout=1000",
+                "spring.datasource.hikari.data-source-properties.socketTimeout=30",
                 "spring.flyway.url=jdbc:postgresql://localhost:5432/test",
                 "spring.flyway.user=migration",
                 "spring.flyway.password=test",
@@ -101,7 +102,8 @@ import com.company.shop.security.jwt.JwtTokenProvider;
         })
 @ActiveProfiles("prod")
 @MockitoBean(types = {
-        ProductionDatabaseOwnershipValidator.class, AuthService.class, ApplicationStatusService.class,
+        ProductionDatabaseOwnershipValidator.class, ProductionDatabaseWaitPolicyValidator.class,
+        AuthService.class, ApplicationStatusService.class,
         CategoryService.class, ProductService.class,
         ProductCatalogFacade.class, ProductReviewService.class, CartService.class, UserService.class,
         NotificationService.class, NotificationQueryService.class, NotificationAdminCommandService.class,
