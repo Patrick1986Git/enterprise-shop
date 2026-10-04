@@ -38,6 +38,7 @@ separated by `, `. Do not add production values to this table.
 | `DATABASE_MAXIMUM_POOL_SIZE` | `spring.datasource.hikari.maximum-pool-size` | required | Required. Must be positive and at least `DATABASE_MINIMUM_IDLE`. | Sensitive | Integer connections per replica; no default. | Platform/database capacity; custom production Hikari validator. See [HTTP and downstream capacity](./http-capacity.md) and [database operations](./database.md). |
 | `DATABASE_MINIMUM_IDLE` | `spring.datasource.hikari.minimum-idle` | required | Required. Must be non-negative and no greater than the maximum pool size. | Sensitive | Integer idle connections per replica; no default. | Platform/database capacity; custom production Hikari validator. See [HTTP and downstream capacity](./http-capacity.md). |
 | `DATABASE_CONNECTION_TIMEOUT_MILLISECONDS` | `spring.datasource.hikari.connection-timeout` | required | Required. Must be at least 250 ms. | Sensitive | Integer milliseconds; no default. | Platform/database latency policy; custom production Hikari validator. See [HTTP and downstream capacity](./http-capacity.md). |
+| `DATABASE_SOCKET_TIMEOUT_SECONDS` | `spring.datasource.hikari.data-source-properties.socketTimeout` | required | Required and positive; bounds pgJDBC socket reads, not SQL execution or a whole request. | Sensitive | Integer seconds; no default. | Platform/network latency policy; custom production Hikari validator. See [database operations](./database.md). |
 | `FLYWAY_URL` | `spring.flyway.url` | defaulted | Optional override; falls back exactly to `${DATABASE_URL}`. | Sensitive | PostgreSQL JDBC URL; fallback is `DATABASE_URL`. | Database migration owner; connectivity and driver parsing fail startup. Both variables are inventoried because one selects the migration endpoint while the fallback remains a separately required runtime input. See [migrations](./migrations.md). |
 | `FLYWAY_USER` | `spring.flyway.user` | required | Required and non-blank; must differ from `DATABASE_USERNAME`. | Sensitive | Migration PostgreSQL role name; no default. | Database migration owner; custom production Flyway identity validator. See [database operations](./database.md) and [migrations](./migrations.md). |
 | `FLYWAY_PASSWORD` | `spring.flyway.password` | required | Required and non-blank. | Secret | Migration-role credential; no default. | Secret store/database migration owner; custom production Flyway identity validator and database authentication fail startup. See [migrations](./migrations.md). |
@@ -124,14 +125,18 @@ the sender.
 
 Before rollout, the deployment owner must:
 
-1. supply every `required` row, including secrets through an approved injection mechanism;
-2. decide whether optional overrides are needed and preserve the documented defaults otherwise;
-3. coordinate Tomcat, Hikari, database, Stripe, worker, SMTP, edge, and termination budgets rather than tuning each in
+1. configure finite PostgreSQL `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` values
+   for the runtime identity, with `lock_timeout` shorter than `statement_timeout`; startup validates these effective
+   session invariants without owning their numeric values;
+
+2. supply every `required` row, including secrets through an approved injection mechanism;
+3. decide whether optional overrides are needed and preserve the documented defaults otherwise;
+4. coordinate Tomcat, Hikari, database, Stripe, worker, SMTP, edge, and termination budgets rather than tuning each in
    isolation;
-4. keep runtime and migration database identities separate and grant them only their documented privileges;
-5. test database/Flyway connectivity, Stripe credentials/webhooks, CORS origins, and enabled SMTP transport against the
+5. keep runtime and migration database identities separate and grant them only their documented privileges;
+6. test database/Flyway connectivity, Stripe credentials/webhooks, CORS origins, and enabled SMTP transport against the
    actual external infrastructure; and
-6. exercise readiness, graceful shutdown, rollback, key rotation, and recovery procedures described in the linked runbooks.
+7. exercise readiness, graceful shutdown, rollback, key rotation, and recovery procedures described in the linked runbooks.
 
 Repository startup validation proves binding and the listed invariants. It cannot prove external capacity, routing,
 credential acceptance, provider sender policy, certificate trust, DNS, firewall rules, or secret rotation by the deployment.

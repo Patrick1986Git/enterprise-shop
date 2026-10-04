@@ -73,6 +73,7 @@ class DiscountCodeLockTimeoutIT extends PostgresContainerSupport {
     @Timeout(20)
     void findByCodeIgnoreCase_shouldUseDeploymentOwnedPostgresLockTimeoutUnderContention() throws Exception {
         String code = "LOCK-" + UUID.randomUUID().toString().substring(0, 8);
+        String rolledBackCode = "ROLLBACK-" + UUID.randomUUID().toString().substring(0, 8);
         insertDiscountCode(code);
 
         CountDownLatch lockHeld = new CountDownLatch(1);
@@ -92,6 +93,8 @@ class DiscountCodeLockTimeoutIT extends PostgresContainerSupport {
             Future<Throwable> contender = executor.submit(() -> {
                 try {
                     transactionTemplate.executeWithoutResult(status -> {
+                        insertDiscountCode(rolledBackCode);
+                        entityManager.flush();
                         entityManager.createNativeQuery("SET LOCAL lock_timeout = '100ms'").executeUpdate();
                         contenderAttemptedLock.countDown();
                         discountCodeRepository.findByCodeIgnoreCase(code);
@@ -114,6 +117,12 @@ class DiscountCodeLockTimeoutIT extends PostgresContainerSupport {
             assertThat(postgresFailure.getServerErrorMessage().getMessage())
                     .contains("lock timeout");
         }
+
+        Number rolledBackRows = (Number) entityManager.createNativeQuery(
+                "SELECT count(*) FROM discount_codes WHERE code = :code")
+                .setParameter("code", rolledBackCode)
+                .getSingleResult();
+        assertThat(rolledBackRows.intValue()).isZero();
     }
 
     private boolean consumeIfEligible(String code, CountDownLatch start) {

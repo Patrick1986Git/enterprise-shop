@@ -88,15 +88,16 @@ Java 21, and the repository's `postgres:18-alpine` server image. The following t
 | Layer | Current repository contract | What it does not bound |
 | --- | --- | --- |
 | Hikari connection acquisition | Production must provide `DATABASE_CONNECTION_TIMEOUT_MILLISECONDS`. Hikari applies it only while `DataSource.getConnection()` waits for a pool entry. | SQL, a lock wait, or a transaction after the connection has been borrowed. |
-| JDBC/network | No PostgreSQL JDBC `socketTimeout`, `Statement.setQueryTimeout`, or `Connection.setNetworkTimeout` policy is configured. | With the driver defaults, application-side network and statement execution have no repository-owned deadline. |
-| SQL statement | No global JPA/Hibernate query timeout and no PostgreSQL `statement_timeout` are configured. | A slow plan, database resource wait, or blocked statement can retain a borrowed connection without a repository-owned bound. |
-| Lock wait | No general JPA/Hibernate lock timeout and no PostgreSQL `lock_timeout` are configured. | Ordinary row/advisory lock acquisition is unbounded by repository configuration. |
+| JDBC/network | Production requires a positive deployment-owned pgJDBC `socketTimeout`; no global `Statement.setQueryTimeout` or `Connection.setNetworkTimeout` is configured. | The socket bound covers stalled reads, not server execution, lock acquisition, transaction duration, or a whole request. |
+| SQL statement | Production startup requires the effective runtime-session PostgreSQL `statement_timeout` to be finite. | The deployment owns its value; it is not a whole-request deadline. |
+| Lock wait | Production startup requires a finite effective runtime `lock_timeout` shorter than `statement_timeout`. | Correctness-critical locks remain blocking; deployment chooses the permitted wait. |
 | Spring transaction | There is no `spring.transaction.default-timeout`, transaction-manager override, or `@Transactional(timeout=...)`. Read-only transactions differ only in the read-only hint, not duration. | Transaction completion and idle-in-transaction time. A Spring timeout, if later used, is not a forceful wall-clock cancellation guarantee for arbitrary blocked driver I/O. |
-| PostgreSQL idle transaction | No `idle_in_transaction_session_timeout` or `idle_session_timeout` is configured. | A session that is idle while its transaction remains open is not terminated by repository-owned policy. |
+| PostgreSQL idle transaction | Production startup requires a finite effective runtime `idle_in_transaction_session_timeout`; `idle_session_timeout` remains optional. | The required setting recovers abandoned open transactions, while transaction-free pooled idle sessions need not be terminated. |
 
 PostgreSQL JDBC cancellation is best effort: a JDBC query timeout schedules a separate cancel request, while
 `socketTimeout` closes a connection after a socket read receives no data. Those are different failure and recovery
-mechanisms and neither is supplied here. PostgreSQL `statement_timeout` measures statement execution on the server;
+mechanisms: production requires the socket bound and validates effective server-side bounds independently. PostgreSQL
+`statement_timeout` measures statement execution on the server;
 `lock_timeout` applies while acquiring PostgreSQL locks (including advisory locks) and is useful only when shorter than
 the applicable statement timeout. A server/session timeout cancels the statement and leaves an explicit transaction
 failed until rollback; transaction-scoped advisory locks are released when that transaction ends, or when the session
@@ -228,18 +229,24 @@ runtime identity, PostgreSQL `lock_timeout` controls that wait on the server.
 
 ### Ownership decision
 
-The audit selects **Outcome A**: deployment-owned generic PostgreSQL policy remains correct for statement, lock-wait,
-transaction, and idle-in-transaction bounds. Safe
+The follow-up selects **Outcome A**: production fails closed unless the effective least-privilege runtime session has
+finite `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` values. The repository owns the
+presence/boundedness invariant, while deployment owns every numeric value. `lock_timeout` must be shorter than
+`statement_timeout`, so it remains an effective lock-acquisition policy rather than a redundant later cancellation. Safe
 values depend on measured query/lock latency, request and worker budgets, database performance, rollout/shutdown policy,
-and operational recovery. The repository intentionally does not invent universal numeric defaults. The checkout
+and operational recovery. The repository intentionally does not invent universal numeric defaults. `idle_session_timeout`
+is not mandatory because an idle, transaction-free Hikari session retains no transaction locks or partial work. The checkout
 advisory lock and each row lock remain repository-owned correctness mechanisms, but their generic wait durations do
 not become application correctness numbers. Existing `SKIP LOCKED` coordination remains non-blocking and needs no lock
 timeout hint.
 
-Prefer PostgreSQL role or database defaults scoped to the least-privilege runtime identity when a deployment adopts
+Prefer PostgreSQL role or role-in-database defaults scoped to the least-privilege runtime identity for
 `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout`. This covers ORM and native SQL without
 high-cardinality per-query configuration and keeps the policy visible to database operators. Validate the effective
-values on a fresh runtime session during deployment. JDBC URL `options` or Hikari connection-init SQL can also scope a
+values on a fresh runtime session during deployment. Server and database defaults, JDBC startup `options`, session
+`SET`, and Hikari connection-init SQL may also supply or override effective values under PostgreSQL's normal precedence.
+The validator therefore reads `current_setting(...)` through the runtime `JdbcTemplate`; it neither parses
+`DATABASE_URL` nor mutates policy. JDBC URL `options` or Hikari connection-init SQL can also scope a
 runtime-session policy, but they couple operational policy to application configuration and should not be combined
 with role defaults without a clear precedence rule. Per-query hints are reserved for a proven, query-specific contract.
 
@@ -247,6 +254,30 @@ Do not apply runtime timeouts to `FLYWAY_USER`, the Flyway URL, the PostgreSQL a
 ownership transfer, backup/restore, or reviewed maintenance sessions. Migrations and privileged operations have
 different duration and recovery requirements. Runtime/Flyway identity separation is therefore also the timeout-policy
 boundary; database-wide defaults are unsafe unless they explicitly exclude those identities.
+
+Spring creates the primary runtime datasource used by JPA and `JdbcTemplate`; the explicit production Flyway URL and
+credentials create a separate migration datasource. Flyway migration and Hibernate schema validation complete during
+context initialization, before `ApplicationRunner` execution. The wait-policy runner therefore borrows only a runtime
+Hikari connection after migration. Repository code does not mutate these generic session settings and no Hikari
+connection-init SQL is configured, so all physical pool connections share the same startup/default configuration. The
+PostgreSQL integration contract additionally proves two distinct runtime sessions and a replacement session inherit
+the role and role-in-database policy, while the migration identity remains unbounded.
+
+The separate positive `DATABASE_SOCKET_TIMEOUT_SECONDS` requirement supplies pgJDBC's network-read bound. PostgreSQL
+server cancellation cannot ensure delivery over a broken network path, while this socket bound cannot cancel server
+work or establish a whole-request deadline.
+
+### Production rollout for the startup invariant
+
+1. Connect as the runtime identity and inspect `SHOW statement_timeout`, `SHOW lock_timeout`, and
+   `SHOW idle_in_transaction_session_timeout` (or equivalent `current_setting(...)` calls).
+2. Configure deployment-selected finite values at the runtime role or role-in-database level, keeping lock timeout
+   shorter than statement timeout and leaving migration, admin, restore, and maintenance identities separate.
+3. Verify the effective settings in a fresh runtime session and configure a positive deployment-selected pgJDBC socket
+   timeout.
+4. Deploy the validator. Unsafe or unreadable policy stops startup while reporting only the setting and semantic
+   requirement, never URL, username, SQL, credential, or raw driver diagnostics.
+5. Verify startup, readiness, ordinary queries, and expected contention before routing traffic.
 
 ### Failure and observability contract
 

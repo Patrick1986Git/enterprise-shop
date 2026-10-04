@@ -15,14 +15,17 @@ public class ProductionHikariConfigurationValidator {
     private final int maximumPoolSize;
     private final int minimumIdle;
     private final long connectionTimeoutMilliseconds;
+    private final int socketTimeoutSeconds;
 
     public ProductionHikariConfigurationValidator(
             @Value("${spring.datasource.hikari.maximum-pool-size}") int maximumPoolSize,
             @Value("${spring.datasource.hikari.minimum-idle}") int minimumIdle,
-            @Value("${spring.datasource.hikari.connection-timeout}") long connectionTimeoutMilliseconds) {
+            @Value("${spring.datasource.hikari.connection-timeout}") long connectionTimeoutMilliseconds,
+            @Value("${spring.datasource.hikari.data-source-properties.socketTimeout}") int socketTimeoutSeconds) {
         this.maximumPoolSize = maximumPoolSize;
         this.minimumIdle = minimumIdle;
         this.connectionTimeoutMilliseconds = connectionTimeoutMilliseconds;
+        this.socketTimeoutSeconds = socketTimeoutSeconds;
     }
 
     @PostConstruct
@@ -40,6 +43,10 @@ public class ProductionHikariConfigurationValidator {
         if (connectionTimeoutMilliseconds < HIKARI_MINIMUM_CONNECTION_TIMEOUT_MILLISECONDS) {
             throw new IllegalStateException(
                     "spring.datasource.hikari.connection-timeout must be at least 250 milliseconds");
+        }
+        if (socketTimeoutSeconds < 1) {
+            throw new IllegalStateException(
+                    "spring.datasource.hikari.data-source-properties.socketTimeout must be positive");
         }
     }
 }

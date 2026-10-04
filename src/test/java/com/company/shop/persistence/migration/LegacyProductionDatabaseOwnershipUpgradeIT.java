@@ -161,6 +161,7 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
                         "DATABASE_MAXIMUM_POOL_SIZE", "4",
                         "DATABASE_MINIMUM_IDLE", "0",
                         "DATABASE_CONNECTION_TIMEOUT_MILLISECONDS", "1000",
+                        "DATABASE_SOCKET_TIMEOUT_SECONDS", "30",
                         "FLYWAY_URL", POSTGRES.getJdbcUrl(),
                         "FLYWAY_USER", MIGRATION_USER,
                         "FLYWAY_PASSWORD", MIGRATION_PASSWORD))
@@ -174,6 +175,10 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
             statement.execute("CREATE ROLE " + LEGACY_RUNTIME_USER
                     + " LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '"
                     + LEGACY_RUNTIME_PASSWORD + "'");
+            statement.execute("ALTER ROLE " + LEGACY_RUNTIME_USER + " SET statement_timeout = '9s'");
+            statement.execute("ALTER ROLE " + LEGACY_RUNTIME_USER + " SET lock_timeout = '3s'");
+            statement.execute("ALTER ROLE " + LEGACY_RUNTIME_USER + " IN DATABASE " + DATABASE_NAME
+                    + " SET idle_in_transaction_session_timeout = '7s'");
             statement.execute("CREATE ROLE " + MIGRATION_USER
                     + " LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '"
                     + MIGRATION_PASSWORD + "'");
