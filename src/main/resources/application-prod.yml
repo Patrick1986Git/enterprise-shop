@@ -17,6 +17,20 @@ spring:
       maximum-pool-size: ${DATABASE_MAXIMUM_POOL_SIZE}
       minimum-idle: ${DATABASE_MINIMUM_IDLE}
       connection-timeout: ${DATABASE_CONNECTION_TIMEOUT_MILLISECONDS}
+      # Read-only fail-closed check applied by Hikari to every new physical runtime connection.
+      connection-init-sql: >-
+        DO $wait_policy$
+        BEGIN
+          IF NOT (
+            current_setting('statement_timeout')::interval > interval '0'
+            AND current_setting('lock_timeout')::interval > interval '0'
+            AND current_setting('lock_timeout')::interval < current_setting('statement_timeout')::interval
+            AND current_setting('idle_in_transaction_session_timeout')::interval > interval '0'
+          ) THEN
+            RAISE EXCEPTION 'Production runtime database wait policy is unsafe' USING ERRCODE = '22023';
+          END IF;
+        END
+        $wait_policy$
       # pgJDBC network-read bound; separate from PostgreSQL server-side execution policy.
       data-source-properties:
         socketTimeout: ${DATABASE_SOCKET_TIMEOUT_SECONDS}

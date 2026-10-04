@@ -229,7 +229,8 @@ runtime identity, PostgreSQL `lock_timeout` controls that wait on the server.
 
 ### Ownership decision
 
-The follow-up selects **Outcome A**: production fails closed unless the effective least-privilege runtime session has
+The connection-lifecycle audit selects **Outcome B**: production fails closed unless every newly created physical
+runtime connection has
 finite `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` values. The repository owns the
 presence/boundedness invariant, while deployment owns every numeric value. `lock_timeout` must be shorter than
 `statement_timeout`, so it remains an effective lock-acquisition policy rather than a redundant later cancellation. Safe
@@ -258,16 +259,35 @@ boundary; database-wide defaults are unsafe unless they explicitly exclude those
 Spring creates the primary runtime datasource used by JPA and `JdbcTemplate`; the explicit production Flyway URL and
 credentials create a separate migration datasource. Flyway migration and Hibernate schema validation complete during
 context initialization, before `ApplicationRunner` execution. The wait-policy runner therefore borrows only a runtime
-Hikari connection after migration. Repository code does not mutate these generic session settings and no Hikari
-connection-init SQL is configured, so all physical pool connections share the same startup/default configuration. The
-PostgreSQL integration contract additionally proves two distinct runtime sessions and a replacement session inherit
-the role and role-in-database policy, while the migration identity remains unbounded.
+Hikari connection after migration. It remains an explicit, fast startup diagnostic before traffic. In addition, the
+production Hikari pool runs a read-only `connectionInitSql` check after pgJDBC creates each physical runtime connection
+and before Hikari admits it to the pool. The check observes the same four semantic conditions and raises one generic,
+non-sensitive error when they are false; it never sets a timeout. This applies to initial fill and to connections made
+later for minimum-idle maintenance, demand growth, `maxLifetime` replacement, idle eviction followed by demand,
+network/driver failure, database restart or failover, and explicit soft eviction. Borrowing an already pooled
+connection does not create a PostgreSQL session and does not rerun the init check.
+
+PostgreSQL role, role-in-database, database, and server defaults are resolved when a new session starts. Changing one
+while the application is live leaves existing sessions unchanged but affects later sessions, so startup-only validation
+could otherwise produce a heterogeneous pool. JDBC startup `options` are also applied by pgJDBC to every connection
+created from the unchanged datasource. An externally supplied session-setting connection-init statement runs for every
+new connection but can override defaults according to statement order; production now reserves the repository-owned
+Hikari init statement for validation, not value assignment. The application does not parse `DATABASE_URL` as policy.
+Because `socketTimeout` is a pgJDBC datasource property, the same positive configured value is applied during every
+physical connection creation independently of the server-session check.
+
+When init validation fails, Hikari closes that candidate and continues its own fill/replacement attempts; no custom
+retry loop is added. Existing admitted connections remain usable until ordinary retirement or failure. Callers begin
+timing out when no admitted connection is available before `connectionTimeout`; at that point the standard `db`
+readiness contributor also reports DOWN, while liveness stays independent. Standard Hikari total/active/idle/pending,
+creation, acquisition, usage, and timeout meters plus sanitized pool logs are sufficient evidence, so no custom metric
+or high-cardinality tag is added.
 
 The separate positive `DATABASE_SOCKET_TIMEOUT_SECONDS` requirement supplies pgJDBC's network-read bound. PostgreSQL
 server cancellation cannot ensure delivery over a broken network path, while this socket bound cannot cancel server
 work or establish a whole-request deadline.
 
-### Production rollout for the startup invariant
+### Production rollout and recovery
 
 1. Connect as the runtime identity and inspect `SHOW statement_timeout`, `SHOW lock_timeout`, and
    `SHOW idle_in_transaction_session_timeout` (or equivalent `current_setting(...)` calls).
@@ -275,9 +295,27 @@ work or establish a whole-request deadline.
    shorter than statement timeout and leaving migration, admin, restore, and maintenance identities separate.
 3. Verify the effective settings in a fresh runtime session and configure a positive deployment-selected pgJDBC socket
    timeout.
-4. Deploy the validator. Unsafe or unreadable policy stops startup while reporting only the setting and semantic
-   requirement, never URL, username, SQL, credential, or raw driver diagnostics.
+4. Deploy the validators. Unsafe or unreadable policy stops startup, and unsafe later physical connections are rejected,
+   while diagnostics report only the semantic requirement and never URL, username, credential, or raw driver detail.
 5. Verify startup, readiness, ordinary queries, and expected contention before routing traffic.
+
+After an unsafe live mutation or failover, repair the role/role-in-database or replacement-server policy first. Existing
+safe sessions need no mutation. Any unsafe sessions admitted before this protection was deployed retain their old
+session values and require operator-driven Hikari soft eviction or a controlled replica restart after repair; changing
+role defaults does not rewrite active sessions. Once repaired, Hikari's normal retries admit safe replacements and
+readiness recovers when the pool can satisfy its database probe. A restored instance receives the same protection after
+its pre-start source/target checks, without duplicating the restore rehearsal.
+
+An unsafe session primarily creates an availability risk: an ordinary query, pessimistic row lock, checkout advisory
+lock, webhook transaction, or scheduled durable-work transaction can retain a thread and pool connection longer than
+the approved operational bound. The locks and transactions still preserve their correctness semantics, and rollback,
+idempotency, and durable retry contracts remain intact; an unbounded wait is not itself evidence of data corruption.
+
+No ordering invariant is added between pgJDBC `socketTimeout` and PostgreSQL `statement_timeout`. A shorter socket
+timeout can close the client connection before the server cancels the statement, reducing diagnostic clarity and
+temporarily leaving server work until disconnect/cancellation is observed, but transaction rollback and connection
+discard preserve correctness. Deployment owners should coordinate the values with request, pool, server, and network
+budgets; the repository requires only that both independent bounds are positive/finite.
 
 ### Failure and observability contract
 
