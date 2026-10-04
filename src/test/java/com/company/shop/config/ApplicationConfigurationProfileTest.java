@@ -174,6 +174,12 @@ class ApplicationConfigurationProfileTest {
                 .isEqualTo("${DATABASE_MINIMUM_IDLE}");
         assertThat(properties.getProperty("spring.datasource.hikari.connection-timeout"))
                 .isEqualTo("${DATABASE_CONNECTION_TIMEOUT_MILLISECONDS}");
+        assertThat(properties.getProperty("spring.datasource.hikari.connection-init-sql"))
+                .contains("current_setting('statement_timeout')::interval > interval '0'")
+                .contains("current_setting('lock_timeout')::interval < current_setting('statement_timeout')::interval")
+                .contains("current_setting('idle_in_transaction_session_timeout')::interval > interval '0'")
+                .contains("Production runtime database wait policy is unsafe")
+                .doesNotContain("SET statement_timeout", "SET lock_timeout", "SET idle_in_transaction_session_timeout");
         assertThat(properties.getProperty("spring.datasource.hikari.data-source-properties.socketTimeout"))
                 .isEqualTo("${DATABASE_SOCKET_TIMEOUT_SECONDS}");
     }

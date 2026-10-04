@@ -113,7 +113,11 @@ gauges under `jdbc.connections.*` with datasource `name`:
 The generic gauges are `jdbc.connections.active`, `jdbc.connections.idle`, `jdbc.connections.max`, and
 `jdbc.connections.min`. No custom pool gauges are needed. Pending demand plus acquisition latency and timeouts reveals
 saturation pressure; usage and creation timing help distinguish long-held connections, slow creation, and capacity
-contention. These process-local signals must be aggregated with replica count and database/proxy telemetry for the
+contention. Repeated production wait-policy init rejection appears as failed/slow replacement creation in sanitized
+Hikari logs, falling total/idle capacity, pending acquisition, and eventually acquisition timeouts; when no safe
+connection can be borrowed, the existing `db` readiness contributor reports DOWN. Existing safe connections can keep
+readiness UP during partial degradation, so database-side policy monitoring remains required for early diagnosis. No
+new metric is added. These process-local signals must be aggregated with replica count and database/proxy telemetry for the
 database-wide budget. Do not attach SQL, database usernames, request/user/tenant identifiers, or arbitrary pool values
 as tags, and derive no alert threshold from the repository defaults.
 

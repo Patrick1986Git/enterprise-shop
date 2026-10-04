@@ -127,7 +127,8 @@ Before rollout, the deployment owner must:
 
 1. configure finite PostgreSQL `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` values
    for the runtime identity, with `lock_timeout` shorter than `statement_timeout`; startup validates these effective
-   session invariants without owning their numeric values;
+   session invariants and Hikari rejects later physical runtime connections that do not satisfy them, without the
+   repository owning their numeric values;
 
 2. supply every `required` row, including secrets through an approved injection mechanism;
 3. decide whether optional overrides are needed and preserve the documented defaults otherwise;
@@ -138,5 +139,5 @@ Before rollout, the deployment owner must:
    actual external infrastructure; and
 7. exercise readiness, graceful shutdown, rollback, key rotation, and recovery procedures described in the linked runbooks.
 
-Repository startup validation proves binding and the listed invariants. It cannot prove external capacity, routing,
+Repository startup and physical-connection validation prove binding and the listed runtime-session invariants. They cannot prove external capacity, routing,
 credential acceptance, provider sender policy, certificate trust, DNS, firewall rules, or secret rotation by the deployment.
