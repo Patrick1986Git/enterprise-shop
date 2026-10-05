@@ -26,7 +26,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
@@ -43,7 +43,7 @@ class LegacyProductionDatabaseOwnershipUpgradeIT {
     private static final String MIGRATION_PASSWORD = "test_migration_password";
     private static final String DATABASE_NAME = "enterprise_shop_legacy_test";
 
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
             DockerImageName.parse("postgres:18-alpine"))
             .withDatabaseName(DATABASE_NAME)
             .withUsername(ADMIN_USER)

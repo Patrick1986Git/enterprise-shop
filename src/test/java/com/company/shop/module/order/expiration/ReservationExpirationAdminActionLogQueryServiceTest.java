@@ -28,13 +28,13 @@ class ReservationExpirationAdminActionLogQueryServiceTest {
 
     @Test
     void search_shouldUseNewestFirstStableDefaultSort() {
-        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+        when(repository.findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         service().search(null, null, null, null, null, null, null, PageRequest.of(1, 10));
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(repository).findAll(any(Specification.class), captor.capture());
+        verify(repository).findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), captor.capture());
         assertThat(captor.getValue().getPageNumber()).isOne();
         assertThat(captor.getValue().getSort()).isEqualTo(Sort.by(
                 Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
@@ -42,52 +42,52 @@ class ReservationExpirationAdminActionLogQueryServiceTest {
 
     @Test
     void search_shouldAppendDescendingIdTieBreakerToAllowedSort() {
-        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+        when(repository.findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         service().search(null, null, null, null, null, null, null,
                 PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "createdAt")));
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(repository).findAll(any(Specification.class), captor.capture());
+        verify(repository).findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), captor.capture());
         assertThat(captor.getValue().getSort()).isEqualTo(Sort.by(
                 Sort.Order.asc("createdAt"), Sort.Order.desc("id")));
     }
 
     @Test
     void search_shouldPreserveExplicitIdSortWithoutDuplicateTieBreaker() {
-        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+        when(repository.findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
         Pageable requested = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "id"));
 
         service().search(null, null, null, null, null, null, null, requested);
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(repository).findAll(any(Specification.class), captor.capture());
+        verify(repository).findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), captor.capture());
         assertThat(captor.getValue().getSort()).isEqualTo(requested.getSort());
     }
 
     @Test
     void search_shouldAcceptEqualDateRange() {
         Instant boundary = Instant.parse("2026-08-31T12:00:00Z");
-        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+        when(repository.findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         service().search(null, null, null, null, null,
                 boundary, boundary, PageRequest.of(0, 20));
 
-        verify(repository).findAll(any(Specification.class), any(Pageable.class));
+        verify(repository).findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), any(Pageable.class));
     }
 
     @Test
     void search_shouldSupportUnpagedRequestWithStableDefaultSort() {
-        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+        when(repository.findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         service().search(null, null, null, null, null, null, null, Pageable.unpaged());
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(repository).findAll(any(Specification.class), captor.capture());
+        verify(repository).findAll(org.mockito.ArgumentMatchers.<Specification<ReservationExpirationAdminActionLog>>any(), captor.capture());
         assertThat(captor.getValue().isUnpaged()).isTrue();
         assertThat(captor.getValue().getSort()).isEqualTo(Sort.by(
                 Sort.Order.desc("createdAt"), Sort.Order.desc("id")));

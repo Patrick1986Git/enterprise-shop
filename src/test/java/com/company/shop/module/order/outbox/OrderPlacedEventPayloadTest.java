@@ -40,15 +40,15 @@ class OrderPlacedEventPayloadTest {
         OrderPlacedEventPayload deserialized = objectMapper.readValue(json, OrderPlacedEventPayload.class);
 
         JsonNode root = objectMapper.readTree(json);
-        assertThat(root.get("orderId").asText()).isEqualTo(orderId.toString());
-        assertThat(root.get("userId").asText()).isEqualTo(userId.toString());
-        assertThat(root.get("userEmail").asText()).isEqualTo("customer@example.com");
-        assertThat(root.get("status").asText()).isEqualTo(OrderStatus.NEW.name());
+        assertThat(root.get("orderId").asString()).isEqualTo(orderId.toString());
+        assertThat(root.get("userId").asString()).isEqualTo(userId.toString());
+        assertThat(root.get("userEmail").asString()).isEqualTo("customer@example.com");
+        assertThat(root.get("status").asString()).isEqualTo(OrderStatus.NEW.name());
         assertThat(root.get("totalAmount").decimalValue()).isEqualByComparingTo("42.50");
-        assertThat(root.get("createdAt").asText()).isEqualTo("2026-05-31T10:15:30");
-        assertThat(root.get("items").get(0).get("productId").asText()).isEqualTo(productId.toString());
-        assertThat(root.get("items").get(0).get("productName").asText()).isEqualTo("Product");
-        assertThat(root.get("items").get(0).get("productSku").asText()).isEqualTo("SKU-1");
+        assertThat(root.get("createdAt").asString()).isEqualTo("2026-05-31T10:15:30");
+        assertThat(root.get("items").get(0).get("productId").asString()).isEqualTo(productId.toString());
+        assertThat(root.get("items").get(0).get("productName").asString()).isEqualTo("Product");
+        assertThat(root.get("items").get(0).get("productSku").asString()).isEqualTo("SKU-1");
         assertThat(root.get("items").get(0).get("price").decimalValue()).isEqualByComparingTo("12.50");
         assertThat(root.get("items").get(0).get("quantity").asInt()).isEqualTo(2);
         assertThat(root.has("metadata")).isFalse();

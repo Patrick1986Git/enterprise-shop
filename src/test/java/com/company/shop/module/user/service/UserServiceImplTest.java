@@ -64,7 +64,8 @@ class UserServiceImplTest {
         String email = "john@example.com";
         User user = new User(email, "old-encoded", "John", "Doe");
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
-        when(userRepository.findActiveByEmailWithRoles(email)).thenReturn(Optional.of(user), Optional.of(user));
+        when(userRepository.findActiveByEmailWithRoles(email)).thenReturn(Optional.of(user))
+                .thenReturn(Optional.of(user));
         when(passwordEncoder.matches("OldPassword123!", "old-encoded")).thenReturn(true);
         when(passwordEncoder.encode("NewPassword456!")).thenReturn("new-encoded");
 
@@ -81,7 +82,8 @@ class UserServiceImplTest {
         String email = "john@example.com";
         User user = new User(email, "old-encoded", "John", "Doe");
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
-        when(userRepository.findActiveByEmailWithRoles(email)).thenReturn(Optional.of(user), Optional.of(user));
+        when(userRepository.findActiveByEmailWithRoles(email)).thenReturn(Optional.of(user))
+                .thenReturn(Optional.of(user));
         when(passwordEncoder.matches("WrongPassword123!", "old-encoded")).thenReturn(false);
 
         assertThatThrownBy(() -> service.changeCurrentUserPassword(new PasswordChangeRequestDTO(
@@ -99,7 +101,8 @@ class UserServiceImplTest {
         User user = new User(email, "encoded", "John", "Doe");
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
         when(userRepository.findActiveByEmailWithRoles(email))
-                .thenReturn(Optional.of(user), Optional.of(user));
+                .thenReturn(Optional.of(user))
+                .thenReturn(Optional.of(user));
 
         assertThat(service.getCurrentUserEntity()).isSameAs(user);
 
@@ -112,7 +115,8 @@ class UserServiceImplTest {
         User user = new User(email, "encoded", "John", "Doe");
         when(currentUserProvider.getCurrentUserEmail()).thenReturn(email);
         when(userRepository.findActiveByEmailWithRoles(email))
-                .thenReturn(Optional.of(user), Optional.empty());
+                .thenReturn(Optional.of(user))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getCurrentUserEntity())
                 .isInstanceOf(UserNotFoundException.class);

@@ -7,7 +7,7 @@ import com.company.shop.common.exception.BusinessException;
 public class OrderAmountInvalidException extends BusinessException {
 
     public OrderAmountInvalidException() {
-        super(HttpStatus.UNPROCESSABLE_ENTITY,
+        super(HttpStatus.UNPROCESSABLE_CONTENT,
                 "ORDER_AMOUNT_INVALID",
                 "error.business.order.amountInvalid",
                 new Object[0],

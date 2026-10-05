@@ -74,10 +74,10 @@ class NotificationDeliveryProcessorTest {
         Notification notification = pendingNotification();
         UUID expiredToken = UUID.randomUUID();
         UUID replacementToken = UUID.randomUUID();
-        when(transactionalWorker.claimBatch(1)).thenReturn(
-                List.of(new ClaimedNotification(notification, expiredToken)),
-                List.of(new ClaimedNotification(notification, replacementToken)),
-                List.of());
+        when(transactionalWorker.claimBatch(1))
+                .thenReturn(List.of(new ClaimedNotification(notification, expiredToken)))
+                .thenReturn(List.of(new ClaimedNotification(notification, replacementToken)))
+                .thenReturn(List.of());
         when(transactionalWorker.finalizeSuccess(notification.getId(), expiredToken)).thenReturn(false);
         when(transactionalWorker.finalizeSuccess(notification.getId(), replacementToken)).thenReturn(true);
 
@@ -178,7 +178,8 @@ class NotificationDeliveryProcessorTest {
     private UUID stubClaim(Notification notification) {
         UUID token = UUID.randomUUID();
         when(transactionalWorker.claimBatch(1))
-                .thenReturn(List.of(new ClaimedNotification(notification, token)), List.of());
+                .thenReturn(List.of(new ClaimedNotification(notification, token)))
+                .thenReturn(List.of());
         return token;
     }
 

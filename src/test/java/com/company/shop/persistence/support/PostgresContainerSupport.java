@@ -2,7 +2,7 @@ package com.company.shop.persistence.support;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
@@ -17,7 +17,7 @@ public abstract class PostgresContainerSupport {
 
     private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:18-alpine");
 
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(POSTGRES_IMAGE)
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(POSTGRES_IMAGE)
             .withDatabaseName("enterprise_shop_test")
             .withUsername("shop_test")
             .withPassword("shop_test")

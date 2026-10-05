@@ -12,7 +12,7 @@ import org.postgresql.util.PSQLException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
@@ -20,7 +20,7 @@ class ProductReviewAuthorSnapshotMigrationIT {
 
     @Test
     void migrate_shouldBackfillStableAuthorNameBeforeEnforcingConstraints() {
-        try (PostgreSQLContainer<?> postgres = postgres()) {
+        try (PostgreSQLContainer postgres = postgres()) {
             postgres.start();
             Flyway.configure()
                     .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
@@ -75,8 +75,8 @@ class ProductReviewAuthorSnapshotMigrationIT {
                 """, UUID.class, productId, userId);
     }
 
-    private PostgreSQLContainer<?> postgres() {
-        return new PostgreSQLContainer<>(DockerImageName.parse("postgres:18-alpine"))
+    private PostgreSQLContainer postgres() {
+        return new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
                 .withDatabaseName("product_review_migration")
                 .withUsername("shop_test")
                 .withPassword("shop_test")

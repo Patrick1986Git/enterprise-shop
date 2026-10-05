@@ -75,16 +75,16 @@ class OrderOutboxEventRecorderTest {
         JsonNode payload = objectMapper.readTree(event.getPayload());
         assertThat(payload.has("eventVersion")).isFalse();
         assertThat(payload.has("payload")).isFalse();
-        assertThat(payload.get("orderId").asText()).isEqualTo(orderId.toString());
-        assertThat(payload.get("userId").asText()).isEqualTo(userId.toString());
-        assertThat(payload.get("userEmail").asText()).isEqualTo("john@example.com");
-        assertThat(payload.get("status").asText()).isEqualTo(OrderStatus.NEW.name());
+        assertThat(payload.get("orderId").asString()).isEqualTo(orderId.toString());
+        assertThat(payload.get("userId").asString()).isEqualTo(userId.toString());
+        assertThat(payload.get("userEmail").asString()).isEqualTo("john@example.com");
+        assertThat(payload.get("status").asString()).isEqualTo(OrderStatus.NEW.name());
         assertThat(payload.get("totalAmount").decimalValue()).isEqualByComparingTo("25.00");
-        assertThat(payload.get("createdAt").asText()).isEqualTo("2026-05-31T10:15:30");
+        assertThat(payload.get("createdAt").asString()).isEqualTo("2026-05-31T10:15:30");
         assertThat(payload.get("items")).hasSize(1);
-        assertThat(payload.get("items").get(0).get("productId").asText()).isEqualTo(productId.toString());
-        assertThat(payload.get("items").get(0).get("productName").asText()).isEqualTo("Product");
-        assertThat(payload.get("items").get(0).get("productSku").asText()).isEqualTo("SKU-1");
+        assertThat(payload.get("items").get(0).get("productId").asString()).isEqualTo(productId.toString());
+        assertThat(payload.get("items").get(0).get("productName").asString()).isEqualTo("Product");
+        assertThat(payload.get("items").get(0).get("productSku").asString()).isEqualTo("SKU-1");
         assertThat(payload.get("items").get(0).get("price").decimalValue()).isEqualByComparingTo("12.50");
         assertThat(payload.get("items").get(0).get("quantity").asInt()).isEqualTo(2);
     }

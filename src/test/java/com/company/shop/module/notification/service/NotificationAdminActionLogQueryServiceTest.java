@@ -175,48 +175,48 @@ class NotificationAdminActionLogQueryServiceTest {
     void searchActionLogs_shouldAllowEqualCreatedFromAndCreatedTo() {
         NotificationAdminActionLogQueryService service = service();
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(notificationAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.searchActionLogs(null, null, null, createdAt, createdAt, PageRequest.of(0, 20));
 
-        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(notificationAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class));
     }
 
     @Test
     void searchActionLogs_shouldAllowOnlyCreatedFrom() {
         NotificationAdminActionLogQueryService service = service();
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(notificationAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.searchActionLogs(
                 null, null, null, Instant.parse("2026-01-01T00:00:00Z"), null, PageRequest.of(0, 20));
 
-        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(notificationAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class));
     }
 
     @Test
     void searchActionLogs_shouldAllowOnlyCreatedTo() {
         NotificationAdminActionLogQueryService service = service();
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(notificationAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.searchActionLogs(
                 null, null, null, null, Instant.parse("2026-01-01T00:00:00Z"), PageRequest.of(0, 20));
 
-        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(notificationAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class));
     }
 
     @Test
     void searchActionLogs_shouldApplyDefaultSortWhenPageableIsUnsorted() {
         NotificationAdminActionLogQueryService service = service();
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(notificationAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.searchActionLogs(null, null, null, null, null, PageRequest.of(2, 5));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        verify(notificationAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
         assertThat(pageable.getPageSize()).isEqualTo(5);
@@ -227,19 +227,19 @@ class NotificationAdminActionLogQueryServiceTest {
     void searchActionLogs_shouldPreserveExplicitPageableSort() {
         NotificationAdminActionLogQueryService service = service();
         Pageable pageable = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "actorEmail"));
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), eq(pageable)))
+        when(notificationAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), eq(pageable)))
                 .thenReturn(Page.empty(pageable));
 
         service.searchActionLogs(null, null, null, null, null, pageable);
 
-        verify(notificationAdminActionLogRepository).findAll(any(Specification.class), eq(pageable));
+        verify(notificationAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), eq(pageable));
     }
 
     @Test
     void searchActionLogs_shouldNotRequireNotificationExistence() {
         NotificationAdminActionLogQueryService service = service();
         UUID notificationId = UUID.randomUUID();
-        when(notificationAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(notificationAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<NotificationAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         Page<NotificationAdminActionLogResponseDTO> result = service.searchActionLogs(
