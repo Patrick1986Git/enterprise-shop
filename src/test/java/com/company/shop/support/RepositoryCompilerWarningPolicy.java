@@ -125,6 +125,23 @@ public final class RepositoryCompilerWarningPolicy {
         return snapshot;
     }
 
+    public static void verifyTrackedSources(Path root, List<Path> sources) throws IOException, InterruptedException {
+        Path repository = root.toRealPath();
+        var process = new ProcessBuilder("git", "-C", repository.toString(), "ls-files", "-z", "--", "*.java")
+                .redirectErrorStream(true).start();
+        String paths = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (process.waitFor() != 0 || paths.isEmpty() || !paths.endsWith("\0")) {
+            throw new IllegalStateException("Missing or malformed tracked Java source inventory");
+        }
+        Set<Path> inventoried = Set.copyOf(sources);
+        for (String relative : paths.substring(0, paths.length() - 1).split("\0", -1)) {
+            Path source = repository.resolve(relative).toRealPath();
+            if (relative.isEmpty() || !source.startsWith(repository) || !inventoried.contains(source)) {
+                throw new IllegalStateException("Tracked Java source escaped ownership inventory: " + source);
+            }
+        }
+    }
+
     public static void validate(Path root, Set<Path> expectedSources, Evidence evidence) throws IOException {
         Path repository = root.toRealPath();
         if (evidence == null || !Boolean.TRUE.equals(evidence.completed())

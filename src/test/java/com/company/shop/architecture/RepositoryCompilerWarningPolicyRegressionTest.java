@@ -135,6 +135,27 @@ class RepositoryCompilerWarningPolicyRegressionTest {
     }
 
     @Test
+    void verifyTrackedSources_shouldRejectJavaTrackedUnderBuildOutput() throws Exception {
+        Path source = source("src/main/java/Clean.java", "class Clean {}");
+        assertThat(new ProcessBuilder("git", "init", "-q", root.toString()).start().waitFor()).isZero();
+        assertThat(new ProcessBuilder("git", "-C", root.toString(), "add", "src/main/java/Clean.java")
+                .start().waitFor()).isZero();
+        RepositoryCompilerWarningPolicy.verifyTrackedSources(root, List.of(source));
+        source("target/generated-sources/Owned.java", "class Owned {}");
+        assertThat(new ProcessBuilder("git", "-C", root.toString(), "add", "-f", "target/generated-sources/Owned.java")
+                .start().waitFor()).isZero();
+        assertThatThrownBy(() -> RepositoryCompilerWarningPolicy.verifyTrackedSources(root, List.of(source)))
+                .hasMessageContaining("Tracked Java source escaped ownership inventory");
+    }
+
+    @Test
+    void verifyTrackedSources_shouldRejectMissingGitEvidence() throws Exception {
+        Path source = source("src/main/java/Clean.java", "class Clean {}");
+        assertThatThrownBy(() -> RepositoryCompilerWarningPolicy.verifyTrackedSources(root, List.of(source)))
+                .hasMessageContaining("Missing or malformed tracked Java source inventory");
+    }
+
+    @Test
     void validate_shouldNotReadMavenMetadataLogs() throws Exception {
         Path source = source("src/main/java/Clean.java", "class Clean {}");
         source("maven.log", "[WARNING] Could not transfer metadata from Redgate: HTTP 403\n");

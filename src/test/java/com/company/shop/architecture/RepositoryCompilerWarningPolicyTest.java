@@ -24,6 +24,7 @@ class RepositoryCompilerWarningPolicyTest {
             throw new IllegalStateException("Run this policy through the repository Maven test lifecycle");
         }
         List<Path> sources = RepositoryCompilerWarningPolicy.sources(root);
+        RepositoryCompilerWarningPolicy.verifyTrackedSources(root, sources);
         var before = RepositoryCompilerWarningPolicy.snapshot(sources);
         // Use Surefire's actual resolved application/test dependencies, not a maintained jar inventory.
         String classpath = System.getProperty("surefire.test.class.path");
@@ -32,6 +33,7 @@ class RepositoryCompilerWarningPolicyTest {
                 || !before.equals(RepositoryCompilerWarningPolicy.snapshot(sources))) {
             throw new IllegalStateException("Repository source inventory changed during compilation");
         }
+        RepositoryCompilerWarningPolicy.verifyTrackedSources(root, sources);
         RepositoryCompilerWarningPolicy.validate(root, new HashSet<>(sources), evidence);
         System.out.println("Compiler-warning policy: checked " + sources.size() + " repository sources; "
                 + "deprecation/unchecked warnings: 0");
