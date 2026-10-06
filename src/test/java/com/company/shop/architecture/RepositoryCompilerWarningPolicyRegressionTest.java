@@ -137,12 +137,13 @@ class RepositoryCompilerWarningPolicyRegressionTest {
     @Test
     void verifyTrackedSources_shouldRejectJavaTrackedUnderBuildOutput() throws Exception {
         Path source = source("src/main/java/Clean.java", "class Clean {}");
-        assertThat(new ProcessBuilder("git", "init", "-q", root.toString()).start().waitFor()).isZero();
-        assertThat(new ProcessBuilder("git", "-C", root.toString(), "add", "src/main/java/Clean.java")
+        String git = RepositoryCompilerWarningPolicy.gitExecutable();
+        assertThat(new ProcessBuilder(git, "init", "-q", root.toString()).start().waitFor()).isZero();
+        assertThat(new ProcessBuilder(git, "-C", root.toString(), "add", "src/main/java/Clean.java")
                 .start().waitFor()).isZero();
         RepositoryCompilerWarningPolicy.verifyTrackedSources(root, List.of(source));
         source("target/generated-sources/Owned.java", "class Owned {}");
-        assertThat(new ProcessBuilder("git", "-C", root.toString(), "add", "-f", "target/generated-sources/Owned.java")
+        assertThat(new ProcessBuilder(git, "-C", root.toString(), "add", "-f", "target/generated-sources/Owned.java")
                 .start().waitFor()).isZero();
         assertThatThrownBy(() -> RepositoryCompilerWarningPolicy.verifyTrackedSources(root, List.of(source)))
                 .hasMessageContaining("Tracked Java source escaped ownership inventory");
@@ -153,6 +154,23 @@ class RepositoryCompilerWarningPolicyRegressionTest {
         Path source = source("src/main/java/Clean.java", "class Clean {}");
         assertThatThrownBy(() -> RepositoryCompilerWarningPolicy.verifyTrackedSources(root, List.of(source)))
                 .hasMessageContaining("Missing or malformed tracked Java source inventory");
+    }
+
+    @Test
+    void gitExecutable_shouldUseValidatedAbsolutePath() throws Exception {
+        Path executable = Path.of(RepositoryCompilerWarningPolicy.gitExecutable());
+        assertThat(executable.isAbsolute()).isTrue();
+        assertThat(Files.isExecutable(executable)).isTrue();
+        assertThat(RepositoryCompilerWarningPolicy.gitExecutable(executable)).isEqualTo(executable.toRealPath().toString());
+    }
+
+    @Test
+    void gitExecutable_shouldRejectRelativeMissingAndDirectoryPaths() throws Exception {
+        Path nonExecutable = source("not-executable", "fixture");
+        for (Path path : List.of(Path.of("git"), root.resolve("missing-git"), root, nonExecutable)) {
+            assertThatThrownBy(() -> RepositoryCompilerWarningPolicy.gitExecutable(path))
+                    .hasMessageContaining("absolute Git executable");
+        }
     }
 
     @Test

@@ -127,7 +127,7 @@ public final class RepositoryCompilerWarningPolicy {
 
     public static void verifyTrackedSources(Path root, List<Path> sources) throws IOException, InterruptedException {
         Path repository = root.toRealPath();
-        var process = new ProcessBuilder("git", "-C", repository.toString(), "ls-files", "-z", "--", "*.java")
+        var process = new ProcessBuilder(gitExecutable(), "-C", repository.toString(), "ls-files", "-z", "--", "*.java")
                 .redirectErrorStream(true).start();
         String paths = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         if (process.waitFor() != 0 || paths.isEmpty() || !paths.endsWith("\0")) {
@@ -140,6 +140,17 @@ public final class RepositoryCompilerWarningPolicy {
                 throw new IllegalStateException("Tracked Java source escaped ownership inventory: " + source);
             }
         }
+    }
+
+    public static String gitExecutable() throws IOException {
+        return gitExecutable(Path.of(System.getProperty("compilerWarningPolicy.gitExecutable", "/usr/bin/git")));
+    }
+
+    public static String gitExecutable(Path configured) throws IOException {
+        if (!configured.isAbsolute() || !Files.isRegularFile(configured) || !Files.isExecutable(configured)) {
+            throw new IllegalStateException("Compiler-warning policy requires an absolute Git executable: " + configured);
+        }
+        return configured.toRealPath().toString();
     }
 
     public static void validate(Path root, Set<Path> expectedSources, Evidence evidence) throws IOException {
