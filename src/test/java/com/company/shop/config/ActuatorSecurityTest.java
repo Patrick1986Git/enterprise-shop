@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.json.JsonCompareMode.STRICT;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -84,7 +85,7 @@ class ActuatorSecurityTest {
     void actuatorHealth_shouldReturnOkForAnonymous() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"UP\",\"groups\":[\"liveness\",\"readiness\"]}", true))
+                .andExpect(content().json("{\"status\":\"UP\",\"groups\":[\"liveness\",\"readiness\"]}", STRICT))
                 .andExpect(jsonPath("$.components").doesNotExist())
                 .andExpect(result -> assertNoSecrets(result.getResponse().getContentAsString()));
     }
@@ -94,7 +95,7 @@ class ActuatorSecurityTest {
     void actuatorAvailabilityProbes_shouldReturnOkForAnonymous(String endpoint) throws Exception {
         mockMvc.perform(get(endpoint))
                 .andExpect(status().isOk())
-                .andExpect(content().json("{\"status\":\"UP\"}", true))
+                .andExpect(content().json("{\"status\":\"UP\"}", STRICT))
                 .andExpect(jsonPath("$.components").doesNotExist())
                 .andExpect(result -> assertNoSecrets(result.getResponse().getContentAsString()));
     }

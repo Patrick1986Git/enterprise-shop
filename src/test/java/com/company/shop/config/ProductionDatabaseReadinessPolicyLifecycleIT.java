@@ -31,7 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import com.zaxxer.hikari.HikariDataSource;
@@ -73,7 +73,7 @@ class ProductionDatabaseReadinessPolicyLifecycleIT {
     private static final String MIGRATION_PASSWORD = "readiness_migration_password";
     private static final Duration POLL_TIMEOUT = Duration.ofSeconds(10);
 
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
             DockerImageName.parse("postgres:18-alpine"))
             .withDatabaseName(DATABASE)
             .withUsername("postgres")

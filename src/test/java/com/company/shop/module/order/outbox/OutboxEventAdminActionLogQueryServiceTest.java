@@ -147,13 +147,13 @@ class OutboxEventAdminActionLogQueryServiceTest {
 
     @Test
     void searchActionLogs_shouldApplyDefaultSortWhenPageableIsUnsorted() {
-        when(outboxEventAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEventAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service().searchActionLogs(null, null, null, null, null, PageRequest.of(2, 5));
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-        verify(outboxEventAdminActionLogRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        verify(outboxEventAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEventAdminActionLog>>any(), pageableCaptor.capture());
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isEqualTo(2);
         assertThat(pageable.getPageSize()).isEqualTo(5);
@@ -164,12 +164,12 @@ class OutboxEventAdminActionLogQueryServiceTest {
     @Test
     void searchActionLogs_shouldPreserveExplicitPageableSort() {
         Pageable pageable = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "actorEmail"));
-        when(outboxEventAdminActionLogRepository.findAll(any(Specification.class), eq(pageable)))
+        when(outboxEventAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEventAdminActionLog>>any(), eq(pageable)))
                 .thenReturn(Page.empty(pageable));
 
         service().searchActionLogs(null, null, null, null, null, pageable);
 
-        verify(outboxEventAdminActionLogRepository).findAll(any(Specification.class), eq(pageable));
+        verify(outboxEventAdminActionLogRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEventAdminActionLog>>any(), eq(pageable));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -191,7 +191,7 @@ class OutboxEventAdminActionLogQueryServiceTest {
     @Test
     void searchActionLogs_shouldAllowEqualBoundsAndOneSidedBounds() {
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
-        when(outboxEventAdminActionLogRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventAdminActionLogRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEventAdminActionLog>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service().searchActionLogs(null, null, null, createdAt, createdAt, PageRequest.of(0, 20));
@@ -199,7 +199,7 @@ class OutboxEventAdminActionLogQueryServiceTest {
         service().searchActionLogs(null, null, null, null, createdAt, PageRequest.of(0, 20));
 
         verify(outboxEventAdminActionLogRepository, org.mockito.Mockito.times(3))
-                .findAll(any(Specification.class), any(Pageable.class));
+                .findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEventAdminActionLog>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 

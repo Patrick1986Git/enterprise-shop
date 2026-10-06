@@ -31,7 +31,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
@@ -54,7 +54,7 @@ class ProductionDatabaseIdentityIT {
     private static final String RUNTIME_USER = "shop_runtime";
     private static final String RUNTIME_PASSWORD = "test_runtime_password";
 
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
             DockerImageName.parse("postgres:18-alpine"))
             .withDatabaseName("enterprise_shop_prod_test")
             .withUsername(ADMIN_USER)

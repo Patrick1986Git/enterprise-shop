@@ -34,7 +34,9 @@ class ReservationExpirationMetricsTest {
 
     @Test
     void oldestFailureAgeGauge_shouldBeZeroWithoutFailuresAndClampFutureTimestamps() {
-        when(repository.findOldestFailedAt()).thenReturn(Optional.empty(), Optional.of(NOW.plusSeconds(30)));
+        when(repository.findOldestFailedAt())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(NOW.plusSeconds(30)));
         var registry = new SimpleMeterRegistry();
         new ReservationExpirationMetrics(repository, registry, Clock.fixed(NOW, ZoneOffset.UTC));
 

@@ -330,7 +330,7 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
                 .getResponse()
                 .getContentAsString();
         JsonNode json = objectMapper.readTree(response);
-        return json.get("token").asText();
+        return json.get("token").asString();
     }
 
     private void loginShouldFail(String email, String password) throws Exception {

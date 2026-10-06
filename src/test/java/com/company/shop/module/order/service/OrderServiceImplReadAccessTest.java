@@ -87,7 +87,8 @@ class OrderServiceImplReadAccessTest {
 				paymentService, orderOutboxEventRecorder, meterRegistry,
 				new com.company.shop.module.order.expiration.ReservationExpirationProperties(),
 				org.mockito.Mockito.mock(com.company.shop.module.order.expiration.ReservationExpirationWorkRepository.class),
-				java.time.Clock.systemUTC(), org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class, org.mockito.Mockito.RETURNS_DEEP_STUBS));
+				java.time.Clock.systemUTC(), new org.springframework.beans.factory.support.StaticListableBeanFactory()
+						.getBeanProvider(org.springframework.transaction.PlatformTransactionManager.class));
 		OrderQueryProcessor queryProcessor = new OrderQueryProcessor(orderRepository, currentUserFacade, orderMapper);
 		service = new OrderServiceImpl(checkoutProcessor, queryProcessor);
 	}

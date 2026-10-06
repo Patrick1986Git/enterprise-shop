@@ -585,12 +585,12 @@ class OutboxEventQueryServiceTest {
     @Test
     void getEvents_shouldAcceptPositiveEventVersion() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithEventVersion(1), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -612,27 +612,27 @@ class OutboxEventQueryServiceTest {
     @Test
     void getEvents_shouldAllowNullAndBlankLastErrorContains() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(emptyCriteria(), pageable);
         outboxEventQueryService.getEvents(criteriaWithLastErrorContains("   "), pageable);
 
-        verify(outboxEventRepository, org.mockito.Mockito.times(2)).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository, org.mockito.Mockito.times(2)).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
     @Test
     void getEvents_shouldAllowOneSidedAndEqualAttemptsFilters() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithAttempts(1, null), pageable);
         outboxEventQueryService.getEvents(criteriaWithAttempts(null, 3), pageable);
         outboxEventQueryService.getEvents(criteriaWithAttempts(2, 2), pageable);
 
-        verify(outboxEventRepository, org.mockito.Mockito.times(3)).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository, org.mockito.Mockito.times(3)).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -655,24 +655,24 @@ class OutboxEventQueryServiceTest {
     @Test
     void getEvents_shouldAllowOnlyLastAttemptFrom() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithLastAttemptRange(Instant.parse("2026-06-01T00:00:00Z"), null), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
     @Test
     void getEvents_shouldAllowOnlyLastAttemptTo() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithLastAttemptRange(null, Instant.parse("2026-06-30T23:59:59Z")), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -680,12 +680,12 @@ class OutboxEventQueryServiceTest {
     void getEvents_shouldAllowEqualLastAttemptFromAndLastAttemptTo() {
         Instant lastAttemptAt = Instant.parse("2026-06-15T12:00:00Z");
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithLastAttemptRange(lastAttemptAt, lastAttemptAt), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
@@ -735,36 +735,36 @@ class OutboxEventQueryServiceTest {
     void getEvents_shouldAllowEqualCreatedFromAndCreatedTo() {
         Instant createdAt = Instant.parse("2026-01-01T00:00:00Z");
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithCreatedRange(createdAt, createdAt), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
     @Test
     void getEvents_shouldAllowOnlyCreatedFrom() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithCreatedRangeAndRequeuedOnly(Instant.parse("2026-01-01T00:00:00Z"), null, Boolean.FALSE), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
     @Test
     void getEvents_shouldAllowOnlyCreatedTo() {
         Pageable pageable = PageRequest.of(0, 20);
-        when(outboxEventRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(outboxEventRepository.findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class)))
                 .thenReturn(Page.empty(pageable));
 
         outboxEventQueryService.getEvents(criteriaWithCreatedRange(null, Instant.parse("2026-01-01T00:00:00Z")), pageable);
 
-        verify(outboxEventRepository).findAll(any(Specification.class), any(Pageable.class));
+        verify(outboxEventRepository).findAll(org.mockito.ArgumentMatchers.<Specification<OutboxEvent>>any(), any(Pageable.class));
         verifyNoInteractions(outboxEventProcessor);
     }
 
