@@ -9,6 +9,25 @@
 
 Mockito static mocking is used in service tests, including Stripe SDK entry points. The build config starts tests with Mockito as an explicit `-javaagent` to avoid JDK 21+ dynamic self-attach warnings and keep execution compatible with stricter future JDK defaults.
 
+## Repository compiler-warning policy
+
+`RepositoryCompilerWarningPolicyTest` enforces repository-owned deprecated API use (including APIs marked for removal) and unchecked casts, conversions, invocations, and generic varargs warnings in production and test Java sources. Surefire runs the policy during the existing `test` and `verify` lifecycle in CI and CodeQL. Reproduce it locally under a Java 21 JDK with:
+
+```bash
+./mvnw -B -Dtest=RepositoryCompilerWarningPolicyRegressionTest,RepositoryCompilerWarningPolicyTest test
+./mvnw -B clean verify
+```
+
+The ordinary Maven compilation and its MapStruct and Hibernate processors remain unchanged. After they produce the real application, test classes, mappers, and metamodels, the policy uses the public Java compiler API for one additional source audit with `-Xlint:deprecation,unchecked`. It uses Surefire's actual resolved classpath and compiles into a temporary directory without loading or replacing the resulting classes. Processing is not repeated in this audit; the original Maven compilation continues to run both processors and display their diagnostics. This adds a compilation pass, not another application build or test-suite execution. Maven Compiler Plugin's normal logging retains source locations and human messages but discards javac diagnostic codes, so it cannot supply this structured ownership evidence without a compiler extension or fragile log parsing.
+
+The source inventory executes Git through a validated absolute path, defaulting to `/usr/bin/git` on the Linux CI/CodeQL runners. If Git is installed elsewhere, pass `-DcompilerWarningPolicy.gitExecutable=/absolute/path/to/git` to Maven. Relative, missing, non-executable, and directory paths fail closed; the policy does not search the current directory or `PATH` for a command.
+
+The policy reads diagnostic kinds, codes, and source URIs directly from javac, checks successful completion and a parse event for every inventoried source, rejects source changes during the audit, and fails on missing, malformed, unstructured, or summary-only evidence. Java 21's `compiler.warn.prob.found.req` wrapper is reviewed for unchecked casts/conversions alongside `compiler.warn.unchecked.*` and the two deprecated-use codes; executable fixtures prove casts, assignments, raw member calls, generic arrays/varargs, and deprecated use in both source roots. The warning limit is raised so external diagnostics cannot exhaust javac's default warning budget. New packages under either source root are discovered automatically; Java files outside `src/main/java` and `src/test/java`, or source-tree symlinks, require an explicit ownership-policy review rather than being silently omitted. Only root `.git` and `target` are excluded from filesystem source discovery. A separate NUL-delimited `git ls-files` inventory must also be covered completely, so forcibly tracking Java under build/generated output cannot bypass ownership enforcement; missing Git evidence fails closed.
+
+Generated sources under `target/generated-sources` and `target/generated-test-sources`, processor Messager diagnostics (even when they name a repository element), dependency/classpath annotation noise, Maven/plugin/repository metadata messages, and JVM/toolchain warnings are outside this source policy. Maven logs are never policy input. Other lint families, including raw types and serialization identifiers, are not enabled by the contract. A global `-Xlint:all -Werror` would conflate those unrelated families with the reviewed warnings; even narrow `-Werror` rejects generated-source warnings without an ownership boundary. Regression fixtures prove that distinction without committing Java warning debt into repository source.
+
+A new framework deprecation at a repository call site must be migrated to its supported replacement with equivalent behavior and focused regression coverage. Do not suppress the warning, widen the diagnostic exclusions, disable processors, or change dependency versions merely to satisfy this policy. When adding a source root or changing the toolchain/compiler diagnostic model, update the ownership contract and its negative fixtures explicitly. `-DskipTests` and selecting unrelated tests omit this Surefire policy; the authoritative merge gates continue to require the complete `clean verify` lifecycle.
+
 ## Coverage reporting
 
 JaCoCo measures which production bytecode instructions, lines, and branches execute during the Maven test lifecycle. Both the Surefire unit/service/WebMvc/repository test phase and the Failsafe `*IT.java` integration-test phase, including Testcontainers PostgreSQL paths, contribute to one `target/jacoco.exec` execution-data file. The agent uses append mode, so a later fork or test phase adds its probes instead of replacing coverage recorded by the first phase. No project-specific coverage exclusions are configured.
