@@ -65,6 +65,23 @@ class BuildToolCiPolicyTest(unittest.TestCase):
                 docker.assert_not_called()
             self.assertTrue(all(not (directory / name).exists() for name in stale))
 
+    def test_tampered_execution_scope_fails_before_the_scanner_is_invoked(self):
+        contract = SCAN.INVENTORY.read_json(SCAN.INVENTORY.CONTRACT)
+        inventory = contract['inventory']
+        expected = {'schema': 1, 'executed_components': inventory['components']}
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            SCAN.INVENTORY.write_json(directory / 'enterprise-shop-build-tools.cdx.json',
+                                     SCAN.INVENTORY.bom(inventory))
+            SCAN.INVENTORY.write_json(directory / 'inventory.json', inventory)
+            SCAN.INVENTORY.write_json(directory / 'execution-scope.json',
+                                     {**expected, 'executed_components': []})
+            with patch('sys.argv', ['scan', '--directory', temporary]), \
+                    patch.object(SCAN.INVENTORY, 'collect', return_value=(inventory, expected)), \
+                    contextlib.redirect_stderr(io.StringIO()), patch.object(SCAN, 'docker') as docker:
+                self.assertEqual(2, SCAN.main())
+                docker.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

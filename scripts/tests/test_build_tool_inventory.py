@@ -24,8 +24,8 @@ class BuildToolInventoryTest(unittest.TestCase):
         self.directory = Path(self.temporary.name)
 
     def stream(self, records):
-        rows = [['begin', '1', 'verify'], *records, ['session', '0']]
-        rows.append(['end', '1', str(len(rows))])
+        rows = [['begin', '2', 'verify'], *records, ['session', '0']]
+        rows.append(['end', '2', str(len(rows))])
         path = self.directory / 'events.tsv'
         path.write_text('\n'.join('\t'.join(x) for x in rows) + '\n')
         return path
@@ -231,11 +231,13 @@ class BuildToolInventoryTest(unittest.TestCase):
         previous = self.directory / 'previous.cdx.json'
         previous.write_text('{}')
         (self.directory / 'inventory.json').write_text('{}')
+        (self.directory / 'execution-scope.json').write_text('{}')
         with patch('sys.argv', ['inventory', 'collect', '--directory', str(self.directory),
                                '--bom', str(previous)]), contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(1, INVENTORY.main())
         self.assertFalse(previous.exists())
         self.assertFalse((self.directory / 'inventory.json').exists())
+        self.assertFalse((self.directory / 'execution-scope.json').exists())
 
 
 if __name__ == '__main__':

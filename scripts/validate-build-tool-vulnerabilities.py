@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate complete pinned-Trivy Maven SBOM results and block HIGH/CRITICAL findings."""
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -69,20 +70,47 @@ def validate(document, report, scanner_exit_status):
     return sorted(set(blocked))
 
 
+def execution_policy(document, report, scanner_exit_status, executed_purls):
+    findings = validate(document, report, scanner_exit_status)
+    expected = {x['purl'] for x in document['components']}
+    require(isinstance(executed_purls, list) and executed_purls
+            and all(isinstance(x, str) for x in executed_purls)
+            and len(executed_purls) == len(set(executed_purls))
+            and set(executed_purls) <= expected, 'Missing/conflicting executable package ownership')
+    executed = set(executed_purls)
+    return {'blocked': [x for x in findings if x[0] in executed],
+            'resolved_only': [x for x in findings if x[0] not in executed]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bom', required=True)
     parser.add_argument('--report', required=True)
     parser.add_argument('--scanner-exit-status', type=int, required=True)
+    parser.add_argument('--execution-scope', required=True)
+    parser.add_argument('--directory', default='.tmp/build-tool-security')
     args = parser.parse_args()
     try:
-        blocked = validate(read_json(args.bom), read_json(args.report), args.scanner_exit_status)
+        spec = importlib.util.spec_from_file_location('inventory',
+            Path(__file__).with_name('build-tool-inventory.py'))
+        inventory_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inventory_module)
+        contract = inventory_module.read_json(inventory_module.CONTRACT)
+        scope = inventory_module.validate_collected(args.directory, contract)
+        require(read_json(args.execution_scope) == scope, 'Execution scope differs from fresh receipts')
+        document = read_json(args.bom)
+        inventory_module.validate_bom(document, contract)
+        result = execution_policy(document, read_json(args.report), args.scanner_exit_status,
+                                  [inventory_module.purl(x) for x in scope['executed_components']])
+        blocked = result['blocked']
+        for identity, advisory, severity in result['resolved_only']:
+            print(f'Resolved-only advisory: {severity}: {identity}: {advisory}')
         for identity, advisory, severity in blocked:
             print(f'{severity}: {identity}: {advisory}', file=sys.stderr)
         if blocked:
             print(f'Build-tool policy blocked {len(blocked)} HIGH/CRITICAL matches.', file=sys.stderr)
             return 1
-        print('Complete build-tool Maven package readback; no HIGH/CRITICAL findings.')
+        print('Complete Maven package readback; no blocking HIGH/CRITICAL findings in the authoritative execution set.')
         return 0
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f'Invalid build-tool vulnerability evidence: {error}', file=sys.stderr)

@@ -25,7 +25,7 @@ public final class BuildToolEvidence implements EventSpy {
     public void init(Context context) throws IOException {
         destination = Path.of(System.getProperty("buildtools.evidence"));
         output = new PrintWriter(Files.newBufferedWriter(destination, StandardCharsets.UTF_8));
-        emit("begin", "1", System.getProperty("buildtools.mode"));
+        emit("begin", "2", System.getProperty("buildtools.mode"));
     }
 
     private void emit(String... values) throws IOException {
@@ -92,6 +92,11 @@ public final class BuildToolEvidence implements EventSpy {
                         realm("configured", descriptor);
                     }
                 }
+                if (execution.getType() == ExecutionEvent.Type.MojoStarted) {
+                    var mojo = execution.getMojoExecution();
+                    emit("started", mojo.getMojoDescriptor().getPluginDescriptor().getId(),
+                            mojo.getGoal(), mojo.getExecutionId());
+                }
                 if (execution.getType() == ExecutionEvent.Type.MojoSucceeded) {
                     var mojo = execution.getMojoExecution();
                     var descriptor = mojo.getMojoDescriptor().getPluginDescriptor();
@@ -124,7 +129,7 @@ public final class BuildToolEvidence implements EventSpy {
     @Override
     public void close() throws IOException {
         if (!failed && succeeded) {
-            emit("end", "1", Integer.toString(records));
+            emit("end", "2", Integer.toString(records));
         }
         output.close();
         if (output.checkError()) {

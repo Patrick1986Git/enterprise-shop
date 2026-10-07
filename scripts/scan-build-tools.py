@@ -96,7 +96,9 @@ def main():
             (directory / name).unlink(missing_ok=True)
         source = directory / 'enterprise-shop-build-tools.cdx.json'
         document = INVENTORY.read_json(source)
-        INVENTORY.validate_bom(document, INVENTORY.read_json(INVENTORY.CONTRACT))
+        contract = INVENTORY.read_json(INVENTORY.CONTRACT)
+        INVENTORY.validate_bom(document, contract)
+        scope = INVENTORY.validate_collected(directory, contract)
         command = docker(Path(args.cache).resolve(), directory)
         download = command + ['image', '--download-db-only']
         if os.environ.get('TRIVY_DB_REPOSITORY'):
@@ -110,13 +112,22 @@ def main():
         status = scan(command, f'/evidence/{source.name}', target, directory / 'build-tools.scan.log')
         if status:
             raise ValueError(f'Build-tool scanner/database failure: {status}')
-        findings = POLICY.validate(document, INVENTORY.read_json(target), status)
+        result = POLICY.execution_policy(document, INVENTORY.read_json(target), status,
+            [INVENTORY.purl(x) for x in scope['executed_components']])
+        findings = result['blocked']
         INVENTORY.write_json(directory / 'policy-result.json', {'scanner_exit_status': status,
-                             'threshold': ['HIGH', 'CRITICAL'], 'blocked': findings})
+                             'threshold': ['HIGH', 'CRITICAL'], **result,
+                             'resolved_purls': len(document['components']),
+                             'executed_purls': len(scope['executed_components']),
+                             'resolved_only_purls': len(scope['resolved_only_components'])})
+        for identity, advisory, severity in result['resolved_only']:
+            print(f'Resolved-only advisory: {severity}: {identity}: {advisory}')
         for identity, advisory, severity in findings:
             print(f'{severity}: {identity}: {advisory}', file=sys.stderr)
+        if not findings:
+            print('No blocking HIGH/CRITICAL findings in the authoritative execution set.')
         return 1 if findings else 0
-    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.CalledProcessError) as error:
         print(f'Build-tool scan failed: {error}', file=sys.stderr)
         return 2
 

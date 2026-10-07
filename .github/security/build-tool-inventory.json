@@ -581,27 +581,6 @@
       "tools.jackson.core:jackson-core:jar::3.1.7",
       "tools.jackson.core:jackson-databind:jar::3.1.7"
     ],
-    "executions": {
-      "docker": [
-        "org.apache.maven.plugins:maven-dependency-plugin:3.10.0:go-offline:default-cli"
-      ],
-      "verify": [
-        "org.apache.maven.plugins:maven-clean-plugin:3.5.0:clean:default-clean",
-        "org.apache.maven.plugins:maven-compiler-plugin:3.16.0:compile:default-compile",
-        "org.apache.maven.plugins:maven-compiler-plugin:3.16.0:testCompile:default-testCompile",
-        "org.apache.maven.plugins:maven-enforcer-plugin:3.6.3:enforce:enforce-build-environment",
-        "org.apache.maven.plugins:maven-failsafe-plugin:3.6.0:integration-test:default",
-        "org.apache.maven.plugins:maven-failsafe-plugin:3.6.0:verify:default",
-        "org.apache.maven.plugins:maven-jar-plugin:3.5.1:jar:default-jar",
-        "org.apache.maven.plugins:maven-resources-plugin:3.5.0:resources:default-resources",
-        "org.apache.maven.plugins:maven-resources-plugin:3.5.0:testResources:default-testResources",
-        "org.apache.maven.plugins:maven-surefire-plugin:3.5.6:test:default-test",
-        "org.jacoco:jacoco-maven-plugin:0.8.15:prepare-agent:prepare-jacoco-agent",
-        "org.jacoco:jacoco-maven-plugin:0.8.15:report:report-full-test-suite-coverage",
-        "org.springframework.boot:spring-boot-maven-plugin:4.1.1:build-info:default",
-        "org.springframework.boot:spring-boot-maven-plugin:4.1.1:repackage:repackage"
-      ]
-    },
     "model_plugins": [
       "org.apache.maven.plugins:maven-clean-plugin:3.5.0",
       "org.apache.maven.plugins:maven-compiler-plugin:3.16.0",
@@ -1260,5 +1239,5 @@
     }
   },
   "maven": "3.10.0",
-  "schema": 1
+  "schema": 2
 }

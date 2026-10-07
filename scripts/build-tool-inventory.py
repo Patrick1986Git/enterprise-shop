@@ -69,11 +69,11 @@ def write_json(path, value):
 
 def evidence(path, mode):
     lines = Path(path).read_text(encoding='utf-8').splitlines()
-    require(len(lines) > 3 and lines[0] == f'begin\t1\t{mode}', 'Missing evidence header')
+    require(len(lines) > 3 and lines[0] == f'begin\t2\t{mode}', 'Missing evidence header')
     rows = [line.split('\t') for line in lines]
-    require(rows[-1] == ['end', '1', str(len(rows) - 1)], 'Truncated/failed Maven evidence')
+    require(rows[-1] == ['end', '2', str(len(rows) - 1)], 'Truncated/failed Maven evidence')
     lengths = {'begin': 3, 'artifact': 7, 'model-plugin': 4, 'configured': 2,
-               'configured-artifact': 8, 'configured-url': 3, 'executed': 4,
+               'configured-artifact': 8, 'configured-url': 3, 'started': 4, 'executed': 4,
                'actual': 2, 'actual-artifact': 8, 'actual-url': 3,
                'processor-config': 3, 'session': 2, 'end': 3}
     require(all(x[0] in lengths and len(x) == lengths[x[0]] for x in rows),
@@ -219,6 +219,57 @@ def execution_paths(log, artifacts, project_root):
                         'failsafe': sorted(booters[1] - tests[1])}, 'agents': sorted(agents[0])}
 
 
+def execution_records(rows, actual, log):
+    started = [x[1:] for x in rows if x[0] == 'started']
+    succeeded = [x[1:] for x in rows if x[0] == 'executed']
+    require(started and started == succeeded, 'Missing/conflicting successful goal execution evidence')
+    require(all(len(x[0].split(':')) == 3 and all(TOKEN.fullmatch(v) for v in
+                [*x[0].split(':'), x[1], x[2]]) for x in succeeded), 'Malformed goal execution identity')
+    require({x[0] for x in succeeded} == actual.keys(), 'Executed goal missing its complete actual realm')
+    # Independent Maven debug-plan evidence detects a dropped event/realm pair.
+    text = Path(log).read_text(encoding='utf-8')
+    require(text.count('[INFO] BUILD SUCCESS') == 1, 'Missing successful execution log')
+    planned = re.findall(r'^\[DEBUG\] Goal:\s+(\S+) \(([^)]+)\)$', text, re.M)
+    expected = [(':'.join(x[:2]), x[2]) for x in succeeded]
+    require(planned == expected, 'Maven execution plan differs from successful goal receipts')
+    return [':'.join(x) for x in succeeded]
+
+
+def execution_scope(inventory, executions, actual, distribution):
+    require(isinstance(executions, dict) and executions.keys() == {'verify', 'docker'}
+            and actual.keys() == executions.keys(), 'Missing authoritative execution modes')
+    executing = set()
+    for mode, records in executions.items():
+        require(isinstance(records, list) and records and len(records) == len(set(records)),
+                'Missing/duplicate execution receipts')
+        roots = set()
+        for record in records:
+            parts = record.split(':')
+            require(len(parts) == 5 and all(TOKEN.fullmatch(x) for x in parts),
+                    'Malformed goal execution identity')
+            roots.add(':'.join(parts[:3]))
+        require(roots == actual[mode].keys(), 'Executed plugin omitted from actual realm ownership')
+        for root in roots:
+            require(root in inventory['plugins'] and
+                    {k: sorted(v) for k, v in actual[mode][root].items()} == inventory['plugins'][root],
+                    'Actual realm conflicts with resolved inventory')
+        executing.update(roots)
+    owned = set(distribution) | {DISTRIBUTION_PACKAGE} | set(inventory['processors']) | set(inventory['agents'])
+    for kind in ('providers', 'booters'):
+        for members in inventory[kind].values():
+            owned.update(members)
+    for root in executing:
+        owned.update(inventory['plugins'][root]['realm'])
+    resolved = inventory['components']
+    require(len(resolved) == len(set(resolved)) and owned and owned <= set(resolved),
+            'Duplicate/conflicting resolved and executed component identities')
+    return {'schema': 1, 'executions': executions,
+            'executed_plugins': sorted(executing),
+            'resolved_only_plugins': sorted(set(inventory['plugins']) - executing),
+            'executed_components': sorted(owned),
+            'resolved_only_components': sorted(set(resolved) - owned)}
+
+
 def collect(directory, contract):
     directory = Path(directory)
     verify, verify_artifacts = evidence(directory / 'verify.tsv', 'verify')
@@ -233,7 +284,10 @@ def collect(directory, contract):
         require(configured.get(root) == graph, 'Executing realm differs from effective resolution')
     direct = realm_graphs(docker, docker_artifacts, 'actual')
     dependency = 'org.apache.maven.plugins:maven-dependency-plugin:3.10.0'
-    require(direct.keys() == {dependency}, 'Unexpected/missing Docker direct plugin')
+    require(dependency in direct, 'Missing Docker direct plugin')
+    for root, graph in direct.items():
+        require(root not in configured or configured[root] == graph,
+                'Direct executing realm conflicts with effective resolution')
     require('commons-beanutils:commons-beanutils:jar::1.11.0' in direct[dependency]['realm']
             and 'commons-beanutils:commons-beanutils:jar::1.11.0'
             in configured['org.apache.maven.plugins:maven-site-plugin:3.22.0']['realm'],
@@ -275,14 +329,28 @@ def collect(directory, contract):
     inventory = {'model_plugins': sorted(model_roots),
                  'plugins': {k: {s: sorted(v) for s, v in g.items()} for k, g in sorted(graphs.items())},
                  'processor_roots': sorted(roots), **paths,
-                 'executions': {mode: sorted({':'.join(x[1:]) for x in rows if x[0] == 'executed'})
-                                for mode, rows in [('verify', verify), ('docker', docker)]},
                  'components': sorted(components)}
-    return inventory
+    actual_by_mode = {'verify': actual, 'docker': direct}
+    executions = {mode: execution_records(rows, actual_by_mode[mode], directory / f'{mode}.log')
+                  for mode, rows in [('verify', verify), ('docker', docker)]}
+    return inventory, execution_scope(inventory, executions, actual_by_mode, distribution)
 
 
 def validate_inventory(inventory, contract):
+    require(type(contract.get('schema')) is int and contract.get('schema') == 2,
+            'Unreviewed inventory contract schema')
     require(inventory == contract['inventory'], 'Build-tool graph changed; review the inventory contract')
+
+
+def validate_collected(directory, contract):
+    inventory, scope = collect(directory, contract)
+    validate_inventory(inventory, contract)
+    directory = Path(directory)
+    supplied = read_json(directory / 'execution-scope.json')
+    require(isinstance(supplied, dict) and type(supplied.get('schema')) is int and
+            read_json(directory / 'inventory.json') == inventory and supplied == scope,
+            'Generated inventory/execution scope differs from fresh authoritative receipts')
+    return scope
 
 
 def bom(inventory):
@@ -354,7 +422,8 @@ def main():
                 # A failed recollection must never leave a previously scan-ready document.
                 Path(args.bom).unlink(missing_ok=True)
                 (Path(args.directory) / 'inventory.json').unlink(missing_ok=True)
-                inventory = collect(args.directory, contract)
+                (Path(args.directory) / 'execution-scope.json').unlink(missing_ok=True)
+                inventory, scope = collect(args.directory, contract)
                 if args.review_contract:
                     write_json(args.review_contract, {**contract, 'inventory': inventory})
                     print('Candidate inventory written for review; no scan-ready SBOM emitted.')
@@ -363,6 +432,7 @@ def main():
                 document = bom(inventory)
                 validate_bom(document, contract)
                 write_json(Path(args.directory) / 'inventory.json', inventory)
+                write_json(Path(args.directory) / 'execution-scope.json', scope)
                 write_json(args.bom, document)
                 print(f'Validated {len(inventory["components"])} build-tool Maven components.')
         return 0
