@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -270,6 +271,106 @@ def execution_scope(inventory, executions, actual, distribution):
             'resolved_only_components': sorted(set(resolved) - owned)}
 
 
+def required_commands(project_root):
+    root = Path(project_root)
+    files = [root / 'Dockerfile', *(root / '.github/workflows').glob('*.yml'),
+             *(root / '.github/workflows').glob('*.yaml'), *(root / 'scripts').rglob('*.sh')]
+    # These default lifecycle phases are already observed by clean verify.
+    covered = set('pre-clean clean validate initialize generate-sources process-sources '
+                  'generate-resources process-resources compile process-classes '
+                  'generate-test-sources process-test-sources generate-test-resources '
+                  'process-test-resources test-compile process-test-classes test '
+                  'prepare-package package pre-integration-test integration-test '
+                  'post-integration-test verify'.split())
+    result = []
+    for path in sorted(files):
+        if not path.is_file():
+            continue
+        text = '\n'.join(line for line in path.read_text().replace('\\\n', ' ').splitlines()
+                         if not line.lstrip().startswith('#'))
+        for match in re.finditer(r'(?:^|\s)(?:\S*/mvnw|mvn)(?=\s)([^\n]+)', text):
+            tokens = shlex.split(match[1], comments=True)
+            goals = []
+            index = 0
+            while index < len(tokens):
+                token = tokens[index]
+                index += 1
+                if token in ('>', '>>', '2>', '2>&1', '&&', '||', ';', '|'):
+                    break
+                require(not token.startswith(('-P', '--activate-profiles')),
+                        'Additional Maven profiles require separate authoritative execution evidence')
+                if token in ('-f', '--file', '-s', '--settings'):
+                    require(index < len(tokens), 'Incomplete repository Maven command')
+                    index += 1
+                elif token.startswith('-'):
+                    continue
+                elif token not in covered:
+                    require(re.fullmatch(r'[A-Za-z0-9_.+:\-]+', token),
+                            'Dynamic/unsupported Maven goal requires execution evidence')
+                    goals.append(token)
+            if goals:
+                result.append({'source': path.relative_to(root).as_posix(), 'goals': goals})
+    return result
+
+
+def executed_aliases(executions, artifacts):
+    roots = {':'.join(x.split(':')[:3]) for records in executions.values() for x in records}
+    aliases = set(roots)
+    aliases.update(x.split(':')[3] for records in executions.values() for x in records)
+    for root in roots:
+        g, a, v = root.split(':')
+        value = coordinate((g, a, 'jar', '', v))
+        paths = [path for path, identity in artifacts.items() if identity == value]
+        require(paths, 'Executed root has no authoritative plugin descriptor path')
+        with zipfile.ZipFile(paths[0]) as archive:
+            descriptor = ET.fromstring(archive.read('META-INF/maven/plugin.xml'))
+        require((descriptor.findtext('groupId'), descriptor.findtext('artifactId'),
+                 descriptor.findtext('version')) == (g, a, v), 'Plugin descriptor identity mismatch')
+        prefix = descriptor.findtext('goalPrefix', '')
+        require(TOKEN.fullmatch(prefix), 'Missing authoritative plugin goal prefix')
+        aliases.add(prefix)
+    return aliases
+
+
+def command_owned(goal, aliases):
+    parts = goal.split(':')
+    if len(parts) == 1:
+        return goal in aliases
+    if len(parts) == 2:
+        return parts[0] in aliases
+    if len(parts) == 3:
+        return any(alias.startswith(':'.join(parts[:2]) + ':') for alias in aliases)
+    if len(parts) == 4:
+        return ':'.join(parts[:3]) in aliases
+    return False
+
+
+def command_coverage(commands, aliases):
+    require(all(command_owned(goal, aliases) for command in commands for goal in command['goals']),
+            'Repository Maven command lacks authoritative executed-realm receipts')
+
+
+def observe_commands(directory, maven_arguments):
+    directory = Path(directory).resolve()
+    for name in ('docker.tsv', 'docker.log', 'required-commands.json', 'inventory.json',
+                 'execution-scope.json', 'enterprise-shop-build-tools.cdx.json', 'policy-result.json'):
+        (directory / name).unlink(missing_ok=True)
+    rows, artifacts = evidence(directory / 'verify.tsv', 'verify')
+    actual = realm_graphs(rows, artifacts, 'actual')
+    records = execution_records(rows, actual, directory / 'verify.log')
+    aliases = executed_aliases({'verify': records}, artifacts)
+    commands = required_commands(ROOT)
+    goals = list(dict.fromkeys(goal for command in commands for goal in command['goals']
+                               if not command_owned(goal, aliases)))
+    require(goals, 'Missing additional authoritative Maven command')
+    write_json(directory / 'required-commands.json', commands)
+    with (directory / 'docker.log').open('w') as log:
+        subprocess.run([str(ROOT / 'mvnw'), *maven_arguments, '-B', '-X', '-DskipTests',
+                        f'-Dmaven.ext.class.path={directory / "collector.jar"}',
+                        f'-Dbuildtools.evidence={directory / "docker.tsv"}', '-Dbuildtools.mode=docker',
+                        *goals], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
+
+
 def collect(directory, contract):
     directory = Path(directory)
     verify, verify_artifacts = evidence(directory / 'verify.tsv', 'verify')
@@ -333,7 +434,12 @@ def collect(directory, contract):
     actual_by_mode = {'verify': actual, 'docker': direct}
     executions = {mode: execution_records(rows, actual_by_mode[mode], directory / f'{mode}.log')
                   for mode, rows in [('verify', verify), ('docker', docker)]}
-    return inventory, execution_scope(inventory, executions, actual_by_mode, distribution)
+    scope = execution_scope(inventory, executions, actual_by_mode, distribution)
+    aliases = executed_aliases(executions, all_artifacts)
+    commands = required_commands(ROOT)
+    command_coverage(commands, aliases)
+    scope['repository_commands'] = commands
+    return inventory, scope
 
 
 def validate_inventory(inventory, contract):
@@ -405,15 +511,18 @@ def prepare(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['prepare', 'collect', 'validate-bom'])
+    parser.add_argument('command', choices=['prepare', 'observe-commands', 'collect', 'validate-bom'])
     parser.add_argument('--directory', default='.tmp/build-tool-security')
     parser.add_argument('--contract', default=str(CONTRACT))
     parser.add_argument('--review-contract', help='Write a candidate contract for explicit reviewer inspection; never used by CI')
     parser.add_argument('--bom', default='.tmp/build-tool-security/enterprise-shop-build-tools.cdx.json')
+    parser.add_argument('--maven-arg', action='append', default=[], help='Local Maven transport/settings argument')
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
             prepare(args.directory)
+        elif args.command == 'observe-commands':
+            observe_commands(args.directory, args.maven_arg)
         else:
             contract = read_json(args.contract)
             if args.command == 'validate-bom':

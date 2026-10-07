@@ -105,10 +105,8 @@ jobs:
               exit 1
             }
           tail -n 12 "${evidence}/verify.log"
-          ./mvnw -B -X -DskipTests \
-            -Dmaven.ext.class.path="${evidence}/collector.jar" \
-            -Dbuildtools.evidence="${evidence}/docker.tsv" -Dbuildtools.mode=docker \
-            dependency:go-offline > "${evidence}/docker.log" 2>&1 || {
+          # Observe Docker's dependency:go-offline and any newly required Maven goal.
+          python scripts/build-tool-inventory.py observe-commands || {
               tail -n 80 "${evidence}/docker.log"
               exit 1
             }

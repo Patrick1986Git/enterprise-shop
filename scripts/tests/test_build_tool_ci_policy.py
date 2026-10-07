@@ -35,7 +35,7 @@ class BuildToolCiPolicyTest(unittest.TestCase):
                         'python scripts/build-tool-inventory.py collect',
                         'python scripts/build-tool-inventory.py validate-bom',
                         'python scripts/scan-build-tools.py', 'dependency:go-offline',
-                        '-Dbuildtools.mode=verify', '-Dbuildtools.mode=docker'):
+                        '-Dbuildtools.mode=verify', 'python scripts/build-tool-inventory.py observe-commands'):
             self.assertIn(command, self.build)
 
     def test_security_failure_preserves_reviewable_evidence(self):

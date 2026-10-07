@@ -2,6 +2,7 @@ import copy
 import importlib.util
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -198,6 +199,100 @@ class BuildToolExecutionScopeTest(unittest.TestCase):
                 with patch.object(INVENTORY, 'collect', return_value=(self.inventory, scope)), \
                         self.subTest(value=value), self.assertRaises(ValueError):
                     INVENTORY.validate_collected(directory, contract)
+
+    def source_commands(self, directory, text, source='Dockerfile'):
+        root = Path(directory)
+        path = root / source
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return INVENTORY.required_commands(root)
+
+    def test_required_source_discovery_covers_docker_workflows_and_scripts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.source_commands(directory, 'RUN ./mvnw -B dependency:go-offline && true\n')
+            self.source_commands(directory, 'run: ./mvnw available:render > evidence.log\n',
+                                 '.github/workflows/check.yaml')
+            commands = self.source_commands(directory, './mvnw install\n', 'scripts/nested/required.sh')
+            self.assertEqual({'dependency:go-offline', 'available:render', 'install'},
+                             {goal for command in commands for goal in command['goals']})
+
+    def test_already_observed_lifecycle_options_comments_and_continuations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            commands = self.source_commands(directory, '# ./mvnw ignored:goal\n'
+                'RUN ./mvnw -B -DskipTests -f pom.xml clean package\n'
+                './mvnw -s settings.xml available:render \\\n  available:help # comment\n')
+            self.assertEqual([{'source': 'Dockerfile', 'goals': ['available:render', 'available:help']}],
+                             commands)
+
+    def test_dynamic_goals_or_additional_profiles_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for command in ('./mvnw "$GOALS"', './mvnw -Pextra package',
+                            './mvnw --activate-profiles=extra package', './mvnw --settings'):
+                with self.subTest(command=command), self.assertRaises(ValueError):
+                    self.source_commands(directory, command)
+
+    def test_new_required_source_command_is_observed_automatically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source'
+            evidence = Path(directory) / 'evidence'
+            evidence.mkdir()
+            self.source_commands(source, 'RUN ./mvnw docker:offline available:render\n')
+            artifacts = {}
+            with patch.object(INVENTORY, 'ROOT', source), \
+                    patch.object(INVENTORY, 'evidence', return_value=([], artifacts)), \
+                    patch.object(INVENTORY, 'realm_graphs', return_value=self.actual['verify']), \
+                    patch.object(INVENTORY, 'execution_records', return_value=self.executions['verify']), \
+                    patch.object(INVENTORY, 'executed_aliases', return_value={'active'}), \
+                    patch.object(INVENTORY.subprocess, 'run') as run:
+                INVENTORY.observe_commands(evidence, [])
+            self.assertEqual(['docker:offline', 'available:render'], run.call_args.args[0][-2:])
+            self.promote('docker', 'new-required-command')
+
+    def test_new_required_command_cannot_pass_on_previous_receipts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            commands = self.source_commands(directory, './mvnw available:render\n')
+            with self.assertRaisesRegex(ValueError, 'lacks authoritative'):
+                INVENTORY.command_coverage(commands, {'active', 'docker'})
+            INVENTORY.command_coverage(commands, {'active', 'docker', 'available'})
+
+    def test_failed_command_observation_removes_stale_receipts_and_scan_ready_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            names = ('docker.tsv', 'docker.log', 'required-commands.json', 'inventory.json',
+                     'execution-scope.json', 'enterprise-shop-build-tools.cdx.json', 'policy-result.json')
+            for name in names:
+                (root / name).write_text('stale')
+            with patch.object(INVENTORY, 'evidence', side_effect=ValueError('broken receipts')), \
+                    self.assertRaises(ValueError):
+                INVENTORY.observe_commands(root, [])
+            self.assertFalse(any((root / name).exists() for name in names))
+
+    def test_executed_prefix_comes_from_matching_embedded_plugin_descriptor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'unrelated-name.jar'
+            with zipfile.ZipFile(path, 'w') as archive:
+                archive.writestr('META-INF/maven/plugin.xml', '<plugin><groupId>example</groupId>'
+                    '<artifactId>active-plugin</artifactId><version>1</version>'
+                    '<goalPrefix>authoritative</goalPrefix></plugin>')
+            aliases = INVENTORY.executed_aliases({'verify': self.executions['verify']},
+                                                 {path: 'example:active-plugin:jar::1'})
+            self.assertTrue(INVENTORY.command_owned('authoritative:new-goal', aliases))
+            self.assertTrue(INVENTORY.command_owned('example:active-plugin:1:new-goal', aliases))
+            self.assertFalse(INVENTORY.command_owned('available:render', aliases))
+            self.assertFalse(INVENTORY.command_owned('example:active-plugin:2:run', aliases))
+            self.assertTrue(INVENTORY.command_owned('example:active-plugin:run', aliases))
+            self.assertFalse(INVENTORY.command_owned('example:available-plugin:render', aliases))
+
+    def test_missing_or_conflicting_plugin_descriptor_cannot_establish_command_ownership(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'artifact.jar'
+            with zipfile.ZipFile(path, 'w') as archive:
+                archive.writestr('META-INF/maven/plugin.xml', '<plugin><groupId>wrong</groupId>'
+                    '<artifactId>active-plugin</artifactId><version>1</version>'
+                    '<goalPrefix>active</goalPrefix></plugin>')
+            for artifacts in ({}, {path: 'example:active-plugin:jar::1'}):
+                with self.subTest(artifacts=artifacts), self.assertRaises(ValueError):
+                    INVENTORY.executed_aliases({'verify': self.executions['verify']}, artifacts)
 
 
 if __name__ == '__main__':
