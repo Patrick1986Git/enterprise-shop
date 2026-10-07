@@ -57,7 +57,7 @@ jobs:
           show-openssf-scorecard: false
 
   build:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -66,6 +66,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
 
       - name: Validate live protected-master policy
         run: python scripts/validate-master-protection.py --repository "${{ github.repository }}"
@@ -90,7 +91,27 @@ jobs:
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
           SPRING_PROFILES_ACTIVE: test
-        run: ./mvnw -B clean verify
+        run: |
+          set -euo pipefail
+          evidence="${PWD}/.tmp/build-tool-security"
+          mkdir -p "${evidence}"
+          ./mvnw -v > "${evidence}/maven-version.txt"
+          python scripts/build-tool-inventory.py prepare
+          ./mvnw -B -X \
+            -Dmaven.ext.class.path="${evidence}/collector.jar" \
+            -Dbuildtools.evidence="${evidence}/verify.tsv" -Dbuildtools.mode=verify \
+            clean verify > "${evidence}/verify.log" 2>&1 || {
+              tail -n 80 "${evidence}/verify.log"
+              exit 1
+            }
+          tail -n 12 "${evidence}/verify.log"
+          ./mvnw -B -DskipTests \
+            -Dmaven.ext.class.path="${evidence}/collector.jar" \
+            -Dbuildtools.evidence="${evidence}/docker.tsv" -Dbuildtools.mode=docker \
+            dependency:go-offline > "${evidence}/docker.log" 2>&1 || {
+              tail -n 80 "${evidence}/docker.log"
+              exit 1
+            }
 
       - name: Checkout protected-master OpenAPI baseline source
         if: github.event_name == 'pull_request'
@@ -178,6 +199,33 @@ jobs:
             target/surefire-reports/**
             target/failsafe-reports/**
           if-no-files-found: ignore
+
+      - name: Generate and validate reviewed build-tool CycloneDX
+        run: |
+          set -euo pipefail
+          python scripts/build-tool-inventory.py collect
+          python scripts/build-tool-inventory.py validate-bom
+
+      - name: Cache existing Trivy database for build-tool scanning
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tmp/container-security/trivy-cache
+          key: trivy-db-${{ runner.os }}-${{ github.run_id }}-build-tools
+          restore-keys: |
+            trivy-db-${{ runner.os }}-
+
+      - name: Enforce build-tool HIGH and CRITICAL advisory policy
+        run: python scripts/scan-build-tools.py
+
+      - name: Upload build-tool security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-tool-security-evidence
+          path: .tmp/build-tool-security/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   docker-validation:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'

@@ -1,0 +1,134 @@
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
+import org.apache.maven.artifact.Artifact;
+import org.apache.maven.eventspy.EventSpy;
+import org.apache.maven.execution.ExecutionEvent;
+import org.apache.maven.model.io.xpp3.MavenXpp3Writer;
+import org.apache.maven.plugin.MavenPluginManager;
+import org.apache.maven.plugin.descriptor.PluginDescriptor;
+import org.eclipse.aether.RepositoryEvent;
+
+/** Emits resolution identities and classloader membership; never guesses from filenames. */
+public final class BuildToolEvidence implements EventSpy {
+    private MavenPluginManager pluginManager;
+    private PrintWriter output;
+    private Path destination;
+    private int records;
+    private boolean failed;
+    private boolean succeeded;
+
+    @Override
+    public void init(Context context) throws IOException {
+        destination = Path.of(System.getProperty("buildtools.evidence"));
+        output = new PrintWriter(Files.newBufferedWriter(destination, StandardCharsets.UTF_8));
+        emit("begin", "1", System.getProperty("buildtools.mode"));
+    }
+
+    private void emit(String... values) throws IOException {
+        for (String value : values) {
+            if (value == null || value.indexOf('\t') >= 0 || value.indexOf('\n') >= 0
+                    || value.indexOf('\r') >= 0) {
+                throw new IOException("Unsupported build-tool evidence field");
+            }
+        }
+        output.println(String.join("\t", values));
+        output.flush();
+        if (output.checkError()) {
+            throw new IOException("Cannot write build-tool evidence");
+        }
+        records++;
+    }
+
+    private void realm(String kind, PluginDescriptor descriptor) throws IOException {
+        emit(kind, descriptor.getId());
+        for (Artifact artifact : descriptor.getArtifacts()) {
+            emit(kind + "-artifact", descriptor.getId(), artifact.getGroupId(),
+                    artifact.getArtifactId(), artifact.getArtifactHandler().getExtension(),
+                    artifact.getClassifier() == null ? "" : artifact.getClassifier(),
+                    artifact.getVersion(), artifact.getFile().getCanonicalPath());
+        }
+        for (var url : descriptor.getClassRealm().getURLs()) {
+            emit(kind + "-url", descriptor.getId(), url.toString());
+        }
+    }
+
+    @Override
+    public void onEvent(Object event) throws Exception {
+        try {
+            if (event instanceof RepositoryEvent repository
+                    && repository.getType() == RepositoryEvent.EventType.ARTIFACT_RESOLVED
+                    && repository.getException() == null && repository.getArtifact() != null
+                    && repository.getArtifact().getPath() != null) {
+                var artifact = repository.getArtifact();
+                emit("artifact", artifact.getGroupId(), artifact.getArtifactId(),
+                        artifact.getExtension(), artifact.getClassifier(), artifact.getVersion(),
+                        artifact.getPath().toRealPath().toString());
+            }
+            if (event instanceof ExecutionEvent execution) {
+                if (execution.getType() == ExecutionEvent.Type.SessionStarted) {
+                    var session = execution.getSession();
+                    if (session.getProjects().size() != 1) {
+                        throw new IOException("Build-tool inventory supports one Maven project");
+                    }
+                    var project = session.getProjects().getFirst();
+                    if (!project.getBuildExtensions().isEmpty()) {
+                        throw new IOException("Unreviewed Maven build extension");
+                    }
+                    try (var writer = Files.newBufferedWriter(
+                            Path.of(destination + ".effective-pom.xml"), StandardCharsets.UTF_8)) {
+                        new MavenXpp3Writer().write(writer, project.getModel());
+                    }
+                    for (var plugin : project.getBuildPlugins()) {
+                        emit("model-plugin", plugin.getGroupId(), plugin.getArtifactId(),
+                                plugin.getVersion());
+                        var descriptor = pluginManager.getPluginDescriptor(plugin,
+                                project.getRemotePluginRepositories(), session.getRepositorySession());
+                        // Resolve the exact Maven-filtered realm without invoking the plugin goal.
+                        pluginManager.setupPluginRealm(descriptor, session, null, null, null);
+                        realm("configured", descriptor);
+                    }
+                }
+                if (execution.getType() == ExecutionEvent.Type.MojoSucceeded) {
+                    var mojo = execution.getMojoExecution();
+                    var descriptor = mojo.getMojoDescriptor().getPluginDescriptor();
+                    emit("executed", descriptor.getId(), mojo.getGoal(), mojo.getExecutionId());
+                    realm("actual", descriptor);
+                    if ("org.apache.maven.plugins".equals(descriptor.getGroupId())
+                            && "maven-compiler-plugin".equals(descriptor.getArtifactId())
+                            && ("compile".equals(mojo.getGoal()) || "testCompile".equals(mojo.getGoal()))) {
+                        var paths = mojo.getConfiguration().getChild("annotationProcessorPaths");
+                        if (paths == null) {
+                            throw new IOException("Compiler has no explicit processor path");
+                        }
+                        emit("processor-config", mojo.getGoal(), Base64.getEncoder().encodeToString(
+                                paths.toString().getBytes(StandardCharsets.UTF_8)));
+                    }
+                }
+                if (execution.getType() == ExecutionEvent.Type.SessionEnded) {
+                    succeeded = execution.getSession().getResult().getExceptions().isEmpty();
+                    emit("session", succeeded ? "0" : "1");
+                }
+            }
+        } catch (Exception error) {
+            // Maven logs EventSpy errors and continues. Withhold the completion marker so
+            // the repository parser rejects that otherwise successful Maven invocation.
+            failed = true;
+            throw error;
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (!failed && succeeded) {
+            emit("end", "1", Integer.toString(records));
+        }
+        output.close();
+        if (output.checkError()) {
+            throw new IOException("Cannot close build-tool evidence");
+        }
+    }
+}
