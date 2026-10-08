@@ -134,6 +134,7 @@ def build(directory, analyze=True):
             ['go test -mod=readonly -count=1 -timeout=90s -json .'], stdout=out, stderr=err, timeout=120).returncode
     client_tests = {'status': status, 'source_files': test_files,
                     'output_sha256': sha((directory / 'client-tests.jsonl').read_bytes())}
+    write(directory / 'client-test-receipt.json', client_tests)
     ryuk_client_tests.validate(tests, client_tests, sha)
     reference, image_id, config, layer, archive = image_archive(binary, (directory / 'ca-certificates.crt').read_bytes())
     (directory / 'image.tar').write_bytes(archive)

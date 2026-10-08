@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/moby/moby/client"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 

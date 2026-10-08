@@ -215,7 +215,7 @@
     "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
     "scripts/auxiliary_binary_evidence.py": "a56a9cf1a14377b3171bccbd5cb29f9e48b3e40012a5250caf569882dbf8cb0c",
-    "scripts/build-ryuk-candidate.py": "b282e18956d55dab619006f7bff570db29b3007d2c022af27c6a9f652c482dba",
+    "scripts/build-ryuk-candidate.py": "4d70488e92217c520d6d456a049cccec64cfeb263c8669dde44919097fe5c00c",
     "scripts/build-tool-inventory.py": "7f25b130ee128a321564613f1e7ff8ec1f5e26c6e406f4ccad86008c6ec11c34",
     "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
     "scripts/historical-forward-restore-rehearsal.sh": "1b6f3241fdaa1bce83cae712f4128e9ebba408ad09e9ea4a5d5c188be3dce507",
@@ -237,7 +237,7 @@
     "src/test/java/com/company/shop/persistence/migration/ProductReviewAuthorSnapshotMigrationIT.java": "e6a2d75068f678e704e29b277ab46023e0b4c39a2fc6aa9cc917d4f1d7032a81",
     "src/test/java/com/company/shop/persistence/migration/ProductionDatabaseIdentityIT.java": "6a4a1368d0402a3e4e27657a7aea8eff4a827fee925ac01fceef744e2865bdc8",
     "src/test/java/com/company/shop/persistence/support/PostgresContainerSupport.java": "e4207244b664c2ccb6c03f8fe0fb306ba578175a0fb2c320258787aefbefd5ea",
-    "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicy.java": "5d6077429854ef767a4bf68823da5aedcd7a343559779d0787e3f117c29880da",
+    "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicy.java": "f4322920c1bb7da4021e9d46416edbb32c34736a7b294b73f9f45d132c35e03c",
     "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicyTest.java": "355eb3dcef586d6f26f196219074ab0cfd150adda12e12ea40dd00cd8cee7bd9"
   },
   "tools": {

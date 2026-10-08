@@ -6,7 +6,7 @@
   ],
   "execution": "Go 1.26.8; readonly modules; no external network or Docker socket",
   "source_files": {
-    "client_contract_test.go": "e7ff7ce883e375d5a46d06af948bab3c81d603de6b6e0e23235c6bf67fe95a92",
+    "client_contract_test.go": "9a7d6fa146e3607697b4a62f005dbe37c58d7d0d2cdf3abd9a342b384ad79452",
     "config.go": "69f4a20e6d0e5f7b82a2f8ddb22be9cfeac5f9582f501e735d604c95d10e7e21",
     "config_test.go": "549d1399f7a6d9818e8e92e2a3bb08e269ae9e4796b42435013dd38b9404c7ba",
     "consts.go": "0cad75fdaebd2d12368e06b285a0dfd4bc885eda98f94f83d38b4c3269f45dc7",
@@ -16,7 +16,7 @@
     "main.go": "f1bfac94dc379e237e805d1bfc469dd6dd9a9bf2cd9113a45fcf05e31ff62938",
     "mock_test.go": "95d4961a756aa6cf401da39b7298a3eca01939e0d10beaea4af9275aeaed22d2",
     "reaper.go": "191f4ae6ee2890d463d6c38d1b95e15563cb0bbcf6388bd8eb639bb2d63e5b8b",
-    "reaper_test.go": "7cedb0f7109a9f196c3f533c0ca6464fddcf1392f28fcc5c0bad03a394ab17b0"
+    "reaper_test.go": "65e6f22c19ee1f3b1c09badf91a48c4dbe58d3049b861fb51aeb8e389e42f2a0"
   },
   "passed_tests": [
     "TestClientContract",

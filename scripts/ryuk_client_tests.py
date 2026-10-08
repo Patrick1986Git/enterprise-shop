@@ -35,6 +35,11 @@ def prepare(source, directory):
                             f'cli.On("NetworkRemove", mockContext, networkID{number}, client.NetworkRemoveOptions{{}}).')
     text = text.replace('volumeRemoveForce).', 'client.VolumeRemoveOptions{Force: volumeRemoveForce}).')
     text = text.replace('[]*volume.Volume', '[]volume.Volume')
+    text = text.replace('[]container.Port', '[]container.PortSummary')
+    text = text.replace('{ID: networkID1, Created: tc.createdAt1}',
+                        '{Network: network.Network{ID: networkID1, Created: tc.createdAt1}}')
+    text = text.replace('{ID: networkID2, Created: tc.networkCreated2}',
+                        '{Network: network.Network{ID: networkID2, Created: tc.networkCreated2}}')
     (directory / 'reaper_test.go').write_text(text)
     mock = (source / 'mock_test.go').read_text()
     mock = mock.replace('"github.com/docker/docker/api/types"', '"github.com/moby/moby/client"')
@@ -83,7 +88,9 @@ def prepare(source, directory):
 def validate(directory, receipt, sha):
     contract = json.loads(CONTRACT.read_text())
     hashes = {p.name: sha(p.read_bytes()) for p in directory.iterdir() if p.is_file()}
-    if type(receipt['status']) is not int or receipt['status'] != 0 or hashes != contract['source_files'] or receipt['source_files'] != hashes:
+    if type(receipt['status']) is not int or receipt['status'] != 0:
+        raise ValueError('Ryuk client tests failed; inspect client-tests.jsonl and client-tests.log')
+    if hashes != contract['source_files'] or receipt['source_files'] != hashes:
         raise ValueError('Ryuk client test source/status drift')
     events = [json.loads(line) for line in (directory.parent / 'client-tests.jsonl').read_text().splitlines()]
     passed = sorted(e['Test'] for e in events if e['Action'] == 'pass' and 'Test' in e)
