@@ -1,0 +1,23 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "bom-ref": "pkg:maven/commons-beanutils/commons-beanutils@1.11.0",
+      "group": "commons-beanutils",
+      "name": "commons-beanutils",
+      "purl": "pkg:maven/commons-beanutils/commons-beanutils@1.11.0",
+      "type": "library",
+      "version": "1.11.0"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "bom-ref": "enterprise-shop-build-tool-scanner-fixture",
+      "name": "enterprise-shop-build-tool-scanner-fixture",
+      "type": "application",
+      "version": "1"
+    }
+  },
+  "specVersion": "1.5",
+  "version": 1
+}

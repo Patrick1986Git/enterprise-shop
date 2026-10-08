@@ -149,6 +149,20 @@ Targeted examples:
 ./mvnw -Dtest=SecurityConfigWebMvcTest test
 ```
 
+## Maven build-tool security tests
+
+CI collects build-tool execution evidence during its existing Java 21 `clean verify`, generates a separate CycloneDX SBOM, and scans it using the existing pinned Trivy authority. The same `build` job now runs on the weekly protected-master scan schedule. The reviewed graph includes plugin resolution and filtered realms, both annotation processor paths, dynamic test providers/booters, explicit agents, and Maven distribution libraries. See [container-security validation](../operations/container-security.md#maven-build-tool-advisory-boundary) for the ownership contract, failure policy, reproduction commands, and review procedure.
+
+Dependency-free parser/policy and workflow regressions run with the existing Python policy suite:
+
+```bash
+python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+The additional tests cover effective/direct roots, processor roots/transitives, BeanUtils remediation, graph drift, incomplete/truncated resolution, authoritative path identities, classifiers, distribution bytes, deterministic/incomplete CycloneDX, complete package readback, scanner errors, and stale evidence. Execution-boundary fixtures prove HIGH blocking for executed plugins, processors, providers/booters, agents, distribution, and Docker's direct realm; resolved-only HIGH preservation; automatic full-realm promotion from lifecycle binding or direct invocation; shared executable ownership; missing/conflicting starts/successes/realms/plans; tampered subset rejection; command discovery across workflows/Docker/shell scripts; automatic observation of newly required goals; descriptor-backed prefixes; coverage checks; unsupported profile/dynamic-goal failure; and stale observation output removal. The tests use general ownership rules rather than a safe-plugin or CVE allowlist. The real pinned-container fixtures separately prove vulnerable BeanUtils HIGH detection, patched success, malformed SBOM rejection, and missing-database failure; unit tests do not require network access.
+
+The EventSpy is stored as `BuildToolEvidence.java.source` and compiled from a temporary directory with Java 21 `-Xlint:all -Werror`. It has a separate strict tooling compilation boundary; it neither changes nor bypasses the application/test source inventory in `RepositoryCompilerWarningPolicyTest`. Generated Java and class files stay outside that source inventory. The unchanged Java/Kotlin CodeQL workflow analyzes the normal repository build; its success is not a claim that Python tooling or the collector source asset was separately analyzed.
+
 ## Practical guidance
 
 - Prefer the narrowest useful test for the changed behavior.

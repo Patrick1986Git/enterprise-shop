@@ -1,0 +1,16 @@
+<component-set>
+  <components>
+    <component>
+      <role>org.apache.maven.eventspy.EventSpy</role>
+      <role-hint>enterprise-shop-build-tool-evidence</role-hint>
+      <implementation>BuildToolEvidence</implementation>
+      <instantiation-strategy>singleton</instantiation-strategy>
+      <requirements>
+        <requirement>
+          <role>org.apache.maven.plugin.MavenPluginManager</role>
+          <field-name>pluginManager</field-name>
+        </requirement>
+      </requirements>
+    </component>
+  </components>
+</component-set>

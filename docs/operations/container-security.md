@@ -23,10 +23,12 @@ The workflow event matrix is intentionally narrow:
 | --- | --- | --- | --- | --- |
 | Pull request | Yes | Yes | Yes | No |
 | Push to `master` | Yes | Yes | Yes | Yes, after `build` |
-| Weekly schedule | No | No | Yes | No |
-| Manual `workflow_dispatch` | No | No | Yes | No |
+| Weekly schedule | Yes | No | Yes | No |
+| Manual `workflow_dispatch` | Yes | No | Yes | No |
 
-The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; scheduled and manual runs explicitly check out `master`. These runs rebuild both CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new policy-violating HIGH or CRITICAL finding is therefore detected by the next run.
+The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; the scheduled and manual container jobs explicitly check out `master`. These runs rebuild both CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new policy-violating HIGH or CRITICAL finding is therefore detected by the next run.
+
+Scheduled CI also regenerates Maven build-tool evidence against protected `master` and refreshes its advisory scan in the existing `build` job. Manual CI uses its selected workflow ref, allowing exact-head verification of an existing proposal; its container-security job retains the existing explicit `master` checkout. Both build modes perform one verification lifecycle before generating build-tool evidence.
 
 The external container tools and scan input are immutable while retaining readable source versions:
 
@@ -46,6 +48,56 @@ The repository uses Maven Wrapper 3.3.4 in `only-script` mode to download Maven 
 Apache publishes the release archive, detached OpenPGP signature, and SHA-512 checksum at `https://downloads.apache.org/maven/maven-3/3.10.0/binaries/`, with release keys at `https://downloads.apache.org/maven/KEYS`. The configured ZIP was accepted only after its computed SHA-512 matched Apache's published checksum and its detached signature verified against the published keys; the SHA-256 pin above was then computed independently from those exact verified bytes. A future Maven upgrade must repeat this authoritative verification and atomically update the wrapper archive and digest, the focused policy expectation and tests, and this evidence before the new distribution is executed in trusted automation.
 
 Maven Enforcer separately requires Java in `[21,22)` and Maven in `[3.9.15,)`; it checks build-tool compatibility after Maven starts, while the wrapper checksum protects the downloaded Maven archive before execution. This checksum is an integrity pin for the expected Maven distribution, not package signing or end-to-end provenance. It does not establish Apache account or release-process integrity, Maven plugin or dependency integrity, Maven Central availability, reproducible application bytecode, or vulnerability safety. Dependency and container vulnerability controls remain separate concerns.
+
+## Maven build-tool advisory boundary
+
+The `build` job owns a dedicated build-tool scan using the same pinned Trivy image and database authority as the image scans. It runs on ordinary pull requests, protected-master pushes, the weekly CI schedule, and manual CI dispatch. Pull-request checkout uses the event's exact head SHA; scheduled checkout uses `master`. Workflow permissions remain `contents: read`, with no dependency submission, privileged pull-request event, secrets, or persisted checkout credentials.
+
+`scripts/build-tool-inventory.py` compiles a repository-owned Maven EventSpy and attaches it to the job's existing `clean verify`. The collector writes effective-model roots, authoritative Maven resolver identities, configured plugin descriptors, filtered classloader URLs, and successful goal executions. Its `observe-commands` operation discovers Maven goals in repository workflows, Dockerfile commands, and shell scripts, then observes goals whose complete plugin realms have not already executed. This currently adds only Docker's `dependency:go-offline`, without another verification lifecycle. Plugin goal prefixes come from matching embedded descriptors, never filenames. Collection also checks discovered commands against actual realm receipts; an added command cannot silently pass on old evidence. Dynamic goals and additional profiles fail closed pending separate authoritative evidence. The actual compiler and test-fork logs establish annotation processor paths, selected providers, booter artifacts, and Java agents. No Maven coordinate is derived from a filename.
+
+The reviewed schema-2 contract is `.github/security/build-tool-inventory.json`. Boundary A retains twelve effective plugin roots, the directly invoked Dependency Plugin, and every resolved descriptor dependency. Install, Deploy, and Site currently have available realms without executed goals. All available realm members enter the complete SBOM; dependencies excluded in favor of Maven's own API retain inventory provenance, require reviewed distribution group/artifact authority, and are represented by the actual distribution versions in the SBOM. Configured, resolved, realm-available, and goal-executed are distinct states.
+
+Boundary B blocks HIGH/CRITICAL findings in the mechanically proven authoritative execution set. `execution-scope.json` derives ownership from matching `MojoStarted`/`MojoSucceeded` records, complete actual realms, and the independent Maven debug goal plan, plus actual processor/provider/booter/agent paths and Maven distribution ownership. It currently contains 211 executable PURLs and 55 resolved-only PURLs, partitioning all 266 input identities. Ten plugin roots execute: nine during verification plus Dependency in Docker's direct command. The scanner re-collects the raw receipts and requires exact agreement with the generated scope before evaluating advisories. A manually reduced or stale subset fails.
+
+The contract reviews dependency graphs, not a frozen execution allowlist. Binding or directly invoking an already inventoried plugin automatically promotes its entire observed realm into blocking ownership; no contract edit or package/CVE exception is needed. A shared package blocks if any authoritative executed owner uses it. New dependency graphs still require inventory review. The collector's deliberate `setupPluginRealm` resolves/registers available components without invoking their goals; only actual goal receipts grant plugin execution ownership. This is goal-level evidence, not bytecode-level reachability analysis or a claim about every class initializer.
+
+The ownership boundary also includes both explicit processor paths, the actual Surefire/Failsafe JUnit Platform providers and booters, JaCoCo's runtime-classifier agent, and Mockito's explicit agent. Ordinary application/test classpaths remain under Dependency Review and existing application evidence. All 56 Maven distribution/bootstrap JARs are byte-checked against reviewed identities resolved from Apache's published distribution POM. JARs lacking embedded metadata use that authoritative resolution plus byte equality; unknown identities fail. The Maven distribution itself additionally has its authoritative `org.apache.maven:apache-maven:pom:3.10.0` PURL to cover advisories attached to that aggregate package. This package denotes the distribution, rather than an executing POM file.
+
+The ephemeral CycloneDX 1.5 JSON artifact is `enterprise-shop-build-tools.cdx.json`, with root identity `enterprise-shop-build-tools`. Its complete, deterministic component list is checked against the contract before scanning. Material classifiers are encoded in Maven PURLs. Generated inventories, SBOMs, reports, effective models, and raw execution logs are uploaded as `build-tool-security-evidence`, including on failure; they are not committed. The versioned contract is a reviewed expectation, not a substitute for fresh execution evidence.
+
+The scanner first requires a successful database update and then runs:
+
+```bash
+trivy sbom --skip-db-update --ignorefile /dev/null --list-all-pkgs \
+  --exit-code 0 --format json --output enterprise-shop-build-tools.trivy.json \
+  enterprise-shop-build-tools.cdx.json
+```
+
+The actual invocation runs inside the immutable Trivy image documented above. Exit status zero produces raw evidence; scanner/database errors still fail. `scripts/validate-build-tool-vulnerabilities.py` requires every input PURL and exact name/version in Trivy's readback and partitions HIGH/CRITICAL matches by validated execution ownership. `policy-result.json` preserves both `blocked` and `resolved_only` findings. Only `blocked` determines the advisory gate status. There are no CVE/package exceptions or inherited image/gosu exceptions. Unknown/omitted packages, malformed/truncated evidence, graph changes, missing starts/successes/plans/realms, and stale results fail before policy success. Isolated BeanUtils fixtures prove vulnerable HIGH detection, patched success, malformed input failure, and missing-database failure using the real pinned scanner.
+
+Current Jetty HIGH findings remain visible in the full raw report and `resolved_only` evidence because the current Site realm has no authoritative executed goal. Success means **no blocking HIGH/CRITICAL findings in the authoritative execution set**, rather than no vulnerabilities. An isolated local `dependency:go-offline site:help` probe with the same contract promoted all Site realm members and blocked both Jetty findings; it is not a required repository command or a permanent Site exception.
+
+Local reproduction requires a complete Java 21 JDK and Docker. From the repository root:
+
+```bash
+mkdir -p .tmp/build-tool-security
+./mvnw -v > .tmp/build-tool-security/maven-version.txt
+python scripts/build-tool-inventory.py prepare
+./mvnw -B -X \
+  -Dmaven.ext.class.path="$PWD/.tmp/build-tool-security/collector.jar" \
+  -Dbuildtools.evidence="$PWD/.tmp/build-tool-security/verify.tsv" \
+  -Dbuildtools.mode=verify clean verify > .tmp/build-tool-security/verify.log 2>&1
+python scripts/build-tool-inventory.py observe-commands
+python scripts/build-tool-inventory.py collect
+python scripts/build-tool-inventory.py validate-bom
+python scripts/scan-build-tools.py
+```
+
+Run these in a shell with `set -euo pipefail`; any failed command stops the gate. A managed environment may supply `BUILD_TOOL_SCAN_CA_BUNDLE` for a public CA trust bundle and `TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2` for Trivy's standard database when its default mirror is unavailable. Neither changes the vulnerability authority or disables TLS validation.
+
+When changing a plugin, processor, provider, or other reviewed dependency graph, collect fresh successful execution evidence and run `collect --review-contract .tmp/build-tool-security/candidate-contract.json`. This writes a candidate expectation for explicit comparison and review, removes previous scan-ready output, and does not emit a production SBOM. Review roots, every transitive, realm filtering, classifier identities, advisories, and compatibility before updating the maintained contract and rerunning normal collection. CI never accepts candidates automatically. Pure execution changes within an unchanged reviewed graph derive a new scope directly from receipts. New required Maven goals from those repository sources are automatically observed when their realm has not executed, and must supply complete collector/debug-plan evidence; resolving an available realm alone cannot substitute for an executed-goal receipt. A Maven distribution change additionally requires the authoritative archive verification described above and a new POM-resolution/byte-match inventory.
+
+This boundary covers the current candidate's reviewed Maven-package categories for the observed single-project Linux Java 21 verification and direct Docker Maven commands. Docker/restore `package`, protected-base OpenAPI comparison, CodeQL `clean verify`, and the development Spring Boot command were audited separately for additional plugin roots; they introduce no Site/Install/Deploy execution. Different project inputs and profiles require separate evidence. Discovery covers literal commands in the root Dockerfile, workflow YAML, and repository shell scripts; commands constructed dynamically or introduced through other languages/external tooling require extending discovery and instrumentation. Declared goals alone never establish execution ownership. Changed bootstrap configuration, build extensions, Maven versions, fork topology, or log formats require review and otherwise fail. Wrapper shell logic, builder OS/JDK/native executables, arbitrary external downloads, class-initializer reachability, and other execution graphs remain distinct limits. Wrapper integrity, dependency review, final-image Trivy, Actions pins, CodeQL, and behavioral tests retain separate ownership. Advisory matches establish affected versions, not goal-specific exploitability. Current findings and proof are recorded in [the build-tool audit](../testing/build-tool-advisory-audit.md).
 
 ## Java platform baseline
 
