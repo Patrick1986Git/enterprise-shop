@@ -29,7 +29,7 @@ CHECKOUT_STEP = re.compile(
 CHECKOUT_REF = re.compile(r"(?m)^          ref:\s*(?P<value>.+?)\s*$")
 SCHEDULE_CHECKOUT_REF = re.compile(
     r"^\$\{\{\s*github\.event_name\s*==\s*(['\"])schedule\1\s*&&\s*"
-    r"(['\"])master\2\s*\|\|\s*github\.ref\s*\}\}$"
+    r"(['\"])master\2\s*\|\|\s*github\.event\.pull_request\.head\.sha\s*\|\|\s*github\.ref\s*\}\}$"
 )
 RESTORE_CHECKOUT_REF = re.compile(
     r"^\$\{\{\s*github\.event_name\s*==\s*(['\"])schedule\1\s*&&\s*"
@@ -129,11 +129,17 @@ def restore_rehearsal_checkout_ref(path):
     return ref_match.group("value").strip() if ref_match else None
 
 
-def resolve_container_security_checkout_ref(expression, event_name, github_ref):
-    """Resolve the supported schedule-only checkout expression for policy tests."""
+def resolve_container_security_checkout_ref(expression, event_name, github_ref, pr_head_sha=None):
+    """Resolve protected-master schedule, exact PR head, and selected dispatch ref."""
     if not expression or not SCHEDULE_CHECKOUT_REF.fullmatch(expression):
         raise ValueError("unsupported container-security checkout ref expression")
-    return "master" if event_name == "schedule" else github_ref
+    if event_name == "schedule":
+        return "master"
+    if event_name == "pull_request":
+        if not pr_head_sha:
+            raise ValueError("missing immutable pull-request head SHA")
+        return pr_head_sha
+    return github_ref
 
 
 def resolve_restore_checkout_ref(expression, event_name, github_ref, github_sha):
@@ -209,7 +215,7 @@ def validate_workflows(workflows_dir):
             if not checkout_ref or not SCHEDULE_CHECKOUT_REF.fullmatch(checkout_ref):
                 violations.append(
                     f"{path}: container-security checkout must use master only for schedule "
-                    "and github.ref for workflow_dispatch, pull_request, and push"
+                    "the immutable head SHA for pull_request, and github.ref for workflow_dispatch and push"
                 )
             rehearsal_ref = restore_rehearsal_checkout_ref(path)
             if not rehearsal_ref or not RESTORE_CHECKOUT_REF.fullmatch(rehearsal_ref):

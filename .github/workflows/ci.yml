@@ -450,7 +450,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'schedule' && 'master' || github.ref }}
+          ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
 
       - name: Validate pinned container tool references
         run: |
@@ -516,10 +516,38 @@ jobs:
             -w /workspace \
             "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml "${TRIVY_POLICY_TEST_IMAGE}"
 
-      - name: Build CI-local images from fresh bases
+      - name: Validate reviewed builder boundary
         run: |
-          docker build --pull --tag enterprise-shop/app:ci .
+          python scripts/validate-builder-security.py stages
+          python -m unittest discover -s scripts/tests -p 'test_builder_security.py'
+
+      - name: Build CI-local images from fresh bases
+        env:
+          BUILDX_METADATA_PROVENANCE: max
+        run: |
+          mkdir -p .tmp/container-security/builder
+          docker buildx build --pull --platform linux/amd64 --target builder --load --tag enterprise-shop/builder:ci --metadata-file .tmp/container-security/builder/builder-build.json .
+          docker buildx build --pull --platform linux/amd64 --load --tag enterprise-shop/app:ci --metadata-file .tmp/container-security/builder/app-build.json .
           docker build --pull --tag enterprise-shop/postgres:ci docker/postgres
+
+      - name: Record builder and runtime identities
+        run: bash scripts/record-docker-builder.sh
+
+      - name: Generate builder raw vulnerability report and CycloneDX
+        run: bash scripts/scan-docker-builder.sh
+
+      - name: Retrieve Temurin JDK advisory evidence
+        run: python scripts/validate-builder-security.py fetch-jdk
+
+      - name: Upload builder security evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-builder-security-evidence
+          path: .tmp/container-security/builder/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Verify application runtime Java version
         run: |
@@ -640,6 +668,18 @@ jobs:
         run: |
           python scripts/validate-container-vulnerability-policy.py application .tmp/container-security/reports/enterprise-shop-app-trivy-raw.json
           python scripts/validate-container-vulnerability-policy.py postgres .tmp/container-security/reports/enterprise-shop-postgres-trivy-raw.json
+
+      - name: Enforce builder HIGH and CRITICAL vulnerability policy
+        run: python scripts/validate-builder-security.py evidence
+
+      - name: Upload builder policy decision
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-builder-policy-result
+          path: .tmp/container-security/builder/policy-result.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Enforce application HIGH and CRITICAL vulnerability policy
         run: |

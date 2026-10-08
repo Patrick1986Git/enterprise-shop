@@ -21,7 +21,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
     def workflow(self, reference, extra=""):
         return f"jobs:\n  test:\n    steps:\n      - uses: {reference}\n{extra}"
 
-    def ci_workflow(self, ref, container_ref="${{ github.event_name == 'schedule' && 'master' || github.ref }}"):
+    def ci_workflow(self, ref, container_ref="${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}"):
         dependency_review = (
             "  dependency-review:\n"
             "    if: github.event_name == 'pull_request'\n"
@@ -184,14 +184,14 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         self.assertEqual([], self.validate(workflow))
 
     def test_container_security_checkout_preserves_event_ref_semantics(self):
-        expression = "${{ github.event_name == 'schedule' && 'master' || github.ref }}"
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}"
         restore_expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
         self.assertEqual([], self.validate(self.ci_workflow(restore_expression, expression), "ci.yml"))
 
         refs = {
             "schedule": ("refs/heads/ignored", "master"),
             "workflow_dispatch": ("refs/heads/ratchet", "refs/heads/ratchet"),
-            "pull_request": ("refs/pull/294/merge", "refs/pull/294/merge"),
+            "pull_request": ("refs/pull/294/merge", "candidate-head-sha"),
             "push": ("refs/heads/master", "refs/heads/master"),
         }
         for event_name, (github_ref, expected) in refs.items():
@@ -199,7 +199,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
                 self.assertEqual(
                     expected,
                     POLICY.resolve_container_security_checkout_ref(
-                        expression, event_name, github_ref
+                        expression, event_name, github_ref, "candidate-head-sha"
                     ),
                 )
 
