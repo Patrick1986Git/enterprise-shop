@@ -2,6 +2,7 @@
 """Build an unpublished, deterministic Ryuk candidate from reviewed upstream bytes."""
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -12,6 +13,9 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+TEST_SPEC = importlib.util.spec_from_file_location('ryuk_client_tests', ROOT / 'scripts/ryuk_client_tests.py')
+ryuk_client_tests = importlib.util.module_from_spec(TEST_SPEC)
+TEST_SPEC.loader.exec_module(ryuk_client_tests)
 SOURCE = 'b3726afd6cc2c36628abcc08e9cabac43f587384'
 ARCHIVE_SHA = '7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d'
 BUILDER = 'docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c'
@@ -66,7 +70,7 @@ def image_archive(binary, ca):
 
 
 def build(directory, analyze=True):
-    require(not directory.exists(), 'Candidate directory must be new; no stale evidence reuse')
+    require(not directory.exists(), 'Candidate directory exists: use --reuse to verify it, or choose a new --directory')
     directory.mkdir(parents=True)
     url = f'https://codeload.github.com/testcontainers/moby-ryuk/tar.gz/{SOURCE}'
     with urllib.request.urlopen(url, timeout=120) as response:
@@ -117,6 +121,20 @@ def build(directory, analyze=True):
     require(binary == (directory / 'ryuk.repeat').read_bytes(), 'Candidate binary build is not repeatable')
     require(source_hashes == {p.relative_to(source).as_posix(): sha(p.read_bytes())
                              for p in sorted(source.rglob('*')) if p.is_file()}, 'Build mutated reviewed source')
+    tests = ryuk_client_tests.prepare(source, directory / 'tests')
+    test_command = command.copy()
+    test_command[test_command.index('-w') + 1] = '/evidence/tests'
+    subprocess.run(test_command + ['gofmt -w *_test.go'], check=True)
+    test_files = {p.name: sha(p.read_bytes()) for p in tests.iterdir() if p.is_file()}
+    require(test_files == json.loads(ryuk_client_tests.CONTRACT.read_text())['source_files'], 'Unreviewed Ryuk test overlay')
+    subprocess.run(test_command + ['go mod download github.com/stretchr/testify github.com/davecgh/go-spew '
+        'github.com/pmezard/go-difflib github.com/stretchr/objx gopkg.in/yaml.v3; go mod verify'], check=True)
+    with (directory / 'client-tests.jsonl').open('w') as out, (directory / 'client-tests.log').open('w') as err:
+        status = subprocess.run(test_command[:3] + ['--network', 'none'] + test_command[3:] +
+            ['go test -mod=readonly -count=1 -timeout=90s -json .'], stdout=out, stderr=err, timeout=120).returncode
+    client_tests = {'status': status, 'source_files': test_files,
+                    'output_sha256': sha((directory / 'client-tests.jsonl').read_bytes())}
+    ryuk_client_tests.validate(tests, client_tests, sha)
     reference, image_id, config, layer, archive = image_archive(binary, (directory / 'ca-certificates.crt').read_bytes())
     (directory / 'image.tar').write_bytes(archive)
     (directory / 'image-config.json').write_bytes(config)
@@ -132,7 +150,7 @@ def build(directory, analyze=True):
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),
         'layer_sha256': sha(layer), 'filesystem': census,
         'repository_head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-        'govulncheck_version': TOOL, 'govulncheck_sum': TOOL_SUM, 'analysis': {}}
+        'govulncheck_version': TOOL, 'govulncheck_sum': TOOL_SUM, 'analysis': {}, 'client_tests': client_tests}
     receipt['evidence_hashes'] = {name: sha((directory / name).read_bytes())
         for name in ['buildinfo.txt', 'source-packages.json', 'source-modules.json']}
     write(directory / 'build-receipt.json', receipt)
@@ -160,9 +178,24 @@ def build(directory, analyze=True):
     return receipt
 
 
+def reuse(directory, analyze=True):
+    import ryuk_candidate_evidence
+    candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    _, receipt = ryuk_candidate_evidence.validate_build(candidate, directory, head, analyze)
+    observed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', candidate['image_reference']]))[0]
+    require(observed['Id'] == candidate['image_id'], 'Local candidate configuration drift; rebuild before Maven')
+    print('Verified existing local Ryuk source, repeat binaries, tests, archive and loaded image: ' + candidate['image_id'])
+    return receipt
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', type=Path, default=ROOT / '.tmp/ryuk-candidate')
     parser.add_argument('--no-analysis', action='store_true')
+    parser.add_argument('--reuse', action='store_true', help='Revalidate existing current-HEAD evidence and loaded image')
     args = parser.parse_args()
-    build(args.directory.resolve(), not args.no_analysis)
+    try:
+        (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        parser.exit(1, 'Ryuk preparation failed: ' + str(error) + '\n')

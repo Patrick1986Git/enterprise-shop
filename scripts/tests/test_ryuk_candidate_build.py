@@ -3,6 +3,8 @@ import io
 import json
 import tarfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location('candidate', Path(__file__).parents[1] / 'build-ryuk-candidate.py')
@@ -29,6 +31,23 @@ class CandidatePackagingTest(unittest.TestCase):
             changed = CANDIDATE.image_archive(binary, ca)
             self.assertNotEqual(original[0], changed[0])
             self.assertNotEqual(original[1], changed[1])
+
+    def test_reuse_revalidates_complete_build_before_accepting_loaded_configuration(self):
+        reviewed = json.loads((CANDIDATE.ROOT / '.github/security/ryuk/candidate.json').read_text())
+        validation = Mock(return_value=({}, {'verified': True}))
+        evidence = SimpleNamespace(validate_build=validation)
+        with patch.dict('sys.modules', {'ryuk_candidate_evidence': evidence}), \
+                patch.object(CANDIDATE.subprocess, 'check_output', side_effect=['current head', json.dumps([{'Id': reviewed['image_id']}])]):
+            result = CANDIDATE.reuse(Path('/existing-proof'), analyze=False)
+        self.assertEqual({'verified': True}, result)
+        validation.assert_called_once_with(reviewed, Path('/existing-proof'), 'current head', False)
+
+    def test_reuse_rejects_wrong_loaded_candidate_configuration(self):
+        evidence = SimpleNamespace(validate_build=Mock(return_value=({}, {})))
+        with patch.dict('sys.modules', {'ryuk_candidate_evidence': evidence}), \
+                patch.object(CANDIDATE.subprocess, 'check_output', side_effect=['current head', json.dumps([{'Id': 'sha256:' + '0' * 64}])]):
+            with self.assertRaisesRegex(ValueError, 'configuration drift'):
+                CANDIDATE.reuse(Path('/existing-proof'), analyze=False)
 
 
 if __name__ == '__main__':

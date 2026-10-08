@@ -224,7 +224,7 @@ class CompressedGoEvidenceTest(unittest.TestCase):
         contract = POLICY.read(POLICY.CONTRACT)
         image = contract['images']['ryuk']
         self.assertEqual('ryuk.container.image=' + image['reference'].removeprefix('docker.io/'),
-                         (ROOT / 'src/test/resources/testcontainers.properties').read_text().strip())
+                         (ROOT / 'src/test/resources/testcontainers.properties').read_text().splitlines()[0])
         self.assertNotEqual(image['reference'], contract['comparisons']['official_ryuk']['reference'])
         self.assertEqual('upx-deterministic-go-readback',
                          contract['comparisons']['official_ryuk']['evidence_transform']['method'])

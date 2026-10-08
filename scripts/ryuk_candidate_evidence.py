@@ -9,6 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+TEST_SPEC = importlib.util.spec_from_file_location('ryuk_client_tests', ROOT / 'scripts/ryuk_client_tests.py')
+CLIENT_TESTS = importlib.util.module_from_spec(TEST_SPEC)
+TEST_SPEC.loader.exec_module(CLIENT_TESTS)
 CONTRACT = ROOT / '.github/security/ryuk/candidate.json'
 spec = importlib.util.spec_from_file_location('binary_evidence', ROOT / 'scripts/auxiliary_binary_evidence.py')
 BINARY = importlib.util.module_from_spec(spec)
@@ -66,6 +69,7 @@ def validate_build(candidate, directory, head, analysis=True):
     actual_source = {p.relative_to(directory / 'source').as_posix(): sha(p.read_bytes())
                      for p in sorted((directory / 'source').rglob('*')) if p.is_file()}
     require(actual_source == candidate['source_files'], 'Candidate source files drift')
+    CLIENT_TESTS.validate(directory / 'tests', receipt['client_tests'], sha)
     binary = (directory / 'ryuk').read_bytes()
     BINARY.elf(binary)
     require(sha(binary) == sha((directory / 'ryuk.repeat').read_bytes()) == candidate['binary_sha256'],

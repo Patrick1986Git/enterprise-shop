@@ -9,6 +9,7 @@ Hosted container-security additionally requires actual Hadolint, installed-gosu-
 - Java 21.
 - Maven Wrapper is present and should be used for repeatable local/CI commands.
 - CI runs `./mvnw -B clean verify`.
+- Before local `clean verify`, follow [reviewed Ryuk preparation](../operations/local-development.md#maven-and-testcontainers-verification). `./mvnw test` needs no candidate preparation; CI and CodeQL build and analyze it automatically.
 - Test stack includes JUnit 5, AssertJ, Mockito, Spring MVC test support, Spring Security test support, Testcontainers PostgreSQL, Flyway test support, and ArchUnit. Persistence integration tests start dynamically managed Testcontainers PostgreSQL instances and do not depend on the Docker Compose database. They remain independent of the local Compose least-privilege runtime role bootstrap.
 
 Mockito static mocking is used in service tests, including Stripe SDK entry points. The build config starts tests with Mockito as an explicit `-javaagent` to avoid JDK 21+ dynamic self-attach warnings and keep execution compatible with stricter future JDK defaults.

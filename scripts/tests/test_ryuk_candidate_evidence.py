@@ -77,6 +77,13 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.receipt['evidence_hashes'] = {name: CANDIDATE.sha((self.directory / name).read_bytes())
             for name in ['buildinfo.txt', 'source-packages.json', 'source-modules.json', 'govulncheck-buildinfo.txt']}
         self.receipt['analysis'] = {}
+        self.put('tests/fixture_test.go', b'test fixture')
+        self.put('client-tests.jsonl', b'{"Action":"pass","Test":"TestReview"}\n')
+        self.test_contract = self.directory / 'client-contract.json'
+        files = {'fixture_test.go': CANDIDATE.sha(b'test fixture')}
+        self.put(self.test_contract.name, json.dumps({'source_files': files, 'passed_tests': ['TestReview']}).encode())
+        self.receipt['client_tests'] = {'status': 0, 'source_files': files,
+            'output_sha256': CANDIDATE.sha((self.directory / 'client-tests.jsonl').read_bytes())}
         for mode in ['source', 'binary']:
             stream = [{'config': {'scan_mode': mode, 'scan_level': 'symbol', 'scanner_name': 'govulncheck',
                        'scanner_version': 'v1.8.0', 'db': 'https://vuln.go.dev',
@@ -114,6 +121,7 @@ class CandidateEvidenceTest(unittest.TestCase):
     def validate(self):
         self.save()
         with patch.object(CANDIDATE, 'CONTRACT', self.directory / 'candidate.json'), \
+                patch.object(CANDIDATE.CLIENT_TESTS, 'CONTRACT', self.test_contract), \
                 patch.object(POLICY.subprocess, 'check_output', return_value='head fixture'):
             return POLICY.validate(self.image, self.evidence, self.report, self.bom, '0.75.0', self.directory)
 
@@ -199,6 +207,28 @@ class CandidateEvidenceTest(unittest.TestCase):
     def test_analysis_failure_cannot_be_clean(self):
         self.receipt['analysis']['source']['status'] = 1
         with self.assertRaisesRegex(ValueError, 'failed source'): self.validate()
+
+    def test_missing_failed_or_skipped_client_tests_block(self):
+        for events in [[], [{'Action': 'fail', 'Test': 'TestReview'}], [{'Action': 'skip', 'Test': 'TestReview'}]]:
+            self.put('client-tests.jsonl', '\n'.join(json.dumps(event) for event in events).encode())
+            self.receipt['client_tests']['output_sha256'] = CANDIDATE.sha((self.directory / 'client-tests.jsonl').read_bytes())
+            with self.assertRaisesRegex(ValueError, 'Ryuk client contract tests'): self.validate()
+
+    def test_client_test_source_or_output_drift_blocks(self):
+        self.put('tests/fixture_test.go', b'changed test')
+        with self.assertRaisesRegex(ValueError, 'client test source'): self.validate()
+        self.put('tests/fixture_test.go', b'test fixture')
+        self.put('client-tests.jsonl', b'{}')
+        with self.assertRaises((ValueError, KeyError)): self.validate()
+
+    def test_legacy_daemon_advisory_provenance_is_preserved(self):
+        before = json.loads((ROOT / '.github/security/ryuk/official-0.14.0-govulncheck-advisories.json').read_text())
+        for cve, symbol in [('CVE-2026-41567', 'Daemon.containerExtractToDir'), ('CVE-2026-42306', 'Daemon.openContainerFS')]:
+            advisory = next(a for a in before['advisories'] if cve in a['aliases'])
+            legacy = next(a for a in advisory['affected'] if a['package']['name'] == 'github.com/docker/docker')
+            self.assertEqual([{'type': 'SEMVER', 'events': [{'introduced': '0'}]}], legacy['ranges'])
+            self.assertEqual([{'path': 'github.com/docker/docker/daemon', 'symbols': [symbol]}],
+                             legacy['ecosystem_specific']['imports'])
 
 
 if __name__ == '__main__':

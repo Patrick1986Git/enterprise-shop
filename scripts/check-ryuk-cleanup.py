@@ -15,7 +15,8 @@ def verify():
         if line and not line.startswith('#'):
             key, value = line.split('=', 1)
             properties[key] = value.replace('\\:', ':').replace('\\=', '=')
-    expected = (ROOT / 'src/test/resources/testcontainers.properties').read_text().strip().split('=', 1)[1]
+    expected = dict(line.split('=', 1) for line in
+                    (ROOT / 'src/test/resources/testcontainers.properties').read_text().splitlines() if line)['ryuk.container.image']
     if properties['reference'] != expected:
         raise ValueError('Wrong actual Testcontainers Ryuk execution reference')
     candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())

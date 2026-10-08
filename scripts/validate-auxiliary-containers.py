@@ -107,8 +107,11 @@ def inventory(contract, root=ROOT):
         for source in [workflow, (root / '.github/workflows/codeql.yml').read_text()]:
             require('python scripts/build-ryuk-candidate.py' in source, 'Build exact candidate before Testcontainers')
     ryuk = images['ryuk']['reference'].removeprefix('docker.io/')
-    require((root / 'src/test/resources/testcontainers.properties').read_text().strip()
-            == 'ryuk.container.image=' + ryuk, 'Testcontainers must execute the inventoried Ryuk digest')
+    lines = (root / 'src/test/resources/testcontainers.properties').read_text().splitlines()
+    properties = dict(line.split('=', 1) for line in lines)
+    require(len(lines) == 2 and properties == {'ryuk.container.image': ryuk,
+            'pull.policy': 'com.company.shop.persistence.support.ReviewedRyukImagePullPolicy'},
+            'Testcontainers must execute the inventoried local Ryuk with its missing-image guard')
     require(images['scanner']['reference'] in (root / 'scripts/scan-build-tools.py').read_text(),
             'Build-tool and image scanner authority must agree')
     job = workflow.split('  container-security:\n', 1)[1].split('\n  deploy-pages:', 1)[0]
