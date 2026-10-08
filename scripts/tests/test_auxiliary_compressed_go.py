@@ -21,7 +21,7 @@ class CompressedGoEvidenceTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
-        self.image = copy.deepcopy(POLICY.read(POLICY.CONTRACT)['images']['ryuk'])
+        self.image = copy.deepcopy(POLICY.read(POLICY.CONTRACT)['comparisons']['official_ryuk'])
         self.transform = self.image['evidence_transform']
         header = bytearray(64)
         header[:7] = b'\x7fELF\x02\x01\x01'
@@ -220,16 +220,20 @@ class CompressedGoEvidenceTest(unittest.TestCase):
         self.receipt['executed_image'] = '/analysis'
         with self.assertRaisesRegex(ValueError, 'execution image'): self.validate()
 
-    def test_original_testcontainers_execution_pin_remains_unchanged(self):
-        image = POLICY.read(POLICY.CONTRACT)['images']['ryuk']
+    def test_official_compressed_provenance_is_distinct_from_candidate_execution(self):
+        contract = POLICY.read(POLICY.CONTRACT)
+        image = contract['images']['ryuk']
         self.assertEqual('ryuk.container.image=' + image['reference'].removeprefix('docker.io/'),
                          (ROOT / 'src/test/resources/testcontainers.properties').read_text().strip())
+        self.assertNotEqual(image['reference'], contract['comparisons']['official_ryuk']['reference'])
+        self.assertEqual('upx-deterministic-go-readback',
+                         contract['comparisons']['official_ryuk']['evidence_transform']['method'])
 
     def test_no_ryuk_package_or_cve_exception(self):
         contract = POLICY.read(POLICY.CONTRACT)
         self.assertEqual([], contract['exceptions'])
-        self.assertEqual([], contract['images']['ryuk']['exceptions'])
-        self.assertEqual(['HIGH', 'CRITICAL'], contract['images']['ryuk']['threshold'])
+        self.assertEqual([], contract['comparisons']['official_ryuk']['exceptions'])
+        self.assertEqual(['HIGH', 'CRITICAL'], contract['comparisons']['official_ryuk']['threshold'])
 
     def test_normal_go_image_retains_direct_evidence_path(self):
         contract = POLICY.read(POLICY.CONTRACT)
@@ -243,7 +247,7 @@ class CompressedGoEvidenceTest(unittest.TestCase):
 
     def test_fixture_cannot_enter_compressed_binary_trust_path(self):
         contract = POLICY.read(POLICY.CONTRACT)
-        contract['images']['fixture']['evidence_transform'] = contract['images']['ryuk']['evidence_transform']
+        contract['images']['fixture']['evidence_transform'] = contract['comparisons']['official_ryuk']['evidence_transform']
         with self.assertRaisesRegex(ValueError, 'fixture compressed'): POLICY.inventory(contract)
 
     def test_decompressor_integrity_change_blocks(self):

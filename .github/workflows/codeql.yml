@@ -47,6 +47,9 @@ jobs:
           build-mode: manual
           queries: security-extended
 
+      - name: Build reviewed unpublished Ryuk candidate
+        run: python scripts/build-ryuk-candidate.py
+
       - name: Build and test application
         env:
           DOCKER_HOST: unix:///var/run/docker.sock

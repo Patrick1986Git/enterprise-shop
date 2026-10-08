@@ -87,6 +87,9 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Build reviewed unpublished Ryuk candidate
+        run: python scripts/build-ryuk-candidate.py
+
       - name: Run Maven verify
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
@@ -120,6 +123,7 @@ jobs:
           path: |
             target/ryuk-compatibility/**
             .tmp/ryuk-compatibility/**
+            .tmp/ryuk-candidate/build-receipt.json
             target/failsafe-reports/TEST-*RyukExecutionIT.xml
           include-hidden-files: true
           if-no-files-found: error
@@ -455,7 +459,7 @@ jobs:
       GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
-      RYUK_IMAGE: docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0
+      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3
       # Human-readable gosu release tag; CI verifies that it resolves to the pinned immutable commit before govulncheck.
       GOSU_SOURCE_TAG: "1.19"
       GOSU_SOURCE_COMMIT: 6456aaa0f3c854d199d0f037f068eb97515b7513
@@ -488,6 +492,7 @@ jobs:
           python scripts/validate-auxiliary-containers.py inventory
           python -m unittest discover -s scripts/tests -p 'test_auxiliary_containers.py'
           python -m unittest discover -s scripts/tests -p 'test_auxiliary_compressed_go.py'
+          python -m unittest discover -s scripts/tests -p 'test_ryuk_candidate*.py'
 
       - name: Validate pinned container tool references
         run: |
@@ -512,7 +517,8 @@ jobs:
           validate_linux_amd64_image "${TRIVY_IMAGE}"
           validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
           validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
-          validate_linux_amd64_image "${RYUK_IMAGE}"
+          docker image inspect "${RYUK_IMAGE}" >/dev/null
+          validate_linux_amd64_image "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"
 
           docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
           docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.75.0'
@@ -754,7 +760,6 @@ jobs:
           name: auxiliary-container-evidence
           path: |
             .tmp/container-security/auxiliary/**
-            !.tmp/container-security/auxiliary/**/*.tar
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

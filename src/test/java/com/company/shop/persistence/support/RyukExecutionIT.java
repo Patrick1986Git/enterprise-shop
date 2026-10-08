@@ -14,13 +14,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RyukExecutionIT extends PostgresContainerSupport {
 
     @Test
-    void ryuk_shouldExecutePinnedOfficialImageAndRegisterCleanupResources() throws Exception {
+    void ryuk_shouldExecuteReviewedCandidateWithSocketAndRegisterCleanupResources() throws Exception {
         Properties configuration = new Properties();
         try (var input = getClass().getResourceAsStream("/testcontainers.properties")) {
             assertThat(input).isNotNull();
             configuration.load(input);
         }
         String expected = configuration.getProperty("ryuk.container.image");
+        assertThat(expected).matches("local/enterprise-shop-ryuk:sha256-[0-9a-f]{64}");
+        String expectedImageId = "sha256:" + expected.substring(expected.indexOf(":sha256-") + 8);
         var docker = DockerClientFactory.instance().client();
         var ryuk = docker.listContainersCmd()
                 .withLabelFilter(Map.of("org.testcontainers.ryuk", "true"))
@@ -30,6 +32,12 @@ class RyukExecutionIT extends PostgresContainerSupport {
         assertThat(actual.getConfig().getImage()).isEqualTo(expected);
         assertThat(actual.getState().getRunning()).isTrue();
         assertThat(actual.getImageId()).isEqualTo(docker.inspectImageCmd(expected).exec().getId());
+        assertThat(actual.getImageId()).isEqualTo(expectedImageId);
+        assertThat(actual.getMounts()).anySatisfy(mount -> {
+            assertThat(mount.getSource()).isEqualTo("/var/run/docker.sock");
+            assertThat(mount.getDestination().getPath()).isEqualTo("/var/run/docker.sock");
+            assertThat(mount.getRW()).isTrue();
+        });
         var resources = docker.listContainersCmd()
                 .withLabelFilter(Map.of("org.testcontainers", "true"))
                 .exec();
@@ -38,6 +46,7 @@ class RyukExecutionIT extends PostgresContainerSupport {
         Properties evidence = new Properties();
         evidence.setProperty("reference", expected);
         evidence.setProperty("image_id", actual.getImageId());
+        evidence.setProperty("socket_verified", "true");
         evidence.setProperty("ryuk_container_id", actual.getId());
         evidence.setProperty("cleanup_container_ids", resources.stream()
                 .map(container -> container.getId()).collect(Collectors.joining(",")));

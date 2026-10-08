@@ -18,6 +18,10 @@ def verify():
     expected = (ROOT / 'src/test/resources/testcontainers.properties').read_text().strip().split('=', 1)[1]
     if properties['reference'] != expected:
         raise ValueError('Wrong actual Testcontainers Ryuk execution reference')
+    candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())
+    if (properties['image_id'] != candidate['image_id'] or expected != candidate['image_reference']
+            or properties.get('socket_verified') != 'true'):
+        raise ValueError('Wrong actual candidate image configuration or Docker socket evidence')
     ids = set(properties['cleanup_container_ids'].split(',')) | {properties['ryuk_container_id']}
     if not ids or not all(re.fullmatch('[0-9a-f]{64}', identifier) for identifier in ids):
         raise ValueError('Missing observed cleanup resources')
@@ -37,7 +41,7 @@ def verify():
     directory = ROOT / '.tmp/ryuk-compatibility'
     directory.mkdir(parents=True, exist_ok=True)
     (directory / 'cleanup.json').write_text(json.dumps({'reference': expected, 'image_id': properties['image_id'],
-        'removed_container_ids': sorted(ids), 'cleanup_verified': True}, indent=2) + '\n')
+        'socket_verified': True, 'removed_container_ids': sorted(ids), 'cleanup_verified': True}, indent=2) + '\n')
     print('Actual pinned Ryuk startup and post-JVM resource cleanup verified')
 
 

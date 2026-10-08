@@ -55,7 +55,10 @@ def scan():
     cache = ROOT / '.tmp/container-security/trivy-cache'
     database_status = int((ROOT / '.tmp/container-security/builder/database-exit-status.txt').read_text())
     database = POLICY.read(cache / 'db/metadata.json')
-    for name, image in images.items():
+    collection_images = dict(images)
+    if contract.get('comparisons'):
+        collection_images['official-ryuk-comparison'] = contract['comparisons']['official_ryuk']
+    for name, image in collection_images.items():
         if not image['governed']:
             continue
         item = directory / name
@@ -66,33 +69,42 @@ def scan():
             ref = image['reference']
             inspect = json.loads(docker('image', 'inspect', ref))[0]
             POLICY.require(inspect['Os'] + '/' + inspect['Architecture'] == 'linux/amd64', 'Wrong resolved platform')
-            POLICY.require(any(d.endswith('@' + ref.split('@')[1]) for d in inspect['RepoDigests']),
-                           'Pulled image does not resolve reviewed source digest')
-            index_bytes = docker('buildx', 'imagetools', 'inspect', '--raw', ref).encode()
-            POLICY.require('sha256:' + hashlib.sha256(index_bytes).hexdigest() == ref.split('@')[1],
-                           'Registry index digest mismatch')
-            (item / 'registry-index.raw.json').write_bytes(index_bytes)
-            index = json.loads(index_bytes)
-            resolved = ref.split('@')[1]
-            if 'manifests' in index:
-                matches = [x for x in index['manifests'] if x.get('platform', {}).get('os') == 'linux'
-                           and x['platform'].get('architecture') == 'amd64']
-                POLICY.require(len(matches) == 1, 'Missing/ambiguous linux/amd64 manifest')
-                resolved = matches[0]['digest']
-                manifest_bytes = docker('buildx', 'imagetools', 'inspect', '--raw', ref.split('@')[0] + '@' + resolved).encode()
-                POLICY.require('sha256:' + hashlib.sha256(manifest_bytes).hexdigest() == resolved,
-                               'Registry platform manifest digest mismatch')
-                manifest = json.loads(manifest_bytes)
+            if image.get('candidate_build'):
+                build = ROOT / '.tmp/ryuk-candidate'
+                reviewed = POLICY.read(POLICY.CANDIDATE.CONTRACT)
+                POLICY.CANDIDATE.validate_build(reviewed, build, source)
+                POLICY.require(inspect['Id'] == reviewed['image_id'], 'Wrong loaded candidate')
+                shutil.copytree(build, item, dirs_exist_ok=True)
+                resolved = reviewed['image_id']
             else:
-                manifest = index
-                manifest_bytes = index_bytes
-            (item / 'registry-manifest.raw.json').write_bytes(manifest_bytes)
-            POLICY.require(manifest['config']['digest'] == inspect['Id'], 'Resolved manifest/image configuration mismatch')
-            POLICY.write(item / 'registry-manifest.json', manifest)
-            POLICY.write(item / 'registry-index.json', index)
+                POLICY.require(any(d.endswith('@' + ref.split('@')[1]) for d in inspect['RepoDigests']),
+                               'Pulled image does not resolve reviewed source digest')
+                index_bytes = docker('buildx', 'imagetools', 'inspect', '--raw', ref).encode()
+                POLICY.require('sha256:' + hashlib.sha256(index_bytes).hexdigest() == ref.split('@')[1],
+                               'Registry index digest mismatch')
+                (item / 'registry-index.raw.json').write_bytes(index_bytes)
+                index = json.loads(index_bytes)
+                resolved = ref.split('@')[1]
+                if 'manifests' in index:
+                    matches = [x for x in index['manifests'] if x.get('platform', {}).get('os') == 'linux'
+                               and x['platform'].get('architecture') == 'amd64']
+                    POLICY.require(len(matches) == 1, 'Missing/ambiguous linux/amd64 manifest')
+                    resolved = matches[0]['digest']
+                    manifest_bytes = docker('buildx', 'imagetools', 'inspect', '--raw', ref.split('@')[0] + '@' + resolved).encode()
+                    POLICY.require('sha256:' + hashlib.sha256(manifest_bytes).hexdigest() == resolved,
+                                   'Registry platform manifest digest mismatch')
+                    manifest = json.loads(manifest_bytes)
+                else:
+                    manifest = index
+                    manifest_bytes = index_bytes
+                (item / 'registry-manifest.raw.json').write_bytes(manifest_bytes)
+                POLICY.require(manifest['config']['digest'] == inspect['Id'], 'Resolved manifest/image configuration mismatch')
+                POLICY.write(item / 'registry-manifest.json', manifest)
+                POLICY.write(item / 'registry-index.json', index)
             POLICY.write(item / 'docker-image.json', inspect)
             archive = item / 'image.tar'
-            subprocess.run(['docker', 'save', '-o', str(archive), ref], check=True)
+            if not image.get('candidate_build'):
+                subprocess.run(['docker', 'save', '-o', str(archive), ref], check=True)
             packages, binary_hash = archive_contents(archive, image['identity']['binary'])
             POLICY.require(binary_hash == image['identity']['sha256'], 'Reviewed executable byte identity changed')
             if image['identity'].get('command'):
@@ -160,8 +172,10 @@ def scan():
                          'installed_os_packages': packages, 'scanner_status': scanner_status,
                          'sbom_status': sbom_status, 'database_status': database_status, 'database': database,
                          'artifact_name': artifact, 'timestamp': datetime.now(timezone.utc).isoformat(),
+                         'identity_authority': 'local-configuration-and-archive' if image.get('candidate_build') else 'registry-oci',
                          'independent_scanner_integrity': False})
-            archive.unlink()
+            if not image.get('candidate_build'):
+                archive.unlink()
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
             POLICY.write(item / 'collection-error.json', {'error': str(error)})
             print(f'{name}: evidence collection failed: {error}', flush=True)

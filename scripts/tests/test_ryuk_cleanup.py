@@ -15,16 +15,20 @@ class RyukCleanupTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.reference = 'testcontainers/ryuk:0.14.0@sha256:' + 'a' * 64
+        self.reference = 'local/enterprise-shop-ryuk:sha256-' + 'b' * 64
         resources = self.root / 'src/test/resources'
         resources.mkdir(parents=True)
         (resources / 'testcontainers.properties').write_text('ryuk.container.image=' + self.reference + '\n')
+        candidate = self.root / '.github/security/ryuk'
+        candidate.mkdir(parents=True)
+        import json
+        (candidate / 'candidate.json').write_text(json.dumps({'image_reference': self.reference, 'image_id': 'sha256:' + 'b' * 64}))
         target = self.root / 'target/ryuk-compatibility'
         target.mkdir(parents=True)
         self.properties = target / 'execution.properties'
         self.properties.write_text('reference=' + self.reference.replace(':', '\\:')
             + '\nimage_id=sha256\\:' + 'b' * 64 + '\nryuk_container_id=' + 'c' * 64
-            + '\ncleanup_container_ids=' + 'd' * 64 + '\n')
+            + '\ncleanup_container_ids=' + 'd' * 64 + '\nsocket_verified=true\n')
 
     def test_observed_resources_must_all_be_removed(self):
         missing = subprocess.CompletedProcess([], 1, '', 'Error: No such container')
@@ -45,9 +49,20 @@ class RyukCleanupTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'resources remain'): CLEANUP.verify()
 
     def test_changed_execution_reference_blocks(self):
-        self.properties.write_text(self.properties.read_text().replace('0.14.0', '0.13.0'))
+        self.properties.write_text(self.properties.read_text().replace('local/enterprise-shop-ryuk', 'local/unreviewed-ryuk'))
         with patch.object(CLEANUP, 'ROOT', self.root):
             with self.assertRaisesRegex(ValueError, 'execution reference'): CLEANUP.verify()
+
+    def test_changed_image_configuration_blocks(self):
+        self.properties.write_text(self.properties.read_text().replace('image_id=sha256\\:' + 'b' * 64,
+                                                                      'image_id=sha256\\:' + 'a' * 64))
+        with patch.object(CLEANUP, 'ROOT', self.root):
+            with self.assertRaisesRegex(ValueError, 'configuration'): CLEANUP.verify()
+
+    def test_missing_socket_evidence_blocks(self):
+        self.properties.write_text(self.properties.read_text().replace('socket_verified=true', 'socket_verified=false'))
+        with patch.object(CLEANUP, 'ROOT', self.root):
+            with self.assertRaisesRegex(ValueError, 'socket'): CLEANUP.verify()
 
 
 if __name__ == '__main__':

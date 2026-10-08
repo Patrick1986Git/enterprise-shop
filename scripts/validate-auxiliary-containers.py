@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BINARY_SPEC = importlib.util.spec_from_file_location('auxiliary_binary_evidence', ROOT / 'scripts/auxiliary_binary_evidence.py')
 BINARY = importlib.util.module_from_spec(BINARY_SPEC)
 BINARY_SPEC.loader.exec_module(BINARY)
+CANDIDATE_SPEC = importlib.util.spec_from_file_location('ryuk_candidate_evidence', ROOT / 'scripts/ryuk_candidate_evidence.py')
+CANDIDATE = importlib.util.module_from_spec(CANDIDATE_SPEC)
+CANDIDATE_SPEC.loader.exec_module(CANDIDATE)
 CONTRACT = ROOT / '.github/security/auxiliary-container-scope.json'
 BLOCKING = {'HIGH', 'CRITICAL'}
 DIGEST = re.compile(r'^sha256:[0-9a-f]{64}$')
@@ -47,11 +50,11 @@ def execution_sources(root):
             for p in sorted(paths) if p.is_file()
             and not any(part in {'.git', '.tmp', 'target', '__pycache__'} for part in p.relative_to(root).parts) and
             ('.github/' in p.relative_to(root).as_posix() or p.name == 'Dockerfile'
-             or 'compose' in p.name or SURFACE.search(p.read_text()))}
+             or 'compose' in p.name or p.name == 'ryuk_candidate_evidence.py' or SURFACE.search(p.read_text()))}
 
 
 def inventory(contract, root=ROOT):
-    require(contract['schema_version'] == 3 and contract['exceptions'] == [],
+    require(contract['schema_version'] == 3 and contract['exceptions'] == [] and contract.get('applicability', []) == [],
             'No auxiliary exception or foreign policy is authorized')
     require(contract['execution_sources'] == execution_sources(root),
             'CI container execution source changed: review image census/classification and source receipts')
@@ -71,7 +74,11 @@ def inventory(contract, root=ROOT):
             and tool['binary_sha256'] == '287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1',
             'Unreviewed evidence transformation tool')
     for name, image in images.items():
-        require(IMAGE.fullmatch(image['reference']), f'{name}: readable tag and immutable registry digest required')
+        if image.get('candidate_build'):
+            require(name == 'ryuk', 'Rebuilt candidate authority is restricted to Ryuk')
+            CANDIDATE.inventory(image, read(root / '.github/security/ryuk/candidate.json'))
+        else:
+            require(IMAGE.fullmatch(image['reference']), f'{name}: readable tag and immutable registry digest required')
         require(image['platform'] == 'linux/amd64', f'{name}: linux/amd64 required')
         require(image['classification'] in {'repository-processing', 'high-impact', 'scanner', 'fixture'},
                 f'{name}: explicit reviewed capability classification required')
@@ -79,7 +86,7 @@ def inventory(contract, root=ROOT):
                 and image['advisory_authority'], f'{name}: executable/version/ownership evidence required')
         require(image['governed'] == (image['classification'] != 'fixture'), 'Fixture cannot become trusted evidence')
         require(image['threshold'] == (['HIGH', 'CRITICAL'] if image['governed'] else []), 'Wrong threshold')
-        require(image.get('exceptions', []) == [], 'No image exception is authorized')
+        require(image.get('exceptions', []) == [] and image.get('applicability', []) == [], 'No image exception is authorized')
         require((image['package_mode'] == 'static-haskell') == (name == 'hadolint'),
                 'Only the reviewed Hadolint scratch executable has an empty static package boundary')
         if image.get('evidence_transform'):
@@ -92,6 +99,13 @@ def inventory(contract, root=ROOT):
                     'Unreviewed/fixture compressed binary path')
     require(images['fixture']['classification'] == 'fixture' and not images['fixture']['governed'],
             'The policy fixture cannot become a trusted execution image')
+    if images['ryuk'].get('candidate_build'):
+        comparison = contract['comparisons']['official_ryuk']
+        require(comparison['reference'].startswith('docker.io/testcontainers/ryuk:0.14.0@sha256:')
+                and comparison['evidence_transform']['method'] == 'upx-deterministic-go-readback'
+                and comparison['exceptions'] == [], 'Official compressed comparison must remain available')
+        for source in [workflow, (root / '.github/workflows/codeql.yml').read_text()]:
+            require('python scripts/build-ryuk-candidate.py' in source, 'Build exact candidate before Testcontainers')
     ryuk = images['ryuk']['reference'].removeprefix('docker.io/')
     require((root / 'src/test/resources/testcontainers.properties').read_text().strip()
             == 'ryuk.container.image=' + ryuk, 'Testcontainers must execute the inventoried Ryuk digest')
@@ -128,6 +142,8 @@ def package_version(package):
 
 def validate(image, evidence, report, bom, scanner_version, directory=None):
     require(image['governed'] and image['classification'] != 'fixture', 'Fixture is not trusted execution evidence')
+    require(image.get('exceptions', []) == [] and image.get('applicability', []) == [],
+            'No auxiliary applicability decision is authorized')
     require(evidence['reference'] == image['reference'] and evidence['platform'] == image['platform'],
             'Image source/platform identity mismatch')
     require(DIGEST.fullmatch(evidence['image_id']) and DIGEST.fullmatch(evidence['resolved_digest']),
@@ -145,7 +161,13 @@ def validate(image, evidence, report, bom, scanner_version, directory=None):
             and datetime.fromisoformat(database['NextUpdate'].replace('Z', '+00:00')) > now,
             'Malformed/stale database provenance')
     transformed = bool(image.get('evidence_transform'))
-    main_module, receipt = BINARY.validate(image, evidence, report, bom, directory) if transformed else (None, None)
+    candidate = bool(image.get('candidate_build'))
+    if candidate:
+        require(directory is not None, 'Candidate build files required')
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        main_module, receipt = CANDIDATE.validate(image, evidence, report, directory, head)
+    else:
+        main_module, receipt = BINARY.validate(image, evidence, report, bom, directory) if transformed else (None, None)
     require(report['SchemaVersion'] == 2
             and report['ArtifactType'] == ('filesystem' if transformed else 'container_image')
             and report['ArtifactName'] == evidence['artifact_name']
@@ -173,7 +195,7 @@ def validate(image, evidence, report, bom, scanner_version, directory=None):
         for package in packages:
             # An unversioned root module is valid only when the measured binary explicitly embeds (devel).
             require(package['Name'] and (package.get('Version') or
-                    (transformed and package['Name'] == main_module and package.get('Relationship') == 'root'))
+                    ((transformed or candidate) and package['Name'] == main_module and package.get('Relationship') == 'root'))
                     and package['Identifier']['PURL'], 'Malformed package identity')
             raw_purls.add(package['Identifier']['PURL'])
         if result['Class'] == 'os-pkgs':
@@ -234,6 +256,17 @@ def evaluate(directory):
                                               read(item / 'sbom.cdx.json'), contract['scanner_version'], item)
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             results['errors'][name] = str(error)
+    if contract.get('comparisons'):
+        try:
+            item = directory / 'official-ryuk-comparison'
+            image = contract['comparisons']['official_ryuk']
+            BINARY.validate(image, read(item / 'identity.json'), read(item / 'raw.json'), read(item / 'sbom.cdx.json'), item)
+            findings = [v for r in read(item / 'raw.json')['Results'] for v in r.get('Vulnerabilities', [])]
+            results['official_ryuk_comparison'] = {'reference': image['reference'], 'execution_authority': False,
+                'readback_complete': True, 'findings': len(findings),
+                'high_critical': sum(v['Severity'] in BLOCKING for v in findings)}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            results['errors']['official-ryuk-comparison'] = str(error)
     write(directory / 'policy-result.json', results)
     print(json.dumps(results, indent=2))
     return 1 if results['errors'] or any(v['blocked'] for v in results['images'].values()) else 0

@@ -16,6 +16,7 @@ SOURCE = 'b3726afd6cc2c36628abcc08e9cabac43f587384'
 ARCHIVE_SHA = '7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d'
 BUILDER = 'docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c'
 TOOL = 'v1.8.0'
+TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
 
 
 def sha(data):
@@ -131,19 +132,30 @@ def build(directory, analyze=True):
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),
         'layer_sha256': sha(layer), 'filesystem': census,
         'repository_head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-        'govulncheck_version': TOOL, 'analysis': {}}
+        'govulncheck_version': TOOL, 'govulncheck_sum': TOOL_SUM, 'analysis': {}}
+    receipt['evidence_hashes'] = {name: sha((directory / name).read_bytes())
+        for name in ['buildinfo.txt', 'source-packages.json', 'source-modules.json']}
     write(directory / 'build-receipt.json', receipt)
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
     require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
             'Loaded candidate configuration differs')
     if analyze:
-        subprocess.run(command + [f'go install golang.org/x/vuln/cmd/govulncheck@{TOOL}'], check=True)
+        subprocess.run(command + [f'go install golang.org/x/vuln/cmd/govulncheck@{TOOL}; '
+            'cp /tmp/go/bin/govulncheck /evidence/govulncheck; '
+            'go version -m /evidence/govulncheck > /evidence/govulncheck-buildinfo.txt'], check=True)
+        receipt['tool_sha256'] = sha((directory / 'govulncheck').read_bytes())
+        receipt['evidence_hashes']['govulncheck-buildinfo.txt'] = sha((directory / 'govulncheck-buildinfo.txt').read_bytes())
         for mode, args in [('source', ['-mode=source', '-json', '.']), ('binary', ['-mode=binary', '-json', '/evidence/ryuk'])]:
             with (directory / f'{mode}-govulncheck.json').open('w') as out, (directory / f'{mode}-govulncheck.log').open('w') as err:
                 status = subprocess.run(command[:-2] + ['/tmp/go/bin/govulncheck'] + args, stdout=out, stderr=err, timeout=600).returncode
             receipt['analysis'][mode] = {'status': status, 'sha256': sha((directory / f'{mode}-govulncheck.json').read_bytes())}
         write(directory / 'build-receipt.json', receipt)
         require(all(v['status'] == 0 for v in receipt['analysis'].values()), 'Candidate govulncheck failed')
+    reviewed = ROOT / '.github/security/ryuk/candidate.json'
+    if reviewed.is_file():
+        import ryuk_candidate_evidence
+        ryuk_candidate_evidence.validate_build(json.loads(reviewed.read_text()), directory,
+                                               receipt['repository_head'], analyze)
     print(json.dumps(receipt, indent=2))
     return receipt
 
