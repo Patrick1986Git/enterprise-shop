@@ -1,16 +1,16 @@
 # Container supply-chain security validation
 
-CI validates the repository Dockerfiles and the final local images used for the Enterprise Shop application and custom PostgreSQL database. These checks add supply-chain visibility without publishing images or changing runtime application/database behavior.
+CI validates the repository Dockerfiles, the application Docker builder stage, and the final local images used for the Enterprise Shop application and custom PostgreSQL database. These checks add supply-chain visibility without publishing images or changing runtime application/database behavior.
 
 ## CI architecture
 
 The `container-security` job is separate from Maven verification and functional Docker validation so failures are easy to classify:
 
 - Hadolint checks the root `Dockerfile` and `docker/postgres/Dockerfile`.
-- Docker builds CI-local images from fresh bases with `--pull`, tagged `enterprise-shop/app:ci` and `enterprise-shop/postgres:ci`.
+- Docker builds CI-local images from fresh bases with `--pull`, tagged `enterprise-shop/builder:ci`, `enterprise-shop/app:ci` and `enterprise-shop/postgres:ci`. Builder/runtime exports preserve BuildKit base and image provenance.
 - Trivy `0.72.0` scans each final image for operating-system and application/library vulnerabilities and reuses a GitHub Actions cache for the scanner database.
 - Raw Trivy JSON reports are generated without policy filtering before any blocking vulnerability gate runs.
-- Trivy generates CycloneDX JSON SBOMs for both images before policy enforcement.
+- Trivy generates separate CycloneDX JSON SBOMs for the builder, application and PostgreSQL images before policy enforcement. The tar-installed Temurin JDK has a separate vendor advisory gate because Trivy does not recognize that distribution.
 - JSON vulnerability reports and SBOM files are uploaded as temporary GitHub Actions artifacts.
 - Component-aware HIGH validation and final blocking policy scans run after evidence upload.
 
@@ -26,9 +26,9 @@ The workflow event matrix is intentionally narrow:
 | Weekly schedule | Yes | No | Yes | No |
 | Manual `workflow_dispatch` | Yes | No | Yes | No |
 
-The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; the scheduled and manual container jobs explicitly check out `master`. These runs rebuild both CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new policy-violating HIGH or CRITICAL finding is therefore detected by the next run.
+The scheduled run starts every Monday at `04:23 UTC` (`23 4 * * 1`). Maintainers can also select **CI** under the repository's **Actions** tab and use **Run workflow**; the scheduled container job explicitly checks out `master`; manual dispatch retains its selected workflow ref. These runs rebuild all three CI-local images with `--pull` and never publish them. Recurring scans matter because vulnerability intelligence and upstream base images change without a repository commit: a new policy-violating HIGH or CRITICAL finding is therefore detected by the next run.
 
-Scheduled CI also regenerates Maven build-tool evidence against protected `master` and refreshes its advisory scan in the existing `build` job. Manual CI uses its selected workflow ref, allowing exact-head verification of an existing proposal; its container-security job retains the existing explicit `master` checkout. Both build modes perform one verification lifecycle before generating build-tool evidence.
+Scheduled CI also regenerates Maven build-tool evidence against protected `master` and refreshes its advisory scan in the existing `build` job. Manual CI uses its selected workflow ref, allowing exact-head verification of an existing proposal; its container-security job uses the same selected workflow ref. Both build modes perform one verification lifecycle before generating build-tool evidence.
 
 The external container tools and scan input are immutable while retaining readable source versions:
 
@@ -97,7 +97,73 @@ Run these in a shell with `set -euo pipefail`; any failed command stops the gate
 
 When changing a plugin, processor, provider, or other reviewed dependency graph, collect fresh successful execution evidence and run `collect --review-contract .tmp/build-tool-security/candidate-contract.json`. This writes a candidate expectation for explicit comparison and review, removes previous scan-ready output, and does not emit a production SBOM. Review roots, every transitive, realm filtering, classifier identities, advisories, and compatibility before updating the maintained contract and rerunning normal collection. CI never accepts candidates automatically. Pure execution changes within an unchanged reviewed graph derive a new scope directly from receipts. New required Maven goals from those repository sources are automatically observed when their realm has not executed, and must supply complete collector/debug-plan evidence; resolving an available realm alone cannot substitute for an executed-goal receipt. A Maven distribution change additionally requires the authoritative archive verification described above and a new POM-resolution/byte-match inventory.
 
-This boundary covers the current candidate's reviewed Maven-package categories for the observed single-project Linux Java 21 verification and direct Docker Maven commands. Docker/restore `package`, protected-base OpenAPI comparison, CodeQL `clean verify`, and the development Spring Boot command were audited separately for additional plugin roots; they introduce no Site/Install/Deploy execution. Different project inputs and profiles require separate evidence. Discovery covers literal commands in the root Dockerfile, workflow YAML, and repository shell scripts; commands constructed dynamically or introduced through other languages/external tooling require extending discovery and instrumentation. Declared goals alone never establish execution ownership. Changed bootstrap configuration, build extensions, Maven versions, fork topology, or log formats require review and otherwise fail. Wrapper shell logic, builder OS/JDK/native executables, arbitrary external downloads, class-initializer reachability, and other execution graphs remain distinct limits. Wrapper integrity, dependency review, final-image Trivy, Actions pins, CodeQL, and behavioral tests retain separate ownership. Advisory matches establish affected versions, not goal-specific exploitability. Current findings and proof are recorded in [the build-tool audit](../testing/build-tool-advisory-audit.md).
+This boundary covers the current candidate's reviewed Maven-package categories for the observed single-project Linux Java 21 verification and direct Docker Maven commands. Docker/restore `package`, protected-base OpenAPI comparison, CodeQL `clean verify`, and the development Spring Boot command were audited separately for additional plugin roots; they introduce no Site/Install/Deploy execution. Different project inputs and profiles require separate evidence. Discovery covers literal commands in the root Dockerfile, workflow YAML, and repository shell scripts; commands constructed dynamically or introduced through other languages/external tooling require extending discovery and instrumentation. Declared goals alone never establish execution ownership. Changed bootstrap configuration, build extensions, Maven versions, fork topology, or log formats require review and otherwise fail. Builder OS/JDK/native-package advisory coverage is maintained separately below. Wrapper shell logic, arbitrary external downloads, class-initializer reachability, and other execution graphs remain distinct limits of the Maven build-tool control. Wrapper integrity, dependency review, final-image Trivy, Actions pins, CodeQL, and behavioral tests retain separate ownership. Advisory matches establish affected versions, not goal-specific exploitability. Current findings and proof are recorded in [the build-tool audit](../testing/build-tool-advisory-audit.md).
+
+## Docker builder OS, native-package, and JDK boundary
+
+The root Dockerfile has two reviewed security boundaries: `eclipse-temurin:21-jdk-jammy AS builder` and `eclipse-temurin:21-jre-jammy AS runtime`. The builder installs `unzip`, runs the checksum-pinned Maven Wrapper, and executes `dependency:go-offline` and `package` with the existing Maven cache mount. The runtime copies the packaged application into a separate JRE image. A clean final runtime scan cannot establish builder security.
+
+The existing `container-security` job exports an ephemeral `enterprise-shop/builder:ci` using:
+
+```bash
+mkdir -p .tmp/container-security/builder
+export BUILDX_METADATA_PROVENANCE=max
+docker buildx build --pull --platform linux/amd64 --target builder --load \
+  --tag enterprise-shop/builder:ci \
+  --metadata-file .tmp/container-security/builder/builder-build.json .
+```
+
+It then exports the normal runtime image using the same BuildKit builder and local cache. This requires an additional target export and image load, not a deliberately separate full Maven build: unchanged builder instructions and the Maven cache are reused for the runtime export. Both exports resolve bases with `--pull`. Maximum BuildKit metadata preserves the actual base material digests, platform, target, and image configuration digest; the policy checks the recorded base `image.resolvemode` is `pull` and that both exports used the same JDK base. Separate tags and artifacts keep the builder out of production output. Additional root Dockerfile stages or changed stage identities fail pending an explicit policy decision, including new artifact-producing stages.
+
+PR checkout uses the exact event head SHA; scheduled checkout uses protected `master`; manual dispatch uses its selected ref. A recorded source SHA must match checkout and the event SHA. The same Monday `04:23 UTC` schedule rebuilds and rescans the builder alongside existing final-image checks. Before this change reaches protected master, the schedule is established by workflow/ref/provenance regression tests, not a claim that a scheduled builder run has already executed. Permissions remain read-only, checkout credentials are not persisted, and no secrets or privileged pull-request event are used.
+
+`scripts/record-docker-builder.sh` records image IDs, JDK/JRE release files, Java properties, builder `javac`, Ubuntu identities, complete installed dpkg inventories, and JDK file paths for both application stages. `scripts/scan-docker-builder.sh` uses the existing pinned Trivy `0.72.0` digest and shared reviewed database/cache directory. It refreshes the vulnerability database, scans the builder with `--list-all-pkgs`, `--ignorefile /dev/null`, and no severity filter, and generates a separate CycloneDX 1.7 SBOM. Database, raw-scan, and SBOM exit statuses are retained independently. Scanner failures cannot be converted to empty clean reports.
+
+The `docker-builder-security-evidence` artifact is uploaded with `always()` before policy enforcement and retained for fourteen days, including on vulnerability failure. It contains raw Trivy JSON, `builder.cdx.json`, build/image metadata, source/platform/Java/OS/dpkg comparison evidence, scanner statuses, and the JDK advisory input/provenance described below. A second `docker-builder-policy-result` artifact preserves the policy decision when valid evidence produces one. Missing or malformed evidence fails rather than synthesizing a success artifact.
+
+`scripts/validate-builder-security.py evidence` requires the raw report and SBOM to identify the same built builder image and to represent every installed dpkg package, including the exact `unzip` version. Debian epochs and releases are retained when comparing Trivy's split version fields with dpkg and CycloneDX. Every HIGH or CRITICAL finding in the builder's recognized OS/library contents blocks, including unfixed findings. There are no builder exceptions, package wildcards, severity reductions, image-wide exclusions, or inherited runtime/PostgreSQL/gosu suppressions. Lower-severity findings remain in the unfiltered raw evidence.
+
+### Tar-installed Temurin JDK advisory authority
+
+The pinned Trivy image demonstrably does not inventory the Temurin JDK itself: this JDK is installed from an upstream tar archive under `/opt/java/openjdk`, rather than dpkg. The live builder raw report has Ubuntu and Java JAR results but no Temurin/OpenJDK distribution package; its CycloneDX likewise omits that distribution. Trivy's [v0.72.0 Java analyzer](https://github.com/aquasecurity/trivy/blob/v0.72.0/pkg/fanal/analyzer/language/java/jar/jar.go) recognizes JAR/WAR/EAR/PAR artifacts, not the JDK release file or JMOD/native runtime. Trivy's Java index is a JAR identity index, not JDK advisory coverage. The raw Trivy-generated SBOM is preserved without inventing a scanner-recognized JDK package.
+
+To close this specific limitation, `fetch-jdk` retrieves the latest published [Adoptium Temurin Vulnerability Disclosure Report](https://github.com/adoptium/temurin-vdr-generator#releases) on every run, without installing another scanner. The vendor aggregates OpenJDK Vulnerability Group advisories with NVD ratings into CycloneDX 1.4. The repository records the release tag, release/asset IDs, publication timestamp, exact SHA-256 and source URL; it validates the vendor checksum manifest and GitHub asset digest when available. Checksums bind the retained bytes, not a signature or proof that the vendor release account is uncompromised. Upstream release immutability is recorded and is not presumed.
+
+The gate binds the observed Eclipse Adoptium `JAVA_VERSION` to actual builder `javac`, compares affected versions within the Java 21 feature line, and applies HIGH/CRITICAL thresholds using the maximum published CVSS score (7.0/9.0). Adoptium's `vers:generic` entries encode OJVG's affected version and earlier within each feature line; they are not interpreted as exact-version-only matches. Repeated CVE records combine their published bounds and ratings; an incomplete duplicate requires a complete record with the same advisory description, and cannot remove its applicability or severity. Unknown version semantics, missing complete applicability, malformed scores, changed vendor, missing/tampered evidence, or failed retrieval fail closed. No CVE-specific JDK exception or reachability exclusion exists. This authority depends on the vendor's advisory completeness and publication cadence; a successfully fetched latest report does not independently prove that the vendor has published every new advisory.
+
+The JDK release/Java/compiler files and vendor VDR are distinct from Trivy's recognized-package SBOM. The builder/runtime file comparison identifies compiler tools, JMODs and native libraries absent from the JRE, without claiming each is executed. The JDK gate evaluates the Docker builder distribution as a whole; it does not exempt a vulnerable component merely because a particular Maven goal appears unlikely to call it.
+
+### Inventory and execution ownership
+
+The maintained container policy scans installed recognized packages. It does not establish binary-level reachability. Source audit shows Docker RUN instructions invoke the shell, `apt-get`, `rm`, `chmod`, and the Maven Wrapper; the wrapper uses shell/coreutils operations, verifies SHA-256, and chooses available download tooling before ZIP extraction. Cold wrapper provisioning uses `unzip`; a warm Maven cache can avoid downloading/extracting the distribution. Presence of inherited `wget`, `curl`, binutils, JDK utilities, or a shared library is inventory evidence, not proof each ran. No hand-maintained executable allowlist is needed for an inventory-wide vulnerability threshold.
+
+The Maven distribution and resolved plugin/processor/test tooling primarily reside in the `/root/.m2` BuildKit cache mount, which is not exported as builder image filesystem contents. The builder still contains the packaged application and recognized Java libraries, so some package identities overlap PR #458's independent build-tool evidence. The audited scan overlaps 22 of its 266 Maven PURLs, including the packaged Hibernate processor and shared dependencies; it does not duplicate or replace the complete build-tool inventory or its execution-derived ownership. The build-tool policy and its resolved-only advisories remain unchanged.
+
+| Environment/component | Repository evidence and ownership |
+| --- | --- |
+| GitHub-hosted Temurin 21 Maven and CodeQL builds | Java feature/version setup, Maven Wrapper integrity, build-tool execution/advisory evidence, tests and coverage; hosted runner OS/JDK provisioning is a GitHub/Adoptium trust boundary. Docker evidence does not attest those JDK bytes. |
+| Application Docker builder | Fresh-base BuildKit provenance, installed OS/native packages and recognized Java libraries through Trivy, separate measured Temurin JDK identity and vendor advisory policy. |
+| Final application runtime | Existing independent JRE-image Trivy HIGH/CRITICAL policy and CycloneDX; runtime user, image identity and application behavior remain unchanged. |
+| Custom PostgreSQL image | One stage; existing final-image policy, SBOM and scoped gosu applicability evidence. Its build adds dictionary files and targeted package repairs; it has no separate discarded builder. |
+| Compose database-role bootstrap | Executes the repository shell script inside the same custom PostgreSQL image, not a new image or application builder boundary. |
+| Immutable Trivy/Hadolint tool images | Scanner/linter execution authority with pinned digest/platform/version checks; this builder policy does not advisory-scan their own installed contents. |
+| Immutable Go govulncheck image | Runs gosu source/applicability analysis; its own Go/OS toolchain is a separate security-evidence-generator boundary. |
+| Immutable Alpine policy-test image | Scanner-policy fixture, not an application artifact-producing builder. |
+| Dockerfile frontend, BuildKit and Docker daemon | Build execution infrastructure; recorded frontend/base materials do not constitute vulnerability or source-analysis coverage for all build infrastructure. |
+
+Hosted runners, arbitrary downloads, vendor/scanner publication completeness, dynamically constructed external commands, and auxiliary security-tool image contents remain separate limits. The next repository-owned inventory/advisory decision should address immutable security-tool images that execute analysis commands, beginning with the Go govulncheck toolchain. This task does not claim complete software-supply-chain coverage.
+
+### Builder OpenSSL remediation
+
+The first fresh builder scan found HIGH `CVE-2026-84782` in `libssl3 3.0.2-0ubuntu1.29`; the runtime stage's existing targeted installation already resolves the fixed `3.0.2-0ubuntu1.30`. The builder now adds only `libssl3` alongside its required `unzip` installation. It receives the maintained Jammy candidate during fresh builds without a blanket OS upgrade, base/JDK change, package-version freeze, or exception. The Wrapper policy's reviewed installation line is adjusted only for this compatible addition; Maven archive/version/checksum expectations are unchanged.
+
+Focused offline regression coverage:
+
+```bash
+python -m unittest discover -s scripts/tests -p 'test_builder_security.py'
+```
+
+Local reproduction requires Docker and the pinned scanner variable above. Create the builder/runtime images with maximum BuildKit metadata using the workflow commands, set `EXPECTED_SOURCE_SHA` to the checkout SHA, then run `record-docker-builder.sh`, `scan-docker-builder.sh`, `validate-builder-security.py fetch-jdk`, and `validate-builder-security.py evidence`. The pipeline intentionally uploads collected evidence before the final gate; local users should retain that directory on failure. Ordinary Maven/CodeQL/PostgreSQL verification remains mandatory independently of these image checks.
 
 ## Java platform baseline
 
