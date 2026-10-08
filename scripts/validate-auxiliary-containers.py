@@ -40,7 +40,8 @@ def execution_sources(root):
     paths |= set(root.glob('**/Dockerfile')) - set(root.glob('target/**/Dockerfile'))
     paths |= set(root.glob('*compose*.y*ml'))
     return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(paths) if p.is_file() and
+            for p in sorted(paths) if p.is_file()
+            and not any(part in {'.git', '.tmp', 'target', '__pycache__'} for part in p.relative_to(root).parts) and
             ('.github/' in p.relative_to(root).as_posix() or p.name == 'Dockerfile'
              or 'compose' in p.name or SURFACE.search(p.read_text()))}
 
@@ -68,6 +69,11 @@ def inventory(contract, root=ROOT):
                 and image['advisory_authority'], f'{name}: executable/version/ownership evidence required')
         require(image['governed'] == (image['classification'] != 'fixture'), 'Fixture cannot become trusted evidence')
         require(image['threshold'] == (['HIGH', 'CRITICAL'] if image['governed'] else []), 'Wrong threshold')
+        require(image.get('exceptions', []) == [], 'No image exception is authorized')
+        require((image['package_mode'] == 'static-haskell') == (name == 'hadolint'),
+                'Only the reviewed Hadolint scratch executable has an empty static package boundary')
+    require(images['fixture']['classification'] == 'fixture' and not images['fixture']['governed'],
+            'The policy fixture cannot become a trusted execution image')
     ryuk = images['ryuk']['reference'].removeprefix('docker.io/')
     require((root / 'src/test/resources/testcontainers.properties').read_text().strip()
             == 'ryuk.container.image=' + ryuk, 'Testcontainers must execute the inventoried Ryuk digest')
@@ -112,6 +118,9 @@ def validate(image, evidence, report, bom, scanner_version):
     require(evidence['independent_scanner_integrity'] is False, 'Self-scan cannot be independent integrity proof')
     database = evidence['database']
     now = datetime.now(timezone.utc)
+    collected = datetime.fromisoformat(evidence['timestamp'].replace('Z', '+00:00'))
+    require(collected <= now and (now - collected).total_seconds() < 86400,
+            'Missing/stale image evidence timestamp')
     require(database['Version'] == 2 and datetime.fromisoformat(database['UpdatedAt'].replace('Z', '+00:00')) <= now
             and datetime.fromisoformat(database['NextUpdate'].replace('Z', '+00:00')) > now,
             'Malformed/stale database provenance')

@@ -221,7 +221,7 @@
     "scripts/scan-auxiliary-containers.py": "ee8cdf50b6d2eec8b7f847da9ccf8bb9de755144f9b329a3fd360b4f39c4cfe5",
     "scripts/scan-build-tools.py": "aa681f6ff7f1023bf838373ff53db822d24e855b10b50d6e3a8d944cefa80e7c",
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
-    "scripts/validate-auxiliary-containers.py": "483996c25738dcb9d4858203b0b9467293c82b1eb407dd9f23f0c86bbfa17c25",
+    "scripts/validate-auxiliary-containers.py": "eab8f0f346897c02614c90947e34548d2edcf0f73028cff15994c0233250d90d",
     "scripts/verify-runtime-append-only-integrity.sh": "2d8c3322c817a9d8d86eb37b0fad53b9b32d83b9bd53a4b9de8ec0f6b76a1447",
     "scripts/verify-trivy-provenance.py": "0f22b61da9f9922c8b9ca0f7b37f7d448096d6d561fe973454b7d187cacf9736",
     "src/test/java/com/company/shop/config/ProductionDatabaseReadinessPolicyLifecycleIT.java": "75c4e02383845403fb9a39f7b152f39374917d12f317acb1b4db4148729f4f19",

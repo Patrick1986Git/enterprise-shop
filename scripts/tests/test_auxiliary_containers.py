@@ -23,6 +23,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         self.evidence = {'reference': self.image['reference'], 'platform': 'linux/amd64',
                          'image_id': self.image_id, 'resolved_digest': 'sha256:' + 'b' * 64,
                          'identity': self.image['identity'], 'database_status': 0, 'scanner_status': 0,
+                         'timestamp': now.isoformat(),
                          'sbom_status': 0, 'independent_scanner_integrity': False,
                          'database': {'Version': 2, 'UpdatedAt': (now - timedelta(hours=1)).isoformat(),
                                       'NextUpdate': (now + timedelta(hours=5)).isoformat()},
@@ -75,6 +76,22 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_dynamic_command_change_requires_review(self):
         self.source_change(lambda r: (r / 'scripts/run-gosu-govulncheck.sh').write_text('docker run "$UNREVIEWED_IMAGE"\n'))
+
+    def test_downloaded_gosu_dockerfiles_are_not_repository_execution_surfaces(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / '.tmp/gosu-source/Dockerfile'
+            path.parent.mkdir(parents=True)
+            path.write_text('FROM golang:latest\n')
+            self.assertEqual({}, POLICY.execution_sources(root))
+
+    def test_timestamp_is_required_and_must_be_fresh(self):
+        self.evidence['timestamp'] = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        with self.assertRaisesRegex(ValueError, 'timestamp'): self.validate()
+
+    def test_opaque_binary_cannot_borrow_empty_hadolint_boundary(self):
+        self.contract['images']['ryuk']['package_mode'] = 'static-haskell'
+        with self.assertRaisesRegex(ValueError, 'Hadolint'): POLICY.inventory(self.contract)
 
     def test_digest_required(self):
         self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.8-alpine3.24'
