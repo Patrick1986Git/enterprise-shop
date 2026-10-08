@@ -22,22 +22,20 @@ class BuilderStagePolicyTest(unittest.TestCase):
                 POLICY.validate_stages(changed)
 
 
-if __name__ == '__main__':
-    unittest.main()
-
-
 class BuilderEvidencePolicyTest(unittest.TestCase):
     def setUp(self):
         self.packages = {'unzip': '6.0-26ubuntu3.2', 'openssl': '3.0.2-test', 'bash': '5.1-test'}
         self.report = {
-            'SchemaVersion': 2, 'ArtifactType': 'container_image', 'Trivy': {'Version': '0.72.0'},
+            'SchemaVersion': 2, 'ArtifactType': 'container_image', 'ArtifactName': 'enterprise-shop/builder:ci',
+            'Trivy': {'Version': '0.72.0'},
             'Metadata': {'ImageID': 'sha256:test', 'OS': {'Family': 'ubuntu', 'Name': '22.04'}},
             'Results': [{'Class': 'os-pkgs', 'Type': 'ubuntu', 'Target': 'Ubuntu',
                          'Packages': [{'Name': k, 'Version': v} for k, v in self.packages.items()],
                          'Vulnerabilities': []}],
         }
-        self.bom = {'bomFormat': 'CycloneDX', 'specVersion': '1.6',
-                    'metadata': {'component': {'name': 'enterprise-shop/builder:ci'}},
+        self.bom = {'bomFormat': 'CycloneDX', 'specVersion': '1.7',
+                    'metadata': {'component': {'name': 'enterprise-shop/builder:ci',
+                        'properties': [{'name': 'aquasecurity:trivy:ImageID', 'value': 'sha256:test'}]}},
                     'components': [{'name': k, 'version': v, 'purl': f'pkg:deb/ubuntu/{k}@{v}'}
                                    for k, v in self.packages.items()]}
 
@@ -94,6 +92,18 @@ class BuilderEvidencePolicyTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.validate()
 
+    def test_malformed_vulnerability_container_cannot_become_clean(self):
+        for malformed in ({}, 'clean', False):
+            self.report['Results'][0]['Vulnerabilities'] = malformed
+            with self.assertRaises(ValueError):
+                self.validate()
+
+    def test_debian_epoch_and_release_are_part_of_the_scanned_identity(self):
+        self.assertEqual('1:3.8-0ubuntu2.1', POLICY.package_version(
+            {'Version': '3.8', 'Epoch': 1, 'Release': '0ubuntu2.1'}))
+        self.assertEqual('6.0-26ubuntu3.2', POLICY.package_version(
+            {'Version': '6.0', 'Release': '26ubuntu3.2'}))
+
     def test_installed_dpkg_inventory_is_not_a_hand_maintained_tool_list(self):
         text = '\n'.join(f'{k}\t{v}\tamd64\tinstalled' for k, v in self.packages.items())
         self.assertEqual(self.packages, POLICY.dpkg_inventory(text))
@@ -141,10 +151,103 @@ class TemurinAdvisoryPolicyTest(unittest.TestCase):
             with self.assertRaises((ValueError, KeyError)):
                 POLICY.jdk_findings(vdr, '21.0.12.1')
 
+    def test_incomplete_duplicate_cannot_erase_complete_advisory_bounds(self):
+        import copy
+        vdr = self.vdr()
+        vdr['vulnerabilities'][0]['description'] = 'The same vendor advisory'
+        duplicate = copy.deepcopy(vdr['vulnerabilities'][0])
+        duplicate['affects'][0].pop('versions')
+        vdr['vulnerabilities'].append(duplicate)
+        self.assertEqual(1, len(POLICY.jdk_findings(vdr, '21.0.1')))
+        duplicate['description'] = 'Conflicting applicability'
+        with self.assertRaises(ValueError):
+            POLICY.jdk_findings(vdr, '21.0.1')
+
     def test_missing_or_nonfinite_severity_fails_closed(self):
         for score in (None, float('nan'), 11):
             with self.assertRaises(ValueError):
                 POLICY.jdk_findings(self.vdr(score=score), '21.0.1')
+
+
+class BuildProvenanceTest(unittest.TestCase):
+    def document(self):
+        digest = 'a' * 64
+        return {'containerimage.config.digest': 'sha256:image', 'buildx.build.provenance': {
+            'buildType': 'https://mobyproject.org/buildkit@v1',
+            'invocation': {'environment': {'platform': 'linux/amd64'},
+                           'configSource': {'entryPoint': 'Dockerfile'},
+                           'parameters': {'args': {'target': 'builder'}}},
+            'materials': [{'uri': 'pkg:docker/eclipse-temurin@21-jdk-jammy?platform=linux%2Famd64',
+                           'digest': {'sha256': digest}}],
+            'buildConfig': {'llbDefinition': [{'op': {'Op': {'source': {
+                'identifier': 'docker-image://docker.io/library/eclipse-temurin:21-jdk-jammy@sha256:' + digest,
+                'attrs': {'image.resolvemode': 'pull'}}}}}]}}}
+
+    def test_exact_base_target_platform_and_fresh_pull_are_required(self):
+        document = self.document()
+        self.assertEqual({'21-jdk-jammy': 'sha256:' + 'a' * 64},
+                         POLICY.build_provenance(document, 'sha256:image', True))
+        document['buildx.build.provenance']['buildConfig']['llbDefinition'][0]['op']['Op']['source']['attrs']['image.resolvemode'] = 'default'
+        with self.assertRaises(ValueError):
+            POLICY.build_provenance(document, 'sha256:image', True)
+        with self.assertRaises(ValueError):
+            POLICY.build_provenance(self.document(), 'sha256:other', True)
+
+
+class TemurinEvidenceFetchTest(unittest.TestCase):
+    def test_vendor_checksum_and_asset_authority_are_required(self):
+        import hashlib
+        import json
+        import tempfile
+        from unittest.mock import patch
+        tag = 'temurin-vdr-06-10-2026-37483977503'
+        name = tag + '.json'
+        prefix = f'https://github.com/{POLICY.VDR_REPOSITORY}/releases/download/{tag}/'
+        payload = json.dumps(TemurinAdvisoryPolicyTest().vdr()).encode()
+        digest = hashlib.sha256(payload).hexdigest()
+        release = {'tag_name': tag, 'draft': False, 'prerelease': False, 'id': 12,
+                   'published_at': '2026-10-06T15:02:09Z', 'immutable': False,
+                   'assets': [{'name': name, 'id': 34, 'browser_download_url': prefix + name,
+                               'digest': 'sha256:' + digest},
+                              {'name': tag + '.sha256', 'browser_download_url': prefix + tag + '.sha256'}]}
+        for checksum, passes in ((digest, True), ('0' * 64, False)):
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                (directory / 'policy-result.json').write_text('stale')
+                with patch.object(POLICY, 'download', side_effect=[json.dumps(release).encode(),
+                        payload, f'{checksum}  {name}\n'.encode()]):
+                    if passes:
+                        POLICY.fetch_jdk(directory)
+                        provenance = POLICY.read_json(directory / 'jdk-advisory-provenance.json')
+                        self.assertEqual(digest, provenance['sha256'])
+                        self.assertFalse(provenance['upstream_immutable'])
+                    else:
+                        with self.assertRaises(ValueError):
+                            POLICY.fetch_jdk(directory)
+                        self.assertFalse((directory / 'temurin-vdr.json').exists())
+                self.assertFalse((directory / 'policy-result.json').exists())
+
+    def test_transport_failure_preserves_failure_and_removes_stale_advisory_evidence(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for name in ('policy-result.json', 'temurin-vdr.json', 'jdk-advisory-provenance.json'):
+                (directory / name).write_text('stale')
+            with patch.object(POLICY, 'download', side_effect=OSError('network unavailable')):
+                with self.assertRaises(OSError):
+                    POLICY.fetch_jdk(directory)
+            self.assertFalse((directory / 'temurin-vdr.json').exists())
+
+    def test_missing_builder_sbom_cannot_reuse_a_previous_policy_success(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / 'policy-result.json').write_text('{"blocked": []}')
+            (directory / 'trivy-raw.json').write_text('{}')
+            with self.assertRaises(FileNotFoundError):
+                POLICY.evaluate(directory)
+            self.assertFalse((directory / 'policy-result.json').exists())
 
 
 class BuilderCiPolicyTest(unittest.TestCase):
@@ -190,3 +293,7 @@ class BuilderCiPolicyTest(unittest.TestCase):
         self.assertIn('database-exit-status.txt', self.scanner)
         for disallowed in ('--ignore-unfixed', '.trivyignore', '--severity', '|| true'):
             self.assertNotIn(disallowed, self.scanner)
+
+
+if __name__ == '__main__':
+    unittest.main()

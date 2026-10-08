@@ -13,7 +13,7 @@ EXPECTED_ARCHIVE = "apache-maven-3.10.0-bin.zip"
 EXPECTED_SHA256 = "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff"
 SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 BUILDER_UNZIP_INSTALL = """RUN apt-get update \\
-    && apt-get install --no-install-recommends -y unzip \\
+    && apt-get install --no-install-recommends -y unzip libssl3 \\
     && rm -rf /var/lib/apt/lists/*"""
 
 

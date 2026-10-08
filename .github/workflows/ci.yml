@@ -531,6 +531,8 @@ jobs:
           docker build --pull --tag enterprise-shop/postgres:ci docker/postgres
 
       - name: Record builder and runtime identities
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bash scripts/record-docker-builder.sh
 
       - name: Generate builder raw vulnerability report and CycloneDX

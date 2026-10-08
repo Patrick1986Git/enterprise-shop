@@ -3,6 +3,7 @@ set -euo pipefail
 builder_evidence="${PWD}/.tmp/container-security/builder"
 mkdir -p "${builder_evidence}"
 git rev-parse HEAD > "${builder_evidence}/source-sha.txt"
+test "$(cat "${builder_evidence}/source-sha.txt")" = "${EXPECTED_SOURCE_SHA}"
 for stage in builder app; do
   image="enterprise-shop/${stage}:ci"
   docker image inspect "${image}" > "${builder_evidence}/${stage}-image.json"
