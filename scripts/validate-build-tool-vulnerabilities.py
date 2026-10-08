@@ -32,7 +32,7 @@ def validate(document, report, scanner_exit_status):
             'Scanner/database failure cannot be a clean result')
     require(type(report.get('SchemaVersion')) is int and report.get('SchemaVersion') == 2
             and report.get('ArtifactType') == 'cyclonedx'
-            and report.get('Trivy', {}).get('Version') == '0.72.0', 'Unexpected scanner provenance')
+            and report.get('Trivy', {}).get('Version') == '0.75.0', 'Unexpected scanner provenance')
     expected = {x['purl']: (x['group'] + ':' + x['name'], x['version'])
                 for x in document['components']}
     require(expected and len(expected) == len(document['components']), 'Empty/duplicate input components')

@@ -185,7 +185,7 @@ def validate_image(report, bom, packages, image_id, scanner_status, sbom_status,
             'Scanner/SBOM/database failure cannot be a clean result')
     require(report['SchemaVersion'] == 2 and report['ArtifactType'] == 'container_image'
             and report['ArtifactName'] == 'enterprise-shop/builder:ci'
-            and report['Trivy']['Version'] == '0.72.0', 'Unexpected Trivy image provenance')
+            and report['Trivy']['Version'] == '0.75.0', 'Unexpected Trivy image provenance')
     metadata = report['Metadata']
     require(metadata['ImageID'] == image_id and metadata['OS']['Family'] == 'ubuntu'
             and metadata['OS']['Name'] == '22.04', 'Wrong builder image/OS identity')
