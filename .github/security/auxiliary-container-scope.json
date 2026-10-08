@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "boundary": "externally supplied auxiliary container images executed by repository-owned CI",
+  "blocking_severities": [
+    "HIGH",
+    "CRITICAL"
+  ],
+  "fixture_policy": "reviewed integrity; isolated from trusted execution evidence",
+  "scanner_trust": "Trivy package self-scan is advisory evidence, not independent scanner integrity assurance",
+  "exceptions": []
+}
