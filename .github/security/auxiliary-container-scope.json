@@ -361,7 +361,7 @@
     "scripts/restore-rehearsal.sh": "d702b731fb363709d70c2fb30137f75c68c011ba7db2a04a99385a2870158ca7",
     "scripts/run-dev.sh": "d16cefda7b73d82550aecef27e25b9bb7a3361e81f7821fffd3a9735831576b7",
     "scripts/run-gosu-govulncheck.sh": "f2466620d3c3388db8b1af20da70076e4d1e522365c4596518b0e5bca17f4d4c",
-    "scripts/scan-auxiliary-containers.py": "5d27d50b42ac1b782892ea1355296d29aa0dbbf50baa4095de9dd6c139098159",
+    "scripts/scan-auxiliary-containers.py": "fe9eecf74c35e75ff57d9410c82dcbd6e3e1b93547afd9513527ccac131f31a8",
     "scripts/scan-build-tools.py": "aa681f6ff7f1023bf838373ff53db822d24e855b10b50d6e3a8d944cefa80e7c",
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
     "scripts/validate-auxiliary-containers.py": "6a4c34ce14d2120440537e9f68dbc97d01b61ad75fb3543cedee4145c3706c15",

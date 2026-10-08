@@ -236,6 +236,11 @@ class CompressedGoEvidenceTest(unittest.TestCase):
         self.assertNotIn('evidence_transform', contract['images']['govulncheck'])
         self.assertNotIn('evidence_transform', contract['images']['scanner'])
 
+    def test_binary_analysis_cannot_populate_nonroot_gosu_cache(self):
+        source = (ROOT / 'scripts/scan-auxiliary-containers.py').read_text()
+        self.assertIn("'ryuk-govulncheck:/tmp'", source)
+        self.assertNotIn("'govulncheck:/tmp'", source)
+
     def test_fixture_cannot_enter_compressed_binary_trust_path(self):
         contract = POLICY.read(POLICY.CONTRACT)
         contract['images']['fixture']['evidence_transform'] = contract['images']['ryuk']['evidence_transform']

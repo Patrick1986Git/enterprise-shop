@@ -139,7 +139,7 @@ def scan():
                 govuln = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--cap-drop', 'ALL',
                           '--security-opt', 'no-new-privileges', '-e', 'GOTOOLCHAIN=local',
                           '-e', 'GOVERSION=go' + image['go_version'], '-e', 'GOPATH=/tmp/go',
-                          '-e', 'GOCACHE=/tmp/gocache', '-v', 'govulncheck:/tmp',
+                          '-e', 'GOCACHE=/tmp/gocache', '-v', 'ryuk-govulncheck:/tmp',
                           '-v', f'{analysis.resolve()}:/analysis:ro']
                 if certificate:
                     govuln += ['-v', f'{Path(certificate).resolve()}:/run/scan-ca.pem:ro', '-e', 'SSL_CERT_FILE=/run/scan-ca.pem']
