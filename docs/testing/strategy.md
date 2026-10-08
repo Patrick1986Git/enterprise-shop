@@ -163,6 +163,12 @@ The additional tests cover effective/direct roots, processor roots/transitives, 
 
 The EventSpy is stored as `BuildToolEvidence.java.source` and compiled from a temporary directory with Java 21 `-Xlint:all -Werror`. It has a separate strict tooling compilation boundary; it neither changes nor bypasses the application/test source inventory in `RepositoryCompilerWarningPolicyTest`. Generated Java and class files stay outside that source inventory. The unchanged Java/Kotlin CodeQL workflow analyzes the normal repository build; its success is not a claim that Python tooling or the collector source asset was separately analyzed.
 
+## Docker builder security policy tests
+
+The existing `container-security` job builds the root Dockerfile's `builder` target with fresh linux/amd64 bases, generates raw Trivy and CycloneDX evidence, records builder/JRE identities and installed dpkg packages, and applies an independent HIGH/CRITICAL gate. A measured Temurin JDK identity is checked against Adoptium's vendor VDR because pinned Trivy does not recognize the tar-installed JDK distribution. See [the builder security boundary](../operations/container-security.md#docker-builder-os-native-package-and-jdk-boundary) for scanner/vendor ownership, evidence retention, inventory-versus-execution limits, and local reproduction.
+
+Run the narrow offline fixtures with `python -m unittest discover -s scripts/tests -p 'test_builder_security.py'`. They cover stage identity and additional-stage review; fresh base/platform/image provenance; raw/SBOM/installed-unzip agreement; HIGH/CRITICAL blocking; scanner/database/SBOM failures; missing, malformed and stale evidence; runtime/gosu exception isolation; exact PR-head and protected-master schedule configuration; vendor checksums, affected-version semantics, duplicate advisory normalization and JDK severity. The complete Python policy suite includes these tests; complete Java 21 verification, PostgreSQL/Testcontainers, compiler-warning, JaCoCo and CodeQL checks remain separate requirements. These Docker evidence checks do not attest the hosted runner JDK's bytes or advisory state.
+
 ## Practical guidance
 
 - Prefer the narrowest useful test for the changed behavior.

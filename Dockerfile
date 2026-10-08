@@ -4,7 +4,7 @@ FROM eclipse-temurin:21-jdk-jammy AS builder
 WORKDIR /workspace
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y unzip \
+    && apt-get install --no-install-recommends -y unzip libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY .mvn/ .mvn/
