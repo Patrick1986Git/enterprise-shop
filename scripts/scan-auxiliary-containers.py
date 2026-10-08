@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import tarfile
 from datetime import datetime, timezone
@@ -67,16 +68,25 @@ def scan():
             POLICY.require(inspect['Os'] + '/' + inspect['Architecture'] == 'linux/amd64', 'Wrong resolved platform')
             POLICY.require(any(d.endswith('@' + ref.split('@')[1]) for d in inspect['RepoDigests']),
                            'Pulled image does not resolve reviewed source digest')
-            index = json.loads(docker('buildx', 'imagetools', 'inspect', '--raw', ref))
+            index_bytes = docker('buildx', 'imagetools', 'inspect', '--raw', ref).encode()
+            POLICY.require('sha256:' + hashlib.sha256(index_bytes).hexdigest() == ref.split('@')[1],
+                           'Registry index digest mismatch')
+            (item / 'registry-index.raw.json').write_bytes(index_bytes)
+            index = json.loads(index_bytes)
             resolved = ref.split('@')[1]
             if 'manifests' in index:
                 matches = [x for x in index['manifests'] if x.get('platform', {}).get('os') == 'linux'
                            and x['platform'].get('architecture') == 'amd64']
                 POLICY.require(len(matches) == 1, 'Missing/ambiguous linux/amd64 manifest')
                 resolved = matches[0]['digest']
-                manifest = json.loads(docker('buildx', 'imagetools', 'inspect', '--raw', ref.split('@')[0] + '@' + resolved))
+                manifest_bytes = docker('buildx', 'imagetools', 'inspect', '--raw', ref.split('@')[0] + '@' + resolved).encode()
+                POLICY.require('sha256:' + hashlib.sha256(manifest_bytes).hexdigest() == resolved,
+                               'Registry platform manifest digest mismatch')
+                manifest = json.loads(manifest_bytes)
             else:
                 manifest = index
+                manifest_bytes = index_bytes
+            (item / 'registry-manifest.raw.json').write_bytes(manifest_bytes)
             POLICY.require(manifest['config']['digest'] == inspect['Id'], 'Resolved manifest/image configuration mismatch')
             POLICY.write(item / 'registry-manifest.json', manifest)
             POLICY.write(item / 'registry-index.json', index)
@@ -109,6 +119,42 @@ def scan():
                 sbom_status = subprocess.run(command + ['convert', '--format', 'cyclonedx', '--output',
                                                        '/evidence/sbom.cdx.json', '/evidence/raw.json'],
                                              stdout=output, stderr=subprocess.STDOUT).returncode
+            if image.get('evidence_transform'):
+                POLICY.require(scanner_status == 0 and sbom_status == 0, 'Original image scan failure')
+                shutil.copyfile(item / 'raw.json', item / 'executed-image.raw.json')
+                shutil.copyfile(item / 'sbom.cdx.json', item / 'executed-image.sbom.cdx.json')
+                analysis_image = images['govulncheck']['reference']
+                analysis = POLICY.BINARY.collect(image, contract['tools']['upx'], archive, item, analysis_image)
+                command = command[:-1] + ['-v', f'{analysis.resolve()}:/analysis:ro'] + command[-1:]
+                artifact = '/analysis'
+                with (item / 'scanner.log').open('w') as output:
+                    scanner_status = subprocess.run(command + ['rootfs', '--skip-db-update', '--ignorefile', '/dev/null',
+                                                              '--scanners', 'vuln', '--list-all-pkgs', '--exit-code', '0',
+                                                              '--format', 'json', '--output', '/evidence/raw.json', artifact],
+                                                    stdout=output, stderr=subprocess.STDOUT).returncode
+                with (item / 'sbom.log').open('w') as output:
+                    sbom_status = subprocess.run(command + ['convert', '--format', 'cyclonedx', '--output',
+                                                           '/evidence/sbom.cdx.json', '/evidence/raw.json'],
+                                                 stdout=output, stderr=subprocess.STDOUT).returncode
+                govuln = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--cap-drop', 'ALL',
+                          '--security-opt', 'no-new-privileges', '-e', 'GOTOOLCHAIN=local',
+                          '-e', 'GOVERSION=go' + image['go_version'], '-e', 'GOPATH=/tmp/go',
+                          '-e', 'GOCACHE=/tmp/gocache', '-v', 'govulncheck:/tmp',
+                          '-v', f'{analysis.resolve()}:/analysis:ro']
+                if certificate:
+                    govuln += ['-v', f'{Path(certificate).resolve()}:/run/scan-ca.pem:ro', '-e', 'SSL_CERT_FILE=/run/scan-ca.pem']
+                govuln += [analysis_image, 'sh', '-ec',
+                           'go install golang.org/x/vuln/cmd/govulncheck@v1.1.4; '
+                           'exec /tmp/go/bin/govulncheck -mode=binary -json "$1"', '--',
+                           '/analysis' + image['identity']['binary']]
+                with (item / 'govulncheck.json').open('w') as out, (item / 'govulncheck.log').open('w') as err:
+                    govuln_status = subprocess.run(govuln, stdout=out, stderr=err, timeout=300).returncode
+                receipt = POLICY.read(item / 'transformation.json')
+                receipt.update({'raw_sha256': POLICY.BINARY.sha((item / 'raw.json').read_bytes()),
+                                'sbom_sha256': POLICY.BINARY.sha((item / 'sbom.cdx.json').read_bytes()),
+                                'govulncheck_status': govuln_status,
+                                'govulncheck_sha256': POLICY.BINARY.sha((item / 'govulncheck.json').read_bytes())})
+                POLICY.write(item / 'transformation.json', receipt)
             POLICY.write(item / 'identity.json', {'reference': ref, 'platform': 'linux/amd64',
                          'resolved_digest': resolved, 'image_id': inspect['Id'], 'identity': image['identity'],
                          'installed_os_packages': packages, 'scanner_status': scanner_status,

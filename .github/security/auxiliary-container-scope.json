@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "boundary": "Externally supplied auxiliary images executed by repository CI, including library-launched Ryuk",
   "scanner_version": "0.75.0",
   "scanner_independent_integrity": "upstream-github-attestation-and-executable-byte-match",
@@ -194,10 +194,151 @@
       "network": "Testcontainers runner bridge and exposed cleanup-control port; Docker daemon access",
       "input": "Docker labels/resources and Testcontainers protocol",
       "repository_code_executed": false,
-      "advisory_authority": "Upstream Testcontainers releases/advisories; current image Trivy readback is missing due to UPX. Auxiliary gate fails closed; no exception is authorized.",
-      "sbom": "Required exact image CycloneDX; stock compressed image has no executable package components",
-      "scan_coverage": "Trivy cannot inventory compressed Go binary. Empty report is a blocking coverage error, not zero vulnerabilities.",
-      "environment": "RYUK_IMAGE"
+      "advisory_authority": "Pinned Trivy 0.75.0 package/version HIGH/CRITICAL gate over measured deterministic decompression; binary govulncheck supplemental, never an exception.",
+      "sbom": "CycloneDX converted from one raw rootfs analysis scan; original compressed image evidence retained separately.",
+      "scan_coverage": "Exact compressed/decompressed hashes, scratch filesystem/layer census, UPX test/repeat, actual Go stdlib and complete embedded dependency readback; source corroborates versions and sums. HIGH/CRITICAL findings remain blocking.",
+      "environment": "RYUK_IMAGE",
+      "go_version": "1.23.12",
+      "evidence_transform": {
+        "method": "upx-deterministic-go-readback",
+        "resolved_digest": "sha256:f0456560ea5b4acdbed0da0efc33b5f9dd6bc1e59f2337106826dcb5b0b0e981",
+        "image_id": "sha256:9a5f93e8f9300530b91866bcf41c0b8a5d72f0e5a7b4365167a48df9816cd36e",
+        "decompressed_sha256": "54b194bbf7e39ffc7faf132ccf7dc694a409a4db3c1cfb9a889299827078fae8",
+        "filesystem": {
+          "etc/ssl/certs/ca-certificates.crt": {
+            "size": 212585,
+            "sha256": "8cf3f2d5222508ca469c78a347764ee1b1fab10a903172612c489ebcca05c91c"
+          },
+          "bin/ryuk": {
+            "size": 2184384,
+            "sha256": "5aa022d7dcdc90eb4072a44b6f54b9b62d5fbd126de320cd56e04db4938e4e38"
+          }
+        },
+        "upx_marker": "$Id: UPX 5.02 Copyright (C) 1996-2025 the UPX Team. All Rights Reserved. $",
+        "tool": {
+          "version": "5.2.1",
+          "platform": "linux/amd64",
+          "classification": "isolated-evidence-transformer",
+          "url": "https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-amd64_linux.tar.xz",
+          "member": "upx-5.2.1-amd64_linux/upx",
+          "archive_sha256": "402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657",
+          "binary_sha256": "287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1",
+          "exceptions": [],
+          "provenance": "Official UPX release 377853905 asset 532383358 published SHA-256 plus reviewed executable hash. No signed upstream attestation established.",
+          "advisory_authority": "Maintainer review of official UPX NEWS/security issues for this pinned current release; Trivy does not inventory its static C++ libraries. Restricted parser boundary, no claim of complete native-library coverage.",
+          "capabilities": "Existing governed Go image; offline nonroot read-only rootfs, no socket/secrets/repository, copied input RO and only temporary payload output RW; all capabilities dropped, no-new-privileges and resource limits."
+        },
+        "analysis_image": "docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c",
+        "buildinfo": {
+          "go_version": "1.23.12",
+          "dependencies": {
+            "github.com/caarlos0/env/v11": {
+              "version": "v11.3.1",
+              "sum": "h1:cArPWC15hWmEt+gWk7YBi7lEXTXCvpaSdCiZE2X5mCA="
+            },
+            "github.com/containerd/errdefs": {
+              "version": "v1.0.0",
+              "sum": "h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI="
+            },
+            "github.com/containerd/errdefs/pkg": {
+              "version": "v0.3.0",
+              "sum": "h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE="
+            },
+            "github.com/distribution/reference": {
+              "version": "v0.6.0",
+              "sum": "h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk="
+            },
+            "github.com/docker/docker": {
+              "version": "v28.3.3+incompatible",
+              "sum": "h1:Dypm25kh4rmk49v1eiVbsAtpAsYURjYkaKubwuBdxEI="
+            },
+            "github.com/docker/go-connections": {
+              "version": "v0.5.0",
+              "sum": "h1:USnMq7hx7gwdVZq1L49hLXaFtUdTADjXGp+uj1Br63c="
+            },
+            "github.com/docker/go-units": {
+              "version": "v0.5.0",
+              "sum": "h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4="
+            },
+            "github.com/felixge/httpsnoop": {
+              "version": "v1.0.4",
+              "sum": "h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg="
+            },
+            "github.com/go-logr/logr": {
+              "version": "v1.4.2",
+              "sum": "h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY="
+            },
+            "github.com/go-logr/stdr": {
+              "version": "v1.2.2",
+              "sum": "h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag="
+            },
+            "github.com/gogo/protobuf": {
+              "version": "v1.3.2",
+              "sum": "h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q="
+            },
+            "github.com/moby/docker-image-spec": {
+              "version": "v1.3.1",
+              "sum": "h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0="
+            },
+            "github.com/opencontainers/go-digest": {
+              "version": "v1.0.0",
+              "sum": "h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U="
+            },
+            "github.com/opencontainers/image-spec": {
+              "version": "v1.1.0",
+              "sum": "h1:8SG7/vwALn54lVB/0yZ/MMwhFrPYtpEHQb2IpWsCzug="
+            },
+            "github.com/pkg/errors": {
+              "version": "v0.9.1",
+              "sum": "h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4="
+            },
+            "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp": {
+              "version": "v0.53.0",
+              "sum": "h1:4K4tsIXefpVJtvA/8srF4V4y0akAoPHkIslgAkjixJA="
+            },
+            "go.opentelemetry.io/otel": {
+              "version": "v1.28.0",
+              "sum": "h1:/SqNcYk+idO0CxKEUOtKQClMK/MimZihKYMruSMViUo="
+            },
+            "go.opentelemetry.io/otel/metric": {
+              "version": "v1.28.0",
+              "sum": "h1:f0HGvSl1KRAU1DLgLGFjrwVyismPlnuU6JD6bOeuA5Q="
+            },
+            "go.opentelemetry.io/otel/trace": {
+              "version": "v1.28.0",
+              "sum": "h1:GhQ9cUuQGmNDd5BTCP2dAvv75RdMxEfTmYejp+lkx9g="
+            }
+          },
+          "build": {
+            "-buildmode": "exe",
+            "-compiler": "gc",
+            "-trimpath": "true",
+            "CGO_ENABLED": "0",
+            "GOARCH": "amd64",
+            "GOOS": "linux",
+            "GOAMD64": "v1"
+          },
+          "path": "github.com/testcontainers/moby-ryuk",
+          "main_module": "github.com/testcontainers/moby-ryuk",
+          "main_version": "(devel)"
+        },
+        "source_commit": "b3726afd6cc2c36628abcc08e9cabac43f587384",
+        "source_url": "https://raw.githubusercontent.com/testcontainers/moby-ryuk",
+        "source_files": {
+          "go.mod": "414e08ff0842a4c5d607b95984cf2afec999c8ba79d7023d6b14eb7b82787eaf",
+          "go.sum": "0e13ae0d7b3dcf475a0e4ff03c39f065e6fe43ac855ad37dd3fe37907d7a275d",
+          "linux/Dockerfile": "314508b7cf1237e7742a53a15f95602f1d2d8e6d51df85bf0bd4e1b10a8d0124",
+          ".github/workflows/build-docker-image.yml": "1bb798618f424ca51fd9814bdbd1e488fb43331593cdb96424dc2121e37013e0",
+          ".github/workflows/publish-docker-image.yml": "71dc43a4a4b593487574510ab0f0bb1ba3442a89e389387318ae599e37bdea3b"
+        },
+        "upstream_provenance": {
+          "manifest_digest": "sha256:df604959c6dcf62c3e5d87ed85ec9cfae1ca0c3a846c143f5919ad564ae14c73",
+          "statement_digest": "sha256:e101a7504012f07ce2375a5d18ebc748525019bd013d42830db9c62dbb2bb4e5",
+          "repository": "https://github.com/testcontainers/moby-ryuk",
+          "builder": "https://github.com/testcontainers/moby-ryuk/actions/runs/18032732627/attempts/1",
+          "signed_identity_verified": false
+        }
+      }
     }
   },
   "comparison_boundaries": [
@@ -206,22 +347,24 @@
     "GitHub-hosted runner Docker daemon, BuildKit/default Dockerfile frontend and docker-init: infrastructure trust, not auxiliary package assurance"
   ],
   "execution_sources": {
-    ".github/workflows/ci.yml": "16c47ef1041b540bdb93644a389ab78d221064cb1b0cb902c82843ed03e20125",
+    ".github/workflows/ci.yml": "b83fb8e4489ea6859fe83300699ceec75c95e8776c460c535c4410a7944c2740",
     ".github/workflows/codeql.yml": "8ece24cd09c5d8a0e2a378b5e5c6f812c8931fca3e7caebd71e9a2766d948612",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
     "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
+    "scripts/auxiliary_binary_evidence.py": "a56a9cf1a14377b3171bccbd5cb29f9e48b3e40012a5250caf569882dbf8cb0c",
     "scripts/build-tool-inventory.py": "7f25b130ee128a321564613f1e7ff8ec1f5e26c6e406f4ccad86008c6ec11c34",
+    "scripts/check-ryuk-cleanup.py": "3216869021134373c538c2d44d070edaa284dedd2c4929924fe3179c4cdd6b02",
     "scripts/historical-forward-restore-rehearsal.sh": "1b6f3241fdaa1bce83cae712f4128e9ebba408ad09e9ea4a5d5c188be3dce507",
     "scripts/record-docker-builder.sh": "751269ba6d5e422c4800c783b3deac8aa088b4c3c57b96e9a4ff5e79b428f6b7",
     "scripts/restore-rehearsal.sh": "d702b731fb363709d70c2fb30137f75c68c011ba7db2a04a99385a2870158ca7",
     "scripts/run-dev.sh": "d16cefda7b73d82550aecef27e25b9bb7a3361e81f7821fffd3a9735831576b7",
     "scripts/run-gosu-govulncheck.sh": "f2466620d3c3388db8b1af20da70076e4d1e522365c4596518b0e5bca17f4d4c",
-    "scripts/scan-auxiliary-containers.py": "ee8cdf50b6d2eec8b7f847da9ccf8bb9de755144f9b329a3fd360b4f39c4cfe5",
+    "scripts/scan-auxiliary-containers.py": "5d27d50b42ac1b782892ea1355296d29aa0dbbf50baa4095de9dd6c139098159",
     "scripts/scan-build-tools.py": "aa681f6ff7f1023bf838373ff53db822d24e855b10b50d6e3a8d944cefa80e7c",
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
-    "scripts/validate-auxiliary-containers.py": "eab8f0f346897c02614c90947e34548d2edcf0f73028cff15994c0233250d90d",
+    "scripts/validate-auxiliary-containers.py": "6a4c34ce14d2120440537e9f68dbc97d01b61ad75fb3543cedee4145c3706c15",
     "scripts/verify-runtime-append-only-integrity.sh": "2d8c3322c817a9d8d86eb37b0fad53b9b32d83b9bd53a4b9de8ec0f6b76a1447",
     "scripts/verify-trivy-provenance.py": "0f22b61da9f9922c8b9ca0f7b37f7d448096d6d561fe973454b7d187cacf9736",
     "src/test/java/com/company/shop/config/ProductionDatabaseReadinessPolicyLifecycleIT.java": "75c4e02383845403fb9a39f7b152f39374917d12f317acb1b4db4148729f4f19",
@@ -231,5 +374,20 @@
     "src/test/java/com/company/shop/persistence/migration/ProductReviewAuthorSnapshotMigrationIT.java": "e6a2d75068f678e704e29b277ab46023e0b4c39a2fc6aa9cc917d4f1d7032a81",
     "src/test/java/com/company/shop/persistence/migration/ProductionDatabaseIdentityIT.java": "6a4a1368d0402a3e4e27657a7aea8eff4a827fee925ac01fceef744e2865bdc8",
     "src/test/java/com/company/shop/persistence/support/PostgresContainerSupport.java": "e4207244b664c2ccb6c03f8fe0fb306ba578175a0fb2c320258787aefbefd5ea"
+  },
+  "tools": {
+    "upx": {
+      "version": "5.2.1",
+      "platform": "linux/amd64",
+      "classification": "isolated-evidence-transformer",
+      "url": "https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-amd64_linux.tar.xz",
+      "member": "upx-5.2.1-amd64_linux/upx",
+      "archive_sha256": "402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657",
+      "binary_sha256": "287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1",
+      "exceptions": [],
+      "provenance": "Official UPX release 377853905 asset 532383358 published SHA-256 plus reviewed executable hash. No signed upstream attestation established.",
+      "advisory_authority": "Maintainer review of official UPX NEWS/security issues for this pinned current release; Trivy does not inventory its static C++ libraries. Restricted parser boundary, no claim of complete native-library coverage.",
+      "capabilities": "Existing governed Go image; offline nonroot read-only rootfs, no socket/secrets/repository, copied input RO and only temporary payload output RW; all capabilities dropped, no-new-privileges and resource limits."
+    }
   }
 }

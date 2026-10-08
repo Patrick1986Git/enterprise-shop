@@ -2,6 +2,7 @@
 """Reviewed CI image census and fail-closed auxiliary advisory evidence policy."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -10,6 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+BINARY_SPEC = importlib.util.spec_from_file_location('auxiliary_binary_evidence', ROOT / 'scripts/auxiliary_binary_evidence.py')
+BINARY = importlib.util.module_from_spec(BINARY_SPEC)
+BINARY_SPEC.loader.exec_module(BINARY)
 CONTRACT = ROOT / '.github/security/auxiliary-container-scope.json'
 BLOCKING = {'HIGH', 'CRITICAL'}
 DIGEST = re.compile(r'^sha256:[0-9a-f]{64}$')
@@ -47,7 +51,7 @@ def execution_sources(root):
 
 
 def inventory(contract, root=ROOT):
-    require(contract['schema_version'] == 2 and contract['exceptions'] == [],
+    require(contract['schema_version'] == 3 and contract['exceptions'] == [],
             'No auxiliary exception or foreign policy is authorized')
     require(contract['execution_sources'] == execution_sources(root),
             'CI container execution source changed: review image census/classification and source receipts')
@@ -60,6 +64,12 @@ def inventory(contract, root=ROOT):
     require(contract['scanner_independent_integrity'] == 'upstream-github-attestation-and-executable-byte-match',
             'Self-scan cannot establish independent scanner integrity')
     require(contract['scanner_version'] == '0.75.0', 'Unreviewed scanner version')
+    tool = contract['tools']['upx']
+    require(tool['version'] == '5.2.1' and tool['platform'] == 'linux/amd64'
+            and tool['classification'] == 'isolated-evidence-transformer' and tool['exceptions'] == []
+            and tool['archive_sha256'] == '402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657'
+            and tool['binary_sha256'] == '287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1',
+            'Unreviewed evidence transformation tool')
     for name, image in images.items():
         require(IMAGE.fullmatch(image['reference']), f'{name}: readable tag and immutable registry digest required')
         require(image['platform'] == 'linux/amd64', f'{name}: linux/amd64 required')
@@ -72,6 +82,14 @@ def inventory(contract, root=ROOT):
         require(image.get('exceptions', []) == [], 'No image exception is authorized')
         require((image['package_mode'] == 'static-haskell') == (name == 'hadolint'),
                 'Only the reviewed Hadolint scratch executable has an empty static package boundary')
+        if image.get('evidence_transform'):
+            transform = image['evidence_transform']
+            require(image['governed'] and image['classification'] != 'fixture' and image['package_mode'] == 'gobinary'
+                    and re.fullmatch(r'/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+', image['identity']['binary'])
+                    and transform['method'] == 'upx-deterministic-go-readback'
+                    and transform['tool'] == tool and transform['analysis_image'] == images['govulncheck']['reference']
+                    and image['required_gobinaries'] == [image['identity']['binary'].lstrip('/')],
+                    'Unreviewed/fixture compressed binary path')
     require(images['fixture']['classification'] == 'fixture' and not images['fixture']['governed'],
             'The policy fixture cannot become a trusted execution image')
     ryuk = images['ryuk']['reference'].removeprefix('docker.io/')
@@ -91,6 +109,8 @@ def inventory(contract, root=ROOT):
                     'python scripts/validate-auxiliary-containers.py evidence',
                     "python -m unittest discover -s scripts/tests -p 'test_auxiliary_containers.py'"):
         require(command in job, 'Required auxiliary CI control disappeared: ' + command)
+    require("python -m unittest discover -s scripts/tests -p 'test_auxiliary_compressed_go.py'" in job,
+            'Compressed executable regression control disappeared')
     require('name: auxiliary-container-evidence' in job and 'retention-days: 14' in job
             and job.index('name: Upload auxiliary container evidence') < job.index('name: Enforce auxiliary HIGH and CRITICAL policy'),
             'Retain unfiltered evidence for 14 days before enforcing policy')
@@ -98,7 +118,7 @@ def inventory(contract, root=ROOT):
 
 
 def package_version(package):
-    version = package['Version']
+    version = package.get('Version', '')
     if package.get('Release'):
         version += '-' + package['Release']
     if package.get('Epoch'):
@@ -106,7 +126,7 @@ def package_version(package):
     return version
 
 
-def validate(image, evidence, report, bom, scanner_version):
+def validate(image, evidence, report, bom, scanner_version, directory=None):
     require(image['governed'] and image['classification'] != 'fixture', 'Fixture is not trusted execution evidence')
     require(evidence['reference'] == image['reference'] and evidence['platform'] == image['platform'],
             'Image source/platform identity mismatch')
@@ -124,14 +144,18 @@ def validate(image, evidence, report, bom, scanner_version):
     require(database['Version'] == 2 and datetime.fromisoformat(database['UpdatedAt'].replace('Z', '+00:00')) <= now
             and datetime.fromisoformat(database['NextUpdate'].replace('Z', '+00:00')) > now,
             'Malformed/stale database provenance')
-    require(report['SchemaVersion'] == 2 and report['ArtifactType'] == 'container_image'
+    transformed = bool(image.get('evidence_transform'))
+    main_module, receipt = BINARY.validate(image, evidence, report, bom, directory) if transformed else (None, None)
+    require(report['SchemaVersion'] == 2
+            and report['ArtifactType'] == ('filesystem' if transformed else 'container_image')
             and report['ArtifactName'] == evidence['artifact_name']
             and report['Trivy']['Version'] == scanner_version
-            and report['Metadata']['ImageID'] == evidence['image_id'], 'Malformed/wrong raw image evidence')
+            and (transformed or report['Metadata']['ImageID'] == evidence['image_id']), 'Malformed/wrong raw image evidence')
     require(bom['bomFormat'] == 'CycloneDX' and bom['specVersion'] == '1.7'
             and bom['metadata']['component']['name'] == evidence['artifact_name'], 'Malformed/wrong SBOM identity')
     properties = bom['metadata']['component'].get('properties', [])
-    require([p['value'] for p in properties if p['name'] == 'aquasecurity:trivy:ImageID'] == [evidence['image_id']],
+    require([p['value'] for p in properties if p['name'] == 'aquasecurity:trivy:ImageID']
+            == ([] if transformed else [evidence['image_id']]),
             'SBOM/image identity mismatch')
     results = report.get('Results', [])
     require(isinstance(results, list), 'Malformed raw results')
@@ -147,7 +171,10 @@ def validate(image, evidence, report, bom, scanner_version):
         targets[result['Target']] = packages
         identities = {(p['Name'], package_version(p)) for p in packages}
         for package in packages:
-            require(package['Name'] and package['Version'] and package['Identifier']['PURL'], 'Malformed package identity')
+            # An unversioned root module is valid only when the measured binary explicitly embeds (devel).
+            require(package['Name'] and (package.get('Version') or
+                    (transformed and package['Name'] == main_module and package.get('Relationship') == 'root'))
+                    and package['Identifier']['PURL'], 'Malformed package identity')
             raw_purls.add(package['Identifier']['PURL'])
         if result['Class'] == 'os-pkgs':
             require(not observed_os, 'Ambiguous OS inventory')
@@ -182,7 +209,8 @@ def validate(image, evidence, report, bom, scanner_version):
     return {'reference': image['reference'], 'platform': image['platform'], 'image_id': evidence['image_id'],
             'resolved_digest': evidence['resolved_digest'], 'blocked': blocked, 'exceptions': [],
             'threshold': ['HIGH', 'CRITICAL'], 'package_count': len(raw_purls),
-            'independent_scanner_integrity': False, 'package_mode': image['package_mode']}
+            'independent_scanner_integrity': False, 'package_mode': image['package_mode'],
+            'readback_complete': True, 'transformation': receipt}
 
 
 def evaluate(directory):
@@ -203,7 +231,7 @@ def evaluate(directory):
         try:
             item = directory / name
             results['images'][name] = validate(image, read(item / 'identity.json'), read(item / 'raw.json'),
-                                              read(item / 'sbom.cdx.json'), contract['scanner_version'])
+                                              read(item / 'sbom.cdx.json'), contract['scanner_version'], item)
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             results['errors'][name] = str(error)
     write(directory / 'policy-result.json', results)
