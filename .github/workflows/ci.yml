@@ -467,6 +467,22 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
 
+      - name: Prove unpublished Ryuk candidate build
+        run: python scripts/build-ryuk-candidate.py
+
+      - name: Upload unpublished Ryuk candidate proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ryuk-candidate-build-proof
+          path: |
+            .tmp/ryuk-candidate/**
+            !.tmp/ryuk-candidate/image.tar
+            !.tmp/ryuk-candidate/layer.tar
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Validate auxiliary container inventory
         run: |
           python scripts/validate-auxiliary-containers.py inventory

@@ -347,13 +347,14 @@
     "GitHub-hosted runner Docker daemon, BuildKit/default Dockerfile frontend and docker-init: infrastructure trust, not auxiliary package assurance"
   ],
   "execution_sources": {
-    ".github/workflows/ci.yml": "b83fb8e4489ea6859fe83300699ceec75c95e8776c460c535c4410a7944c2740",
+    ".github/workflows/ci.yml": "3c76234b9f2b23069b15ae4461d6591abfcac1b8847be21afa8db733c62b40f5",
     ".github/workflows/codeql.yml": "8ece24cd09c5d8a0e2a378b5e5c6f812c8931fca3e7caebd71e9a2766d948612",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
     "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
     "scripts/auxiliary_binary_evidence.py": "a56a9cf1a14377b3171bccbd5cb29f9e48b3e40012a5250caf569882dbf8cb0c",
+    "scripts/build-ryuk-candidate.py": "d1ac9419ea781c9bb412aef399a376a9a49763d0340d0b5f873b4d2c1baa3658",
     "scripts/build-tool-inventory.py": "7f25b130ee128a321564613f1e7ff8ec1f5e26c6e406f4ccad86008c6ec11c34",
     "scripts/check-ryuk-cleanup.py": "3216869021134373c538c2d44d070edaa284dedd2c4929924fe3179c4cdd6b02",
     "scripts/historical-forward-restore-rehearsal.sh": "1b6f3241fdaa1bce83cae712f4128e9ebba408ad09e9ea4a5d5c188be3dce507",
