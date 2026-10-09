@@ -49,7 +49,7 @@ class BuildToolExecutionScopeTest(unittest.TestCase):
     def result(self, coordinate, scope=None):
         identity = INVENTORY.purl(coordinate)
         group, name, _, _, version = coordinate.split(':')
-        report = {'SchemaVersion': 2, 'ArtifactType': 'cyclonedx', 'Trivy': {'Version': '0.72.0'},
+        report = {'SchemaVersion': 2, 'ArtifactType': 'cyclonedx', 'Trivy': {'Version': '0.75.0'},
                   'Results': [{'Class': 'lang-pkgs', 'Type': 'jar', 'Packages': [
                       {'Name': x['group'] + ':' + x['name'], 'Version': x['version'],
                        'Identifier': {'PURL': x['purl']}} for x in self.document['components']],
