@@ -35,6 +35,18 @@ requires real extraction, query execution and SARIF processing on the exact fina
 HEAD for both languages, plus every existing CI/application/security gate. Finding
 counts are review evidence; they are not a guarantee of vulnerability absence.
 
+The temporary required-status migration fixtures use an independent literal
+eight-context expectation, exercise all 256 subsets and accept only the exact
+reviewed old seven or intended eight with GitHub Actions integration `15368`.
+Python rename/duplicate/untrusted integration and all existing protection controls
+remain negative cases. This temporary acceptance must be tightened to eight after
+the coordinated live change; it is not final merge acceptance. See the
+[protected-master sequence](../operations/container-security.md#required-python-status-migration-temporary-preparation).
+Run `python -m unittest scripts.tests.test_validate_master_protection` offline.
+The compressed Go suite additionally verifies the actual OCI provenance caller,
+fixed HTTPS request hosts/scope and adversarial delimiters with network mocked:
+`python -m unittest scripts.tests.test_auxiliary_compressed_go`.
+
 - Java 21.
 - Maven Wrapper is present and should be used for repeatable local/CI commands.
 - CI runs `./mvnw -B clean verify`.

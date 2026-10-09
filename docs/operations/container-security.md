@@ -62,12 +62,79 @@ tools, native Haskell/C++ binaries, registries, compilers or hosted runner/daemo
 infrastructure. Maven, Trivy, govulncheck and existing integrity policies continue
 to cover their reviewed supply-chain boundaries.
 
-The active master ruleset currently requires `Analyze Java/Kotlin` but does not
-require `Analyze Python`. Maintainers must separately decide to add the exact
-`Analyze Python` status from GitHub Actions (integration ID 15368). The live
-protection validator intentionally checks the current exact required-status set;
-that reviewed contract and its offline fixtures must be updated together with any
-maintainer-side ruleset change. This PR does not change administrative settings.
+### Required Python status migration: temporary preparation
+
+Ruleset `Protect master` (`20755388`) currently requires the exact seven contexts
+`build`, `docker-validation`, `container-security`, `Analyze Java/Kotlin`,
+`dependency-review`, `restore-pr-scope` and `restore-rehearsal`, all from GitHub
+Actions integration `15368`. `Analyze Python` is independently successful but is
+not currently required. The intended final contract adds that exact context and
+retains all seven existing checks, strict up-to-date status validation, review
+thread resolution and the current bypass policy.
+
+This draft contains a temporary validator accepting only the exact old seven or
+the exact intended eight, with identical trusted integration IDs in both states.
+Every other subset, added/renamed/duplicated context or untrusted integration fails.
+This is preparation, not the permanent policy or a merge-ready migration. The
+seven-check alternative must be removed before this draft is accepted as final.
+
+The current protected-master source still requires exactly seven. Installing the
+ruleset's eighth check now would cause a master CI rerun to fail its existing
+validator. Conversely, merging a strict-eight validator before the live change
+would fail the new master's live check. A transition only on the PR branch does
+not resolve that protected-master sequencing constraint.
+
+For a migration that preserves successful master validation throughout:
+
+1. A maintainer must first arrange a separately reviewed minimal bootstrap of the
+   exact seven/eight transition validator and its tests on protected master, and
+   verify that master's CI accepts the unchanged seven-check live ruleset. This
+   requires an explicit exception to keeping every change solely in draft PR
+   #467; this task does not create another branch/PR, update master or merge.
+2. Only after that compatible master revision is verified may the maintainer add
+   exactly `Analyze Python`, GitHub Actions integration ID `15368`, to ruleset
+   `20755388`. Preserve all seven existing contexts and every other rule. Confirm
+   the live eight-check representation and the bootstrap master's policy check.
+3. Continue in PR #467: incorporate that exact protected base, remove the temporary
+   seven-check acceptance, make fixtures/regressions/documentation enforce exactly
+   eight, and rerun all final-head CI and both CodeQL jobs before maintainer review.
+
+Under the original single-PR/no-merge constraints alone, there is no atomic change
+covering GitHub administration and the validator on two Git revisions. A brief
+master-validator incompatibility window would require a separate explicit
+maintainer decision; it is not silently accepted here. Do not add the eighth
+status merely because the draft's temporary validator is green. No administrative
+settings are changed by this draft.
+
+### OCI provenance finding and tested trust boundary
+
+`py/incomplete-url-substring-sanitization` reports the registry prefix check in
+`auxiliary_binary_evidence.provenance`. This helper is not a parser for arbitrary
+untrusted references: an isolated caller can inject token query parameters using
+an otherwise Docker-prefixed repository string. The actual collector calls
+`validate-auxiliary-containers.inventory` first. Its official comparison check
+requires `docker.io/testcontainers/ryuk:0.14.0@sha256:`; unlike ordinary inventory
+images, this comparison uses that fixed prefix rather than the generic `IMAGE`
+regex. Thus `removeprefix('docker.io/').split(':', 1)[0]` is necessarily the exact
+`testcontainers/ryuk` repository. Registry, namespace and tag changes or delimiters
+before the tag fail that real caller boundary before any provenance request.
+
+Malformed tails after the fixed tag cannot change the repository/authentication
+scope or fixed HTTPS authentication and registry hosts. This is not a claim that
+the prefix validates all OCI syntax. Collection verifies pulled/platform image
+identity and actual index/manifest/configuration bytes; retained evidence binds
+the measured index digest to the reference. Provenance manifest/blob responses
+must match their reviewed SHA-256 values and source/subject relationships.
+
+Seven deterministic mocked-network regressions exercise actual census rejection,
+misleading registries, credentials, query/fragment/encoded delimiters, path
+components, malformed digest tails, all three request URLs and exact read-only
+token scope, response integrity and the isolated-helper counterexample. Within
+the reviewed caller/data flow the CodeQL finding is not exploitable by these
+inputs, so no speculative production correction is made. The finding remains
+visible for explicit maintainer triage, with no suppression, downgrade or automatic
+dismissal. Altering reviewed repository code/inventory, upstream HTTPS redirects,
+or the external registry itself remains a separate trust boundary.
 
 ## Auxiliary execution images
 

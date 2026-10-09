@@ -18,10 +18,13 @@ REQUIRED_CHECKS = {
     "docker-validation",
     "container-security",
     "Analyze Java/Kotlin",
+    "Analyze Python",
     "dependency-review",
     "restore-pr-scope",
     "restore-rehearsal",
 }
+# Temporary migration only: remove this set after the live eight-check change.
+PYTHON_TRANSITION_CHECKS = REQUIRED_CHECKS - {"Analyze Python"}
 ALLOWED_MERGE_METHODS = {"merge", "squash", "rebase"}
 
 
@@ -141,9 +144,10 @@ def validate_ruleset_detail(payload):
             if context in observed:
                 errors.append(f"duplicate required check context {context!r}")
             observed[context] = check.get("integration_id")
-        if set(observed) != REQUIRED_CHECKS:
+        if set(observed) not in (PYTHON_TRANSITION_CHECKS, REQUIRED_CHECKS):
             errors.append(
-                f"required check contexts must be exactly {sorted(REQUIRED_CHECKS)!r}, "
+                "required check contexts must be exactly the reviewed temporary seven "
+                f"{sorted(PYTHON_TRANSITION_CHECKS)!r} or intended eight {sorted(REQUIRED_CHECKS)!r}, "
                 f"got {sorted(observed)!r}"
             )
         for context, integration_id in observed.items():

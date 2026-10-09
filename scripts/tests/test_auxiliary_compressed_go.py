@@ -2,12 +2,15 @@
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 import struct
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).parents[2]
 SPEC = importlib.util.spec_from_file_location('policy', ROOT / 'scripts/validate-auxiliary-containers.py')
@@ -276,6 +279,109 @@ class CompressedGoEvidenceTest(unittest.TestCase):
         self.put_json('upstream-provenance.json', statement)
         self.transform['upstream_provenance']['statement_digest'] = 'sha256:' + self.digest('upstream-provenance.json')
         with self.assertRaisesRegex(ValueError, 'provenance/source mismatch'): self.validate()
+
+    def provenance_responses(self):
+        return [io.BytesIO(json.dumps({'token': 'offline-registry-token'}).encode()),
+                io.BytesIO((self.directory / 'upstream-provenance-manifest.json').read_bytes()),
+                io.BytesIO((self.directory / 'upstream-provenance.json').read_bytes())]
+
+    def assert_provenance_requests(self, network):
+        self.assertEqual(3, network.call_count)
+        token_url = urlsplit(network.call_args_list[0].args[0])
+        self.assertEqual(('https', 'auth.docker.io', '/token', ''),
+                         (token_url.scheme, token_url.netloc, token_url.path, token_url.fragment))
+        self.assertEqual({'service': ['registry.docker.io'],
+                          'scope': ['repository:testcontainers/ryuk:pull']}, parse_qs(token_url.query))
+        authority = self.transform['upstream_provenance']
+        for call, suffix in zip(network.call_args_list[1:],
+                ('manifests/' + authority['manifest_digest'], 'blobs/' + authority['statement_digest'])):
+            request = call.args[0]
+            url = urlsplit(request.full_url)
+            self.assertEqual(('https', 'registry-1.docker.io', '/v2/testcontainers/ryuk/' + suffix, '', ''),
+                             (url.scheme, url.netloc, url.path, url.query, url.fragment))
+            self.assertEqual('Bearer offline-registry-token', request.get_header('Authorization'))
+
+    def test_reviewed_provenance_requests_keep_exact_https_hosts_scope_and_digests(self):
+        with patch.object(BINARY.urllib.request, 'urlopen', side_effect=self.provenance_responses()) as network:
+            BINARY.provenance(self.transform, self.directory, self.image)
+            self.assert_provenance_requests(network)
+
+    def test_misleading_registry_forms_fail_before_authentication(self):
+        for reference in ('evil.example/docker.io/testcontainers/ryuk:0.14.0',
+                          'docker.io.evil.example/testcontainers/ryuk:0.14.0',
+                          'docker.io@evil.example/testcontainers/ryuk:0.14.0',
+                          'https://docker.io/testcontainers/ryuk:0.14.0',
+                          'https://docker.io@evil.example/testcontainers/ryuk:0.14.0',
+                          '//docker.io/testcontainers/ryuk:0.14.0',
+                          'ghcr.io/testcontainers/ryuk:0.14.0',
+                          '\ndocker.io/testcontainers/ryuk:0.14.0'):
+            with self.subTest(reference=reference), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(ValueError, 'Unreviewed provenance registry'):
+                    BINARY.provenance(self.transform, self.directory, {'reference': reference})
+                network.assert_not_called()
+
+    def test_actual_comparison_census_rejects_repository_tag_and_delimiter_changes(self):
+        reviewed = POLICY.read(POLICY.CONTRACT)
+        suffix = reviewed['comparisons']['official_ryuk']['reference'].split('@', 1)[1]
+        for prefix in ('docker.io/evil/ryuk:0.14.0', 'docker.io/testcontainers/ryuk:latest',
+                       'docker.io/user:password@testcontainers/ryuk:0.14.0',
+                       'docker.io/testcontainers/../evil:0.14.0',
+                       'docker.io/testcontainers//ryuk:0.14.0',
+                       'docker.io/testcontainers/%2e%2e/evil:0.14.0',
+                       'docker.io/testcontainers/ryuk?scope=repository:evil:pull',
+                       'docker.io/testcontainers/ryuk&scope=repository:evil:pull',
+                       'docker.io/testcontainers/ryuk#fragment:0.14.0',
+                       'docker.io/testcontainers/ryuk%26scope=evil:0.14.0',
+                       'docker.io/testcontainers/ryuk\\evil:0.14.0'):
+            contract = copy.deepcopy(reviewed)
+            contract['comparisons']['official_ryuk']['reference'] = prefix + '@' + suffix
+            with self.subTest(prefix=prefix), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
+                    POLICY.inventory(contract)
+                network.assert_not_called()
+
+    def test_suffix_delimiters_cannot_modify_repository_authentication_scope_or_request_hosts(self):
+        # The comparison census pins everything through the first tag colon.
+        # Even malformed tails accepted by that prefix cannot affect these URLs.
+        for suffix in ('?scope=repository:evil:pull', '&scope=repository:evil:pull', '#fragment',
+                       '/../../evil', '@evil.example', '%2f..%2f', '\\evil', '\n'):
+            image = copy.deepcopy(self.image)
+            image['reference'] += suffix
+            with self.subTest(suffix=suffix), patch.object(BINARY.urllib.request, 'urlopen',
+                    side_effect=self.provenance_responses()) as network:
+                BINARY.provenance(self.transform, self.directory, image)
+                self.assert_provenance_requests(network)
+
+    def test_changed_or_malformed_image_digest_fails_measured_identity(self):
+        reference = self.image['reference']
+        for tail in ('0' * 64, reference.split(':')[-1] + '?scope=evil',
+                     reference.split(':')[-1] + '#fragment', reference.split(':')[-1] + '/..'):
+            self.image['reference'] = 'docker.io/testcontainers/ryuk:0.14.0@sha256:' + tail
+            self.evidence['reference'] = self.image['reference']
+            self.receipt['executed_image'] = self.image['reference']
+            with self.subTest(tail=tail), self.assertRaisesRegex(ValueError, 'registry index/platform manifest'):
+                self.validate()
+
+    def test_provenance_response_digest_mismatch_fails_before_statement_request(self):
+        responses = [io.BytesIO(b'{"token":"offline-registry-token"}'), io.BytesIO(b'{"layers":[]}')]
+        with patch.object(BINARY.urllib.request, 'urlopen', side_effect=responses) as network:
+            with self.assertRaisesRegex(ValueError, 'Upstream provenance digest mismatch'):
+                BINARY.provenance(self.transform, self.directory, self.image)
+            self.assertEqual(2, network.call_count)
+
+    def test_isolated_helper_is_not_an_untrusted_reference_parser_and_real_caller_rejects_scope_input(self):
+        reference = 'docker.io/testcontainers/ryuk&scope=repository:evil:pull@sha256:' + '0' * 64
+        with patch.object(BINARY.urllib.request, 'urlopen', side_effect=RuntimeError('offline stop')) as network:
+            with self.assertRaisesRegex(RuntimeError, 'offline stop'):
+                BINARY.provenance(self.transform, self.directory, {'reference': reference})
+            query = parse_qs(urlsplit(network.call_args.args[0]).query)
+            self.assertNotEqual(['repository:testcontainers/ryuk:pull'], query['scope'])
+        contract = POLICY.read(POLICY.CONTRACT)
+        contract['comparisons']['official_ryuk']['reference'] = reference
+        with patch.object(BINARY.urllib.request, 'urlopen') as network:
+            with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
+                POLICY.inventory(contract)
+            network.assert_not_called()
 
 
 if __name__ == '__main__':
