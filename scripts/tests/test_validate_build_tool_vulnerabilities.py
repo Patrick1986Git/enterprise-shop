@@ -14,7 +14,7 @@ FIXTURES = Path(__file__).parent / 'fixtures/build-tool-sbom'
 def evidence(document, severity=None):
     item = document['components'][0]
     identity = item['purl']
-    value = {'SchemaVersion': 2, 'ArtifactType': 'cyclonedx', 'Trivy': {'Version': '0.72.0'},
+    value = {'SchemaVersion': 2, 'ArtifactType': 'cyclonedx', 'Trivy': {'Version': '0.75.0'},
              'Results': [{'Class': 'lang-pkgs', 'Type': 'jar', 'Packages': [
                  {'Name': item['group'] + ':' + item['name'], 'Version': item['version'],
                   'Identifier': {'PURL': identity}}]}]}

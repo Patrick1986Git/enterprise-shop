@@ -87,6 +87,9 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Build reviewed unpublished Ryuk candidate
+        run: python scripts/build-ryuk-candidate.py
+
       - name: Run Maven verify
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
@@ -105,11 +108,26 @@ jobs:
               exit 1
             }
           tail -n 12 "${evidence}/verify.log"
+          python scripts/check-ryuk-cleanup.py
           # Observe Docker's dependency:go-offline and any newly required Maven goal.
           python scripts/build-tool-inventory.py observe-commands || {
               tail -n 80 "${evidence}/docker.log"
               exit 1
             }
+
+      - name: Upload Ryuk compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ryuk-compatibility-evidence
+          path: |
+            target/ryuk-compatibility/**
+            .tmp/ryuk-compatibility/**
+            .tmp/ryuk-candidate/build-receipt.json
+            target/failsafe-reports/TEST-*RyukExecutionIT.xml
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Checkout protected-master OpenAPI baseline source
         if: github.event_name == 'pull_request'
@@ -433,14 +451,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      # Official Docker Hub Hadolint v2.14.0 Alpine multi-platform OCI index; linux/amd64 child: sha256:be27962427a85de242820cb710a374478cce9bfb534a2c07e4fa54741d98908f.
-      HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0-alpine@sha256:7aba693c1442eb31c0b015c129697cb3b6cb7da589d85c7562f9deb435a6657c
-      # Trivy v0.72.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.72.0 image digest.
-      TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
-      # Official Docker Hub Go 1.25.7 Bookworm multi-platform OCI index; linux/amd64 child: sha256:58259daf0a27c150118663ef7452aa94d66a86d55e73b3443386146623f5364d.
-      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1
+      # Same reviewed Hadolint executable in the upstream scratch variant; removes vulnerable Alpine packages.
+      HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
+      # Trivy v0.75.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.75.0 image digest.
+      TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+      # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
+      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3
       # Human-readable gosu release tag; CI verifies that it resolves to the pinned immutable commit before govulncheck.
       GOSU_SOURCE_TAG: "1.19"
       GOSU_SOURCE_COMMIT: 6456aaa0f3c854d199d0f037f068eb97515b7513
@@ -451,6 +470,29 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
+
+      - name: Prove unpublished Ryuk candidate build
+        run: python scripts/build-ryuk-candidate.py
+
+      - name: Upload unpublished Ryuk candidate proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ryuk-candidate-build-proof
+          path: |
+            .tmp/ryuk-candidate/**
+            !.tmp/ryuk-candidate/image.tar
+            !.tmp/ryuk-candidate/layer.tar
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Validate auxiliary container inventory
+        run: |
+          python scripts/validate-auxiliary-containers.py inventory
+          python -m unittest discover -s scripts/tests -p 'test_auxiliary_containers.py'
+          python -m unittest discover -s scripts/tests -p 'test_auxiliary_compressed_go.py'
+          python -m unittest discover -s scripts/tests -p 'test_ryuk_candidate*.py'
 
       - name: Validate pinned container tool references
         run: |
@@ -475,15 +517,22 @@ jobs:
           validate_linux_amd64_image "${TRIVY_IMAGE}"
           validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
           validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
+          docker image inspect "${RYUK_IMAGE}" >/dev/null
+          validate_linux_amd64_image "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"
 
           docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
-          docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.72.0'
-          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.25.7 linux/amd64'
+          docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.75.0'
+          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.8 linux/amd64'
           docker run --rm --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}" cat /etc/alpine-release | grep -E '^3\.20\.'
+
+      - name: Verify upstream Trivy executable provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/verify-trivy-provenance.py
 
       - name: Lint Dockerfiles with Hadolint
         run: |
-          docker run --rm --platform linux/amd64 \
+          docker run --rm --platform linux/amd64 --network none \
             -v "${PWD}:/workspace:ro" \
             -w /workspace \
             "${HADOLINT_IMAGE}" \
@@ -550,6 +599,11 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
+
+      - name: Collect auxiliary image vulnerability and SBOM evidence
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/scan-auxiliary-containers.py
 
       - name: Verify application runtime Java version
         run: |
@@ -660,8 +714,8 @@ jobs:
           test -f version.go
           grep -F 'const Version = "1.19"' version.go
 
-          GOLANG_IMAGE="${GOSU_GOVULNCHECK_IMAGE}" \
-            ./govulncheck-with-excludes.sh ./...
+          cd ../..
+          bash scripts/run-gosu-govulncheck.sh
 
       - name: Test component-aware vulnerability policy
         run: python -m unittest discover -s scripts/tests -p 'test_*.py'
@@ -698,6 +752,32 @@ jobs:
             -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
             -w /workspace \
             "${TRIVY_IMAGE}" image --scanners vuln --severity CRITICAL --exit-code 1 --format table --ignorefile .trivyignore.yaml --show-suppressed enterprise-shop/postgres:ci
+
+      - name: Upload auxiliary container evidence before policy
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auxiliary-container-evidence
+          path: |
+            .tmp/container-security/auxiliary/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce auxiliary HIGH and CRITICAL policy
+        run: python scripts/validate-auxiliary-containers.py evidence
+
+      - name: Upload auxiliary container policy decision
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auxiliary-container-policy-result
+          path: |
+            .tmp/container-security/auxiliary/policy-result.json
+            .tmp/container-security/gosu/*.txt
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
   deploy-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'

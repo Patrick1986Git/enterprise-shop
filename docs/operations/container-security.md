@@ -1,5 +1,71 @@
 # Container supply-chain security validation
 
+## Auxiliary execution images
+
+The authoritative [auxiliary inventory](../../.github/security/auxiliary-container-scope.json) records exact tags/digests, registries, linux/amd64, executable byte/version identities, commands, mounts, Docker-socket/network capabilities, inputs, code execution, update/advisory owners, SBOM coverage and classifications. Whole-source SHA-256 receipts cover workflow, Docker/Compose, shell/Python Docker orchestration and Java Testcontainers image surfaces. New surfaces and changes to existing ones fail inventory validation until the image census/classification and source receipts are deliberately reviewed. This is a review boundary for those sources, not a complete interpreter of arbitrary downloaded or dynamically generated code.
+
+| Image | Capability and owned advisory boundary |
+| --- | --- |
+| Hadolint v2.14.0 scratch | Parses candidate Dockerfiles with repository read-only access and networking disabled. No OS packages. Its static Haskell executable/dependency graph is not represented by Trivy; upstream Hadolint/Haskell advisory review remains necessary. |
+| Trivy 0.75.0 | Security authority with Docker-socket access in existing image scans and writable evidence/cache. Auxiliary scans use read-only exported archives without a socket. OS/Go-package self-scan is advisory visibility, not independent scanner integrity proof. |
+| Go 1.26.8 Alpine 3.24 | Installs and executes govulncheck v1.1.4 against pinned gosu source; read-only source, writable named cache, Go-service networking, no socket. Results control PostgreSQL exception applicability. OS/Go-toolchain package findings block at HIGH/CRITICAL. |
+| Alpine 3.20 fixture | Immutable target for Trivy ignorefile/configuration regression plus release-identity probe; no analysis authority or candidate-code execution. End-of-life, with no current audit findings. It is mechanically excluded from trusted execution evidence and supplies no exception authority. Its role does not require deliberate vulnerabilities. |
+| Rebuilt Ryuk 0.14.0 candidate | Runner-local scratch reaper, exact release source plus reviewed Moby client/API migration, Go 1.26.8 and unchanged cleanup algorithm. Content-addressed configuration, repeat executable builds, direct raw/SBOM, source/binary govulncheck, socket/execution/cleanup assertions. No CVE exceptions. |
+
+Ryuk's [0.14.0 release](https://github.com/testcontainers/moby-ryuk/releases/tag/0.14.0), source commit `b3726afd6cc2c36628abcc08e9cabac43f587384`, introduced UPX compression. Its exact Linux Dockerfile uses Go 1.23/Alpine 3.22, `CGO_ENABLED=0`, `go build -a -installsuffix cgo -ldflags="-w -s" -trimpath`, then `upx --best --lzma`; scratch contains only the executable and CA certificates. The 0.13.0 comparison changes Dockerfiles only and does not justify a downgrade. Recovery measures Go **1.23.12**, main module `github.com/testcontainers/moby-ryuk` at `(devel)` with no embedded VCS revision, and **19 embedded dependencies**. Their versions and h1 sums must match exact upstream go.mod/go.sum; source files corroborate binary metadata rather than replacing it.
+
+The inventory's schema 3 `evidence_transform` expresses a measured compressed Go path. The official comparison image remains `docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0`, amd64 manifest `sha256:f0456560ea5b4acdbed0da0efc33b5f9dd6bc1e59f2337106826dcb5b0b0e981`, config `sha256:9a5f93e8f9300530b91866bcf41c0b8a5d72f0e5a7b4365167a48df9816cd36e`. Registry index/manifest bytes, saved configuration and every uncompressed scratch layer are hashed before reading the filesystem. Compressed `/bin/ryuk` SHA-256 is `5aa022d7dcdc90eb4072a44b6f54b9b62d5fbd126de320cd56e04db4938e4e38`; its marker identifies UPX **5.02**. Mandatory UPX `-t`, two independent `-d -o` outputs and Linux/amd64 ELF checks establish deterministic decompressed SHA-256 `54b194bbf7e39ffc7faf132ccf7dc694a409a4db3c1cfb9a889299827078fae8`. Original archived bytes remain available for comparison. Evidence collection never executes the recovered payload.
+
+Official UPX **5.2.1** linux/amd64 release asset is pinned to archive SHA-256 `402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657` and executable SHA-256 `287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1`. Published release checksum and reviewed bytes establish integrity; no signed UPX build provenance was established. This new tool has an explicit `isolated-evidence-transformer` census entry and manual maintainer ownership of upstream UPX NEWS/security issues. Trivy does not inventory its static C++ libraries, so complete native-library advisory coverage is not claimed. It runs in the existing governed Go image with no network/socket/secrets/repository mount, nonroot user, read-only rootfs/input/tool, only temporary payload output writable, dropped capabilities, no-new-privileges and resource limits. It does not become another vulnerability authority.
+
+The decompressed file is mounted read-only as `/analysis/bin/ryuk` for the same pinned Trivy 0.75.0 `rootfs` authority. Raw `ArtifactType=filesystem` and SBOM `/analysis` identity distinguish it from a production container. Both executable identities, the reviewed transformation/tool/source receipts, raw/SBOM hashes and exact compiler/module readback are required at enforcement. The 21 recovered PURLs comprise 19 dependencies, stdlib and the unversioned `(devel)` root module. That root's absence of a release version is explicit binary evidence, not a package exception. The original compressed image's zero-package report is retained separately and cannot pass as clean. Initial measured analysis on 2026-10-08 finds **23 HIGH and 1 CRITICAL**; authoritative current hosted evidence decides the gate. There are zero exceptions. Comparison readback does not accept those advisories or become the rebuilt candidate’s security result.
+
+Pinned govulncheck v1.1.4 also analyzes the exact recovered binary in binary mode with `GOVERSION=go1.23.12`. Its JSON, stderr and status are retained; analyzer/database errors block. Findings exit status 3 remains evidence, not an exemption. Binary analysis of a stripped executable cannot prove source-level call-path reachability, configuration, or applicability. Package/version HIGH/CRITICAL findings remain authoritative even if govulncheck reports fewer reachable symbols.
+
+The pinned OCI index includes an unsigned SLSA v0.2 BuildKit statement, layer `sha256:e101a7504012f07ce2375a5d18ebc748525019bd013d42830db9c62dbb2bb4e5`, under attestation manifest `sha256:df604959c6dcf62c3e5d87ed85ec9cfae1ca0c3a846c143f5919ad564ae14c73`. Its subject is the exact amd64 digest, VCS metadata names the reviewed source commit/repository, and builder claims [official release run 18032732627](https://github.com/testcontainers/moby-ryuk/actions/runs/18032732627), independently observed successful at that commit. Collector retains and verifies digest/subject/source relationships. This strengthens source corroboration but does not verify a signed workflow/builder identity; the statement declares incomplete materials and `reproducible=false`. No controlled rebuild is needed to recover package identities, and byte-identical source-to-binary reproduction is not claimed.
+
+### Reviewed unpublished Ryuk rebuild
+
+The [candidate receipt](../../.github/security/ryuk/candidate.json) and [production patch](../../.github/security/ryuk/moby-client.patch) select the exact official 0.14.0 commit and SHA-256-verified codeload archive. No post-release upstream commits are included. Current main at `84f4ff002cee21da147748b986d393f2e5d79345` still uses legacy Docker `v28.5.2+incompatible`; its merged Go change `cefd12788475f37b4dcfc0866708a224a29fabe5` independently supports the maintained Go 1.26 build line. Taking main wholesale would also include unrelated workflow, test-dependency and lint changes. The rebuild keeps release application logic and uses a focused dependency/API migration instead. The production patch changes only interfaces, client calls and dependency files. Repository PostgreSQL/Testcontainers integration tests validate candidate execution and cleanup.
+
+Candidate validation selects upstream `Test_loadConfig` and all fourteen mocked `Test_newReaper_Run` scenarios into an isolated test overlay, adapting only Moby API types, result wrappers and negotiated Ping expectations. This covers session-label filters, all four resource list/remove paths, changed-resource waiting, not-found handling and list/remove failures. Four focused contract cases additionally check negotiated Ping failure, filter order/deduplication, cleanup sequencing/options and transient removal retry. Tests use the same immutable Go builder, reviewed release go.sum checksums and readonly module resolution, with no external network or Docker socket during execution. Test source hashes, exact passed test names and JSON output/status are required evidence. Test-only module additions do not change production source, embedded dependencies or image bytes.
+
+Upstream daemon-backed `Test_newReaper`, `TestReapContainer`, `TestReapNetwork`, `TestReapVolume` and `TestReapImage` are not ported: they require the removed legacy API, arbitrary Alpine pulls and Docker image-build/archive APIs outside Ryuk's execution contract. Abort/shutdown timing tests are outside this focused migration subset. The mocked scenarios and repository's actual PostgreSQL/Testcontainers/post-JVM cleanup checks remain complementary; complete upstream Docker-resource integration coverage is not claimed. Local preparation and validated reuse are documented in [local development](local-development.md#maven-and-testcontainers-verification).
+
+All starting Trivy advisory IDs, severities and published fixed versions are recorded in [comparison advisories](../../.github/security/ryuk/official-0.14.0-advisories.json); the separate binary govulncheck advisory inventory records module ranges. The 21 HIGH stdlib findings require at least Go 1.26.6; CRITICAL CVE-2025-68121 was already fixed on the 1.26 release line. The selected immutable `golang:1.26.8-alpine3.24` builder is the current maintained 1.26 patch already governed for OS/compiler advisories. `CGO_ENABLED=0`, linux/amd64/v1, `-a -installsuffix cgo -ldflags="-w -s" -trimpath` remain; `-mod=readonly -buildvcs=false` prevents graph changes and location-dependent VCS metadata. Two builds must produce identical bytes.
+
+Current public legacy versions end at Docker 28.5.2. Reviewed Go advisories [GO-2026-5746](https://pkg.go.dev/vuln/GO-2026-5746) / CVE-2026-41567 and [GO-2026-5617](https://pkg.go.dev/vuln/GO-2026-5617) / CVE-2026-42306 have no fixed legacy module version. Their daemon functions are `Daemon.containerExtractToDir` (archive upload/host execution) and `Daemon.openContainerFS` (docker-cp bind-mount redirection). The engine module `github.com/moby/moby/v2` is fixed from `v2.0.0-beta.14`, but Ryuk requires neither that engine nor its daemon. The supported split modules `github.com/moby/moby/client v0.6.1` and `github.com/moby/moby/api v1.56.1` replace the monolithic dependency; both require Go 1.24 or newer. These are current public module releases, not a private replacement of Docker.
+
+The migration preserves session-label filter JSON, list/remove routes, container force/volume removal, image prune-child options and error handling. List response wrappers expose Items; client option types replace API option types; negotiated Ping handles API negotiation. The supported client’s minimum API is 1.40, compatible with the repository’s maintained Docker runners. The exact 19 embedded module versions/h1 checksums are inventoried, including updated docker/go-connections, image-spec and OpenTelemetry dependencies. The source dependency graph must match every embedded dependency and must contain no legacy Docker or Moby daemon module/package. Current govulncheck v1.8.0 analyzes the exact patched production main in source mode and the resulting binary; both must have zero findings, correct Go/module identity, tool version/checksum and retained statuses. No non-applicability mechanism is installed: every HIGH/CRITICAL still blocks, and any attempt to add applicability decisions fails closed.
+
+The candidate omits UPX to reduce parser and evidence complexity. Its scratch layer contains only the executable and CA material copied from the immutable builder. No shell, package manager or runner proxy CA is introduced. Canonical configuration and tar headers bind all contents to a reproducible local reference: `local/enterprise-shop-ryuk:sha256-b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3`. This suffix is the **image configuration** digest, not a registry manifest digest. Binary SHA-256 is `492354530b28f1eaf9846f5d3b7496dba5b40631839c680b75a224a87a7f1917`. No private image is published; each CI/CodeQL checkout builds and loads its own exact candidate. Missing local build or any source, dependency, executable, CA, archive/configuration drift fails. The official compressed image’s entire OCI/UPX/decompression/source/binary chain remains collected and validated under `official-ryuk-comparison`, with no execution authority.
+
+Hosted [build proof at 48e91592](https://github.com/Patrick1986Git/enterprise-shop/actions/runs/37772549705/artifacts/11548487975) matched local repeat executable/configuration/archive identities and returned zero source/binary govulncheck findings. The final patch retains upstream’s original test-only testify version; every final-head build rechecks the resulting exact source receipt. Testcontainers properties select only the fully identified candidate. RyukExecutionIT proves the running local reference, expected configuration ID and writable `/var/run/docker.sock` mount; after the Maven JVM exits, cleanup verification requires removal of the observed reaper and PostgreSQL resources. The socket remains a privileged execution boundary: this remediation does not patch or attest the external Docker daemon, and arbitrary socket access would still permit host-level Docker operations.
+
+Strict Trivy schema/UpdatedAt/NextUpdate freshness is unchanged. Source/binary repair never rewrites DB timestamps, ignores unfixed findings, suppresses scanner errors or converts the upstream publication outage into an exception. If final-head builds/tests pass but authoritative DB NextUpdate is expired, the draft remains `UPSTREAM_DB_BLOCKED` and is not merge-ready.
+
+The advisory-driven changes preserve other boundaries. Hadolint changes to upstream scratch with the **identical** v2.14.0 executable SHA-256, removing 19 HIGH and 2 CRITICAL inherited OS-package findings without upgrading the linter. Trivy 0.72.0 had 41 HIGH findings; 0.75.0 has no current HIGH/CRITICAL package findings. Go 1.25.7 Bookworm had affected Go binaries and 790 blocking OS findings. Same-line 1.25.14 Bookworm repairs Go but retains 419 OS findings, including 301 without a published fix; its Alpine variant still has two OpenSSL HIGH findings. Supported 1.26.8 Alpine has no current HIGH/CRITICAL OS/toolchain findings. Counts are time/database-specific observations, not security guarantees.
+
+`run-gosu-govulncheck.sh` measures the installed PostgreSQL gosu compiler version using Go binary metadata and forwards that version as GOVERSION to the unchanged upstream reachability/filtering wrapper. Upgrading the analysis compiler therefore does not erase installed-binary advisories by analyzing only a newer standard-library version. The downloaded analyzer/modules and named cache remain separate trust boundaries; the Go image SBOM does not cover every subsequent download.
+
+`scan-auxiliary-containers.py` records the source/index/amd64 manifest and matching image configuration, reads installed apk packages and executable hashes from exported archives, and requires executable version identity. It reuses the builder's successful database refresh/cache. One unfiltered `--list-all-pkgs --ignorefile /dev/null` image report supplies both policy and converted CycloneDX 1.7 evidence. It does not rescan to generate the SBOM. Raw package PURLs must match the SBOM, installed OS packages must read back, and required Go binaries/compiler versions must appear. Scanner/database/conversion failure, stale database provenance, missing evidence, or wrong source/platform/version/image identity fails closed. Explicitly empty static Hadolint package coverage, bound to its reviewed binary hash, cannot authorize Ryuk's missing Go readback.
+
+The existing container-security job uploads `auxiliary-container-evidence` with always() before the auxiliary gate, then `auxiliary-container-policy-result`, both for fourteen days. Evidence retains source SHA, exact reference/amd64 resolution, registry/Docker metadata, raw reports, SBOMs, statuses, timestamp/database provenance, executable identity and decision. Transient external-image exports are deleted; the deterministic candidate archive and layer are retained for verification. Every recognized HIGH/CRITICAL finding blocks, including unfixed findings. There are no inherited exceptions, wildcard packages, severity reductions, image exclusions or CI-only exemptions. Fixture evidence cannot enter this gate. Monday 04:23 UTC scans use protected master; PR execution uses exact head with contents: read and disabled persisted checkout credentials. No repository secrets or privileged PR event are introduced.
+
+### Scanner provenance and bootstrap limits
+
+Aqua's official release workflow publishes Cosign image-manifest signatures, Sigstore asset bundles and GitHub SLSA provenance for checksum-listed archives. The design inspected the pinned upstream workflow, GoReleaser configuration and signature documentation before selecting verification. Existing hosted-runner gh verifies the official Linux/amd64 archive attestation with repository, source-ref/tag and signer-workflow constraints. `verify-trivy-provenance.py` downloads the archive **as data**, verifies its published asset digest and attestation, then requires its scanner executable bytes to match the pinned image and reviewed hash. It installs or executes no downloaded verifier/scanner archive and adds no vulnerability database. The ephemeral standard GitHub token is available only to host gh verification, never to a tool image.
+
+This supplies independent scanner **executable provenance** through Aqua/GitHub/Sigstore and existing runner/gh trust roots. It does not verify the image's Cosign signature, attest every filesystem file, independently audit scanner source, or make self-scan output independent. Immutable digest/amd64/configuration checks establish image identity; self-scan supplies package advisory visibility. Upstream release/signing compromise, runner/gh compromise, scanner defects and advisory publication omissions remain residual boundaries. Every self-scan policy record explicitly denies independent integrity assurance.
+
+### Update authority and infrastructure boundaries
+
+Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.
+
+Maintainers own manual upstream release/advisory review; existing weekly rescans refresh recognized-package advisories without rewriting digests. No silent updater exists. Version/digest changes require normal PR review, amd64 resolution, executable/version checks, raw advisory/SBOM evidence and hosted regression compatibility. Receipt updates must review any new image's classification and ownership. Successful package scans do not automate advisory review for static/opaque binaries.
+
+Application/JRE, PostgreSQL/base/bootstrap/test images, builder OS/JDK and Maven executable tooling keep separate ownership policies. Production PostgreSQL scans do not attest every test-base byte. GitHub runner provisioning, runner Docker daemon/BuildKit/default Dockerfile frontend/docker-init, downloaded analyzer modules, vendor/database completeness and sources outside the census remain distinct trust limits. Ryuk remediation requires fresh authoritative final-head package evidence; UPX comparison-tool native-library coverage, authenticated upstream image/source provenance and downloaded analyzer provenance remain separate limits. This policy does not claim all CI tools or the entire supply chain are covered.
+
 CI validates the repository Dockerfiles, the application Docker builder stage, and the final local images used for the Enterprise Shop application and custom PostgreSQL database. These checks add supply-chain visibility without publishing images or changing runtime application/database behavior.
 
 ## CI architecture
@@ -8,7 +74,7 @@ The `container-security` job is separate from Maven verification and functional 
 
 - Hadolint checks the root `Dockerfile` and `docker/postgres/Dockerfile`.
 - Docker builds CI-local images from fresh bases with `--pull`, tagged `enterprise-shop/builder:ci`, `enterprise-shop/app:ci` and `enterprise-shop/postgres:ci`. Builder/runtime exports preserve BuildKit base and image provenance.
-- Trivy `0.72.0` scans each final image for operating-system and application/library vulnerabilities and reuses a GitHub Actions cache for the scanner database.
+- Trivy `0.75.0` scans each final image for operating-system and application/library vulnerabilities and reuses a GitHub Actions cache for the scanner database.
 - Raw Trivy JSON reports are generated without policy filtering before any blocking vulnerability gate runs.
 - Trivy generates separate CycloneDX JSON SBOMs for the builder, application and PostgreSQL images before policy enforcement. The tar-installed Temurin JDK has a separate vendor advisory gate because Trivy does not recognize that distribution.
 - JSON vulnerability reports and SBOM files are uploaded as temporary GitHub Actions artifacts.
@@ -32,9 +98,9 @@ Scheduled CI also regenerates Maven build-tool evidence against protected `maste
 
 The external container tools and scan input are immutable while retaining readable source versions:
 
-- Docker Hub, Hadolint `v2.14.0-alpine`: `docker.io/hadolint/hadolint:v2.14.0-alpine@sha256:7aba693c1442eb31c0b015c129697cb3b6cb7da589d85c7562f9deb435a6657c` (`linux/amd64` child manifest `sha256:be27962427a85de242820cb710a374478cce9bfb534a2c07e4fa54741d98908f`)
-- GHCR, Trivy `0.72.0`: `ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f` (`linux/amd64`)
-- Docker Hub, Go `1.25.7-bookworm`: `docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1` (`linux/amd64` child manifest `sha256:58259daf0a27c150118663ef7452aa94d66a86d55e73b3443386146623f5364d`)
+- Docker Hub, Hadolint `v2.14.0` scratch: `docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e` (`linux/amd64`; resolved child retained in auxiliary evidence)
+- GHCR, Trivy `0.75.0`: `ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa` (`linux/amd64`)
+- Docker Hub, Go `1.26.8-alpine3.24`: `docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c` (`linux/amd64`; resolved child retained in auxiliary evidence)
 - Docker Hub, Alpine `3.20`: `docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc` (`linux/amd64`)
 
 The supplied Docker Hub references are multi-platform OCI index digests, and CI explicitly pulls and inspects their `linux/amd64` images. OCI digests are registry- and repository-scoped, so changing only the registry while reusing a digest does not produce a valid reference. Before linting or scanning, CI verifies manifest availability, the locally resolved platform, and each tool's version or release identity. For gosu source, tag `1.19` is the human-readable upstream release identity and full commit `6456aaa0f3c854d199d0f037f068eb97515b7513` (`Update to 1.19`) is the immutable security identity. CI shallow-clones the tag, verifies its peeled commit and `HEAD`, and fails before govulncheck and policy enforcement if either differs.
@@ -117,7 +183,7 @@ It then exports the normal runtime image using the same BuildKit builder and loc
 
 PR checkout uses the exact event head SHA; scheduled checkout uses protected `master`; manual dispatch uses its selected ref. A recorded source SHA must match checkout and the event SHA. The same Monday `04:23 UTC` schedule rebuilds and rescans the builder alongside existing final-image checks. Before this change reaches protected master, the schedule is established by workflow/ref/provenance regression tests, not a claim that a scheduled builder run has already executed. Permissions remain read-only, checkout credentials are not persisted, and no secrets or privileged pull-request event are used.
 
-`scripts/record-docker-builder.sh` records image IDs, JDK/JRE release files, Java properties, builder `javac`, Ubuntu identities, complete installed dpkg inventories, and JDK file paths for both application stages. `scripts/scan-docker-builder.sh` uses the existing pinned Trivy `0.72.0` digest and shared reviewed database/cache directory. It refreshes the vulnerability database, scans the builder with `--list-all-pkgs`, `--ignorefile /dev/null`, and no severity filter, and generates a separate CycloneDX 1.7 SBOM. Database, raw-scan, and SBOM exit statuses are retained independently. Scanner failures cannot be converted to empty clean reports.
+`scripts/record-docker-builder.sh` records image IDs, JDK/JRE release files, Java properties, builder `javac`, Ubuntu identities, complete installed dpkg inventories, and JDK file paths for both application stages. `scripts/scan-docker-builder.sh` uses the existing pinned Trivy `0.75.0` digest and shared reviewed database/cache directory. It refreshes the vulnerability database, scans the builder with `--list-all-pkgs`, `--ignorefile /dev/null`, and no severity filter, and generates a separate CycloneDX 1.7 SBOM. Database, raw-scan, and SBOM exit statuses are retained independently. Scanner failures cannot be converted to empty clean reports.
 
 The `docker-builder-security-evidence` artifact is uploaded with `always()` before policy enforcement and retained for fourteen days, including on vulnerability failure. It contains raw Trivy JSON, `builder.cdx.json`, build/image metadata, source/platform/Java/OS/dpkg comparison evidence, scanner statuses, and the JDK advisory input/provenance described below. A second `docker-builder-policy-result` artifact preserves the policy decision when valid evidence produces one. Missing or malformed evidence fails rather than synthesizing a success artifact.
 
@@ -146,12 +212,12 @@ The Maven distribution and resolved plugin/processor/test tooling primarily resi
 | Final application runtime | Existing independent JRE-image Trivy HIGH/CRITICAL policy and CycloneDX; runtime user, image identity and application behavior remain unchanged. |
 | Custom PostgreSQL image | One stage; existing final-image policy, SBOM and scoped gosu applicability evidence. Its build adds dictionary files and targeted package repairs; it has no separate discarded builder. |
 | Compose database-role bootstrap | Executes the repository shell script inside the same custom PostgreSQL image, not a new image or application builder boundary. |
-| Immutable Trivy/Hadolint tool images | Scanner/linter execution authority with pinned digest/platform/version checks; this builder policy does not advisory-scan their own installed contents. |
-| Immutable Go govulncheck image | Runs gosu source/applicability analysis; its own Go/OS toolchain is a separate security-evidence-generator boundary. |
+| Immutable Trivy/Hadolint tool images | Separate auxiliary policy below; builder evidence does not establish scanner integrity or Haskell executable advisory coverage. |
+| Immutable Go govulncheck image | Separate auxiliary OS/Go policy below; installed gosu compiler identity remains distinct from the analysis compiler. |
 | Immutable Alpine policy-test image | Scanner-policy fixture, not an application artifact-producing builder. |
 | Dockerfile frontend, BuildKit and Docker daemon | Build execution infrastructure; recorded frontend/base materials do not constitute vulnerability or source-analysis coverage for all build infrastructure. |
 
-Hosted runners, arbitrary downloads, vendor/scanner publication completeness, dynamically constructed external commands, and auxiliary security-tool image contents remain separate limits. The next repository-owned inventory/advisory decision should address immutable security-tool images that execute analysis commands, beginning with the Go govulncheck toolchain. This task does not claim complete software-supply-chain coverage.
+Hosted runners, arbitrary downloads, vendor/scanner publication completeness, and dynamically constructed external commands remain separate limits. Auxiliary ownership is described below. This policy does not claim complete software-supply-chain coverage.
 
 ### Builder OpenSSL remediation
 
@@ -183,7 +249,7 @@ Local reproduction:
 docker run --rm --platform linux/amd64 \
   -v "${PWD}:/workspace:ro" \
   -w /workspace \
-  docker.io/hadolint/hadolint:v2.14.0-alpine@sha256:7aba693c1442eb31c0b015c129697cb3b6cb7da589d85c7562f9deb435a6657c \
+  docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e \
   hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile
 ```
 
@@ -196,7 +262,7 @@ docker run --rm \
   -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -w /workspace \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 ```
 
 ## Vulnerability scanning policy
@@ -210,7 +276,7 @@ Trivy scans both final images with the `vuln` scanner. The policy is:
 - Unfixed vulnerabilities are not ignored by default.
 - Individual CVEs must not be silently suppressed.
 - Raw scanner reports are evidence of everything Trivy detected; policy scans are the actionable gate after documented applicability analysis.
-- Exceptions are not vulnerability fixes. An expired exception must be removed, renewed with fresh evidence, or replaced by a remediation before the expiry date. Trivy `0.72.0` requires `expired_at` in `.trivyignore.yaml` to be an RFC 3339 timestamp, so the configuration uses the end of the UTC calendar day.
+- Exceptions are not vulnerability fixes. An expired exception must be removed, renewed with fresh evidence, or replaced by a remediation before the expiry date. Trivy `0.75.0` requires `expired_at` in `.trivyignore.yaml` to be an RFC 3339 timestamp, so the configuration uses the end of the UTC calendar day.
 
 Local reproduction:
 
@@ -231,13 +297,13 @@ docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/reports:/reports" \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-app-trivy-raw.json enterprise-shop/app:ci
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-app-trivy-raw.json enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/reports:/reports" \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy-raw.json enterprise-shop/postgres:ci
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy-raw.json enterprise-shop/postgres:ci
 ```
 
 Validate the unfiltered JSON evidence and run the final policy scans:
@@ -250,14 +316,14 @@ python scripts/validate-container-vulnerability-policy.py postgres .tmp/containe
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
   -w /workspace \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --scanners vuln --severity CRITICAL --exit-code 1 --format table --ignorefile .trivyignore.yaml --show-suppressed enterprise-shop/postgres:ci
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --scanners vuln --severity CRITICAL --exit-code 1 --format table --ignorefile .trivyignore.yaml --show-suppressed enterprise-shop/postgres:ci
 ```
 
 Use `--show-suppressed` on the PostgreSQL policy scan so reviewers can see when the scoped gosu exception was applied.
@@ -316,7 +382,8 @@ test -x govulncheck-with-excludes.sh
 test -f version.go
 grep -F 'const Version = "1.19"' version.go
 
-GOLANG_IMAGE=docker.io/library/golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1 ./govulncheck-with-excludes.sh ./...
+# CI additionally binds GOVERSION to the installed gosu binary; see the auxiliary policy below.
+GOLANG_IMAGE=docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c ./govulncheck-with-excludes.sh ./...
 ```
 
 ## SBOM artifacts
@@ -337,13 +404,13 @@ docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/sbom:/sbom" \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --format cyclonedx --output /sbom/enterprise-shop-app.cdx.json enterprise-shop/app:ci
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --format cyclonedx --output /sbom/enterprise-shop-app.cdx.json enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/sbom:/sbom" \
-  ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image --format cyclonedx --output /sbom/enterprise-shop-postgres.cdx.json enterprise-shop/postgres:ci
+  ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa image --format cyclonedx --output /sbom/enterprise-shop-postgres.cdx.json enterprise-shop/postgres:ci
 
 python -m json.tool .tmp/container-security/sbom/enterprise-shop-app.cdx.json >/dev/null
 python -m json.tool .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json >/dev/null

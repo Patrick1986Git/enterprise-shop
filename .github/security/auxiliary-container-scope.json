@@ -1,0 +1,438 @@
+{
+  "schema_version": 3,
+  "boundary": "Externally supplied auxiliary images executed by repository CI, including library-launched Ryuk",
+  "scanner_version": "0.75.0",
+  "scanner_independent_integrity": "upstream-github-attestation-and-executable-byte-match",
+  "exceptions": [],
+  "images": {
+    "hadolint": {
+      "platform": "linux/amd64",
+      "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
+      "secrets": false,
+      "exceptions": [],
+      "reference": "docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e",
+      "version": "v2.14.0",
+      "registry": "docker.io",
+      "digest": "sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e",
+      "classification": "repository-processing",
+      "governed": true,
+      "threshold": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "identity": {
+        "binary": "/bin/hadolint",
+        "sha256": "6bf226944684f56c84dd014e8b979d27425c0148f61b3bd99bcc6f39e9dc5a47",
+        "command": [
+          "hadolint",
+          "--version"
+        ],
+        "output": "Haskell Dockerfile Linter 2.14.0"
+      },
+      "environment": "HADOLINT_IMAGE",
+      "package_mode": "static-haskell",
+      "command": "hadolint --ignore DL3008 Dockerfile docker/postgres/Dockerfile",
+      "mounts": [
+        "repository:/workspace:ro"
+      ],
+      "docker_socket": false,
+      "network": "none for lint; default bridge for existing version probe",
+      "input": "Candidate Dockerfiles and repository filesystem",
+      "repository_code_executed": false,
+      "advisory_authority": "Trivy recognized packages (explicitly empty scratch); upstream Hadolint/Haskell advisories require manual review; static Haskell executable is not represented by Trivy",
+      "sbom": "CycloneDX 1.7 image identity, zero recognized package components; executable SHA separately retained",
+      "scan_coverage": "No installed OS packages. No Haskell executable package detection; never claim binary vulnerability safety."
+    },
+    "scanner": {
+      "platform": "linux/amd64",
+      "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
+      "secrets": false,
+      "exceptions": [],
+      "reference": "ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa",
+      "version": "0.75.0",
+      "registry": "ghcr.io",
+      "digest": "sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa",
+      "classification": "scanner",
+      "governed": true,
+      "threshold": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "identity": {
+        "binary": "/usr/local/bin/trivy",
+        "sha256": "93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e",
+        "command": [
+          "version"
+        ],
+        "output": "Version: 0.75.0"
+      },
+      "environment": "TRIVY_IMAGE",
+      "package_mode": "os-and-gobinary",
+      "required_gobinaries": [
+        "usr/local/bin/trivy"
+      ],
+      "command": "image, sbom, convert, version; vulnerability evidence controls later policy",
+      "mounts": [
+        "Docker socket for existing application/PostgreSQL/builder scans",
+        "repository:/workspace:ro for Maven SBOM analysis",
+        "shared Trivy cache:rw",
+        "evidence/report/SBOM directories:rw",
+        "auxiliary image archives:ro"
+      ],
+      "docker_socket": true,
+      "network": "Default bridge; GHCR Trivy databases and image registries",
+      "input": "Candidate images, Maven CycloneDX, repository-controlled packages; own image archive",
+      "repository_code_executed": false,
+      "advisory_authority": "Same pinned Trivy/database package self-scan; upstream Aqua releases/advisories; runner gh verifies Aqua archive provenance and executable byte equivalence",
+      "sbom": "Required CycloneDX 1.7 with complete raw package PURL readback",
+      "scan_coverage": "Alpine OS and Go binary modules/compiler; self-scan is not independent scanner integrity assurance"
+    },
+    "govulncheck": {
+      "platform": "linux/amd64",
+      "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
+      "secrets": false,
+      "exceptions": [],
+      "reference": "docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c",
+      "version": "1.26.8-alpine3.24",
+      "registry": "docker.io",
+      "digest": "sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c",
+      "classification": "high-impact",
+      "governed": true,
+      "threshold": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "identity": {
+        "binary": "/usr/local/go/bin/go",
+        "sha256": "d9a2fa19c7ef8b57f420012c21f49f235c46f08a68c12077d9c753dbb6ccdc34",
+        "command": [
+          "go",
+          "version"
+        ],
+        "output": "go version go1.26.8 linux/amd64"
+      },
+      "environment": "GOSU_GOVULNCHECK_IMAGE",
+      "package_mode": "os-and-gobinary",
+      "required_gobinaries": [
+        "usr/local/go/bin/go",
+        "usr/local/go/bin/gofmt",
+        "usr/local/go/pkg/tool/linux_amd64/compile",
+        "usr/local/go/pkg/tool/linux_amd64/link"
+      ],
+      "go_version": "1.26.8",
+      "command": "go version -m installed gosu; go install golang.org/x/vuln/cmd/govulncheck@v1.1.4; govulncheck ./... through pinned upstream gosu wrapper",
+      "mounts": [
+        "pinned gosu source:/wd:ro",
+        "govulncheck named cache:/tmp:rw",
+        "installed gosu binary evidence:ro"
+      ],
+      "docker_socket": false,
+      "network": "Default bridge: Go module proxy/checksum service and vuln.go.dev",
+      "input": "gosu 1.19 source at 6456aaa0f3c854d199d0f037f068eb97515b7513; advisory result gates PostgreSQL exception applicability",
+      "repository_code_executed": true,
+      "advisory_authority": "Trivy/database for image OS and embedded Go toolchain; Go vulnerability service for dynamically compiled govulncheck execution. Downloaded analyzer dependencies remain a separate boundary.",
+      "sbom": "Required CycloneDX 1.7 and exact OS/Go compiler readback",
+      "scan_coverage": "Alpine installed OS plus every recognized Go binary; require Go compiler version and compile/link targets; source wrapper owned independently"
+    },
+    "fixture": {
+      "platform": "linux/amd64",
+      "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
+      "secrets": false,
+      "exceptions": [],
+      "reference": "docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+      "version": "3.20 (observed 3.20.10)",
+      "registry": "docker.io",
+      "digest": "sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+      "classification": "fixture",
+      "governed": false,
+      "threshold": [],
+      "identity": {
+        "binary": "/bin/busybox",
+        "release": "3.20.10"
+      },
+      "environment": "TRIVY_POLICY_TEST_IMAGE",
+      "package_mode": "fixture",
+      "command": "cat /etc/alpine-release identity probe; Trivy target for ignorefile parser/configuration regression",
+      "mounts": [],
+      "docker_socket": false,
+      "network": "Default bridge for identity probe only; target itself runs no scanner",
+      "input": "Immutable package state, not repository input",
+      "repository_code_executed": false,
+      "advisory_authority": "Reviewed fixture integrity; no execution-tool vulnerability threshold and no reusable exception",
+      "sbom": "Not required as trusted execution evidence",
+      "scan_coverage": "Existing Trivy CRITICAL policy/configuration scan. Current independent audit found zero findings; end-of-life status does not make it a trusted base."
+    },
+    "ryuk": {
+      "platform": "linux/amd64",
+      "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
+      "secrets": false,
+      "exceptions": [],
+      "reference": "local/enterprise-shop-ryuk:sha256-b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3",
+      "version": "0.14.0 + Moby client 0.6.1, Go 1.26.8",
+      "registry": "unpublished runner-local",
+      "digest": "sha256:b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3",
+      "classification": "high-impact",
+      "governed": true,
+      "threshold": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "identity": {
+        "binary": "/bin/ryuk",
+        "sha256": "492354530b28f1eaf9846f5d3b7496dba5b40631839c680b75a224a87a7f1917",
+        "upstream_release": "0.14.0"
+      },
+      "package_mode": "gobinary",
+      "required_gobinaries": [
+        "bin/ryuk"
+      ],
+      "command": "/bin/ryuk; listen on 8080 and remove Docker resources matching Testcontainers session labels",
+      "mounts": [
+        "Docker socket:/var/run/docker.sock"
+      ],
+      "docker_socket": true,
+      "network": "Testcontainers runner bridge and exposed cleanup-control port; Docker daemon access",
+      "input": "Docker labels/resources and Testcontainers protocol",
+      "repository_code_executed": true,
+      "advisory_authority": "Unfiltered pinned Trivy package gate, source and binary govulncheck v1.8.0; no applicability decisions",
+      "sbom": "Direct uncompressed candidate image CycloneDX converted from the same raw Trivy report",
+      "scan_coverage": "Exact source archive, patch, module graph, repeat binary and local config/archive identities; scratch contains only CA roots and ryuk; official compressed image retained for comparison",
+      "environment": "RYUK_IMAGE",
+      "go_version": "1.26.8",
+      "candidate_build": true
+    }
+  },
+  "comparison_boundaries": [
+    "application runtime/JRE and Docker builder: existing policies",
+    "PostgreSQL runtime/base/bootstrap/test images: existing PostgreSQL boundary; test base is not independently image-scanned",
+    "GitHub-hosted runner Docker daemon, BuildKit/default Dockerfile frontend and docker-init: infrastructure trust, not auxiliary package assurance"
+  ],
+  "execution_sources": {
+    ".github/workflows/ci.yml": "cf43166c30970f02d1e0909753d1a10e77ea8f98fdf20d1eef9cca05a8ed93c2",
+    ".github/workflows/codeql.yml": "3199297f27f07647b352d92387357502aa479eadbb1940e66fd4ac41d4520c20",
+    ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
+    "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
+    "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
+    "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
+    "scripts/auxiliary_binary_evidence.py": "a56a9cf1a14377b3171bccbd5cb29f9e48b3e40012a5250caf569882dbf8cb0c",
+    "scripts/build-ryuk-candidate.py": "4d70488e92217c520d6d456a049cccec64cfeb263c8669dde44919097fe5c00c",
+    "scripts/build-tool-inventory.py": "7f25b130ee128a321564613f1e7ff8ec1f5e26c6e406f4ccad86008c6ec11c34",
+    "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
+    "scripts/historical-forward-restore-rehearsal.sh": "1b6f3241fdaa1bce83cae712f4128e9ebba408ad09e9ea4a5d5c188be3dce507",
+    "scripts/record-docker-builder.sh": "751269ba6d5e422c4800c783b3deac8aa088b4c3c57b96e9a4ff5e79b428f6b7",
+    "scripts/restore-rehearsal.sh": "d702b731fb363709d70c2fb30137f75c68c011ba7db2a04a99385a2870158ca7",
+    "scripts/run-dev.sh": "d16cefda7b73d82550aecef27e25b9bb7a3361e81f7821fffd3a9735831576b7",
+    "scripts/run-gosu-govulncheck.sh": "f2466620d3c3388db8b1af20da70076e4d1e522365c4596518b0e5bca17f4d4c",
+    "scripts/ryuk_candidate_evidence.py": "60b3ce7350d1617f4353b0359aadd2df6102e868ea8884500963402b8b686756",
+    "scripts/scan-auxiliary-containers.py": "72a13cb21162778122989a97d134bc18712321dafdce43569c7926a3dc827283",
+    "scripts/scan-build-tools.py": "aa681f6ff7f1023bf838373ff53db822d24e855b10b50d6e3a8d944cefa80e7c",
+    "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
+    "scripts/validate-auxiliary-containers.py": "345e9c55ee55b1ac762251ff3ca5015dd0005af12c51183408f10a75645bdea8",
+    "scripts/verify-runtime-append-only-integrity.sh": "2d8c3322c817a9d8d86eb37b0fad53b9b32d83b9bd53a4b9de8ec0f6b76a1447",
+    "scripts/verify-trivy-provenance.py": "0f22b61da9f9922c8b9ca0f7b37f7d448096d6d561fe973454b7d187cacf9736",
+    "src/test/java/com/company/shop/config/ProductionDatabaseReadinessPolicyLifecycleIT.java": "75c4e02383845403fb9a39f7b152f39374917d12f317acb1b4db4148729f4f19",
+    "src/test/java/com/company/shop/config/ProductionDatabaseWaitPolicyConnectionLifecycleIT.java": "911c6e913809b01c1f20d533ac44487a48bb483991888ef331ecd1b0f6b1e34b",
+    "src/test/java/com/company/shop/config/ProductionDatabaseWaitPolicyValidatorIT.java": "d76955f19c1d50d65b30ed2d41761c06e0894253f6f143f64aec78016a86825b",
+    "src/test/java/com/company/shop/persistence/migration/LegacyProductionDatabaseOwnershipUpgradeIT.java": "d70f222c4870d4f30ed4be3aedf1710ac368474e3a93c421ee2c6456ecdc0b35",
+    "src/test/java/com/company/shop/persistence/migration/ProductReviewAuthorSnapshotMigrationIT.java": "e6a2d75068f678e704e29b277ab46023e0b4c39a2fc6aa9cc917d4f1d7032a81",
+    "src/test/java/com/company/shop/persistence/migration/ProductionDatabaseIdentityIT.java": "6a4a1368d0402a3e4e27657a7aea8eff4a827fee925ac01fceef744e2865bdc8",
+    "src/test/java/com/company/shop/persistence/support/PostgresContainerSupport.java": "e4207244b664c2ccb6c03f8fe0fb306ba578175a0fb2c320258787aefbefd5ea",
+    "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicy.java": "f4322920c1bb7da4021e9d46416edbb32c34736a7b294b73f9f45d132c35e03c",
+    "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicyTest.java": "355eb3dcef586d6f26f196219074ab0cfd150adda12e12ea40dd00cd8cee7bd9"
+  },
+  "tools": {
+    "upx": {
+      "version": "5.2.1",
+      "platform": "linux/amd64",
+      "classification": "isolated-evidence-transformer",
+      "url": "https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-amd64_linux.tar.xz",
+      "member": "upx-5.2.1-amd64_linux/upx",
+      "archive_sha256": "402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657",
+      "binary_sha256": "287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1",
+      "exceptions": [],
+      "provenance": "Official UPX release 377853905 asset 532383358 published SHA-256 plus reviewed executable hash. No signed upstream attestation established.",
+      "advisory_authority": "Maintainer review of official UPX NEWS/security issues for this pinned current release; Trivy does not inventory its static C++ libraries. Restricted parser boundary, no claim of complete native-library coverage.",
+      "capabilities": "Existing governed Go image; offline nonroot read-only rootfs, no socket/secrets/repository, copied input RO and only temporary payload output RW; all capabilities dropped, no-new-privileges and resource limits."
+    }
+  },
+  "comparisons": {
+    "official_ryuk": {
+      "platform": "linux/amd64",
+      "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
+      "secrets": false,
+      "exceptions": [],
+      "reference": "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",
+      "version": "0.14.0",
+      "registry": "docker.io",
+      "digest": "sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0",
+      "classification": "high-impact",
+      "governed": true,
+      "threshold": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "identity": {
+        "binary": "/bin/ryuk",
+        "sha256": "5aa022d7dcdc90eb4072a44b6f54b9b62d5fbd126de320cd56e04db4938e4e38",
+        "upstream_release": "0.14.0"
+      },
+      "package_mode": "gobinary",
+      "required_gobinaries": [
+        "bin/ryuk"
+      ],
+      "command": "/bin/ryuk; listen on 8080 and remove Docker resources matching Testcontainers session labels",
+      "mounts": [
+        "Docker socket:/var/run/docker.sock"
+      ],
+      "docker_socket": true,
+      "network": "Testcontainers runner bridge and exposed cleanup-control port; Docker daemon access",
+      "input": "Docker labels/resources and Testcontainers protocol",
+      "repository_code_executed": false,
+      "advisory_authority": "Pinned Trivy 0.75.0 package/version HIGH/CRITICAL gate over measured deterministic decompression; binary govulncheck supplemental, never an exception.",
+      "sbom": "CycloneDX converted from one raw rootfs analysis scan; original compressed image evidence retained separately.",
+      "scan_coverage": "Exact compressed/decompressed hashes, scratch filesystem/layer census, UPX test/repeat, actual Go stdlib and complete embedded dependency readback; source corroborates versions and sums. HIGH/CRITICAL findings remain blocking.",
+      "environment": "RYUK_IMAGE",
+      "go_version": "1.23.12",
+      "evidence_transform": {
+        "method": "upx-deterministic-go-readback",
+        "resolved_digest": "sha256:f0456560ea5b4acdbed0da0efc33b5f9dd6bc1e59f2337106826dcb5b0b0e981",
+        "image_id": "sha256:9a5f93e8f9300530b91866bcf41c0b8a5d72f0e5a7b4365167a48df9816cd36e",
+        "decompressed_sha256": "54b194bbf7e39ffc7faf132ccf7dc694a409a4db3c1cfb9a889299827078fae8",
+        "filesystem": {
+          "etc/ssl/certs/ca-certificates.crt": {
+            "size": 212585,
+            "sha256": "8cf3f2d5222508ca469c78a347764ee1b1fab10a903172612c489ebcca05c91c"
+          },
+          "bin/ryuk": {
+            "size": 2184384,
+            "sha256": "5aa022d7dcdc90eb4072a44b6f54b9b62d5fbd126de320cd56e04db4938e4e38"
+          }
+        },
+        "upx_marker": "$Id: UPX 5.02 Copyright (C) 1996-2025 the UPX Team. All Rights Reserved. $",
+        "tool": {
+          "version": "5.2.1",
+          "platform": "linux/amd64",
+          "classification": "isolated-evidence-transformer",
+          "url": "https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-amd64_linux.tar.xz",
+          "member": "upx-5.2.1-amd64_linux/upx",
+          "archive_sha256": "402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657",
+          "binary_sha256": "287b3dffe9dcafd8e366e162ac4ab41e5cf45a3c6768970256af0869288d84a1",
+          "exceptions": [],
+          "provenance": "Official UPX release 377853905 asset 532383358 published SHA-256 plus reviewed executable hash. No signed upstream attestation established.",
+          "advisory_authority": "Maintainer review of official UPX NEWS/security issues for this pinned current release; Trivy does not inventory its static C++ libraries. Restricted parser boundary, no claim of complete native-library coverage.",
+          "capabilities": "Existing governed Go image; offline nonroot read-only rootfs, no socket/secrets/repository, copied input RO and only temporary payload output RW; all capabilities dropped, no-new-privileges and resource limits."
+        },
+        "analysis_image": "docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c",
+        "buildinfo": {
+          "go_version": "1.23.12",
+          "dependencies": {
+            "github.com/caarlos0/env/v11": {
+              "version": "v11.3.1",
+              "sum": "h1:cArPWC15hWmEt+gWk7YBi7lEXTXCvpaSdCiZE2X5mCA="
+            },
+            "github.com/containerd/errdefs": {
+              "version": "v1.0.0",
+              "sum": "h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI="
+            },
+            "github.com/containerd/errdefs/pkg": {
+              "version": "v0.3.0",
+              "sum": "h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE="
+            },
+            "github.com/distribution/reference": {
+              "version": "v0.6.0",
+              "sum": "h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk="
+            },
+            "github.com/docker/docker": {
+              "version": "v28.3.3+incompatible",
+              "sum": "h1:Dypm25kh4rmk49v1eiVbsAtpAsYURjYkaKubwuBdxEI="
+            },
+            "github.com/docker/go-connections": {
+              "version": "v0.5.0",
+              "sum": "h1:USnMq7hx7gwdVZq1L49hLXaFtUdTADjXGp+uj1Br63c="
+            },
+            "github.com/docker/go-units": {
+              "version": "v0.5.0",
+              "sum": "h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4="
+            },
+            "github.com/felixge/httpsnoop": {
+              "version": "v1.0.4",
+              "sum": "h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg="
+            },
+            "github.com/go-logr/logr": {
+              "version": "v1.4.2",
+              "sum": "h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY="
+            },
+            "github.com/go-logr/stdr": {
+              "version": "v1.2.2",
+              "sum": "h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag="
+            },
+            "github.com/gogo/protobuf": {
+              "version": "v1.3.2",
+              "sum": "h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q="
+            },
+            "github.com/moby/docker-image-spec": {
+              "version": "v1.3.1",
+              "sum": "h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0="
+            },
+            "github.com/opencontainers/go-digest": {
+              "version": "v1.0.0",
+              "sum": "h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U="
+            },
+            "github.com/opencontainers/image-spec": {
+              "version": "v1.1.0",
+              "sum": "h1:8SG7/vwALn54lVB/0yZ/MMwhFrPYtpEHQb2IpWsCzug="
+            },
+            "github.com/pkg/errors": {
+              "version": "v0.9.1",
+              "sum": "h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4="
+            },
+            "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp": {
+              "version": "v0.53.0",
+              "sum": "h1:4K4tsIXefpVJtvA/8srF4V4y0akAoPHkIslgAkjixJA="
+            },
+            "go.opentelemetry.io/otel": {
+              "version": "v1.28.0",
+              "sum": "h1:/SqNcYk+idO0CxKEUOtKQClMK/MimZihKYMruSMViUo="
+            },
+            "go.opentelemetry.io/otel/metric": {
+              "version": "v1.28.0",
+              "sum": "h1:f0HGvSl1KRAU1DLgLGFjrwVyismPlnuU6JD6bOeuA5Q="
+            },
+            "go.opentelemetry.io/otel/trace": {
+              "version": "v1.28.0",
+              "sum": "h1:GhQ9cUuQGmNDd5BTCP2dAvv75RdMxEfTmYejp+lkx9g="
+            }
+          },
+          "build": {
+            "-buildmode": "exe",
+            "-compiler": "gc",
+            "-trimpath": "true",
+            "CGO_ENABLED": "0",
+            "GOARCH": "amd64",
+            "GOOS": "linux",
+            "GOAMD64": "v1"
+          },
+          "path": "github.com/testcontainers/moby-ryuk",
+          "main_module": "github.com/testcontainers/moby-ryuk",
+          "main_version": "(devel)"
+        },
+        "source_commit": "b3726afd6cc2c36628abcc08e9cabac43f587384",
+        "source_url": "https://raw.githubusercontent.com/testcontainers/moby-ryuk",
+        "source_files": {
+          "go.mod": "414e08ff0842a4c5d607b95984cf2afec999c8ba79d7023d6b14eb7b82787eaf",
+          "go.sum": "0e13ae0d7b3dcf475a0e4ff03c39f065e6fe43ac855ad37dd3fe37907d7a275d",
+          "linux/Dockerfile": "314508b7cf1237e7742a53a15f95602f1d2d8e6d51df85bf0bd4e1b10a8d0124",
+          ".github/workflows/build-docker-image.yml": "1bb798618f424ca51fd9814bdbd1e488fb43331593cdb96424dc2121e37013e0",
+          ".github/workflows/publish-docker-image.yml": "71dc43a4a4b593487574510ab0f0bb1ba3442a89e389387318ae599e37bdea3b"
+        },
+        "upstream_provenance": {
+          "manifest_digest": "sha256:df604959c6dcf62c3e5d87ed85ec9cfae1ca0c3a846c143f5919ad564ae14c73",
+          "statement_digest": "sha256:e101a7504012f07ce2375a5d18ebc748525019bd013d42830db9c62dbb2bb4e5",
+          "repository": "https://github.com/testcontainers/moby-ryuk",
+          "builder": "https://github.com/testcontainers/moby-ryuk/actions/runs/18032732627/attempts/1",
+          "signed_identity_verified": false
+        }
+      }
+    }
+  }
+}

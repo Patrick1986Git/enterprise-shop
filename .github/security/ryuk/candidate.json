@@ -1,0 +1,162 @@
+{
+  "upstream_source_sha": "b3726afd6cc2c36628abcc08e9cabac43f587384",
+  "upstream_archive_sha256": "7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d",
+  "patch_sha256": "f7b18f12fbaa2d8568c1e31a0a2a54b4a969abdfd223425fcd2cd9abc9914074",
+  "source_files": {
+    ".dockerignore": "25df7daad66c30594d3150c0fa61244ef8013651a236f3cc1a5c1923094a2e1b",
+    ".github/CODEOWNERS": "b62c7cc3a2161394cba2f03b681fbb7dd1746cd3e2409b7a7696f5020c52cdfc",
+    ".github/dependabot.yml": "46bc69879969620d146ee7b37313817b0eb3dca6fb5879b34d78e62360145a2c",
+    ".github/release-drafter.yml": "84db2e088f2685a02d71c371b7173ddaefe0a8ab0e7dcc3a2afc16a6cc1dd56b",
+    ".github/settings.yml": "cb1c825d11e0656d4a313908f0a6c740264bd247347b52f9dd82491e62506c5d",
+    ".github/workflows/build-docker-image.yml": "1bb798618f424ca51fd9814bdbd1e488fb43331593cdb96424dc2121e37013e0",
+    ".github/workflows/golangci-lint.yml": "0d931801cd7e0765b1ff604737a345f54e7da13056311ca43ba069a6d28febb2",
+    ".github/workflows/publish-docker-image.yml": "71dc43a4a4b593487574510ab0f0bb1ba3442a89e389387318ae599e37bdea3b",
+    ".github/workflows/release-drafter.yml": "580cb972febaabc110d16e31f1b91ee1ba968178a88bf0eaeb7c60ccd3eed09b",
+    ".gitignore": "8a26b0d27d6a7bdde18a9e8d62e02627cb9bf8529a41becaeb8caa5243eff76b",
+    ".golangci.yaml": "05b47f4432f71ca2f7abed882c569a2b2ed583df127a1778b8cce75c4f7089e1",
+    "LICENSE": "c6c6340d7962d2d1239a0bd8c43d48b2a7cfe377de2fad6ad72588903cd68a0d",
+    "README.md": "05a6a9ea6e43fc53063cdd5a83c94b25016289282b735836d0fafe024bb494da",
+    "RELEASING.md": "f94e31937f60dc71c6983089322752f0c6a2b52be0eb2157b9ab8ec1710bab68",
+    "config.go": "69f4a20e6d0e5f7b82a2f8ddb22be9cfeac5f9582f501e735d604c95d10e7e21",
+    "config_test.go": "549d1399f7a6d9818e8e92e2a3bb08e269ae9e4796b42435013dd38b9404c7ba",
+    "consts.go": "0cad75fdaebd2d12368e06b285a0dfd4bc885eda98f94f83d38b4c3269f45dc7",
+    "go.mod": "22d9477a17e18daa6ba1691e37e24b41eed8307d1e52ed2ad7d2f305b4b78f34",
+    "go.sum": "2c9b89db6d4900ce0fee50bd5fb065c833bd4e578787a8006d16367f0b63bb3c",
+    "interfaces.go": "05b65382a62aadf1377ac68b648fce9be6430151f3d5946fa0e3ecbe6a22f8c0",
+    "linux/Dockerfile": "314508b7cf1237e7742a53a15f95602f1d2d8e6d51df85bf0bd4e1b10a8d0124",
+    "main.go": "f1bfac94dc379e237e805d1bfc469dd6dd9a9bf2cd9113a45fcf05e31ff62938",
+    "mock_test.go": "34a6be3f65804621b33bd1cfa82c2763c827a849b9364d9febc7ead1efa353f6",
+    "reaper.go": "191f4ae6ee2890d463d6c38d1b95e15563cb0bbcf6388bd8eb639bb2d63e5b8b",
+    "reaper_test.go": "3722609da1ff2d7e9c49d416eb155e86dd74122382f8eaba3221b261ac14d596",
+    "supported-architectures.txt": "7945829c94fdf21659b0d3a211fd19c2415b32973504915ecd3150dba1a66f2a",
+    "testdata/Dockerfile": "1ae77b12374e0c3b33b290479a77e5f090d3e66b2fb53a560b48fde14ec4c760",
+    "testresources/Dockerfile": "4a5f89e506d8128cdff30836b21ff05c6124803232f5f8bb290e7349003d95d2",
+    "windows/Dockerfile": "cfd3ef9d5850369f71e7808ffaa72bf2b1b28e62a37b35745aef0d0713bb652a"
+  },
+  "builder": "docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c",
+  "builder_image_id": "sha256:c5fe2bbc8331458475b45686d82e0c28b1161addfe33f1ebac0a715a29587701",
+  "go_version": "1.26.8",
+  "flags": "-mod=readonly -buildvcs=false -a -installsuffix cgo -ldflags=\"-w -s\" -trimpath",
+  "cgo_enabled": "0",
+  "upx": false,
+  "binary_sha256": "492354530b28f1eaf9846f5d3b7496dba5b40631839c680b75a224a87a7f1917",
+  "repeat_sha256": "492354530b28f1eaf9846f5d3b7496dba5b40631839c680b75a224a87a7f1917",
+  "image_reference": "local/enterprise-shop-ryuk:sha256-b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3",
+  "image_id": "sha256:b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3",
+  "archive_sha256": "7d04e2d8d95940908dbba93115f000c692b1a83a7040fca16b7ddc6b3ba5f2e4",
+  "layer_sha256": "4a88e50eb36838dfa021838ec01c02b14f17a49d9ccadbfb3fea4119a2172a5d",
+  "filesystem": {
+    "bin/ryuk": {
+      "sha256": "492354530b28f1eaf9846f5d3b7496dba5b40631839c680b75a224a87a7f1917",
+      "size": 7499938
+    },
+    "etc/ssl/certs/ca-certificates.crt": {
+      "sha256": "028fca5150ee1915c4474489985d55c54fceaa680c754cc8d1301734f01b2232",
+      "size": 181724
+    }
+  },
+  "govulncheck_version": "v1.8.0",
+  "buildinfo": {
+    "go_version": "1.26.8",
+    "dependencies": {
+      "github.com/caarlos0/env/v11": {
+        "version": "v11.3.1",
+        "sum": "h1:cArPWC15hWmEt+gWk7YBi7lEXTXCvpaSdCiZE2X5mCA="
+      },
+      "github.com/containerd/errdefs": {
+        "version": "v1.0.0",
+        "sum": "h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI="
+      },
+      "github.com/containerd/errdefs/pkg": {
+        "version": "v0.3.0",
+        "sum": "h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE="
+      },
+      "github.com/distribution/reference": {
+        "version": "v0.6.0",
+        "sum": "h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk="
+      },
+      "github.com/docker/go-connections": {
+        "version": "v0.8.1",
+        "sum": "h1:JibmG5hULs5qXSr/cp/w3Pw5fZuStt4MOHMUExb29/M="
+      },
+      "github.com/docker/go-units": {
+        "version": "v0.5.0",
+        "sum": "h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4="
+      },
+      "github.com/felixge/httpsnoop": {
+        "version": "v1.0.4",
+        "sum": "h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg="
+      },
+      "github.com/go-logr/logr": {
+        "version": "v1.4.2",
+        "sum": "h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY="
+      },
+      "github.com/go-logr/stdr": {
+        "version": "v1.2.2",
+        "sum": "h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag="
+      },
+      "github.com/moby/docker-image-spec": {
+        "version": "v1.3.1",
+        "sum": "h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0="
+      },
+      "github.com/moby/moby/api": {
+        "version": "v1.56.1",
+        "sum": "h1:PpWkvVPB7Fr/No8w+TfyJ/I6rWZ2YPZhT3JorIg+06c="
+      },
+      "github.com/moby/moby/client": {
+        "version": "v0.6.1",
+        "sum": "h1:gvfKmdcWw+9MzXYP0vAUKQtBTGu1L8475K2nsmL7O98="
+      },
+      "github.com/opencontainers/go-digest": {
+        "version": "v1.0.0",
+        "sum": "h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U="
+      },
+      "github.com/opencontainers/image-spec": {
+        "version": "v1.1.1",
+        "sum": "h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040="
+      },
+      "go.opentelemetry.io/auto/sdk": {
+        "version": "v1.1.0",
+        "sum": "h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA="
+      },
+      "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp": {
+        "version": "v0.60.0",
+        "sum": "h1:sbiXRNDSWJOTobXh5HyQKjq6wUC5tNybqjIqDpAY4CU="
+      },
+      "go.opentelemetry.io/otel": {
+        "version": "v1.35.0",
+        "sum": "h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ="
+      },
+      "go.opentelemetry.io/otel/metric": {
+        "version": "v1.35.0",
+        "sum": "h1:0znxYu2SNyuMSQT4Y9WDWej0VpcsxkuklLa4/siN90M="
+      },
+      "go.opentelemetry.io/otel/trace": {
+        "version": "v1.35.0",
+        "sum": "h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs="
+      }
+    },
+    "build": {
+      "-buildmode": "exe",
+      "-compiler": "gc",
+      "-trimpath": "true",
+      "CGO_ENABLED": "0",
+      "GOARCH": "amd64",
+      "GOOS": "linux",
+      "GOAMD64": "v1"
+    },
+    "path": "github.com/testcontainers/moby-ryuk",
+    "main_module": "github.com/testcontainers/moby-ryuk",
+    "main_version": "(devel)"
+  },
+  "proof": {
+    "head": "48e91592d99482de1c3e5d006cc49025ae0a396e",
+    "run": 37772549705,
+    "artifact": 11548487975,
+    "artifact_digest": "sha256:654e13d23154a62ffa6699a0d9f5838231d1bb45935dc0c7bf367073fc58c3d4",
+    "scope": "Executable, module readback, packaging and Go advisory proof. Final patch restores unchanged upstream test-only testify 1.10.0; final-head build revalidates exact source."
+  },
+  "source_authority": "Official release 0.14.0 at exact commit plus repository-reviewed migration patch; no post-release upstream commits included",
+  "applicability": [],
+  "govulncheck_sum": "h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U="
+}

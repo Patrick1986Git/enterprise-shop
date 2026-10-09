@@ -58,6 +58,34 @@ docker compose --profile full up -d --build --wait
 
 The app service waits for PostgreSQL to become healthy and for `database-role-bootstrap` to complete successfully before starting.
 
+## Maven and Testcontainers verification
+
+Use a Java 21 JDK and the checked-in Maven Wrapper. Unit tests do not need the Ryuk build or Go analysis tooling:
+
+```bash
+./mvnw test
+```
+
+The complete verification lifecycle also needs Python 3, Git, a running Docker daemon capable of linux/amd64 execution, and network access to GitHub, Docker Hub and Go module/checksum services. PostgreSQL integration tests use their own Testcontainers database, independently of the Compose database. A fresh checkout must build the unpublished reviewed Ryuk image before Maven:
+
+```bash
+python3 scripts/build-ryuk-candidate.py --no-analysis
+./mvnw -B clean verify
+python3 scripts/check-ryuk-cleanup.py
+```
+
+Preparation verifies the pinned upstream archive and patch, immutable Go builder, repeated executable bytes, module checksums, selected upstream cleanup tests and exact scratch image contents against the reviewed candidate receipt. It loads the resulting local image; it publishes nothing and never falls back to official Ryuk. `--no-analysis` omits downloading/compiling govulncheck and contacting the Go advisory database for local preparation. Hosted CI and CodeQL omit that flag and retain mandatory source/binary vulnerability analysis; local preparation is not a security approval.
+
+To reuse an existing preparation for the same HEAD, revalidate its complete build evidence and loaded image before running Maven:
+
+```bash
+python3 scripts/build-ryuk-candidate.py --no-analysis --reuse
+./mvnw -B clean verify
+python3 scripts/check-ryuk-cleanup.py
+```
+
+Missing, changed or incomplete evidence, another HEAD, or an incorrect loaded image configuration fails reuse. Choose a new directory with `--directory .tmp/ryuk-candidate-new` when rebuilding; use that same directory with `--reuse` afterward. An absent local Ryuk image fails Testcontainers startup with the preparation command instead of attempting a private-registry pull. Runtime integration assertions also check the actual candidate image ID and Docker socket, and the separate cleanup command waits for resources to disappear after the Maven JVM exits. On an arm64 workstation Docker must support amd64 emulation; native arm64 candidate builds are not reviewed.
+
 ## PostgreSQL 16 to 18 local-volume migration
 
 The PostgreSQL 18 official image stores version-specific clusters below `/var/lib/postgresql`, so Compose mounts its new volume at that parent path. PostgreSQL 16 used the `/var/lib/postgresql/data` mount. A PostgreSQL 16 data directory is not binary-compatible with PostgreSQL 18 and must never be opened directly by the PostgreSQL 18 server.

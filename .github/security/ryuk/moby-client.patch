@@ -1,0 +1,404 @@
+--- a/interfaces.go
++++ b/interfaces.go
+@@ -2,24 +2,18 @@
+ 
+ import (
+ 	"context"
+-
+-	"github.com/docker/docker/api/types"
+-	"github.com/docker/docker/api/types/container"
+-	"github.com/docker/docker/api/types/image"
+-	"github.com/docker/docker/api/types/network"
+-	"github.com/docker/docker/api/types/volume"
++	"github.com/moby/moby/client"
+ )
+ 
+-// dockerClient is an interface that represents the reapers required Docker methods.
++// dockerClient is the cleanup API used by the reaper.
+ type dockerClient interface {
+-	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
+-	ContainerRemove(ctx context.Context, containerID string, options container.RemoveOptions) error
+-	ImageList(ctx context.Context, options image.ListOptions) ([]image.Summary, error)
+-	ImageRemove(ctx context.Context, imageID string, options image.RemoveOptions) ([]image.DeleteResponse, error)
+-	NetworkList(ctx context.Context, options network.ListOptions) ([]network.Summary, error)
+-	NetworkRemove(ctx context.Context, networkID string) error
+-	VolumeList(ctx context.Context, options volume.ListOptions) (volume.ListResponse, error)
+-	VolumeRemove(ctx context.Context, volumeID string, force bool) error
+-	Ping(ctx context.Context) (types.Ping, error)
+-	NegotiateAPIVersion(ctx context.Context)
++	ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error)
++	ContainerRemove(context.Context, string, client.ContainerRemoveOptions) (client.ContainerRemoveResult, error)
++	ImageList(context.Context, client.ImageListOptions) (client.ImageListResult, error)
++	ImageRemove(context.Context, string, client.ImageRemoveOptions) (client.ImageRemoveResult, error)
++	NetworkList(context.Context, client.NetworkListOptions) (client.NetworkListResult, error)
++	NetworkRemove(context.Context, string, client.NetworkRemoveOptions) (client.NetworkRemoveResult, error)
++	VolumeList(context.Context, client.VolumeListOptions) (client.VolumeListResult, error)
++	VolumeRemove(context.Context, string, client.VolumeRemoveOptions) (client.VolumeRemoveResult, error)
++	Ping(context.Context, client.PingOptions) (client.PingResult, error)
+ }
+--- a/reaper.go
++++ b/reaper.go
+@@ -3,6 +3,7 @@
+ import (
+ 	"bufio"
+ 	"context"
++	"encoding/json"
+ 	"errors"
+ 	"fmt"
+ 	"log/slog"
+@@ -13,12 +14,7 @@
+ 	"time"
+ 
+ 	"github.com/containerd/errdefs"
+-	"github.com/docker/docker/api/types/container"
+-	"github.com/docker/docker/api/types/filters"
+-	"github.com/docker/docker/api/types/image"
+-	"github.com/docker/docker/api/types/network"
+-	"github.com/docker/docker/api/types/volume"
+-	"github.com/docker/docker/client"
++	"github.com/moby/moby/client"
+ )
+ 
+ //nolint:gochecknoglobals // Reusable options are fine as globals.
+@@ -27,10 +23,10 @@
+ 	errChangesDetected = errors.New("changes detected")
+ 
+ 	// containerRemoveOptions are the options we use to remove a container.
+-	containerRemoveOptions = container.RemoveOptions{RemoveVolumes: true, Force: true}
++	containerRemoveOptions = client.ContainerRemoveOptions{RemoveVolumes: true, Force: true}
+ 
+ 	// imageRemoveOptions are the options we use to remove an image.
+-	imageRemoveOptions = image.RemoveOptions{PruneChildren: true}
++	imageRemoveOptions = client.ImageRemoveOptions{PruneChildren: true}
+ 
+ 	// volumeRemoveForce is the force option we use to remove a volume.
+ 	volumeRemoveForce = true
+@@ -48,7 +44,7 @@
+ 	connected    chan string
+ 	disconnected chan string
+ 	shutdown     chan struct{}
+-	filters      map[string]filters.Args
++	filters      map[string]client.Filters
+ 	logger       *slog.Logger
+ 	mtx          sync.Mutex
+ }
+@@ -92,7 +88,7 @@
+ func newReaper(ctx context.Context, options ...reaperOption) (*reaper, error) {
+ 	logLevel := &slog.LevelVar{}
+ 	r := &reaper{
+-		filters:      make(map[string]filters.Args),
++		filters:      make(map[string]client.Filters),
+ 		connected:    make(chan string), // Must be unbuffered to ensure correct behaviour.
+ 		disconnected: make(chan string),
+ 		shutdown:     make(chan struct{}),
+@@ -111,13 +107,11 @@
+ 	var err error
+ 	if r.client == nil {
+ 		// Default client configured from the environment.
+-		r.client, err = client.NewClientWithOpts(client.FromEnv)
++		r.client, err = client.New(client.FromEnv)
+ 		if err != nil {
+ 			return nil, fmt.Errorf("new client: %w", err)
+ 		}
+ 	}
+-
+-	r.client.NegotiateAPIVersion(ctx)
+ 
+ 	if r.cfg == nil {
+ 		// Default configuration loaded from the environment.
+@@ -134,7 +128,7 @@
+ 	pingCtx, cancel := context.WithTimeout(ctx, r.cfg.RequestTimeout)
+ 	defer cancel()
+ 
+-	_, err = r.client.Ping(pingCtx)
++	_, err = r.client.Ping(pingCtx, client.PingOptions{NegotiateAPIVersion: true})
+ 	if err != nil {
+ 		return nil, fmt.Errorf("ping: %w", err)
+ 	}
+@@ -436,12 +430,12 @@
+ // affectedContainers returns a slice of container IDs that match the filters.
+ // If a matching container was created after since, an error is returned and
+ // the container is not included in the list.
+-func (r *reaper) affectedContainers(since time.Time, args filters.Args) ([]string, error) {
++func (r *reaper) affectedContainers(since time.Time, args client.Filters) ([]string, error) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), r.cfg.RequestTimeout)
+ 	defer cancel()
+ 
+ 	// List all containers including stopped ones.
+-	options := container.ListOptions{All: true, Filters: args}
++	options := client.ContainerListOptions{All: true, Filters: args}
+ 	r.logger.Debug("listing containers", "filter", options)
+ 
+ 	containers, err := r.client.ContainerList(ctx, options)
+@@ -451,8 +445,8 @@
+ 
+ 	var errChanges []error
+ 
+-	containerIDs := make([]string, 0, len(containers))
+-	for _, container := range containers {
++	containerIDs := make([]string, 0, len(containers.Items))
++	for _, container := range containers.Items {
+ 		if container.Labels[ryukLabel] == "true" {
+ 			// Ignore reaper containers.
+ 			r.logger.Debug("skipping reaper container", "id", container.ID)
+@@ -490,11 +484,11 @@
+ // affectedNetworks returns a list of network IDs that match the filters.
+ // If a matching network was created after since, an error is returned and
+ // the network is not included in the list.
+-func (r *reaper) affectedNetworks(since time.Time, args filters.Args) ([]string, error) {
++func (r *reaper) affectedNetworks(since time.Time, args client.Filters) ([]string, error) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), r.cfg.RequestTimeout)
+ 	defer cancel()
+ 
+-	options := network.ListOptions{Filters: args}
++	options := client.NetworkListOptions{Filters: args}
+ 	r.logger.Debug("listing networks", "options", options)
+ 
+ 	report, err := r.client.NetworkList(ctx, options)
+@@ -504,8 +498,8 @@
+ 
+ 	var errChanges []error
+ 
+-	networks := make([]string, 0, len(report))
+-	for _, network := range report {
++	networks := make([]string, 0, len(report.Items))
++	for _, network := range report.Items {
+ 		changed := network.Created.After(since)
+ 		r.logger.Debug("found network",
+ 			"id", network.ID,
+@@ -530,11 +524,11 @@
+ // affectedVolumes returns a list of volume names that match the filters.
+ // If a matching volume was created after since, an error is returned and
+ // the volume is not included in the list.
+-func (r *reaper) affectedVolumes(since time.Time, args filters.Args) ([]string, error) {
++func (r *reaper) affectedVolumes(since time.Time, args client.Filters) ([]string, error) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), r.cfg.RequestTimeout)
+ 	defer cancel()
+ 
+-	options := volume.ListOptions{Filters: args}
++	options := client.VolumeListOptions{Filters: args}
+ 	r.logger.Debug("listing volumes", "filter", options)
+ 
+ 	report, err := r.client.VolumeList(ctx, options)
+@@ -544,8 +538,8 @@
+ 
+ 	var errChanges []error
+ 
+-	volumes := make([]string, 0, len(report.Volumes))
+-	for _, volume := range report.Volumes {
++	volumes := make([]string, 0, len(report.Items))
++	for _, volume := range report.Items {
+ 		created, perr := time.Parse(time.RFC3339, volume.CreatedAt)
+ 		if perr != nil {
+ 			// Best effort, log and continue.
+@@ -577,11 +571,11 @@
+ // affectedImages returns a list of image IDs that match the filters.
+ // If a matching image was created after since, an error is returned and
+ // the image is not included in the list.
+-func (r *reaper) affectedImages(since time.Time, args filters.Args) ([]string, error) {
++func (r *reaper) affectedImages(since time.Time, args client.Filters) ([]string, error) {
+ 	ctx, cancel := context.WithTimeout(context.Background(), r.cfg.RequestTimeout)
+ 	defer cancel()
+ 
+-	options := image.ListOptions{Filters: args}
++	options := client.ImageListOptions{Filters: args}
+ 	r.logger.Debug("listing images", "filter", options)
+ 
+ 	report, err := r.client.ImageList(ctx, options)
+@@ -591,8 +585,8 @@
+ 
+ 	var errChanges []error
+ 
+-	images := make([]string, 0, len(report))
+-	for _, image := range report {
++	images := make([]string, 0, len(report.Items))
++	for _, image := range report.Items {
+ 		created := time.Unix(image.Created, 0)
+ 		changed := created.After(since)
+ 		r.logger.Debug("found image",
+@@ -623,7 +617,7 @@
+ 		return fmt.Errorf("parse query: %w", err)
+ 	}
+ 
+-	args := filters.NewArgs()
++	args := make(client.Filters)
+ 
+ 	for filterType, values := range query {
+ 		r.logger.Info("adding filter", "type", filterType, "values", values)
+@@ -634,7 +628,7 @@
+ 	}
+ 
+ 	// We can't use msg as it could be in any order.
+-	data, err := args.MarshalJSON()
++	data, err := json.Marshal(args)
+ 	if err != nil {
+ 		return fmt.Errorf("marshal json: %w", err)
+ 	}
+@@ -657,11 +651,11 @@
+ 
+ // filterArgs returns a slice of filter.Args to check against.
+ // Safe to call concurrently.
+-func (r *reaper) filterArgs() []filters.Args {
++func (r *reaper) filterArgs() []client.Filters {
+ 	r.mtx.Lock()
+ 	defer r.mtx.Unlock()
+ 
+-	filters := make([]filters.Args, 0, len(r.filters))
++	filters := make([]client.Filters, 0, len(r.filters))
+ 	for _, args := range r.filters {
+ 		filters = append(filters, args)
+ 	}
+@@ -678,17 +672,20 @@
+ 
+ 	// Containers must be removed first.
+ 	errs = append(errs, r.remove("container", resources.containers, &containers, func(ctx context.Context, id string) error {
+-		return r.client.ContainerRemove(ctx, id, containerRemoveOptions)
++		_, err := r.client.ContainerRemove(ctx, id, containerRemoveOptions)
++		return err
+ 	}))
+ 
+ 	// Networks.
+ 	errs = append(errs, r.remove("network", resources.networks, &networks, func(ctx context.Context, id string) error {
+-		return r.client.NetworkRemove(ctx, id)
++		_, err := r.client.NetworkRemove(ctx, id, client.NetworkRemoveOptions{})
++		return err
+ 	}))
+ 
+ 	// Volumes.
+ 	errs = append(errs, r.remove("volume", resources.volumes, &volumes, func(ctx context.Context, id string) error {
+-		return r.client.VolumeRemove(ctx, id, volumeRemoveForce)
++		_, err := r.client.VolumeRemove(ctx, id, client.VolumeRemoveOptions{Force: volumeRemoveForce})
++		return err
+ 	}))
+ 
+ 	// Images.
+--- a/go.mod
++++ b/go.mod
+@@ -1,55 +1,30 @@
+ module github.com/testcontainers/moby-ryuk
+ 
+-go 1.23.9
++go 1.26.8
+ 
+ require (
+ 	github.com/caarlos0/env/v11 v11.3.1
+ 	github.com/containerd/errdefs v1.0.0
+-	github.com/docker/docker v28.3.3+incompatible
+ 	github.com/moby/go-archive v0.1.0
++	github.com/moby/moby/api v1.56.1
++	github.com/moby/moby/client v0.6.1
+ 	github.com/stretchr/testify v1.10.0
+ )
+ 
+ require (
+-	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
+-	github.com/Microsoft/go-winio v0.6.2 // indirect
+ 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
+-	github.com/containerd/log v0.1.0 // indirect
+-	github.com/davecgh/go-spew v1.1.1 // indirect
+ 	github.com/distribution/reference v0.6.0 // indirect
+-	github.com/docker/go-connections v0.5.0 // indirect
++	github.com/docker/go-connections v0.8.1 // indirect
+ 	github.com/docker/go-units v0.5.0 // indirect
+ 	github.com/felixge/httpsnoop v1.0.4 // indirect
+ 	github.com/go-logr/logr v1.4.2 // indirect
+ 	github.com/go-logr/stdr v1.2.2 // indirect
+-	github.com/gogo/protobuf v1.3.2 // indirect
+-	github.com/klauspost/compress v1.18.0 // indirect
+-	github.com/kr/pretty v0.3.1 // indirect
+ 	github.com/moby/docker-image-spec v1.3.1 // indirect
+-	github.com/moby/patternmatcher v0.6.0 // indirect
+-	github.com/moby/sys/atomicwriter v0.1.0 // indirect
+-	github.com/moby/sys/sequential v0.6.0 // indirect
+-	github.com/moby/sys/user v0.4.0 // indirect
+-	github.com/moby/sys/userns v0.1.0 // indirect
+-	github.com/moby/term v0.5.0 // indirect
+-	github.com/morikuni/aec v1.0.0 // indirect
+ 	github.com/opencontainers/go-digest v1.0.0 // indirect
+-	github.com/opencontainers/image-spec v1.1.0 // indirect
+-	github.com/pkg/errors v0.9.1 // indirect
+-	github.com/pmezard/go-difflib v1.0.0 // indirect
+-	github.com/rogpeppe/go-internal v1.12.0 // indirect
+-	github.com/sirupsen/logrus v1.9.3 // indirect
+-	github.com/stretchr/objx v0.5.2 // indirect
+-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0 // indirect
+-	go.opentelemetry.io/otel v1.28.0 // indirect
+-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0 // indirect
+-	go.opentelemetry.io/otel/metric v1.28.0 // indirect
+-	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
+-	go.opentelemetry.io/otel/trace v1.28.0 // indirect
+-	golang.org/x/net v0.38.0 // indirect
+-	golang.org/x/sys v0.31.0 // indirect
+-	golang.org/x/time v0.5.0 // indirect
+-	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
+-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+-	gopkg.in/yaml.v3 v3.0.1 // indirect
++	github.com/opencontainers/image-spec v1.1.1 // indirect
++	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
++	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
++	go.opentelemetry.io/otel v1.35.0 // indirect
++	go.opentelemetry.io/otel/metric v1.35.0 // indirect
++	go.opentelemetry.io/otel/trace v1.35.0 // indirect
+ )
+--- a/go.sum
++++ b/go.sum
+@@ -26,6 +26,8 @@
+ github.com/docker/docker v28.3.3+incompatible/go.mod h1:eEKB0N0r5NX/I1kEveEz05bcu8tLC/8azJZsviup8Sk=
+ github.com/docker/go-connections v0.5.0 h1:USnMq7hx7gwdVZq1L49hLXaFtUdTADjXGp+uj1Br63c=
+ github.com/docker/go-connections v0.5.0/go.mod h1:ov60Kzw0kKElRwhNs9UlUHAE/F9Fe6GLaXnqyDdmEXc=
++github.com/docker/go-connections v0.8.1 h1:JibmG5hULs5qXSr/cp/w3Pw5fZuStt4MOHMUExb29/M=
++github.com/docker/go-connections v0.8.1/go.mod h1:no1qkHdjq7kLMGUXYAduOhYPSJxxvgWBh7ogVvptn3Q=
+ github.com/docker/go-units v0.5.0 h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4=
+ github.com/docker/go-units v0.5.0/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
+ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
+@@ -58,6 +60,10 @@
+ github.com/moby/docker-image-spec v1.3.1/go.mod h1:eKmb5VW8vQEh/BAr2yvVNvuiJuY6UIocYsFu/DxxRpo=
+ github.com/moby/go-archive v0.1.0 h1:Kk/5rdW/g+H8NHdJW2gsXyZ7UnzvJNOy6VKJqueWdcQ=
+ github.com/moby/go-archive v0.1.0/go.mod h1:G9B+YoujNohJmrIYFBpSd54GTUB4lt9S+xVQvsJyFuo=
++github.com/moby/moby/api v1.56.1 h1:PpWkvVPB7Fr/No8w+TfyJ/I6rWZ2YPZhT3JorIg+06c=
++github.com/moby/moby/api v1.56.1/go.mod h1:sZ+THbVWkjOmBPPfbnzdD/G1LuIexWhqlSHHPTDQ1Uk=
++github.com/moby/moby/client v0.6.1 h1:gvfKmdcWw+9MzXYP0vAUKQtBTGu1L8475K2nsmL7O98=
++github.com/moby/moby/client v0.6.1/go.mod h1:XHgTFqz9NCgS/VuoxXMmEDVmVgXQ4vFEc15wsCIwb24=
+ github.com/moby/patternmatcher v0.6.0 h1:GmP9lR19aU5GqSSFko+5pRqHi+Ohk1O69aFiKkVGiPk=
+ github.com/moby/patternmatcher v0.6.0/go.mod h1:hDPoyOpDY7OrrMDLaYoY3hf52gNCR/YOUYxkhApJIxc=
+ github.com/moby/sys/atomicwriter v0.1.0 h1:kw5D/EqkBwsBFi0ss9v1VG3wIkVhzGvLklJ+w3A14Sw=
+@@ -76,6 +82,8 @@
+ github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
+ github.com/opencontainers/image-spec v1.1.0 h1:8SG7/vwALn54lVB/0yZ/MMwhFrPYtpEHQb2IpWsCzug=
+ github.com/opencontainers/image-spec v1.1.0/go.mod h1:W4s4sFTMaBeK1BQLXbG4AdM2szdn85PY75RI83NrTrM=
++github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
++github.com/opencontainers/image-spec v1.1.1/go.mod h1:qpqAh3Dmcf36wStyyWU+kCeDgrGnAve2nCC8+7h8Q0M=
+ github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA=
+ github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+ github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+@@ -94,20 +102,30 @@
+ github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
+ github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
+ github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
++go.opentelemetry.io/auto/sdk v1.1.0 h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA=
++go.opentelemetry.io/auto/sdk v1.1.0/go.mod h1:3wSPjt5PWp2RhlCcmmOial7AvC4DQqZb7a7wCow3W8A=
+ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0 h1:4K4tsIXefpVJtvA/8srF4V4y0akAoPHkIslgAkjixJA=
+ go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.53.0/go.mod h1:jjdQuTGVsXV4vSs+CJ2qYDeDPf9yIJV23qlIzBm73Vg=
++go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 h1:sbiXRNDSWJOTobXh5HyQKjq6wUC5tNybqjIqDpAY4CU=
++go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0/go.mod h1:69uWxva0WgAA/4bu2Yy70SLDBwZXuQ6PbBpbsa5iZrQ=
+ go.opentelemetry.io/otel v1.28.0 h1:/SqNcYk+idO0CxKEUOtKQClMK/MimZihKYMruSMViUo=
+ go.opentelemetry.io/otel v1.28.0/go.mod h1:q68ijF8Fc8CnMHKyzqL6akLO46ePnjkgfIMIjUIX9z4=
++go.opentelemetry.io/otel v1.35.0 h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=
++go.opentelemetry.io/otel v1.35.0/go.mod h1:UEqy8Zp11hpkUrL73gSlELM0DupHoiq72dR+Zqel/+Y=
+ go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0 h1:3Q/xZUyC1BBkualc9ROb4G8qkH90LXEIICcs5zv1OYY=
+ go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0/go.mod h1:s75jGIWA9OfCMzF0xr+ZgfrB5FEbbV7UuYo32ahUiFI=
+ go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0 h1:j9+03ymgYhPKmeXGk5Zu+cIZOlVzd9Zv7QIiyItjFBU=
+ go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0/go.mod h1:Y5+XiUG4Emn1hTfciPzGPJaSI+RpDts6BnCIir0SLqk=
+ go.opentelemetry.io/otel/metric v1.28.0 h1:f0HGvSl1KRAU1DLgLGFjrwVyismPlnuU6JD6bOeuA5Q=
+ go.opentelemetry.io/otel/metric v1.28.0/go.mod h1:Fb1eVBFZmLVTMb6PPohq3TO9IIhUisDsbJoL/+uQW4s=
++go.opentelemetry.io/otel/metric v1.35.0 h1:0znxYu2SNyuMSQT4Y9WDWej0VpcsxkuklLa4/siN90M=
++go.opentelemetry.io/otel/metric v1.35.0/go.mod h1:nKVFgxBZ2fReX6IlyW28MgZojkoAkJGaE8CpgeAU3oE=
+ go.opentelemetry.io/otel/sdk v1.28.0 h1:b9d7hIry8yZsgtbmM0DKyPWMMUMlK9NEKuIG4aBqWyE=
+ go.opentelemetry.io/otel/sdk v1.28.0/go.mod h1:oYj7ClPUA7Iw3m+r7GeEjz0qckQRJK2B8zjcZEfu7Pg=
+ go.opentelemetry.io/otel/trace v1.28.0 h1:GhQ9cUuQGmNDd5BTCP2dAvv75RdMxEfTmYejp+lkx9g=
+ go.opentelemetry.io/otel/trace v1.28.0/go.mod h1:jPyXzNPg6da9+38HEwElrQiHlVMTnVfM3/yv2OlIHaI=
++go.opentelemetry.io/otel/trace v1.35.0 h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs=
++go.opentelemetry.io/otel/trace v1.35.0/go.mod h1:WUk7DtFp1Aw2MkvqGdwiXYDZZNvA/1J8o6xRXLrIkyc=
+ go.opentelemetry.io/proto/otlp v1.3.1 h1:TrMUixzpM0yuc/znrFTP9MMRh8trP93mkCiDVeXrui0=
+ go.opentelemetry.io/proto/otlp v1.3.1/go.mod h1:0X1WI4de4ZsLrrJNLAQbFeLCm3T7yBkR0XqQ7niQU+8=
+ golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
