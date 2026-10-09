@@ -150,7 +150,22 @@
     "main_version": "(devel)"
   },
   "proof": {
-    "scope": "Go 1.26.9 identities measured from real repeat builds; every final-head CI/CodeQL rebuild requires fresh authoritative source/binary advisory evidence."
+    "head": "8176b025212a5d20c532f5a032c631ff28443c99",
+    "run": 37881363846,
+    "artifact": 11594881209,
+    "artifact_digest": "sha256:630d2a556fb28c00bd4b0a420bc28cf6e2142be157ad3534146a64b0c190e054",
+    "observed_at": "2026-10-09T03:57:22.810969+00:00",
+    "analysis": {
+      "source": {
+        "status": 0,
+        "sha256": "b3b73ff7f852bd66710000baa81ced4f4220bb8cf8cffa498c4983eabb203cdf"
+      },
+      "binary": {
+        "status": 0,
+        "sha256": "3dc4930fe8cd4576c77ce04f2861f8f53789eefd1771e25c23da78df611c2564"
+      }
+    },
+    "scope": "Authentic zero-finding source and binary govulncheck reports, real compiler/source/module and repeat-build evidence; final-head CI/CodeQL must independently rebuild and verify."
   },
   "source_authority": "Official release 0.14.0 at exact commit plus repository-reviewed migration patch; no post-release upstream commits included",
   "applicability": [],

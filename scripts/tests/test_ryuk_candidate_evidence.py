@@ -1,5 +1,6 @@
 """Offline mutations of the candidate's identity and fail-closed advisory contract."""
 import copy
+import gzip
 import importlib.util
 import json
 import struct
@@ -128,6 +129,19 @@ class CandidateEvidenceTest(unittest.TestCase):
     def test_patched_candidate_clears_standard_library_gate(self):
         self.assertEqual([], self.validate()['blocked'])
 
+    def test_authentic_go_1_26_9_source_and_binary_reports_clear_gate(self):
+        fixture = ROOT / 'scripts/tests/fixtures/ryuk-go-1.26.9'
+        proof = json.loads((fixture / 'provenance.json').read_text())
+        for mode in ['source', 'binary']:
+            data = gzip.decompress((fixture / (mode + '-govulncheck.json.gz')).read_bytes())
+            self.assertEqual(proof['analysis'][mode]['sha256'], CANDIDATE.sha(data))
+            self.put(mode + '-govulncheck.json', data)
+            self.receipt['analysis'][mode] = proof['analysis'][mode]
+        # Evaluate retained authentic bytes at their observation time; runtime freshness remains strict.
+        with patch.object(CANDIDATE, 'datetime', wraps=datetime) as clock:
+            clock.now.return_value = datetime.fromisoformat(proof['observed_at'])
+            self.assertEqual([], self.validate()['blocked'])
+
     def test_vulnerable_go_standard_library_cannot_be_a_clean_candidate(self):
         self.put('buildinfo.txt', (self.directory / 'buildinfo.txt').read_bytes().replace(b'go1.26.9', b'go1.23.12'))
         with self.assertRaises(ValueError): self.validate()
@@ -140,6 +154,10 @@ class CandidateEvidenceTest(unittest.TestCase):
     def test_all_new_advisories_block_without_a_reachable_symbol(self):
         before = json.loads((ROOT / '.github/security/ryuk/go-1.26.8-advisories.json').read_text())
         self.assertEqual((13, 12), (before['analysis']['source']['distinct'], before['analysis']['binary']['distinct']))
+        for advisory in before['advisories']:
+            self.assertTrue(any(a['package']['name'] == 'stdlib'
+                and any({'fixed': '1.26.9'} in r['events'] for r in a['ranges'])
+                for a in advisory['affected']), advisory['id'])
         for mode in ['source', 'binary']:
             path = self.directory / (mode + '-govulncheck.json')
             clean = path.read_bytes()
