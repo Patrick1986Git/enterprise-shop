@@ -27,7 +27,7 @@ class BuilderEvidencePolicyTest(unittest.TestCase):
         self.packages = {'unzip': '6.0-26ubuntu3.2', 'openssl': '3.0.2-test', 'bash': '5.1-test'}
         self.report = {
             'SchemaVersion': 2, 'ArtifactType': 'container_image', 'ArtifactName': 'enterprise-shop/builder:ci',
-            'Trivy': {'Version': '0.72.0'},
+            'Trivy': {'Version': '0.75.0'},
             'Metadata': {'ImageID': 'sha256:test', 'OS': {'Family': 'ubuntu', 'Name': '22.04'}},
             'Results': [{'Class': 'os-pkgs', 'Type': 'ubuntu', 'Target': 'Ubuntu',
                          'Packages': [{'Name': k, 'Version': v} for k, v in self.packages.items()],
@@ -284,7 +284,7 @@ class BuilderCiPolicyTest(unittest.TestCase):
         self.assertIn('--format cyclonedx --output /evidence/builder.cdx.json', self.scanner)
 
     def test_pinned_trivy_same_database_and_unfiltered_separate_builder_policy(self):
-        self.assertIn('TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f', self.job)
+        self.assertIn('TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa', self.job)
         self.assertIn('--list-all-pkgs --exit-code 0', self.scanner)
         self.assertIn('--ignorefile /dev/null', self.scanner)
         self.assertIn('image --download-db-only', self.scanner)
