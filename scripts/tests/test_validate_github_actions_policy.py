@@ -11,6 +11,116 @@ SPEC.loader.exec_module(POLICY)
 SHA = "0123456789abcdef0123456789abcdef01234567"
 
 
+class CodeQLWorkflowPolicyTest(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (SCRIPT.parents[1] / ".github/workflows/codeql.yml").read_text()
+
+    def validate(self, contents):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "codeql.yml"
+            path.write_text(contents, encoding="utf-8")
+            return POLICY.validate_workflows(Path(directory))
+
+    def reject(self, before, after, diagnostic):
+        self.assertIn(before, self.workflow)
+        errors = self.validate(self.workflow.replace(before, after))
+        self.assertTrue(any(diagnostic in error for error in errors), errors)
+
+    def test_reviewed_dual_language_workflow_passes(self):
+        self.assertEqual([], self.validate(self.workflow))
+
+    def test_either_language_job_cannot_disappear(self):
+        for job in ("analyze", "analyze-python"):
+            with self.subTest(job=job):
+                self.reject(f"  {job}:\n", f"  removed-{job}:\n", "independent Java/Kotlin and Python")
+
+    def test_whole_codeql_workflow_cannot_disappear_from_cli_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertTrue(POLICY.validate_workflows(Path(directory), require_codeql=True))
+
+    def test_java_build_cannot_move_before_initialization(self):
+        self.reject("      - name: Initialize CodeQL\n",
+                    "      - name: Early build\n        run: ./mvnw -B clean verify\n\n"
+                    "      - name: Initialize CodeQL\n", "between initialization and analysis")
+
+    def test_java_manual_and_python_no_build_modes_cannot_change(self):
+        for mode in ("manual", "none"):
+            with self.subTest(mode=mode):
+                self.reject(f"build-mode: {mode}", "build-mode: autobuild", "mode, queries")
+
+    def test_security_queries_and_languages_cannot_be_reduced(self):
+        for before, after in (("queries: security-extended", "queries: security-and-quality"),
+                              ("languages: python", "languages: javascript-typescript"),
+                              ("languages: java-kotlin", "languages: python")):
+            with self.subTest(before=before):
+                self.reject(before, after, "mode, queries")
+
+    def test_java_jdk_build_and_ryuk_procedure_remain_required(self):
+        for before in ("java-version: '21'", "run: ./mvnw -B clean verify",
+                       "run: python scripts/build-ryuk-candidate.py", "SPRING_PROFILES_ACTIVE: test"):
+            with self.subTest(before=before):
+                self.reject(before, "removed: true", "full Java 21 Maven verification")
+
+    def test_pull_request_target_cannot_be_introduced(self):
+        self.reject("  pull_request:", "  pull_request_target:", "triggers")
+
+    def test_master_push_pr_schedule_and_dispatch_cannot_disappear(self):
+        for before in ("  push:", "  pull_request:", "  schedule:", "  workflow_dispatch:", "      - master"):
+            with self.subTest(before=before):
+                self.reject(before, "  removed:", "triggers")
+
+    def test_persisted_credentials_and_mutable_action_references_fail(self):
+        self.reject("persist-credentials: false", "persist-credentials: true", "persist-credentials")
+        self.reject(POLICY.CODEQL_SHA, "v4", "full 40-character")
+
+    def test_permissions_cannot_be_broadened_or_sarif_disabled(self):
+        for before, after in (("contents: read", "contents: write"),
+                              ("security-events: write", "security-events: read"),
+                              ("upload: always", "upload: never")):
+            with self.subTest(before=before):
+                self.reject(before, after, "least privilege")
+        self.reject("      security-events: write\n", "      security-events: write\n      id-token: write\n",
+                    "least privilege")
+        self.reject("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  id-token: write\n",
+                    "default workflow permissions")
+
+    def test_java_and_python_uploads_remain_distinct(self):
+        self.reject("category: /language:python", "category: /language:java-kotlin", "distinct processed SARIF")
+        self.reject("      - name: Analyze with CodeQL\n",
+                    "      - name: Analyze with CodeQL\n        with:\n          category: /language:python\n",
+                    "existing SARIF category")
+
+    def test_python_extraction_and_processed_upload_are_required(self):
+        for before in ("python scripts/validate-codeql-python-coverage.py", "git ls-files -z -- '*.py'",
+                       "wait-for-processing: true", "name: python-codeql-evidence", "if-no-files-found: error",
+                       "bqrs decode --format=json --entities=string,url"):
+            with self.subTest(before=before):
+                self.reject(before, "removed: true", "source-extraction evidence")
+
+    def test_job_cannot_be_skipped_or_given_privileged_services(self):
+        for extra in ("    if: false", "    needs: analyze", "    container: ubuntu:latest",
+                      "    services:", "    secrets: inherit"):
+            with self.subTest(extra=extra):
+                self.reject("  analyze-python:\n", "  analyze-python:\n" + extra + "\n", "unconditional and isolated")
+
+    def test_source_filters_and_query_suppression_cannot_hide_owned_files(self):
+        for extra in ("          source-root: scripts", "          config-file: reduced.yml",
+                      "          paths-ignore: scripts", "          skip-queries: true"):
+            with self.subTest(extra=extra):
+                self.reject("          languages: python\n", "          languages: python\n" + extra + "\n",
+                            "coverage cannot be restricted")
+
+    def test_python_database_population_cannot_execute_candidate_code(self):
+        for command in ("python scripts/build-ryuk-candidate.py", "./mvnw -B clean verify", "pip install -r requirements.txt"):
+            with self.subTest(command=command):
+                self.reject("      - name: Initialize Python CodeQL\n",
+                            "      - name: Unreviewed execution\n        run: " + command +
+                            "\n\n      - name: Initialize Python CodeQL\n", "must not build")
+
+    def test_pr_sha_and_dispatch_checkout_semantics_remain_required(self):
+        self.reject("github.event.pull_request.head.sha", "github.sha", "permissions and checkout")
+
+
 class GitHubActionsPolicyTest(unittest.TestCase):
     def validate(self, contents, filename="fixture.yml"):
         with tempfile.TemporaryDirectory() as directory:

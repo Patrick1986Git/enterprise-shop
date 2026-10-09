@@ -1,5 +1,74 @@
 # Container supply-chain security validation
 
+## Repository-owned CodeQL source analysis
+
+[CodeQL](../../.github/workflows/codeql.yml) owns two independent jobs with the same
+reviewed SHA-pinned action and `security-extended` query policy. `Analyze Java/Kotlin`
+retains Java 21, manual database population through the reviewed Ryuk preparation
+and full `./mvnw -B clean verify`, and its existing Code Scanning category. `Analyze
+Python` uses `build-mode: none` on a separate hosted runner. It extracts the clean
+checkout without executing candidate scripts, installing dependencies, building
+Java, or using Docker. Its explicit `/language:python` category keeps its processed
+SARIF upload separate from the existing Java analysis.
+
+Both jobs run for pull requests targeting master, protected-master pushes, the
+existing weekly schedule, and explicit dispatch. Checkout disables persisted
+credentials and selects protected master for the schedule, the immutable PR HEAD
+for pull requests, and the selected ref for push/dispatch. The workflow defaults to
+`contents: read`; each analysis job alone adds `security-events: write`. There is
+no `pull_request_target`, additional secret, job dependency, container, or service.
+
+The Python source boundary includes every Git-tracked `*.py` file, including all
+policy tests. New repository directories are covered without an allowlist update.
+The security-sensitive tooling currently has these responsibilities:
+
+| Sources under `scripts/` | Security responsibility |
+| --- | --- |
+| `validate-auxiliary-containers.py`, `validate-build-tool-vulnerabilities.py`, `validate-container-vulnerability-policy.py`, `scan-build-tools.py` | Fail-closed advisory policy, Trivy/CycloneDX identity and execution ownership; subprocess and environment inputs. |
+| `build-ryuk-candidate.py`, `ryuk_candidate_evidence.py`, `ryuk_client_tests.py`, `check-ryuk-cleanup.py` | Verified source/archive inputs, deterministic builds, source/binary govulncheck, reviewed executable and test identities, real cleanup evidence. |
+| `auxiliary_binary_evidence.py`, `scan-auxiliary-containers.py`, `verify-trivy-provenance.py` | External artifact downloads, tar-member readback, OCI/executable/SBOM identities, scanner provenance and Docker subprocess boundaries. |
+| `build-tool-inventory.py`, `validate-builder-security.py` | Maven collector/classpath/execution evidence, ZIP readback, external JDK advisory downloads and checksum verification. |
+| `validate-github-actions-policy.py`, `validate-master-protection.py`, `validate-maven-wrapper.py`, `restore_pr_scope.py` | Pinned Actions and permissions, live protected-master policy, distribution integrity, immutable changed-file detection and restore decisions. |
+| `prepare-jacoco-ratchet.py`, `validate-jacoco-report.py` | Downloaded artifact integrity and provenance, untrusted coverage XML/JSON, exact non-regression and ratchet decisions. |
+| `openapi_compatibility.py`, `validate_migration_compatibility.py`, `validate-production-configuration.py` | Untrusted contract/schema/configuration inputs, compatibility decisions and operational safety. |
+| `validate-codeql-python-coverage.py` and `tests/*.py` | Actual extracted-source/query/SARIF evidence, archive readback and deterministic offline regressions for these boundaries. |
+
+The job places CodeQL databases and SARIF under `runner.temp`, outside the source
+checkout. It creates no Maven output, downloaded third-party source, dependency
+cache or generated Python inputs there. It deliberately uses no source filters.
+Committed Python files are repository-owned inputs; adding vendored/generated
+sources requires review rather than silently excluding a tracked file.
+
+After successful analysis and processed SARIF upload, the job decodes CodeQL's
+built-in `Diagnostics/ExtractedFiles` query. The offline coverage verifier requires
+every tracked Python path to appear in the actual database query and its archived
+source bytes to match the checkout. Missing/empty/partial extraction, changed
+bytes, linked sources or unsuccessful query execution fail the job. The
+`python-codeql-evidence` artifact retains the exact HEAD, per-file SHA-256 inventory,
+decoded query results and Python SARIF for 14 days. A green analysis or a nonempty
+archive alone is insufficient. The verifier runs after extraction; it does not
+execute scripts to populate the database. Findings remain visible in SARIF and
+Code Scanning for investigation, with no suppression or severity downgrade.
+
+Expect one additional short Python runner job per CodeQL event, generally about
+one minute for this repository, subject to runner startup, bundle/cache and query
+cost. No additional complete Maven build is added. Offline policy regressions
+complement this source analysis; advisory scanning, provenance and actual runtime
+tests retain their separate ownership. Static extraction without installing
+dependencies has limited visibility into dynamically imported/generated code and
+external modules. CodeQL does not establish absence of vulnerabilities or complete
+coverage for shell/Windows Wrapper, workflow expression semantics, downloaded Go
+tools, native Haskell/C++ binaries, registries, compilers or hosted runner/daemon
+infrastructure. Maven, Trivy, govulncheck and existing integrity policies continue
+to cover their reviewed supply-chain boundaries.
+
+The active master ruleset currently requires `Analyze Java/Kotlin` but does not
+require `Analyze Python`. Maintainers must separately decide to add the exact
+`Analyze Python` status from GitHub Actions (integration ID 15368). The live
+protection validator intentionally checks the current exact required-status set;
+that reviewed contract and its offline fixtures must be updated together with any
+maintainer-side ruleset change. This PR does not change administrative settings.
+
 ## Auxiliary execution images
 
 The authoritative [auxiliary inventory](../../.github/security/auxiliary-container-scope.json) records exact tags/digests, registries, linux/amd64, executable byte/version identities, commands, mounts, Docker-socket/network capabilities, inputs, code execution, update/advisory owners, SBOM coverage and classifications. Whole-source SHA-256 receipts cover workflow, Docker/Compose, shell/Python Docker orchestration and Java Testcontainers image surfaces. New surfaces and changes to existing ones fail inventory validation until the image census/classification and source receipts are deliberately reviewed. This is a review boundary for those sources, not a complete interpreter of arbitrary downloaded or dynamically generated code.
@@ -431,7 +500,7 @@ python scripts/validate-github-actions-policy.py
 python -m unittest scripts.tests.test_validate_github_actions_policy
 ```
 
-The local validator enforces reference shape and checkout policy only; it cannot prove that a commit exists in the named repository or matches the adjacent release comment. Verify the official tag-to-commit mapping separately. Successful GitHub job preparation confirms that the repository can resolve the referenced commit, but does not independently validate the version comment.
+The local validator enforces reference shape, checkout policy and the reviewed CI/CodeQL configuration boundaries; it cannot prove that a commit exists in the named repository or matches the adjacent release comment. Verify the official tag-to-commit mapping separately. Successful GitHub job preparation confirms that the repository can resolve the referenced commit, but does not independently validate the version comment.
 
 Before accepting an action update, resolve the intended release in the official repository and verify both the tag and commit object, for example:
 

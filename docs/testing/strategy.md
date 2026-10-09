@@ -6,6 +6,35 @@ Hosted container-security additionally requires actual Hadolint, installed-gosu-
 
 ## Tooling
 
+### Python and Java/Kotlin CodeQL
+
+The existing Java/Kotlin CodeQL job retains its manual Java 21 Maven verification.
+The independent Python CodeQL job performs no-build `security-extended` analysis
+of all tracked Python tooling and tests. Its database must actually contain each
+tracked source path and identical source bytes; a green job with incomplete
+extraction fails acceptance. The separate Python SARIF category, processed upload,
+decoded extracted-file query and source inventory are documented in
+[the CodeQL security boundary](../operations/container-security.md#repository-owned-codeql-source-analysis).
+
+Run the offline regressions with:
+
+```bash
+python -m unittest scripts.tests.test_validate_github_actions_policy scripts.tests.test_validate_codeql_python_coverage
+python scripts/validate-github-actions-policy.py
+python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+Workflow mutations reject removal of either language, changed build procedures or
+queries, disabled/shared uploads, missing extraction evidence, lost schedule/master
+triggers, privileged triggers, conditional jobs, changed checkout identities,
+unreviewed actions, broadened permissions and Python database-population commands.
+Extraction fixtures reject empty/partial query results, archived-but-unextracted
+files, source changes, unsafe paths and future tracked files missing from analysis.
+They use local temporary fixtures and no external network. Hosted acceptance still
+requires real extraction, query execution and SARIF processing on the exact final
+HEAD for both languages, plus every existing CI/application/security gate. Finding
+counts are review evidence; they are not a guarantee of vulnerability absence.
+
 - Java 21.
 - Maven Wrapper is present and should be used for repeatable local/CI commands.
 - CI runs `./mvnw -B clean verify`.

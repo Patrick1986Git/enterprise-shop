@@ -76,6 +76,7 @@ jobs:
           ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
 
       - name: Initialize Python CodeQL
+        id: init-python
         uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           languages: python
@@ -91,3 +92,32 @@ jobs:
           output: ${{ runner.temp }}/python-codeql-sarif
           upload: always
           wait-for-processing: true
+
+      - name: Verify Python source extraction
+        env:
+          CODEQL_CLI: ${{ steps.init-python.outputs.codeql-path }}
+          CODEQL_DATABASES: ${{ steps.analyze-python.outputs.db-locations }}
+          CODEQL_SARIF: ${{ steps.analyze-python.outputs.sarif-output }}
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.py' > "$RUNNER_TEMP/python-codeql-sources"
+          "$CODEQL_CLI" bqrs decode --format=json --entities=string,url \
+            "$RUNNER_TEMP/codeql-python/python/results/codeql/python-queries/Diagnostics/ExtractedFiles.bqrs" \
+            > "$RUNNER_TEMP/python-codeql-extracted.json"
+          python scripts/validate-codeql-python-coverage.py \
+            --databases "$CODEQL_DATABASES" --sarif-directory "$CODEQL_SARIF" \
+            --inventory "$RUNNER_TEMP/python-codeql-sources" \
+            --extracted "$RUNNER_TEMP/python-codeql-extracted.json" \
+            --head-sha "$(git rev-parse HEAD)" \
+            --output "$RUNNER_TEMP/python-codeql-coverage.json"
+
+      - name: Upload Python CodeQL evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-codeql-evidence
+          path: |
+            ${{ runner.temp }}/python-codeql-coverage.json
+            ${{ runner.temp }}/python-codeql-extracted.json
+            ${{ runner.temp }}/python-codeql-sarif/python.sarif
+          if-no-files-found: error
+          retention-days: 14
