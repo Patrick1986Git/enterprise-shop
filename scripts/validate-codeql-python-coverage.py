@@ -55,9 +55,11 @@ def validate_coverage(root, inventory, archive, sarif, head_sha, extracted_files
     if sarif.get("version") != "2.1.0" or len(runs) != 1:
         raise ValueError("Missing Python SARIF analysis")
     run = runs[0]
-    rules = run.get("tool", {}).get("driver", {})
-    if rules.get("name") != "CodeQL" or not any(
-            rule.get("id", "").startswith("py/") for rule in rules.get("rules", [])):
+    tool = run.get("tool", {})
+    rules = [rule for component in [tool.get("driver", {}), *tool.get("extensions", [])]
+             for rule in component.get("rules", [])]
+    if tool.get("driver", {}).get("name") != "CodeQL" or not any(
+            rule.get("id", "").startswith("py/") for rule in rules):
         raise ValueError("Missing Python CodeQL security queries")
     invocations = run.get("invocations", [])
     if not invocations or any(item.get("executionSuccessful") is not True for item in invocations):
@@ -67,7 +69,7 @@ def validate_coverage(root, inventory, archive, sarif, head_sha, extracted_files
         raise ValueError("Missing Python CodeQL findings evidence")
     return {"head_sha": head_sha, "tracked_python_files": len(sources),
             "extracted_python_files": len(sources),
-            "security_query_rules": len(rules["rules"]), "findings": len(results),
+            "security_query_rules": len(rules), "findings": len(results),
             "source_archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
             "sources": sources}
 

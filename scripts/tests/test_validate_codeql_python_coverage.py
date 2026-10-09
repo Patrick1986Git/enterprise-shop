@@ -46,6 +46,11 @@ class CodeQLPythonCoverageTest(unittest.TestCase):
         self.assertEqual(1, report["extracted_python_files"])
         self.assertEqual("scripts/security.py", report["sources"][0]["path"])
 
+    def test_codeql_query_pack_rules_in_sarif_extensions_are_verified(self):
+        tool = self.sarif["runs"][0]["tool"]
+        tool["extensions"] = [{"name": "codeql/python-queries", "rules": tool["driver"].pop("rules")}]
+        self.assertEqual(1, self.validate()["security_query_rules"])
+
     def test_empty_extraction_cannot_pass_a_green_scan(self):
         self.write_archive({})
         with self.assertRaisesRegex(ValueError, "Missing or ambiguous extracted"):
