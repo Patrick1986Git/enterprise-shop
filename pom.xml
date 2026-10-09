@@ -204,7 +204,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>4.0.3</version>
+							<version>4.1.0</version>
 						</dependency>
 					</dependencies>
 				</plugin>
@@ -233,7 +233,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>4.0.3</version>
+							<version>4.1.0</version>
 						</dependency>
 					</dependencies>
 				</plugin>
@@ -244,7 +244,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>3.6.1</version>
+							<version>4.1.0</version>
 						</dependency>
 					</dependencies>
 				</plugin>
@@ -255,7 +255,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>4.0.3</version>
+							<version>4.1.0</version>
 						</dependency>
 					</dependencies>
 				</plugin>
@@ -266,7 +266,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>4.0.3</version>
+							<version>4.1.0</version>
 						</dependency>
 					</dependencies>
 				</plugin>
@@ -277,7 +277,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>3.6.1</version>
+							<version>4.1.0</version>
 						</dependency>
 					</dependencies>
 				</plugin>
@@ -288,7 +288,7 @@
 						<dependency>
 							<groupId>org.codehaus.plexus</groupId>
 							<artifactId>plexus-utils</artifactId>
-							<version>3.6.1</version>
+							<version>4.1.0</version>
 						</dependency>
 						<dependency>
 							<groupId>tools.jackson.core</groupId>
