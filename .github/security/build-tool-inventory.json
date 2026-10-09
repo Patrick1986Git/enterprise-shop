@@ -535,8 +535,8 @@
       "org.glassfish.jaxb:jaxb-runtime:jar::4.0.7",
       "org.glassfish.jaxb:txw2:jar::4.0.7",
       "org.hibernate.models:hibernate-models:jar::1.1.2",
-      "org.hibernate.orm:hibernate-core:jar::7.4.11.Final",
-      "org.hibernate.orm:hibernate-processor:jar::7.4.11.Final",
+      "org.hibernate.orm:hibernate-core:jar::7.4.12.Final",
+      "org.hibernate.orm:hibernate-processor:jar::7.4.12.Final",
       "org.jacoco:jacoco-maven-plugin:jar::0.8.15",
       "org.jacoco:org.jacoco.agent:jar:runtime:0.8.15",
       "org.jacoco:org.jacoco.core:jar::0.8.15",
@@ -1194,7 +1194,7 @@
       }
     },
     "processor_roots": [
-      "org.hibernate.orm:hibernate-processor:jar::7.4.11.Final",
+      "org.hibernate.orm:hibernate-processor:jar::7.4.12.Final",
       "org.mapstruct:mapstruct-processor:jar::1.6.3"
     ],
     "processors": [
@@ -1214,8 +1214,8 @@
       "org.glassfish.jaxb:jaxb-runtime:jar::4.0.7",
       "org.glassfish.jaxb:txw2:jar::4.0.7",
       "org.hibernate.models:hibernate-models:jar::1.1.2",
-      "org.hibernate.orm:hibernate-core:jar::7.4.11.Final",
-      "org.hibernate.orm:hibernate-processor:jar::7.4.11.Final",
+      "org.hibernate.orm:hibernate-core:jar::7.4.12.Final",
+      "org.hibernate.orm:hibernate-processor:jar::7.4.12.Final",
       "org.jboss.logging:jboss-logging:jar::3.6.1.Final",
       "org.mapstruct:mapstruct-processor:jar::1.6.3"
     ],

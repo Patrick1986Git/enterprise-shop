@@ -77,6 +77,12 @@ class AuxiliaryPolicyTest(unittest.TestCase):
     def test_dynamic_command_change_requires_review(self):
         self.source_change(lambda r: (r / 'scripts/run-gosu-govulncheck.sh').write_text('docker run "$UNREVIEWED_IMAGE"\n'))
 
+    def test_build_tool_collector_change_requires_fresh_source_receipt(self):
+        def change(root):
+            path = root / 'scripts/build-tool-inventory.py'
+            path.write_text(path.read_text() + '\n')
+        self.source_change(change)
+
     def test_downloaded_gosu_dockerfiles_are_not_repository_execution_surfaces(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
