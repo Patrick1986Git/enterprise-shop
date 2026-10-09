@@ -1,5 +1,6 @@
 import copy
 import importlib.util
+import itertools
 import unittest
 from pathlib import Path
 
@@ -8,6 +9,11 @@ SCRIPT = Path(__file__).parents[1] / "validate-master-protection.py"
 SPEC = importlib.util.spec_from_file_location("master_protection", SCRIPT)
 POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
+
+EXPECTED_CHECKS = {
+    "build", "docker-validation", "container-security", "Analyze Java/Kotlin",
+    "Analyze Python", "dependency-review", "restore-pr-scope", "restore-rehearsal",
+}
 
 
 def valid_collection():
@@ -44,7 +50,7 @@ def valid_detail():
                     "do_not_enforce_on_create": False,
                     "required_status_checks": [
                         {"context": context, "integration_id": POLICY.GITHUB_ACTIONS_INTEGRATION_ID}
-                        for context in sorted(POLICY.REQUIRED_CHECKS)
+                        for context in sorted(EXPECTED_CHECKS)
                     ],
                 },
             },
@@ -69,6 +75,48 @@ class MasterProtectionPolicyTest(unittest.TestCase):
     def test_accepts_exact_valid_ruleset_with_unobservable_bypass_actors(self):
         self.assertEqual([], POLICY.validate_ruleset_collection(valid_collection()))
         self.assertEqual([], POLICY.validate_ruleset_detail(valid_detail()))
+
+    def test_intended_contract_requires_both_codeql_jobs_and_existing_seven(self):
+        self.assertEqual(EXPECTED_CHECKS, POLICY.REQUIRED_CHECKS)
+        self.assertEqual(8, len(POLICY.REQUIRED_CHECKS))
+
+    def test_temporary_transition_accepts_only_exact_seven_or_eight_contexts(self):
+        contexts = sorted(EXPECTED_CHECKS)
+        for flags in itertools.product((False, True), repeat=len(contexts)):
+            observed = {context for context, present in zip(contexts, flags) if present}
+            detail = valid_detail()
+            status_parameters(detail)["required_status_checks"] = [
+                {"context": context, "integration_id": 15368} for context in sorted(observed)
+            ]
+            with self.subTest(contexts=sorted(observed)):
+                accepted = observed in (EXPECTED_CHECKS, EXPECTED_CHECKS - {"Analyze Python"})
+                self.assertEqual(accepted, not POLICY.validate_ruleset_detail(detail))
+
+    def test_python_integration_rename_and_duplicate_are_rejected(self):
+        for mutation, message in (("integration", "integration_id"),
+                                  ("rename", "required check contexts"),
+                                  ("duplicate", "duplicate required check")):
+            detail = valid_detail()
+            checks = status_parameters(detail)["required_status_checks"]
+            python = next(check for check in checks if check["context"] == "Analyze Python")
+            if mutation == "integration":
+                python["integration_id"] = 1
+            elif mutation == "rename":
+                python["context"] = "Analyze python"
+            else:
+                checks.append(copy.deepcopy(python))
+            with self.subTest(mutation=mutation):
+                self.assert_detail_invalid(detail, message)
+
+    def test_all_required_contexts_reject_untrusted_integrations_in_both_transition_states(self):
+        for include_python in (False, True):
+            for context in EXPECTED_CHECKS - (set() if include_python else {"Analyze Python"}):
+                detail = valid_detail()
+                checks = status_parameters(detail)["required_status_checks"]
+                checks[:] = [check for check in checks if include_python or check["context"] != "Analyze Python"]
+                next(check for check in checks if check["context"] == context)["integration_id"] = None
+                with self.subTest(include_python=include_python, context=context):
+                    self.assert_detail_invalid(detail, "integration_id")
 
     def test_rejects_missing_dependency_review(self):
         self.assert_missing_check("dependency-review")
