@@ -60,6 +60,9 @@ class BuildToolInventoryTest(unittest.TestCase):
 
     def test_required_processors_and_every_resolved_processor_component_are_owned(self):
         current = self.contract['inventory']
+        self.assertEqual({'org.mapstruct:mapstruct-processor:jar::1.6.3',
+                          'org.hibernate.orm:hibernate-processor:jar::7.4.12.Final'},
+                         INVENTORY.REQUIRED_PROCESSORS)
         self.assertLessEqual(INVENTORY.REQUIRED_PROCESSORS, set(current['processor_roots']))
         self.assertLessEqual(set(current['processor_roots']), set(current['processors']))
         self.assertLessEqual(set(current['processors']), set(current['components']))
@@ -97,6 +100,24 @@ class BuildToolInventoryTest(unittest.TestCase):
         for missing in INVENTORY.REQUIRED_PROCESSORS:
             with self.subTest(missing=missing), self.assertRaisesRegex(ValueError, 'Required processor absent'):
                 INVENTORY.processor_roots(self.processors(INVENTORY.REQUIRED_PROCESSORS - {missing}))
+
+    def test_unreviewed_hibernate_processor_version_fails_in_both_compiler_executions(self):
+        intended = 'org.hibernate.orm:hibernate-processor:jar::7.4.12.Final'
+        for version in ('7.4.11.Final', '7.4.13.Final'):
+            changed = INVENTORY.REQUIRED_PROCESSORS - {intended} | {
+                f'org.hibernate.orm:hibernate-processor:jar::{version}'}
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'Required processor absent'):
+                INVENTORY.processor_roots(self.processors(changed))
+
+    def test_missing_or_inconsistent_compiler_processor_executions_fail(self):
+        rows = self.processors(INVENTORY.REQUIRED_PROCESSORS)
+        for goal in ('compile', 'testCompile'):
+            with self.subTest(missing=goal), self.assertRaisesRegex(ValueError, 'Missing compiler executions'):
+                INVENTORY.processor_roots([row for row in rows if row[1] != goal])
+            changed = self.processors(INVENTORY.REQUIRED_PROCESSORS | {'example:processor:jar::1'})
+            inconsistent = [row for row in rows if row[1] != goal] + [row for row in changed if row[1] == goal]
+            with self.subTest(changed=goal), self.assertRaisesRegex(ValueError, 'Required processor absent'):
+                INVENTORY.processor_roots(inconsistent)
 
     def test_changed_transitive_and_removed_expected_component_fail(self):
         for key in ('components', 'processors', 'agents'):

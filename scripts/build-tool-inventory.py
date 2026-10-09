@@ -21,7 +21,7 @@ CONTRACT = ROOT / '.github/security/build-tool-inventory.json'
 IDENTITY = 'enterprise-shop-build-tools'
 DISTRIBUTION_PACKAGE = 'org.apache.maven:apache-maven:pom::3.10.0'
 REQUIRED_PROCESSORS = {'org.mapstruct:mapstruct-processor:jar::1.6.3',
-                       'org.hibernate.orm:hibernate-processor:jar::7.4.11.Final'}
+                       'org.hibernate.orm:hibernate-processor:jar::7.4.12.Final'}
 TOKEN = re.compile(r'^[A-Za-z0-9_.+\-]+$')
 SHA256 = re.compile(r'^[0-9a-f]{64}$')
 

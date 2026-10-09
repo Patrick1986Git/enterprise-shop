@@ -216,7 +216,7 @@
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
     "scripts/auxiliary_binary_evidence.py": "a56a9cf1a14377b3171bccbd5cb29f9e48b3e40012a5250caf569882dbf8cb0c",
     "scripts/build-ryuk-candidate.py": "0ecb9c3edc2ec3ff06c744c161ebad19b0e1d3f5a32ef87ea106b57202745b0f",
-    "scripts/build-tool-inventory.py": "7f25b130ee128a321564613f1e7ff8ec1f5e26c6e406f4ccad86008c6ec11c34",
+    "scripts/build-tool-inventory.py": "524e63f73e79be3b3442f525983a083db2f9ba22d757b8fd7e136e91b060a689",
     "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
     "scripts/historical-forward-restore-rehearsal.sh": "1b6f3241fdaa1bce83cae712f4128e9ebba408ad09e9ea4a5d5c188be3dce507",
     "scripts/record-docker-builder.sh": "751269ba6d5e422c4800c783b3deac8aa088b4c3c57b96e9a4ff5e79b428f6b7",
