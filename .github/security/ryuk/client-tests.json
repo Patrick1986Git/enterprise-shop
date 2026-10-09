@@ -4,7 +4,7 @@
     "Test_loadConfig",
     "Test_newReaper_Run"
   ],
-  "execution": "Go 1.26.8; readonly modules; no external network or Docker socket",
+  "execution": "Go 1.26.9; readonly modules; no external network or Docker socket",
   "source_files": {
     "client_contract_test.go": "9a7d6fa146e3607697b4a62f005dbe37c58d7d0d2cdf3abd9a342b384ad79452",
     "config.go": "69f4a20e6d0e5f7b82a2f8ddb22be9cfeac5f9582f501e735d604c95d10e7e21",

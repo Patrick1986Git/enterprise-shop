@@ -456,10 +456,10 @@ jobs:
       # Trivy v0.75.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.75.0 image digest.
       TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
       # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
-      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.8-alpine3.24@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c
+      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
-      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-b71be439828092aba0a7d13f214c1ebe5b45b33753587401c7ac76954a40cdf3
+      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-0c88a43b0dbf5f47247aae36c687e69bda0ec11d49d198f3e2f7a77932a44e2a
       # Human-readable gosu release tag; CI verifies that it resolves to the pinned immutable commit before govulncheck.
       GOSU_SOURCE_TAG: "1.19"
       GOSU_SOURCE_COMMIT: 6456aaa0f3c854d199d0f037f068eb97515b7513
@@ -522,7 +522,7 @@ jobs:
 
           docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
           docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.75.0'
-          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.8 linux/amd64'
+          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.9 linux/amd64'
           docker run --rm --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}" cat /etc/alpine-release | grep -E '^3\.20\.'
 
       - name: Verify upstream Trivy executable provenance

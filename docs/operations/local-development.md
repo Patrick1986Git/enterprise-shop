@@ -74,7 +74,7 @@ python3 scripts/build-ryuk-candidate.py --no-analysis
 python3 scripts/check-ryuk-cleanup.py
 ```
 
-Preparation verifies the pinned upstream archive and patch, immutable Go builder, repeated executable bytes, module checksums, selected upstream cleanup tests and exact scratch image contents against the reviewed candidate receipt. It loads the resulting local image; it publishes nothing and never falls back to official Ryuk. `--no-analysis` omits downloading/compiling govulncheck and contacting the Go advisory database for local preparation. Hosted CI and CodeQL omit that flag and retain mandatory source/binary vulnerability analysis; local preparation is not a security approval.
+Preparation verifies the pinned upstream archive and patch, immutable Go 1.26.9 Alpine 3.24 builder, repeated executable bytes, module checksums, selected upstream cleanup tests and exact scratch image contents against the reviewed candidate receipt. It loads the resulting local image; it publishes nothing and never falls back to official Ryuk. `--no-analysis` omits downloading/compiling govulncheck and contacting the Go advisory database for local preparation. Hosted CI and CodeQL omit that flag and retain mandatory source/binary vulnerability analysis; local preparation is not a security approval. A network restriction affecting `vuln.go.dev` leaves local advisory verification unverified and requires successful hosted evidence for the exact final HEAD.
 
 To reuse an existing preparation for the same HEAD, revalidate its complete build evidence and loaded image before running Maven:
 
