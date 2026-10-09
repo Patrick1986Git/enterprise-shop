@@ -43,7 +43,7 @@ def inventory(image, candidate):
     require(image['reference'] == candidate['image_reference']
             == 'local/enterprise-shop-ryuk:sha256-' + candidate['image_id'].removeprefix('sha256:')
             and image['identity']['sha256'] == candidate['binary_sha256']
-            and image['go_version'] == candidate['go_version'] == '1.26.8', 'Wrong candidate identity')
+            and image['go_version'] == candidate['go_version'] == '1.26.9', 'Wrong candidate identity')
     require(candidate['buildinfo']['go_version'] == candidate['go_version']
             and candidate['buildinfo']['build']['CGO_ENABLED'] == '0' and candidate['upx'] is False,
             'Wrong reviewed candidate build')

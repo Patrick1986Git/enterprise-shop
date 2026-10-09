@@ -34,10 +34,10 @@ class AuxiliaryPolicyTest(unittest.TestCase):
                            {'Target': 'Alpine', 'Class': 'os-pkgs', 'Type': 'alpine', 'Packages': [
                                {'Name': 'musl', 'Version': '1.2.5-r12', 'Identifier': {'PURL': 'pkg:apk/alpine/musl@1.2.5-r12'}}]},
                            {'Target': 'usr/local/go/bin/go', 'Class': 'lang-pkgs', 'Type': 'gobinary', 'Packages': [
-                               {'Name': 'stdlib', 'Version': 'v1.26.8', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.8'}}]}]}
+                               {'Name': 'stdlib', 'Version': 'v1.26.9', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.9'}}]}]}
         self.bom = {'bomFormat': 'CycloneDX', 'specVersion': '1.7', 'metadata': {'component': {
             'name': '/input/govulncheck.tar', 'properties': [{'name': 'aquasecurity:trivy:ImageID', 'value': self.image_id}]}},
-            'components': [{'purl': 'pkg:apk/alpine/musl@1.2.5-r12'}, {'purl': 'pkg:golang/stdlib@v1.26.8'}]}
+            'components': [{'purl': 'pkg:apk/alpine/musl@1.2.5-r12'}, {'purl': 'pkg:golang/stdlib@v1.26.9'}]}
 
     def validate(self):
         return POLICY.validate(self.image, self.evidence, self.report, self.bom, '0.75.0')
@@ -94,7 +94,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Hadolint'): POLICY.inventory(self.contract)
 
     def test_digest_required(self):
-        self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.8-alpine3.24'
+        self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.9-alpine3.24'
         with self.assertRaises(ValueError): POLICY.inventory(self.contract)
 
     def test_linux_amd64_required(self):
@@ -159,7 +159,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         self.report['Results'][1]['Target'] = 'usr/local/bin/gosu'
         self.image['required_gobinaries'] = ['usr/local/bin/gosu']
         self.report['Results'][1]['Vulnerabilities'] = [{'VulnerabilityID': 'CVE-2025-68121',
-            'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.8', 'Severity': 'CRITICAL'}]
+            'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.9', 'Severity': 'CRITICAL'}]
         self.assertEqual(1, len(self.validate()['blocked']))
 
     def test_no_auxiliary_exception_authority_can_exempt_production(self):

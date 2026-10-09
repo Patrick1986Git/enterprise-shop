@@ -1,5 +1,6 @@
 """Offline mutations of the candidate's identity and fail-closed advisory contract."""
 import copy
+import gzip
 import importlib.util
 import json
 import struct
@@ -45,7 +46,7 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.put('image-config.json', config)
         self.put('upstream.tar.gz', b'archive fixture')
         metadata = self.candidate['buildinfo']
-        text = '/evidence/ryuk: go1.26.8\n\tpath\t' + metadata['path'] + '\n\tmod\t' + metadata['main_module'] + '\t(devel)\t\n'
+        text = '/evidence/ryuk: go1.26.9\n\tpath\t' + metadata['path'] + '\n\tmod\t' + metadata['main_module'] + '\t(devel)\t\n'
         for name, dep in metadata['dependencies'].items():
             text += '\tdep\t' + name + '\t' + dep['version'] + '\t' + dep['sum'] + '\n'
         for key, value in metadata['build'].items():
@@ -68,7 +69,7 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.put('source-packages.json', '\n'.join(json.dumps(p) for p in packages).encode())
         self.put('source-modules.json', json.dumps(modules).encode())
         self.put('govulncheck', b'tool fixture')
-        self.put('govulncheck-buildinfo.txt', ('/evidence/govulncheck: go1.26.8\n'
+        self.put('govulncheck-buildinfo.txt', ('/evidence/govulncheck: go1.26.9\n'
             '\tpath\tgolang.org/x/vuln/cmd/govulncheck\n\tmod\tgolang.org/x/vuln\tv1.8.0\t'
             + self.candidate['govulncheck_sum'] + '\n').encode())
         self.receipt = {k: v for k, v in self.candidate.items() if k not in ['proof', 'source_authority', 'applicability', 'buildinfo']}
@@ -88,7 +89,7 @@ class CandidateEvidenceTest(unittest.TestCase):
             stream = [{'config': {'scan_mode': mode, 'scan_level': 'symbol', 'scanner_name': 'govulncheck',
                        'scanner_version': 'v1.8.0', 'db': 'https://vuln.go.dev',
                        'db_last_modified': datetime.now(timezone.utc).isoformat()}},
-                      {'SBOM': {'go_version': 'go1.26.8', 'roots': [metadata['main_module']], 'modules': modules}}]
+                      {'SBOM': {'go_version': 'go1.26.9', 'roots': [metadata['main_module']], 'modules': modules}}]
             self.put(mode + '-govulncheck.json', '\n'.join(json.dumps(m) for m in stream).encode())
             self.receipt['analysis'][mode] = {'status': 0, 'sha256': CANDIDATE.sha((self.directory / (mode + '-govulncheck.json')).read_bytes())}
         self.save()
@@ -100,7 +101,7 @@ class CandidateEvidenceTest(unittest.TestCase):
                 'NextUpdate': (now + timedelta(hours=2)).isoformat()}, 'installed_os_packages': {}, 'artifact_name': '/input/ryuk.tar'}
         packages = [{'Name': n, 'Version': d['version'], 'Identifier': {'PURL': 'pkg:golang/' + n + '@' + d['version']}}
                     for n, d in metadata['dependencies'].items()]
-        packages += [{'Name': 'stdlib', 'Version': 'v1.26.8', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.8'}},
+        packages += [{'Name': 'stdlib', 'Version': 'v1.26.9', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.9'}},
                      {'Name': metadata['main_module'], 'Relationship': 'root', 'Identifier': {'PURL': 'pkg:golang/' + metadata['main_module']}}]
         self.report = {'SchemaVersion': 2, 'ArtifactType': 'container_image', 'ArtifactName': '/input/ryuk.tar',
             'Metadata': {'ImageID': image_id}, 'Trivy': {'Version': '0.75.0'}, 'Results': [
@@ -128,16 +129,81 @@ class CandidateEvidenceTest(unittest.TestCase):
     def test_patched_candidate_clears_standard_library_gate(self):
         self.assertEqual([], self.validate()['blocked'])
 
+    def test_authentic_go_1_26_9_source_and_binary_reports_clear_gate(self):
+        fixture = ROOT / 'scripts/tests/fixtures/ryuk-go-1.26.9'
+        proof = json.loads((fixture / 'provenance.json').read_text())
+        for mode in ['source', 'binary']:
+            data = gzip.decompress((fixture / (mode + '-govulncheck.json.gz')).read_bytes())
+            self.assertEqual(proof['analysis'][mode]['sha256'], CANDIDATE.sha(data))
+            self.put(mode + '-govulncheck.json', data)
+            self.receipt['analysis'][mode] = proof['analysis'][mode]
+        # Evaluate retained authentic bytes at their observation time; runtime freshness remains strict.
+        with patch.object(CANDIDATE, 'datetime', wraps=datetime) as clock:
+            clock.now.return_value = datetime.fromisoformat(proof['observed_at'])
+            self.assertEqual([], self.validate()['blocked'])
+
     def test_vulnerable_go_standard_library_cannot_be_a_clean_candidate(self):
-        self.put('buildinfo.txt', (self.directory / 'buildinfo.txt').read_bytes().replace(b'go1.26.8', b'go1.23.12'))
+        self.put('buildinfo.txt', (self.directory / 'buildinfo.txt').read_bytes().replace(b'go1.26.9', b'go1.23.12'))
         with self.assertRaises(ValueError): self.validate()
+
+    def test_previous_go_1_26_8_candidate_cannot_reauthorize_itself(self):
+        self.candidate['go_version'] = self.image['go_version'] = '1.26.8'
+        self.candidate['buildinfo']['go_version'] = '1.26.8'
+        with self.assertRaisesRegex(ValueError, 'Wrong candidate identity'): self.validate()
+
+    def test_all_new_advisories_block_without_a_reachable_symbol(self):
+        before = json.loads((ROOT / '.github/security/ryuk/go-1.26.8-advisories.json').read_text())
+        self.assertEqual((13, 12), (before['analysis']['source']['distinct'], before['analysis']['binary']['distinct']))
+        for advisory in before['advisories']:
+            self.assertTrue(any(a['package']['name'] == 'stdlib'
+                and any({'fixed': '1.26.9'} in r['events'] for r in a['ranges'])
+                for a in advisory['affected']), advisory['id'])
+        for mode in ['source', 'binary']:
+            path = self.directory / (mode + '-govulncheck.json')
+            clean = path.read_bytes()
+            for advisory in before['advisories']:
+                if mode not in advisory['finding_examples']:
+                    continue
+                with self.subTest(mode=mode, advisory=advisory['id']):
+                    finding = copy.deepcopy(advisory['finding_examples'][mode])
+                    # Package-level findings must block even without a function trace.
+                    finding['trace'] = [{'module': 'stdlib', 'version': 'v1.26.8'}]
+                    self.put(path.name, clean + b'\n' + json.dumps({'finding': finding}).encode())
+                    self.receipt['analysis'][mode]['sha256'] = CANDIDATE.sha(path.read_bytes())
+                    with self.assertRaisesRegex(ValueError, 'advisory findings'): self.validate()
+            self.put(path.name, clean)
+            self.receipt['analysis'][mode]['sha256'] = CANDIDATE.sha(clean)
+
+    def test_wrong_builder_digest_fails_closed(self):
+        self.receipt['builder'] = self.receipt['builder'].split('@')[0] + '@sha256:' + 'a' * 64
+        with self.assertRaisesRegex(ValueError, 'identity drift'): self.validate()
+
+    def test_changed_module_checksum_fails_even_with_updated_source_receipts(self):
+        path = self.directory / 'source/go.sum'
+        self.put('source/go.sum', path.read_bytes().replace(b'h1:', b'h2:', 1))
+        self.candidate['source_files']['go.sum'] = CANDIDATE.sha(path.read_bytes())
+        self.receipt['source_files']['go.sum'] = self.candidate['source_files']['go.sum']
+        with self.assertRaisesRegex(ValueError, 'source/module mismatch'): self.validate()
+
+    def test_unrecognized_candidate_image_fails_closed(self):
+        self.image['reference'] = 'local/unreviewed-ryuk:latest'
+        with self.assertRaises(ValueError): self.validate()
+
+    def test_stale_go_advisory_evidence_fails_closed(self):
+        for mode in ['source', 'binary']:
+            path = self.directory / (mode + '-govulncheck.json')
+            stream = CANDIDATE.messages(path.read_bytes())
+            stream[0]['config']['db_last_modified'] = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            self.put(path.name, '\n'.join(json.dumps(m) for m in stream).encode())
+            self.receipt['analysis'][mode]['sha256'] = CANDIDATE.sha(path.read_bytes())
+            with self.assertRaisesRegex(ValueError, 'Stale Go advisory'): self.validate()
 
     def test_standard_library_high_or_critical_is_always_blocking(self):
         before = json.loads((ROOT / '.github/security/ryuk/official-0.14.0-advisories.json').read_text())
         for finding in before['advisories']:
             if finding['PkgName'] == 'stdlib' and finding['Severity'] in {'HIGH', 'CRITICAL'}:
                 self.report['Results'][0]['Vulnerabilities'] = [{'VulnerabilityID': finding['VulnerabilityID'],
-                    'Severity': finding['Severity'], 'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.8'}]
+                    'Severity': finding['Severity'], 'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.9'}]
                 self.assertEqual(finding['VulnerabilityID'], self.validate()['blocked'][0]['id'])
 
     def test_source_binary_module_version_mismatch_fails(self):
@@ -190,6 +256,10 @@ class CandidateEvidenceTest(unittest.TestCase):
 
     def test_missing_source_mode_evidence_invalidates_evidence(self):
         (self.directory / 'source-govulncheck.json').unlink()
+        with self.assertRaises(OSError): self.validate()
+
+    def test_missing_binary_mode_evidence_invalidates_evidence(self):
+        (self.directory / 'binary-govulncheck.json').unlink()
         with self.assertRaises(OSError): self.validate()
 
     def test_expired_applicability_cannot_be_accepted(self):
