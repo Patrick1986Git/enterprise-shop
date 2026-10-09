@@ -35,13 +35,13 @@ requires real extraction, query execution and SARIF processing on the exact fina
 HEAD for both languages, plus every existing CI/application/security gate. Finding
 counts are review evidence; they are not a guarantee of vulnerability absence.
 
-The temporary required-status migration fixtures use an independent literal
-eight-context expectation, exercise all 256 subsets and accept only the exact
-reviewed old seven or intended eight with GitHub Actions integration `15368`.
-Python rename/duplicate/untrusted integration and all existing protection controls
-remain negative cases. This temporary acceptance must be tightened to eight after
-the coordinated live change; it is not final merge acceptance. See the
-[protected-master sequence](../operations/container-security.md#required-python-status-migration-temporary-preparation).
+The permanent required-status fixtures use an independent literal eight-context
+expectation and exercise all 256 subsets, accepting only the complete eight with
+GitHub Actions integration `15368`. The old seven-check set without `Analyze
+Python` is explicitly rejected. Every context's rename, duplication, incorrect or
+missing integration, additional contexts and weakened protection controls remain
+negative cases. See the
+[required protected-master checks](../operations/container-security.md#required-protected-master-checks).
 Run `python -m unittest scripts.tests.test_validate_master_protection` offline.
 The compressed Go suite additionally verifies the actual OCI provenance caller,
 fixed HTTPS request hosts/scope and adversarial delimiters with network mocked:
@@ -161,11 +161,11 @@ The official CodeQL database extraction, query execution, GitHub code-scanning h
 
 ## Protected-master pull-request gates
 
-The active `master` ruleset is the mechanical merge-enforcement boundary. A red workflow is evidence, but does not block a merge unless its check context is required by that ruleset. The ruleset must therefore require the always-present `build`, `docker-validation`, `container-security`, `dependency-review`, `restore-pr-scope`, and `Analyze Java/Kotlin` checks from GitHub Actions.
+The active `master` ruleset is the mechanical merge-enforcement boundary. A red workflow is evidence, but does not block a merge unless its check context is required by that ruleset. `Protect master` (`20755388`) must require exactly `build`, `docker-validation`, `container-security`, `Analyze Java/Kotlin`, `Analyze Python`, `dependency-review`, `restore-pr-scope`, and `restore-rehearsal`, each from GitHub Actions integration `15368`. Both independent CodeQL jobs are required; the previous seven-check configuration is rejected.
 
 The required `build` job also runs `scripts/validate-master-protection.py` on pull requests, protected-master pushes, and manual dispatches. The script reads the public, read-only repository-ruleset collection and `Protect master` detail endpoints without sending `GITHUB_TOKEN` or any other credential. It fails closed on transport, HTTP, JSON, or schema failure and requires exactly one active repository ruleset, the repository-owned ruleset identity and exact `refs/heads/master` target, no exclusions, pull-request enforcement, review-thread resolution, zero required approvals, the existing merge methods, strict status checks, branch-creation enforcement, and the exact required-check contexts with GitHub Actions integration ID `15368`. Additional checks are treated as drift rather than silently accepted. Offline fixtures test policy behavior without network access.
 
-GitHub's safe public ruleset-detail representation omits `bypass_actors`. The validator therefore distinguishes an absent field from an empty array: it rejects visible non-empty actors, but does not claim that omission proves there are none. A maintainer with repository-administration read access must verify the empty bypass list when intentionally changing the ruleset. No PAT, GitHub App credential, administration permission, or mutation path is supplied to CI.
+GitHub's credential-free public ruleset-detail representation can omit `bypass_actors`. The validator therefore distinguishes an absent field from an empty array: it rejects visible non-empty actors, but does not claim that omission proves there are none. A maintainer with repository-administration read access must verify the empty bypass list when intentionally changing the ruleset. No PAT, GitHub App credential, administration permission, or mutation path is supplied to CI.
 
 The live ruleset remains the enforcement source; the repository policy is a drift detector, not a second protection system. An intentional ruleset or required-job rename must update the live ruleset and this single repository-owned policy in one coordinated change, preserving the exact contexts and integration identity. The check can expose removal of another required context while `build` remains required. It cannot prevent an administrator from simultaneously removing or bypassing `build` itself, and increasing automation privilege would not remove that administrator trust boundary.
 

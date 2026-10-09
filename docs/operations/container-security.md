@@ -62,49 +62,31 @@ tools, native Haskell/C++ binaries, registries, compilers or hosted runner/daemo
 infrastructure. Maven, Trivy, govulncheck and existing integrity policies continue
 to cover their reviewed supply-chain boundaries.
 
-### Required Python status migration: temporary preparation
+### Required protected-master checks
 
-Ruleset `Protect master` (`20755388`) currently requires the exact seven contexts
-`build`, `docker-validation`, `container-security`, `Analyze Java/Kotlin`,
-`dependency-review`, `restore-pr-scope` and `restore-rehearsal`, all from GitHub
-Actions integration `15368`. `Analyze Python` is independently successful but is
-not currently required. The intended final contract adds that exact context and
-retains all seven existing checks, strict up-to-date status validation, review
-thread resolution and the current bypass policy.
+Ruleset `Protect master` (`20755388`) requires exactly eight contexts: `build`,
+`docker-validation`, `container-security`, `Analyze Java/Kotlin`, `Analyze Python`,
+`dependency-review`, `restore-pr-scope` and `restore-rehearsal`. Every context must
+come from GitHub Actions integration `15368`. Both independent CodeQL analyses are
+required merge gates, alongside the existing application, security and restore
+checks.
 
-This draft contains a temporary validator accepting only the exact old seven or
-the exact intended eight, with identical trusted integration IDs in both states.
-Every other subset, added/renamed/duplicated context or untrusted integration fails.
-This is preparation, not the permanent policy or a merge-ready migration. The
-seven-check alternative must be removed before this draft is accepted as final.
+`scripts/validate-master-protection.py` enforces this permanent exact-eight
+contract against the live ruleset. The previous seven-check set is rejected,
+including omission of `Analyze Python`. Additional, renamed or duplicated
+contexts and incorrect integration IDs fail closed. Strict up-to-date status
+checks, exact `refs/heads/master` targeting without exclusions, active enforcement,
+pull-request requirements, review-thread resolution and the empty bypass policy
+remain unchanged. Missing bypass data in the credential-free API representation
+does not prove an empty bypass list; explicit maintainer readback is required
+when changing the ruleset.
 
-The current protected-master source still requires exactly seven. Installing the
-ruleset's eighth check now would cause a master CI rerun to fail its existing
-validator. Conversely, merging a strict-eight validator before the live change
-would fail the new master's live check. A transition only on the PR branch does
-not resolve that protected-master sequencing constraint.
-
-For a migration that preserves successful master validation throughout:
-
-1. A maintainer must first arrange a separately reviewed minimal bootstrap of the
-   exact seven/eight transition validator and its tests on protected master, and
-   verify that master's CI accepts the unchanged seven-check live ruleset. This
-   requires an explicit exception to keeping every change solely in draft PR
-   #467; this task does not create another branch/PR, update master or merge.
-2. Only after that compatible master revision is verified may the maintainer add
-   exactly `Analyze Python`, GitHub Actions integration ID `15368`, to ruleset
-   `20755388`. Preserve all seven existing contexts and every other rule. Confirm
-   the live eight-check representation and the bootstrap master's policy check.
-3. Continue in PR #467: incorporate that exact protected base, remove the temporary
-   seven-check acceptance, make fixtures/regressions/documentation enforce exactly
-   eight, and rerun all final-head CI and both CodeQL jobs before maintainer review.
-
-Under the original single-PR/no-merge constraints alone, there is no atomic change
-covering GitHub administration and the validator on two Git revisions. A brief
-master-validator incompatibility window would require a separate explicit
-maintainer decision; it is not silently accepted here. Do not add the eighth
-status merely because the draft's temporary validator is green. No administrative
-settings are changed by this draft.
+Offline regressions enumerate all 256 subsets and accept only the complete eight,
+with independent literal fixture expectations and negative cases for every
+context's integration, rename and duplication. There is no temporary acceptance
+of seven checks. Intentional future changes must coordinate the live ruleset,
+validator, fixtures and documentation while preserving successful protected-master
+validation. CI reads administration evidence; it does not modify administration.
 
 ### OCI provenance finding and tested trust boundary
 

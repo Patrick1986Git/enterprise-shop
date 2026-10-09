@@ -80,7 +80,7 @@ class MasterProtectionPolicyTest(unittest.TestCase):
         self.assertEqual(EXPECTED_CHECKS, POLICY.REQUIRED_CHECKS)
         self.assertEqual(8, len(POLICY.REQUIRED_CHECKS))
 
-    def test_temporary_transition_accepts_only_exact_seven_or_eight_contexts(self):
+    def test_final_contract_accepts_only_exact_eight_contexts(self):
         contexts = sorted(EXPECTED_CHECKS)
         for flags in itertools.product((False, True), repeat=len(contexts)):
             observed = {context for context, present in zip(contexts, flags) if present}
@@ -89,34 +89,36 @@ class MasterProtectionPolicyTest(unittest.TestCase):
                 {"context": context, "integration_id": 15368} for context in sorted(observed)
             ]
             with self.subTest(contexts=sorted(observed)):
-                accepted = observed in (EXPECTED_CHECKS, EXPECTED_CHECKS - {"Analyze Python"})
+                accepted = observed == EXPECTED_CHECKS
                 self.assertEqual(accepted, not POLICY.validate_ruleset_detail(detail))
 
-    def test_python_integration_rename_and_duplicate_are_rejected(self):
-        for mutation, message in (("integration", "integration_id"),
-                                  ("rename", "required check contexts"),
-                                  ("duplicate", "duplicate required check")):
-            detail = valid_detail()
-            checks = status_parameters(detail)["required_status_checks"]
-            python = next(check for check in checks if check["context"] == "Analyze Python")
-            if mutation == "integration":
-                python["integration_id"] = 1
-            elif mutation == "rename":
-                python["context"] = "Analyze python"
-            else:
-                checks.append(copy.deepcopy(python))
-            with self.subTest(mutation=mutation):
-                self.assert_detail_invalid(detail, message)
-
-    def test_all_required_contexts_reject_untrusted_integrations_in_both_transition_states(self):
-        for include_python in (False, True):
-            for context in EXPECTED_CHECKS - (set() if include_python else {"Analyze Python"}):
+    def test_all_required_contexts_reject_integration_rename_and_duplicate(self):
+        for context in sorted(EXPECTED_CHECKS):
+            for mutation, message in (("integration", "integration_id"),
+                                      ("rename", "required check contexts"),
+                                      ("duplicate", "duplicate required check")):
                 detail = valid_detail()
                 checks = status_parameters(detail)["required_status_checks"]
-                checks[:] = [check for check in checks if include_python or check["context"] != "Analyze Python"]
-                next(check for check in checks if check["context"] == context)["integration_id"] = None
-                with self.subTest(include_python=include_python, context=context):
-                    self.assert_detail_invalid(detail, "integration_id")
+                check = next(item for item in checks if item["context"] == context)
+                if mutation == "integration":
+                    check["integration_id"] = 1
+                elif mutation == "rename":
+                    check["context"] = context.upper()
+                else:
+                    checks.append(copy.deepcopy(check))
+                with self.subTest(context=context, mutation=mutation):
+                    self.assert_detail_invalid(detail, message)
+
+    def test_all_required_contexts_reject_untrusted_integrations(self):
+        for context in sorted(EXPECTED_CHECKS):
+            detail = valid_detail()
+            checks = status_parameters(detail)["required_status_checks"]
+            next(check for check in checks if check["context"] == context)["integration_id"] = None
+            with self.subTest(context=context):
+                self.assert_detail_invalid(detail, "integration_id")
+
+    def test_rejects_previous_seven_checks_without_python(self):
+        self.assert_missing_check("Analyze Python")
 
     def test_rejects_missing_dependency_review(self):
         self.assert_missing_check("dependency-review")
