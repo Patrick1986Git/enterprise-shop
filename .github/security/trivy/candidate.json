@@ -1,0 +1,1614 @@
+{
+  "upstream_source_sha": "591e9799316a602e703f0b484f6c6d7b234ec8f3",
+  "upstream_archive_sha256": "4a5bb1c16ccc55368843eb95ee9a25519a0bfef26609a8b4295f2060af43077e",
+  "patch_sha256": "9fd37166f858e711be6df21fed4d716a7a98951c9a18cde3789cb743770f13c3",
+  "go_mod_sha256": "54eb7f4afb4f86650b63d72deb206c73f24f5fbf1f20e93e93e380eba1ab11c5",
+  "go_sum_sha256": "f0792bca7d673d64f10e76910532f3a1252301ac8e7a0c68aebd31fd5cd4c3b1",
+  "builder": "docker.io/library/golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673",
+  "builder_image_id": "sha256:0a761904b78c29eba4ec83bd83b7312db1e113dcd92da7fc669843ad9bca56a1",
+  "builder_manifest": "sha256:3b15ba438c60ab8fabe5fee3b11025c0049e358b31feff384648f11fc8e335f8",
+  "builder_binary_sha256": "548d3c32f83fa81152f543eb1526be7884cfe0526eb5e9ce29d3eca14786e7e0",
+  "go_version": "1.27.2",
+  "flags": "-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags=\"-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0\"",
+  "sdk_sha256": "ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5",
+  "sdk_tools": {
+    "bin/go": "548d3c32f83fa81152f543eb1526be7884cfe0526eb5e9ce29d3eca14786e7e0",
+    "bin/gofmt": "5583dbb3339147fee7cdb067eb3cd4a50015b48c27084377f49d93833aa4ad77",
+    "pkg/tool/linux_amd64/compile": "8d4484dbaa31c4c6cec965aadd42efaa1e8d59e4a30ca3b466b502c377c29121",
+    "pkg/tool/linux_amd64/link": "b7567a824e05fa24240edbf883e77e536914f22444c6946f1cd4a904b315f9c2"
+  },
+  "symbol_reader_sha256": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
+  "cgo_enabled": "0",
+  "upx": false,
+  "independent_cold_caches": true,
+  "binary_sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
+  "repeat_sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
+  "image_reference": "local/enterprise-shop-trivy:sha256-6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c",
+  "image_id": "sha256:6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c",
+  "archive_sha256": "798aaeac6eadd6f485cf7bd3f93bc0f00e014b96bf77177ed36e9ceb61ff7bc3",
+  "layer_sha256": "a8ec9deebae5c540b00b5037dda39c49fad7200207ef37bc563c443b7699292a",
+  "filesystem": {
+    "usr/local/bin/trivy": {
+      "sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
+      "size": 172540064,
+      "mode": 493
+    },
+    "etc/ssl/certs/ca-certificates.crt": {
+      "sha256": "028fca5150ee1915c4474489985d55c54fceaa680c754cc8d1301734f01b2232",
+      "size": 181724,
+      "mode": 420
+    },
+    "contrib/asff.tpl": {
+      "sha256": "17661a225590a90bef223a246e6f2cb18e1522edd8f70573cb94ff01c46f39b0",
+      "size": 7004,
+      "mode": 420
+    },
+    "contrib/gitlab-codequality.tpl": {
+      "sha256": "1342f7c84d0b15fb552c6e6eb9b2c265f0a5c1e6beb2f55039e7a20c592208cb",
+      "size": 3392,
+      "mode": 420
+    },
+    "contrib/gitlab.tpl": {
+      "sha256": "6921a9ba0ac4f5ed0c8f4bb6a0c23465b907e76dd5f7c7920f70fa3446523a63",
+      "size": 3456,
+      "mode": 420
+    },
+    "contrib/html.tpl": {
+      "sha256": "d36b637cc77bc1a49b1f9a2358173756cd27a5d3385fab6365c0bab09abe5f0a",
+      "size": 5056,
+      "mode": 420
+    },
+    "contrib/junit.tpl": {
+      "sha256": "d46c35736bd6caf4b728375ffa43fd157c54aa2e88ed02963aa063a0ac27938e",
+      "size": 3132,
+      "mode": 420
+    },
+    "tmp": {
+      "type": "directory",
+      "mode": 1023
+    }
+  },
+  "govulncheck_version": "v1.8.0",
+  "govulncheck_sum": "h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U=",
+  "tool_sha256": "cf227122610d4926988781d85029b9bc4f231b5821a0b63c70c0a019b46a14d1",
+  "schema_version": 1,
+  "buildinfo": {
+    "go_version": "1.27.2",
+    "dependencies": {
+      "cel.dev/expr": {
+        "version": "v0.25.2",
+        "sum": "h1:K6j46C81hXtZQfuX60cVWQFBJahKSE2gfRbNuvr5bFs="
+      },
+      "cloud.google.com/go": {
+        "version": "v0.123.0",
+        "sum": "h1:2NAUJwPR47q+E35uaJeYoNhuNEM9kM8SjgRgdeOJUSE="
+      },
+      "cloud.google.com/go/auth": {
+        "version": "v0.23.2",
+        "sum": "h1:pxSCpfiji41hpzpPdMCftEUCezpgpqmmDdYiAjCKXxo="
+      },
+      "cloud.google.com/go/auth/oauth2adapt": {
+        "version": "v0.2.8",
+        "sum": "h1:keo8NaayQZ6wimpNSmW5OPc283g65QNIiLpZnkHRbnc="
+      },
+      "cloud.google.com/go/compute/metadata": {
+        "version": "v0.9.0",
+        "sum": "h1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdBtwLoEkH9Zs="
+      },
+      "cloud.google.com/go/iam": {
+        "version": "v1.13.0",
+        "sum": "h1:ufT3FPT5rFFXu6UtLkNoxaOaV5EuA1dsSkmemCSTo6U="
+      },
+      "cloud.google.com/go/monitoring": {
+        "version": "v1.30.0",
+        "sum": "h1:r/d+JUbyKmJ8b07iznuKfzVzrIXTWxHQ3lBRm3x2LlY="
+      },
+      "cloud.google.com/go/storage": {
+        "version": "v1.65.1",
+        "sum": "h1:LRRpBJUTf+OXDPX9jZUKZ3mSLIsz3htG+qUpeNZovyA="
+      },
+      "dario.cat/mergo": {
+        "version": "v1.0.2",
+        "sum": "h1:85+piFYR1tMbRrLcDwR18y4UKJ3aH1Tbzi24VRW1TK8="
+      },
+      "github.com/Azure/azure-sdk-for-go/sdk/azcore": {
+        "version": "v1.23.1",
+        "sum": "h1:zvXfGJCWvywnCA814d8ZiVyt+fm9nnTE8xSb99zRyfo="
+      },
+      "github.com/Azure/azure-sdk-for-go/sdk/azidentity": {
+        "version": "v1.14.1",
+        "sum": "h1:u93s+zU2JD62im61Bm5CZIc1ZrOJaIAWEg0WOrMVkEo="
+      },
+      "github.com/Azure/azure-sdk-for-go/sdk/containers/azcontainerregistry": {
+        "version": "v0.2.3",
+        "sum": "h1:ldKsKtEIblsgsr6mPwrd9yRntoX6uLz/K89wsldwx/k="
+      },
+      "github.com/Azure/azure-sdk-for-go/sdk/internal": {
+        "version": "v1.12.0",
+        "sum": "h1:fhqpLE3UEXi9lPaBRpQ6XuRW0nU7hgg4zlmZZa+a9q4="
+      },
+      "github.com/AzureAD/microsoft-authentication-library-for-go": {
+        "version": "v1.8.0",
+        "sum": "h1:Nljr4q1GRA/5vCrMONS+g4u4LRHNgOXVSh3O43J2CnI="
+      },
+      "github.com/BurntSushi/toml": {
+        "version": "v1.6.0",
+        "sum": "h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk="
+      },
+      "github.com/CycloneDX/cyclonedx-go": {
+        "version": "v0.12.0",
+        "sum": "h1:/7Jum36UA6V043tQZ/fE3jf+Nf9gn/qxUFfd7QReMy8="
+      },
+      "github.com/GoogleCloudPlatform/docker-credential-gcr/v2": {
+        "version": "v2.2.1",
+        "sum": "h1:hlWYvaYrCCH1nTnUf39MdE+FOEmf2GYUYNF4ED9S3S0="
+      },
+      "github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp": {
+        "version": "v1.33.0",
+        "sum": "h1:l7+6kwRMJNwdCvYdDl7Eax+wzEYHSnNY7zrrfbhDdTA="
+      },
+      "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric": {
+        "version": "v0.57.0",
+        "sum": "h1:jLdiS1vO+XJFyDSWRHBx56r4s/NNtcl5J6KyCcWUX/w="
+      },
+      "github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping": {
+        "version": "v0.57.0",
+        "sum": "h1:RoO5+d7uCmDqovLrHCr2/BuViUXvdcrNxyNM1pN9dDQ="
+      },
+      "github.com/Intevation/gval": {
+        "version": "v1.3.0",
+        "sum": "h1:+Ze5sft5MmGbZrHj06NVUbcxCb67l9RaPTLMNr37mjw="
+      },
+      "github.com/Intevation/jsonpath": {
+        "version": "v0.2.1",
+        "sum": "h1:rINNQJ0Pts5XTFEG+zamtdL7l9uuE1z0FBA+r55Sw+A="
+      },
+      "github.com/MakeNowJust/heredoc": {
+        "version": "v1.0.0",
+        "sum": "h1:cXCdzVdstXyiTqTvfqk9SDHpKNjxuom+DOlyEeQ4pzQ="
+      },
+      "github.com/Masterminds/goutils": {
+        "version": "v1.1.1",
+        "sum": "h1:5nUrii3FMTL5diU80unEVvNevw1nH4+ZV4DSLVJLSYI="
+      },
+      "github.com/Masterminds/semver/v3": {
+        "version": "v3.5.0",
+        "sum": "h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE="
+      },
+      "github.com/Masterminds/sprig/v3": {
+        "version": "v3.3.0",
+        "sum": "h1:mQh0Yrg1XPo6vjYXgtf5OtijNAKJRNcTdOOGZe3tPhs="
+      },
+      "github.com/Masterminds/squirrel": {
+        "version": "v1.5.4",
+        "sum": "h1:uUcX/aBc8O7Fg9kaISIUsHXdKuqehiXAMQTYX8afzqM="
+      },
+      "github.com/NYTimes/gziphandler": {
+        "version": "v1.1.1",
+        "sum": "h1:ZUDjpQae29j0ryrS0u/B8HZfJBtBQHjqw2rQ2cqUQ3I="
+      },
+      "github.com/ProtonMail/go-crypto": {
+        "version": "v1.4.1",
+        "sum": "h1:9RfcZHqEQUvP8RzecWEUafnZVtEvrBVL9BiF67IQOfM="
+      },
+      "github.com/VividCortex/ewma": {
+        "version": "v1.2.0",
+        "sum": "h1:f58SaIzcDXrSy3kWaHNvuJgJ3Nmz59Zji6XoJR/q1ow="
+      },
+      "github.com/agext/levenshtein": {
+        "version": "v1.2.3",
+        "sum": "h1:YB2fHEn0UJagG8T1rrWknE3ZQzWM06O8AMAatNn7lmo="
+      },
+      "github.com/agnivade/levenshtein": {
+        "version": "v1.2.1",
+        "sum": "h1:EHBY3UOn1gwdy/VbFwgo4cxecRznFk7fKWN1KOX7eoM="
+      },
+      "github.com/alecthomas/chroma": {
+        "version": "v0.10.0",
+        "sum": "h1:7XDcGkCQopCNKjZHfYrNLraA+M7e0fMiJ/Mfikbfjek="
+      },
+      "github.com/anchore/go-struct-converter": {
+        "version": "v0.1.0",
+        "sum": "h1:2rDRssAl6mgKBSLNiVCMADgZRhoqtw9dedlWa0OhD30="
+      },
+      "github.com/apparentlymart/go-cidr": {
+        "version": "v1.1.1",
+        "sum": "h1:oEEk8CE0HP0YpHxsegk/TaOtR2FLHdWv4p3eM4ceUwg="
+      },
+      "github.com/apparentlymart/go-textseg/v15": {
+        "version": "v15.0.0",
+        "sum": "h1:uYvfpb3DyLSCGWnctWKGj857c6ew1u1fNQOlOtuGxQY="
+      },
+      "github.com/apparentlymart/go-textseg/v17": {
+        "version": "v17.0.1",
+        "sum": "h1:bpMXRgQ5cEoRNuQke1a80/Nl6w3G5eoIbWo9f3gXkAs="
+      },
+      "github.com/aquasecurity/go-gem-version": {
+        "version": "v0.0.0-20201115065557-8eed6fe000ce",
+        "sum": "h1:QgBRgJvtEOBtUXilDb1MLi1p1MWoyFDXAu5DEUl5nwM="
+      },
+      "github.com/aquasecurity/go-npm-version": {
+        "version": "v0.0.2",
+        "sum": "h1:6sNIaeW4Hw8Xg51nPoD3VSo/5qmFSu0VL809iehEOvc="
+      },
+      "github.com/aquasecurity/go-pep440-version": {
+        "version": "v0.0.2-0.20260224065243-f9bba28c51a4",
+        "sum": "h1:QC8nsF3LvAGHUxkr5bvcekaUQPE9Zk4jyMugyg5Fxy0="
+      },
+      "github.com/aquasecurity/go-version": {
+        "version": "v0.0.1",
+        "sum": "h1:4cNl516agK0TCn5F7mmYN+xVs1E3S45LkgZk3cbaW2E="
+      },
+      "github.com/aquasecurity/iamgo": {
+        "version": "v0.0.10",
+        "sum": "h1:t/HG/MI1eSephztDc+Rzh/YfgEa+NqgYRSfr6pHdSCQ="
+      },
+      "github.com/aquasecurity/jfather": {
+        "version": "v0.0.8",
+        "sum": "h1:tUjPoLGdlkJU0qE7dSzd1MHk2nQFNPR0ZfF+6shaExE="
+      },
+      "github.com/aquasecurity/table": {
+        "version": "v1.11.0",
+        "sum": "h1:SzgCAv7dZcv/gyAyzxorS6OgEk7w/WU5iT2pStIkpl4="
+      },
+      "github.com/aquasecurity/tml": {
+        "version": "v0.6.1",
+        "sum": "h1:y2ZlGSfrhnn7t4ZJ/0rotuH+v5Jgv6BDDO5jB6A9gwo="
+      },
+      "github.com/aquasecurity/trivy-checks": {
+        "version": "v1.12.2-0.20260908095928-2d1b9bec7d6f",
+        "sum": "h1:6ahWZW0sOHMX7I3iMyJpTbOWxKF2RJV7UXxiBzzWSXo="
+      },
+      "github.com/aquasecurity/trivy-db": {
+        "version": "v0.0.0-20261001090913-650c4091f951",
+        "sum": "h1:PXX1UgSc28sNeSSojeu5M9t4qVIW2nd/mFFZ7w/iEvA="
+      },
+      "github.com/aquasecurity/trivy-java-db": {
+        "version": "v0.0.0-20240109071736-184bd7481d48",
+        "sum": "h1:JVgBIuIYbwG+ekC5lUHUpGJboPYiCcxiz06RCtz8neI="
+      },
+      "github.com/aquasecurity/trivy-kubernetes": {
+        "version": "v0.9.1",
+        "sum": "h1:bSErQcavKXDh7XMwbGX7Vy//jR5+xhe/bOgfn9G+9lQ="
+      },
+      "github.com/asaskevich/govalidator": {
+        "version": "v0.0.0-20230301143203-a9d515a09cc2",
+        "sum": "h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so="
+      },
+      "github.com/aws/aws-sdk-go-v2": {
+        "version": "v1.47.0",
+        "sum": "h1:0jsHallhJCeaU0Ko48c/3FK1ctOQ7NpzggxriJOQ8MQ="
+      },
+      "github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream": {
+        "version": "v1.7.20",
+        "sum": "h1:GPRlPwz40I2B2VrBEASOA3Bi77NyeqejNLkifosX0rs="
+      },
+      "github.com/aws/aws-sdk-go-v2/config": {
+        "version": "v1.33.5",
+        "sum": "h1:UA1dmokBFOLFoOyVBhO6HjM6edy0MIk5AZSkJVcksQw="
+      },
+      "github.com/aws/aws-sdk-go-v2/credentials": {
+        "version": "v1.20.5",
+        "sum": "h1:wklUVvHMc9xTQ3rcp49/ISpiMnhbCicJcA6n6S8m7J8="
+      },
+      "github.com/aws/aws-sdk-go-v2/feature/ec2/imds": {
+        "version": "v1.20.0",
+        "sum": "h1:AM4hHjww+PSFtt6E+UrBrPlZkWsePCLEt9AjkfQX+yM="
+      },
+      "github.com/aws/aws-sdk-go-v2/internal/configsources": {
+        "version": "v1.5.3",
+        "sum": "h1:Hp/VgjP0BysR3OgLlR057Vz2LcbbVnoWeJ+3qWiS/fY="
+      },
+      "github.com/aws/aws-sdk-go-v2/internal/endpoints/v2": {
+        "version": "v2.8.3",
+        "sum": "h1:MUaM4f+kj1ZIBPZfUS8cxP1GKXXZtHJjAthy93AN7SM="
+      },
+      "github.com/aws/aws-sdk-go-v2/internal/v4a": {
+        "version": "v1.5.3",
+        "sum": "h1:fuSCw4Z2qfRCztMPO3GXJNSiEp6Wee+WOLwrHHUMy9c="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/ebs": {
+        "version": "v1.22.1",
+        "sum": "h1:SeDJWG4pmye+/aO6k+zt9clPTUy1MXqUmkW8rbAddQg="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/ec2": {
+        "version": "v1.333.0",
+        "sum": "h1:49vpQN9B16CetUbZ4TA5MN2rO44Um6JyswDD4J2U2mw="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/ecr": {
+        "version": "v1.66.0",
+        "sum": "h1:9i19IigAYxnAxTUQcsxkiIXeeytHllTOetWBhr1DTQs="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding": {
+        "version": "v1.13.19",
+        "sum": "h1:bAdDl/HkGCcGPoe25ToSHEw23VIxt6CT5fLcg111BKg="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/internal/checksum": {
+        "version": "v1.11.3",
+        "sum": "h1:BHKCSX4QXERe8So8rbWqaM7owqOmDJxATXgJwGng22A="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/internal/presigned-url": {
+        "version": "v1.14.3",
+        "sum": "h1:bON1rJf67TSTDCKg816AAIE4xSTtoo9tl0XRkO72R+I="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/internal/s3shared": {
+        "version": "v1.20.3",
+        "sum": "h1:L8vIOxylma91TcR96NFTEC07G3JDwSl+CvK2b+IODms="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/s3": {
+        "version": "v1.113.1",
+        "sum": "h1:cFHmwLxZPvtoAlo79MboURL2+7b0TMHycnrcf5VZNXk="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/signin": {
+        "version": "v1.10.0",
+        "sum": "h1:ZD5qFpWcaOKdTuhBi431pIDkCgrMkMlMT6jlpSPoIRI="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/sso": {
+        "version": "v1.38.0",
+        "sum": "h1:JGeeBcMlhg1xtOXYpeCaTQBZObtXMPQCUqBcmr65NRA="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/ssooidc": {
+        "version": "v1.43.0",
+        "sum": "h1:obhahQXDEdVEv8y5bTKXR30LVaxYe1kyYM0L7l2Iq+k="
+      },
+      "github.com/aws/aws-sdk-go-v2/service/sts": {
+        "version": "v1.51.0",
+        "sum": "h1:Zpnqa6XtrNzXZnwbdCqHOXpXhMsa01ql/pcRQ1sb4hk="
+      },
+      "github.com/aws/smithy-go": {
+        "version": "v1.28.1",
+        "sum": "h1:R/nXH00c8qcfCzQVELtRw+eLQWtzv+VAIEFJ1/xxXlQ="
+      },
+      "github.com/bgentry/go-netrc": {
+        "version": "v0.0.0-20140422174119-9fd32a8b3d3d",
+        "sum": "h1:xDfNPAt8lFiC1UJrqV3uuy861HCTo708pDMbjHHdCas="
+      },
+      "github.com/bitnami/go-version": {
+        "version": "v0.0.0-20231130084017-bb00604d650c",
+        "sum": "h1:C4UZIaS+HAw+X6jGUsoP2ZbM99PuqhCttjomg1yhNAI="
+      },
+      "github.com/blang/semver/v4": {
+        "version": "v4.0.0",
+        "sum": "h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM="
+      },
+      "github.com/bmatcuk/doublestar/v4": {
+        "version": "v4.10.0",
+        "sum": "h1:zU9WiOla1YA122oLM6i4EXvGW62DvKZVxIe6TYWexEs="
+      },
+      "github.com/briandowns/spinner": {
+        "version": "v1.23.0",
+        "sum": "h1:alDF2guRWqa/FOZZYWjlMIx2L6H0wyewPxo/CH4Pt2A="
+      },
+      "github.com/cenkalti/backoff/v5": {
+        "version": "v5.0.3",
+        "sum": "h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM="
+      },
+      "github.com/cenkalti/backoff/v6": {
+        "version": "v6.0.1",
+        "sum": "h1:sjqUu1q4wY0FfFEkBmM3bVIHfr1QGq4nATg9M5VWj1U="
+      },
+      "github.com/cespare/xxhash/v2": {
+        "version": "v2.3.0",
+        "sum": "h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs="
+      },
+      "github.com/chai2010/gettext-go": {
+        "version": "v1.0.2",
+        "sum": "h1:1Lwwip6Q2QGsAdl/ZKPCwTe9fe0CjlUbqj5bFNSjIRk="
+      },
+      "github.com/cheggaaa/pb/v3": {
+        "version": "v3.2.1",
+        "sum": "h1:aprZbFRG+B7+ug76S8QZ6Y1PW168UHzOmbC3wa+aU6I="
+      },
+      "github.com/clipperhouse/uax29/v2": {
+        "version": "v2.6.0",
+        "sum": "h1:z0cDbUV+aPASdFb2/ndFnS9ts/WNXgTNNGFoKXuhpos="
+      },
+      "github.com/cloudflare/circl": {
+        "version": "v1.6.4",
+        "sum": "h1:pOXuDTCEYyzydgUpQ0CQz3LsinKjiSk6nNP5Lt5K64U="
+      },
+      "github.com/cncf/xds/go": {
+        "version": "v0.0.0-20260202195803-dba9d589def2",
+        "sum": "h1:aBangftG7EVZoUb69Os8IaYg++6uMOdKK83QtkkvJik="
+      },
+      "github.com/containerd/containerd/api": {
+        "version": "v1.12.0",
+        "sum": "h1:kuQm82SbDrCuO4n7hf2L8zsBtZLuympyq5X/VotfX2A="
+      },
+      "github.com/containerd/containerd/v2": {
+        "version": "v2.4.1",
+        "sum": "h1:DUx/ZJN7cEu0WuzHClDB+68H/bqMEH5pWoEjf0ae4hc="
+      },
+      "github.com/containerd/continuity": {
+        "version": "v0.5.0",
+        "sum": "h1:7a85HZpCSs+1Zps0Ee3DPSuAWY+0SJM1JNM51nlEVDg="
+      },
+      "github.com/containerd/errdefs": {
+        "version": "v1.0.0",
+        "sum": "h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI="
+      },
+      "github.com/containerd/errdefs/pkg": {
+        "version": "v0.3.0",
+        "sum": "h1:9IKJ06FvyNlexW690DXuQNx2KA2cUJXx151Xdx3ZPPE="
+      },
+      "github.com/containerd/fifo": {
+        "version": "v1.1.0",
+        "sum": "h1:4I2mbh5stb1u6ycIABlBw9zgtlK8viPI9QkQNRQEEmY="
+      },
+      "github.com/containerd/log": {
+        "version": "v0.2.0",
+        "sum": "h1:BewD/umNgVnoczglOpX8eRMyEy5t5iPlu5AIpnWDONc="
+      },
+      "github.com/containerd/log/otel": {
+        "version": "v0.1.0",
+        "sum": "h1:Az5rFFo0+c4v2yC8ROR63sWsZpKl/vhtUnUhqLSpE6U="
+      },
+      "github.com/containerd/platforms": {
+        "version": "v1.0.0-rc.5",
+        "sum": "h1:vXd569rDrz8LeMXzAnBsy6LADV5YtsD8oyaRarxdmSU="
+      },
+      "github.com/containerd/plugin": {
+        "version": "v1.1.0",
+        "sum": "h1:O+7lczNJVMy8rz0YNx3xGB8tTf5qY4i5abF041Ew19U="
+      },
+      "github.com/containerd/ttrpc": {
+        "version": "v1.2.9",
+        "sum": "h1:ha0ak962T0s3CA/RoZ6S6xiWZQF24GrBaEpiGX1uihg="
+      },
+      "github.com/containerd/typeurl/v2": {
+        "version": "v2.3.0",
+        "sum": "h1:HZHPhRWo5XMy3QGQoPrUzbW/2ckwjfweHmOwlkIrPAQ="
+      },
+      "github.com/cyphar/filepath-securejoin": {
+        "version": "v0.7.0",
+        "sum": "h1:s0Y3ITPy6sQn5xt54DuYvTF8hu134ooYLUb58DX/HjE="
+      },
+      "github.com/davecgh/go-spew": {
+        "version": "v1.1.2-0.20180830191138-d8f796af33cc",
+        "sum": "h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM="
+      },
+      "github.com/distribution/reference": {
+        "version": "v0.6.0",
+        "sum": "h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk="
+      },
+      "github.com/dlclark/regexp2": {
+        "version": "v1.11.0",
+        "sum": "h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI="
+      },
+      "github.com/docker/cli": {
+        "version": "v29.8.1+incompatible",
+        "sum": "h1:qYL1bCp6cRw2SB1xmLlIOPyV171dilw9W2Jew38vy9c="
+      },
+      "github.com/docker/docker-credential-helpers": {
+        "version": "v0.9.8",
+        "sum": "h1:bIREROb7So6PRlq6KTtdS9MPEjC29OQRkFNlvK2OX8Q="
+      },
+      "github.com/docker/go-connections": {
+        "version": "v0.7.0",
+        "sum": "h1:6SsRfJddP22WMrCkj19x9WKjEDTB+ahsdiGYf0mN39c="
+      },
+      "github.com/docker/go-units": {
+        "version": "v0.5.0",
+        "sum": "h1:69rxXcBk27SvSaaxTtLh/8llcHD8vYHT7WSdRZ/jvr4="
+      },
+      "github.com/dsnet/compress": {
+        "version": "v0.0.2-0.20230904184137-39efe44ab707",
+        "sum": "h1:2tV76y6Q9BB+NEBasnqvs7e49aEBFI8ejC89PSnWH+4="
+      },
+      "github.com/dustin/go-humanize": {
+        "version": "v1.0.1",
+        "sum": "h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY="
+      },
+      "github.com/dylibso/observe-sdk/go": {
+        "version": "v0.0.0-20240819160327-2d926c5d788a",
+        "sum": "h1:UwSIFv5g5lIvbGgtf3tVwC7Ky9rmMFBp0RMs+6f6YqE="
+      },
+      "github.com/emicklei/go-restful/v3": {
+        "version": "v3.13.0",
+        "sum": "h1:C4Bl2xDndpU6nJ4bc1jXd+uTmYPVUwkD6bFY/oTyCes="
+      },
+      "github.com/emirpasic/gods": {
+        "version": "v1.18.1",
+        "sum": "h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc="
+      },
+      "github.com/envoyproxy/go-control-plane/envoy": {
+        "version": "v1.37.0",
+        "sum": "h1:u3riX6BoYRfF4Dr7dwSOroNfdSbEPe9Yyl09/B6wBrQ="
+      },
+      "github.com/envoyproxy/protoc-gen-validate": {
+        "version": "v1.3.3",
+        "sum": "h1:MVQghNeW+LZcmXe7SY1V36Z+WFMDjpqGAGacLe2T0ds="
+      },
+      "github.com/evanphx/json-patch/v5": {
+        "version": "v5.9.11",
+        "sum": "h1:/8HVnzMq13/3x9TPvjG08wUGqBTmZBsCWzjTM0wiaDU="
+      },
+      "github.com/exponent-io/jsonpath": {
+        "version": "v0.0.0-20210407135951-1de76d718b3f",
+        "sum": "h1:Wl78ApPPB2Wvf/TIe2xdyJxTlb6obmF18d8QdkxNDu4="
+      },
+      "github.com/extism/go-sdk": {
+        "version": "v1.7.1",
+        "sum": "h1:lWJos6uY+tRFdlIHR+SJjwFDApY7OypS/2nMhiVQ9Sw="
+      },
+      "github.com/fatih/color": {
+        "version": "v1.19.0",
+        "sum": "h1:Zp3PiM21/9Ld6FzSKyL5c/BULoe/ONr9KlbYVOfG8+w="
+      },
+      "github.com/felixge/httpsnoop": {
+        "version": "v1.1.0",
+        "sum": "h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc="
+      },
+      "github.com/fluxcd/cli-utils": {
+        "version": "v1.2.2",
+        "sum": "h1:adDOmwE+LSwTzmYUaoEFPblruOuaQEKAg1ZNTmPJObE="
+      },
+      "github.com/fsnotify/fsnotify": {
+        "version": "v1.10.1",
+        "sum": "h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho="
+      },
+      "github.com/fvbommel/sortorder": {
+        "version": "v1.2.0",
+        "sum": "h1:TRIiRiGX+djh3Yf4FVxmWmAcYfIr5dH0NbzJWOSAWZk="
+      },
+      "github.com/fxamacker/cbor/v2": {
+        "version": "v2.9.4",
+        "sum": "h1:xwjVlxEMR3S605oUlgBjKLTTeGFciYPGYCtF/35LKGo="
+      },
+      "github.com/go-errors/errors": {
+        "version": "v1.5.1",
+        "sum": "h1:ZwEMSLRCapFLflTpT7NKaAc7ukJ8ZPEjzlxt8rPN8bk="
+      },
+      "github.com/go-git/gcfg": {
+        "version": "v1.5.1-0.20230307220236-3a3c6141e376",
+        "sum": "h1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI="
+      },
+      "github.com/go-git/go-billy/v5": {
+        "version": "v5.9.0",
+        "sum": "h1:jItGXszUDRtR/AlferWPTMN4j38BQ88XnXKbilmmBPA="
+      },
+      "github.com/go-git/go-git/v5": {
+        "version": "v5.19.2",
+        "sum": "h1:wkfn7vOlUBu8ivAWKBWisTiwJK4jYHzTF8Ndv1LyGqY="
+      },
+      "github.com/go-gorp/gorp/v3": {
+        "version": "v3.1.0",
+        "sum": "h1:ItKF/Vbuj31dmV4jxA1qblpSwkl9g1typ24xoe70IGs="
+      },
+      "github.com/go-jose/go-jose/v4": {
+        "version": "v4.1.5",
+        "sum": "h1:RjgjO2LOtWOJKUC5wpwY9LR3B3vwVAz6JS2YHfYU6eA="
+      },
+      "github.com/go-logr/logr": {
+        "version": "v1.4.4",
+        "sum": "h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8="
+      },
+      "github.com/go-logr/stdr": {
+        "version": "v1.2.2",
+        "sum": "h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag="
+      },
+      "github.com/go-openapi/analysis": {
+        "version": "v0.26.0",
+        "sum": "h1:1xECln1iMMmQnTjgcknC1vi1hA4KISt6IHpSwnqcuwI="
+      },
+      "github.com/go-openapi/errors": {
+        "version": "v0.22.8",
+        "sum": "h1:oP7sW7TWc3wFFjrzzj0nI83H2qMBkNjNfSd+XRejk/I="
+      },
+      "github.com/go-openapi/jsonpointer": {
+        "version": "v1.0.0",
+        "sum": "h1:kR9tHqY0CtZaOPVFm622dPVNhrvYpwr4uCxgL3h1H8s="
+      },
+      "github.com/go-openapi/jsonreference": {
+        "version": "v1.0.0",
+        "sum": "h1:jlmTr6torcd1YgDQvSfNmRtKzYDO4FGBkrAdlAVWnpY="
+      },
+      "github.com/go-openapi/loads": {
+        "version": "v0.25.1",
+        "sum": "h1:toKQdIDLxlqfKLLGUUmUsiTd5/X0Chzvde9EGYQP/Ac="
+      },
+      "github.com/go-openapi/runtime": {
+        "version": "v0.33.0",
+        "sum": "h1:Dd3Oj2ig+WH8ckK95l0Wn2V8a4bH/UqWPRZVT0vc8yU="
+      },
+      "github.com/go-openapi/runtime/server-middleware": {
+        "version": "v0.30.0",
+        "sum": "h1:8rPoJ/xv7JL8BsovaqboKETlpWBArVh8n+0L/GyePog="
+      },
+      "github.com/go-openapi/spec": {
+        "version": "v0.22.9",
+        "sum": "h1:/vKIFDcGKp0ktZWGbym/tJEWbk6/XOEmAVU0kqKMH+w="
+      },
+      "github.com/go-openapi/strfmt": {
+        "version": "v0.27.0",
+        "sum": "h1:kbcTeaD9TXuXD0hhMXzuYa1sdTo6+dWGvwjW93E80IM="
+      },
+      "github.com/go-openapi/swag": {
+        "version": "v0.28.0",
+        "sum": "h1:xkgbOSKj6DZziNpyqRRAOt3GJGtgjgsd2RoyT30VWuw="
+      },
+      "github.com/go-openapi/swag/cmdutils": {
+        "version": "v0.28.0",
+        "sum": "h1:7TOeNtkYru1SG8Y34tDh9WBbLsMqGnptuxWiHREPZ4Q="
+      },
+      "github.com/go-openapi/swag/conv": {
+        "version": "v0.28.0",
+        "sum": "h1:GtqqbyFe7vR5Y7ehxG9W6/OvrSFdf1OLeTGp40TqxH8="
+      },
+      "github.com/go-openapi/swag/fileutils": {
+        "version": "v0.28.0",
+        "sum": "h1:Z04XWQD7R8Eq+7GnOrjovBxPPmZzsS4gt2H2GPGIViU="
+      },
+      "github.com/go-openapi/swag/jsonutils": {
+        "version": "v0.28.0",
+        "sum": "h1:YIch6FwO7RXzeAnbO8Tu7dWBZeUEH+4nA0HXltVTnv4="
+      },
+      "github.com/go-openapi/swag/loading": {
+        "version": "v0.28.0",
+        "sum": "h1:td8QZdZC9MIYGGSnSPKShKiK22I2tU5UQvuUhIBPRLU="
+      },
+      "github.com/go-openapi/swag/mangling": {
+        "version": "v0.28.0",
+        "sum": "h1:pH8eyeNO9SLYsTMWJrurnNfKmDa28XrlA+HePVD53VM="
+      },
+      "github.com/go-openapi/swag/netutils": {
+        "version": "v0.28.0",
+        "sum": "h1:YXN6TALEi2pzts8/8GNm6T61HTAZsieukGZidap989k="
+      },
+      "github.com/go-openapi/swag/pools": {
+        "version": "v0.28.0",
+        "sum": "h1:HPMZWSAfce3rdVTFcjFiCIBtDg9h4x2QlRrHipwhxeU="
+      },
+      "github.com/go-openapi/swag/stringutils": {
+        "version": "v0.28.0",
+        "sum": "h1:ixsc9iYgDPubHL/8nSkbnryEHpD2VRlBMLKpQyPXcDU="
+      },
+      "github.com/go-openapi/swag/typeutils": {
+        "version": "v0.28.0",
+        "sum": "h1:nRBKSBXjDgf01VDPB3fWeD9nQuhCOVeIYAkUx2tbkyY="
+      },
+      "github.com/go-openapi/swag/yamlutils": {
+        "version": "v0.28.0",
+        "sum": "h1:TV3JXH6DS46KUroDtMLAYHGkdWf5VDq3wVWFirmzROY="
+      },
+      "github.com/go-openapi/validate": {
+        "version": "v0.26.3",
+        "sum": "h1:OkfZgLvLDnGP2hrRGD+42WBiPWWkoHomTJ+IVI+KaDc="
+      },
+      "github.com/go-viper/mapstructure/v2": {
+        "version": "v2.5.0",
+        "sum": "h1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPEgAXnvj1Ro="
+      },
+      "github.com/gobwas/glob": {
+        "version": "v0.2.3",
+        "sum": "h1:A4xDbljILXROh+kObIiy5kIaPYD8e96x1tgBhUI5J+Y="
+      },
+      "github.com/gocsaf/csaf/v3": {
+        "version": "v3.6.0",
+        "sum": "h1:xU0Tj67HZGsJzHXM+sQGGYlggtASfnZmbjllOxQNXOE="
+      },
+      "github.com/golang-jwt/jwt/v5": {
+        "version": "v5.3.1",
+        "sum": "h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY="
+      },
+      "github.com/golang/groupcache": {
+        "version": "v0.0.0-20241129210726-2c02b8208cf8",
+        "sum": "h1:f+oWsMOmNPc8JmEHVZIycC7hBoQxHH9pNKQORJNozsQ="
+      },
+      "github.com/google/btree": {
+        "version": "v1.1.3",
+        "sum": "h1:CVpQJjYgC4VbzxeGVHfvZrv1ctoYCAI8vbl07Fcxlyg="
+      },
+      "github.com/google/gnostic-models": {
+        "version": "v0.7.0",
+        "sum": "h1:qwTtogB15McXDaNqTZdzPJRHvaVJlAl+HVQnLmJEJxo="
+      },
+      "github.com/google/go-cmp": {
+        "version": "v0.7.0",
+        "sum": "h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8="
+      },
+      "github.com/google/go-containerregistry": {
+        "version": "v0.22.1",
+        "sum": "h1:RZuuSYhTvlDvtsK+NkutoCZ//C0X2ebLK8X8l3ULs84="
+      },
+      "github.com/google/go-github/v62": {
+        "version": "v62.0.0",
+        "sum": "h1:/6mGCaRywZz9MuHyw9gD1CwsbmBX8GWsbFkwMmHdhl4="
+      },
+      "github.com/google/go-querystring": {
+        "version": "v1.1.0",
+        "sum": "h1:AnCroh3fv4ZBgVIf1Iwtovgjaw/GiKJo8M8yD/fhyJ8="
+      },
+      "github.com/google/jsonschema-go": {
+        "version": "v0.4.3",
+        "sum": "h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0="
+      },
+      "github.com/google/licenseclassifier/v2": {
+        "version": "v2.0.0",
+        "sum": "h1:1Y57HHILNf4m0ABuMVb6xk4vAJYEUO0gDxNpog0pyeA="
+      },
+      "github.com/google/s2a-go": {
+        "version": "v0.1.9",
+        "sum": "h1:LGD7gtMgezd8a/Xak7mEWL0PjoTQFvpRudN895yqKW0="
+      },
+      "github.com/google/uuid": {
+        "version": "v1.6.0",
+        "sum": "h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0="
+      },
+      "github.com/googleapis/enterprise-certificate-proxy": {
+        "version": "v0.3.20",
+        "sum": "h1:t/xL64VUoN69MuMRQuJETqYGOw4Z9mSRJK9epIEtwFk="
+      },
+      "github.com/googleapis/gax-go/v2": {
+        "version": "v2.24.0",
+        "sum": "h1:myMaPYyF9MecEmvQqMqomIwn9t/4KCZN9qnwsS76wlg="
+      },
+      "github.com/gosuri/uitable": {
+        "version": "v0.0.4",
+        "sum": "h1:IG2xLKRvErL3uhY6e1BylFzG+aJiwQviDDTfOKeKTpY="
+      },
+      "github.com/grpc-ecosystem/grpc-gateway/v2": {
+        "version": "v2.30.0",
+        "sum": "h1:/Tnpcb2E0Pz/tN9s3bfEY2Q8ePCEX9iuS+cneUwncnw="
+      },
+      "github.com/hashicorp/aws-sdk-go-base/v2": {
+        "version": "v2.0.0-beta.74",
+        "sum": "h1:mymLUKThnV9wFvogOK8NnsMP9/vlhnjXY98gr2QIGW8="
+      },
+      "github.com/hashicorp/errwrap": {
+        "version": "v1.1.0",
+        "sum": "h1:OxrOeh75EUXMY8TBjag2fzXGZ40LB6IKw45YeGUDY2I="
+      },
+      "github.com/hashicorp/go-cleanhttp": {
+        "version": "v0.5.2",
+        "sum": "h1:035FKYIWjmULyFRBKPs8TBQoi0x6d9G4xc9neXJWAZQ="
+      },
+      "github.com/hashicorp/go-getter": {
+        "version": "v1.8.9",
+        "sum": "h1:1AOTMUmz/S/GuqOTE6+bg6nwPXTEbKr3Tc/T/lVS7is="
+      },
+      "github.com/hashicorp/go-multierror": {
+        "version": "v1.1.1",
+        "sum": "h1:H5DkEtf6CXdFp0N0Em5UCwQpXMWke8IA0+lD48awMYo="
+      },
+      "github.com/hashicorp/go-retryablehttp": {
+        "version": "v0.7.8",
+        "sum": "h1:ylXZWnqa7Lhqpk0L1P1LzDtGcCR0rPVUrx/c8Unxc48="
+      },
+      "github.com/hashicorp/go-uuid": {
+        "version": "v1.0.3",
+        "sum": "h1:2gKiV6YVmrJ1i2CKKa9obLvRieoRGviZFL26PcT/Co8="
+      },
+      "github.com/hashicorp/go-version": {
+        "version": "v1.9.0",
+        "sum": "h1:CeOIz6k+LoN3qX9Z0tyQrPtiB1DFYRPfCIBtaXPSCnA="
+      },
+      "github.com/hashicorp/golang-lru/v2": {
+        "version": "v2.0.7",
+        "sum": "h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k="
+      },
+      "github.com/hashicorp/hcl/v2": {
+        "version": "v2.25.0",
+        "sum": "h1:HmmQVYRny4MaBo4b20TjmL46wyuUxpnMWkPZ4+NTbWk="
+      },
+      "github.com/huandu/xstrings": {
+        "version": "v1.5.0",
+        "sum": "h1:2ag3IFq9ZDANvthTwTiqSSZLjDc+BedvHPAp5tJy2TI="
+      },
+      "github.com/ianlancetaylor/demangle": {
+        "version": "v0.0.0-20240805132620-81f5be970eca",
+        "sum": "h1:T54Ema1DU8ngI+aef9ZhAhNGQhcRTrWxVeG07F+c/Rw="
+      },
+      "github.com/in-toto/attestation": {
+        "version": "v1.2.0",
+        "sum": "h1:aPRUZ3azbqD7yEBD5fP3TD8Dszf+YHo284SOcpahjQk="
+      },
+      "github.com/in-toto/in-toto-golang": {
+        "version": "v0.11.0",
+        "sum": "h1:nfidMYBFx+E0lnmX5KUnN2Pdm8zdNKal1ayjJuzzRoA="
+      },
+      "github.com/jbenet/go-context": {
+        "version": "v0.0.0-20150711004518-d14ea06fba99",
+        "sum": "h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A="
+      },
+      "github.com/jmoiron/sqlx": {
+        "version": "v1.4.0",
+        "sum": "h1:1PLqN7S1UYp5t4SrVVnt4nUVNemrDAtxlulVe+Qgm3o="
+      },
+      "github.com/josephburnett/jd/v2": {
+        "version": "v2.3.0",
+        "sum": "h1:AyNT0zSStJ2j28zutWDO4fkc95JoICryWQRmDTRzPTQ="
+      },
+      "github.com/json-iterator/go": {
+        "version": "v1.1.12",
+        "sum": "h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM="
+      },
+      "github.com/kevinburke/ssh_config": {
+        "version": "v1.2.0",
+        "sum": "h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4="
+      },
+      "github.com/klauspost/compress": {
+        "version": "v1.20.0",
+        "sum": "h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA="
+      },
+      "github.com/klauspost/cpuid/v2": {
+        "version": "v2.3.0",
+        "sum": "h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y="
+      },
+      "github.com/knqyf263/go-apk-version": {
+        "version": "v0.0.0-20200609155635-041fdbb8563f",
+        "sum": "h1:GvCU5GXhHq+7LeOzx/haG7HSIZokl3/0GkoUFzsRJjg="
+      },
+      "github.com/knqyf263/go-deb-version": {
+        "version": "v0.0.0-20241115132648-6f4aee6ccd23",
+        "sum": "h1:dWzdsqjh1p2gNtRKqNwuBvKqMNwnLOPLzVZT1n6DK7s="
+      },
+      "github.com/knqyf263/go-rpm-version": {
+        "version": "v0.0.0-20260811110310-1815e1f1b790",
+        "sum": "h1:2R0QOkcV/csVHDigcH1sMNP3fQLw4Wi1ZxG0oC+29Ts="
+      },
+      "github.com/knqyf263/go-rpmdb": {
+        "version": "v0.1.1",
+        "sum": "h1:oh68mTCvp1XzxdU7EfafcWzzfstUZAEa3MW0IJye584="
+      },
+      "github.com/knqyf263/nested": {
+        "version": "v0.0.1",
+        "sum": "h1:Sv26CegUMhjt19zqbBKntjwESdxe5hxVPSk0+AKjdUc="
+      },
+      "github.com/kylelemons/godebug": {
+        "version": "v1.1.0",
+        "sum": "h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc="
+      },
+      "github.com/lann/builder": {
+        "version": "v0.0.0-20180802200727-47ae307949d0",
+        "sum": "h1:SOEGU9fKiNWd/HOJuq6+3iTQz8KNCLtVX6idSoTLdUw="
+      },
+      "github.com/lann/ps": {
+        "version": "v0.0.0-20150810152359-62de8c46ede0",
+        "sum": "h1:P6pPBnrTSX3DEVR4fDembhRWSsG5rVo6hYhAB/ADZrk="
+      },
+      "github.com/lestrrat-go/blackmagic": {
+        "version": "v1.0.4",
+        "sum": "h1:IwQibdnf8l2KoO+qC3uT4OaTWsW7tuRQXy9TRN9QanA="
+      },
+      "github.com/lestrrat-go/dsig": {
+        "version": "v1.3.0",
+        "sum": "h1:phjMOCXvYzhuIgn7Voe2rex8z166vGfxRxmqM25P9/Q="
+      },
+      "github.com/lestrrat-go/httpcc": {
+        "version": "v1.0.1",
+        "sum": "h1:ydWCStUeJLkpYyjLDHihupbn2tYmZ7m22BGkcvZZrIE="
+      },
+      "github.com/lestrrat-go/httprc/v3": {
+        "version": "v3.0.6",
+        "sum": "h1:4FpLQ18KK/ypPbVU3NLWJNRvH3kcYiqKqWfKGqNWxxI="
+      },
+      "github.com/lestrrat-go/jwx/v3": {
+        "version": "v3.2.0",
+        "sum": "h1:Jb3zBASTSZXz7gzzSAfYqxXF8KejvKC4xWoePLQqXCA="
+      },
+      "github.com/lestrrat-go/option/v2": {
+        "version": "v2.0.0",
+        "sum": "h1:XxrcaJESE1fokHy3FpaQ/cXW8ZsIdWcdFzzLOcID3Ss="
+      },
+      "github.com/lib/pq": {
+        "version": "v1.12.3",
+        "sum": "h1:tTWxr2YLKwIvK90ZXEw8GP7UFHtcbTtty8zsI+YjrfQ="
+      },
+      "github.com/liggitt/tabwriter": {
+        "version": "v0.0.0-20181228230101-89fcab3d43de",
+        "sum": "h1:9TO3cAIGXtEhnIaL+V+BEER86oLrvS+kWobKpbJuye0="
+      },
+      "github.com/lunixbochs/struc": {
+        "version": "v0.0.0-20200707160740-784aaebc1d40",
+        "sum": "h1:EnfXoSqDfSNJv0VBNqY/88RNnhSGYkrHaO0mmFGbVsc="
+      },
+      "github.com/masahiro331/go-disk": {
+        "version": "v0.0.0-20260423015231-f7a470ebd472",
+        "sum": "h1:QAY4If99Ee10TUP4mdcB6Qlm036ayfYruTLjvlaczbs="
+      },
+      "github.com/masahiro331/go-ebs-file": {
+        "version": "v0.0.0-20260422020928-9d24e29aac27",
+        "sum": "h1:IrxbYTVKTDTckgMf7DZz2LZ+izZZpidH2mDP4D7GUt4="
+      },
+      "github.com/masahiro331/go-ext4-filesystem": {
+        "version": "v0.0.0-20260423010602-fe51f5b5e52b",
+        "sum": "h1:IAYuiQq6BVizPeXTKBoY3Jcin3gGn8No7h31lvH0aKo="
+      },
+      "github.com/masahiro331/go-mvn-version": {
+        "version": "v0.0.0-20260119054159-d21fcd2e7de1",
+        "sum": "h1:XC9v1PB6rMOCTnQIInoFvgSA+vhTCt0wQ7B+Tjpombk="
+      },
+      "github.com/masahiro331/go-vmdk-parser": {
+        "version": "v0.0.0-20260423020818-08305fa668d2",
+        "sum": "h1:38MMtiCO8na0qZ8MAD3d1z6JVt15RTx8Z2EA/txYnkQ="
+      },
+      "github.com/masahiro331/go-xfs-filesystem": {
+        "version": "v0.0.0-20260422061116-d21e5e4481bb",
+        "sum": "h1:2c5hvZu2o6ccumpPVlyGiRT3aXvc6Yxj1Kqh+usy1iM="
+      },
+      "github.com/mattn/go-colorable": {
+        "version": "v0.1.15",
+        "sum": "h1:+u9SLTRGnXv73cEsnsmoZBom+dMU88B2M0aDcWy0/jY="
+      },
+      "github.com/mattn/go-isatty": {
+        "version": "v0.0.24",
+        "sum": "h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsReI="
+      },
+      "github.com/mattn/go-runewidth": {
+        "version": "v0.0.27",
+        "sum": "h1:Feg/Oou5zI/wnpgDF6omIU0OokC9GxLC/WRknhVlIR0="
+      },
+      "github.com/mattn/go-shellwords": {
+        "version": "v1.0.15",
+        "sum": "h1:rx0n8+ZdM9JWZMlr2BMPAjtLU0rfluLNtwMC2FJOTtY="
+      },
+      "github.com/mitchellh/copystructure": {
+        "version": "v1.2.0",
+        "sum": "h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa15WveJJGw="
+      },
+      "github.com/mitchellh/go-homedir": {
+        "version": "v1.1.0",
+        "sum": "h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y="
+      },
+      "github.com/mitchellh/go-wordwrap": {
+        "version": "v1.0.1",
+        "sum": "h1:TLuKupo69TCn6TQSyGxwI1EblZZEsQ0vMlAFQflz0v0="
+      },
+      "github.com/mitchellh/hashstructure/v2": {
+        "version": "v2.0.2",
+        "sum": "h1:vGKWl0YJqUNxE8d+h8f6NJLcCJrgbhC4NcD46KavDd4="
+      },
+      "github.com/mitchellh/mapstructure": {
+        "version": "v1.5.1-0.20231216201459-8508981c8b6c",
+        "sum": "h1:cqn374mizHuIWj+OSJCajGr/phAmuMug9qIX3l9CflE="
+      },
+      "github.com/mitchellh/reflectwalk": {
+        "version": "v1.0.2",
+        "sum": "h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zxSIeXaQ="
+      },
+      "github.com/moby/buildkit": {
+        "version": "v0.33.0",
+        "sum": "h1:zBbt1FiMcTB/oFg1iCNcKa83k5Rn8MGcVjXFIcfYhuQ="
+      },
+      "github.com/moby/docker-image-spec": {
+        "version": "v1.3.1",
+        "sum": "h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0="
+      },
+      "github.com/moby/locker": {
+        "version": "v1.0.1",
+        "sum": "h1:fOXqR41zeveg4fFODix+1Ch4mj/gT0NE1XJbp/epuBg="
+      },
+      "github.com/moby/moby/api": {
+        "version": "v1.56.0",
+        "sum": "h1:GQzua3NA599ASSIICx0iFgiJeO9YkdDARvQsm23ZZuQ="
+      },
+      "github.com/moby/moby/client": {
+        "version": "v0.6.0",
+        "sum": "h1:AJjEB21QPbXSXjDsZorFBoDZPhMrfbpaPLgSMAW9Bgs="
+      },
+      "github.com/moby/sys/atomicwriter": {
+        "version": "v0.1.0",
+        "sum": "h1:kw5D/EqkBwsBFi0ss9v1VG3wIkVhzGvLklJ+w3A14Sw="
+      },
+      "github.com/moby/sys/mountinfo": {
+        "version": "v0.7.2",
+        "sum": "h1:1shs6aH5s4o5H2zQLn796ADW1wMrIwHsyJ2v9KouLrg="
+      },
+      "github.com/moby/sys/sequential": {
+        "version": "v0.7.0",
+        "sum": "h1:ASQNGNROJSuOO6LL6bPHbKvuZu6NU8P4ldPWk31zj/8="
+      },
+      "github.com/moby/sys/signal": {
+        "version": "v0.7.1",
+        "sum": "h1:PrQxdvxcGijdo6UXXo/lU/TvHUWyPhj7UOpSo8tuvk0="
+      },
+      "github.com/moby/sys/user": {
+        "version": "v0.4.1",
+        "sum": "h1:RgjRlaDKi/Xmyrz4t8lyzXT6v2ooFeO/7xtchmhVWE0="
+      },
+      "github.com/moby/sys/userns": {
+        "version": "v0.2.1",
+        "sum": "h1:4OvdM7BcPkASbuouHsbW3aeMJSFlYDldBRnXVZhaRk8="
+      },
+      "github.com/moby/term": {
+        "version": "v0.5.2",
+        "sum": "h1:6qk3FJAFDs6i/q3W/pQ97SX192qKfZgGjCQqfCJkgzQ="
+      },
+      "github.com/modern-go/concurrent": {
+        "version": "v0.0.0-20180306012644-bacd9c7ef1dd",
+        "sum": "h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg="
+      },
+      "github.com/modern-go/reflect2": {
+        "version": "v1.0.3-0.20250322232337-35a7c28c31ee",
+        "sum": "h1:W5t00kpgFdJifH4BDsTlE89Zl93FEloxaWZfGcifgq8="
+      },
+      "github.com/monochromegane/go-gitignore": {
+        "version": "v0.0.0-20200626010858-205db1a8cc00",
+        "sum": "h1:n6/2gBQ3RWajuToeY6ZtZTIKv2v7ThUy5KKusIT0yc0="
+      },
+      "github.com/morikuni/aec": {
+        "version": "v1.1.0",
+        "sum": "h1:vBBl0pUnvi/Je71dsRrhMBtreIqNMYErSAbEeb8jrXQ="
+      },
+      "github.com/munnerz/goautoneg": {
+        "version": "v0.0.0-20191010083416-a7dc8b61c822",
+        "sum": "h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA="
+      },
+      "github.com/nikolalohinski/gonja/v2": {
+        "version": "v2.9.0",
+        "sum": "h1:QICtNWj0siM3PF5xUjVod/l+C9XnGfI+wrfSIBGKQ6o="
+      },
+      "github.com/oklog/ulid/v2": {
+        "version": "v2.1.1",
+        "sum": "h1:suPZ4ARWLOJLegGFiZZ1dFAkqzhMjL3J1TzI+5wHz8s="
+      },
+      "github.com/open-policy-agent/opa": {
+        "version": "v1.20.2",
+        "sum": "h1:dlX5VEGA5M62W8+X1nRPEaQIh/CMRn5FcD1mebpKWKg="
+      },
+      "github.com/opencontainers/go-digest": {
+        "version": "v1.0.0",
+        "sum": "h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U="
+      },
+      "github.com/opencontainers/image-spec": {
+        "version": "v1.1.1",
+        "sum": "h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040="
+      },
+      "github.com/opencontainers/runtime-spec": {
+        "version": "v1.3.0",
+        "sum": "h1:YZupQUdctfhpZy3TM39nN9Ika5CBWT5diQ8ibYCRkxg="
+      },
+      "github.com/openvex/go-vex": {
+        "version": "v0.2.7",
+        "sum": "h1:/pN3bqvS4QOc6WkkL0hbKzJuAtsUD9vmvk9IZkzD3Zc="
+      },
+      "github.com/owenrumney/go-sarif/v2": {
+        "version": "v2.3.3",
+        "sum": "h1:ubWDJcF5i3L/EIOER+ZyQ03IfplbSU1BLOE26uKQIIU="
+      },
+      "github.com/owenrumney/squealer": {
+        "version": "v1.2.12",
+        "sum": "h1:6VQxQ323q7q0eKNP5p7MX4nbTW1z8wK44YvyHLwDcx0="
+      },
+      "github.com/package-url/packageurl-go": {
+        "version": "v0.1.7",
+        "sum": "h1:iFWg6tzAjLA6F/qX3M5nZaiMHJgc+p2zxVyr/fY+sZY="
+      },
+      "github.com/pandatix/go-cvss": {
+        "version": "v0.6.2",
+        "sum": "h1:TFiHlzUkT67s6UkelHmK6s1INKVUG7nlKYiWWDTITGI="
+      },
+      "github.com/pelletier/go-toml/v2": {
+        "version": "v2.4.3",
+        "sum": "h1:GTRvJQutkOSftxIFD5xw9aepkYNuPWmVJpffdDPYVpY="
+      },
+      "github.com/peterbourgon/diskv": {
+        "version": "v2.0.1+incompatible",
+        "sum": "h1:UBdAOUP5p4RWqPBg048CAvpKN+vxiaj6gdUUzhl4XmI="
+      },
+      "github.com/pjbgf/sha1cd": {
+        "version": "v0.6.0",
+        "sum": "h1:3WJ8Wz8gvDz29quX1OcEmkAlUg9diU4GxJHqs0/XiwU="
+      },
+      "github.com/pkg/browser": {
+        "version": "v0.0.0-20240102092130-5ac0b6a4141c",
+        "sum": "h1:+mdjkGKdHQG3305AYmdv1U2eRNDiU2ErMBj1gwrq8eQ="
+      },
+      "github.com/pkg/errors": {
+        "version": "v0.9.1",
+        "sum": "h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4="
+      },
+      "github.com/planetscale/vtprotobuf": {
+        "version": "v0.6.1-0.20240319094008-0393e58bdf10",
+        "sum": "h1:GFCKgmp0tecUJ0sJuv4pzYCqS9+RGSn52M3FUwPs+uo="
+      },
+      "github.com/pmezard/go-difflib": {
+        "version": "v1.0.1-0.20181226105442-5d4384ee4fb2",
+        "sum": "h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U="
+      },
+      "github.com/rcrowley/go-metrics": {
+        "version": "v0.0.0-20250401214520-65e299d6c5c9",
+        "sum": "h1:bsUq1dX0N8AOIL7EB/X911+m4EHsnWEHeJ0c+3TTBrg="
+      },
+      "github.com/redis/go-redis/v9": {
+        "version": "v9.22.0",
+        "sum": "h1:laDvpYXTJtZLloinw1fA5Kqd6HAEH2XKxOkG/PDq2F0="
+      },
+      "github.com/remyoudompheng/bigfft": {
+        "version": "v0.0.0-20230129092748-24d4a6f8daec",
+        "sum": "h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE="
+      },
+      "github.com/rubenv/sql-migrate": {
+        "version": "v1.8.1",
+        "sum": "h1:EPNwCvjAowHI3TnZ+4fQu3a915OpnQoPAjTXCGOy2U0="
+      },
+      "github.com/russross/blackfriday/v2": {
+        "version": "v2.1.0",
+        "sum": "h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf35Ld67mk="
+      },
+      "github.com/rust-secure-code/go-rustaudit": {
+        "version": "v0.0.0-20250226111315-e20ec32e963c",
+        "sum": "h1:8gOLsYwaY2JwlTMT4brS5/9XJdrdIbmk2obvQ748CC0="
+      },
+      "github.com/sagikazarmark/locafero": {
+        "version": "v0.11.0",
+        "sum": "h1:1iurJgmM9G3PA/I+wWYIOw/5SyBtxapeHDcg+AAIFXc="
+      },
+      "github.com/samber/lo": {
+        "version": "v1.53.0",
+        "sum": "h1:t975lj2py4kJPQ6haz1QMgtId2gtmfktACxIXArw3HM="
+      },
+      "github.com/samber/oops": {
+        "version": "v1.18.1",
+        "sum": "h1:qjhZbqbdyhWBKntkY8sxrDNKA8b4c5VHlmI1rli7X7M="
+      },
+      "github.com/santhosh-tekuri/jsonschema/v6": {
+        "version": "v6.0.3",
+        "sum": "h1:1EYB5IzjZawrrnELUi78f9fPu57HuXjmddZPjrls/28="
+      },
+      "github.com/sassoftware/go-rpmutils": {
+        "version": "v0.4.0",
+        "sum": "h1:ojND82NYBxgwrV+mX1CWsd5QJvvEZTKddtCdFLPWhpg="
+      },
+      "github.com/secure-systems-lab/go-securesystemslib": {
+        "version": "v0.11.1",
+        "sum": "h1:ayahDPjfSIqKegyt5YVGEvQ7SAi72GHXTy+b2YjUd5w="
+      },
+      "github.com/sergi/go-diff": {
+        "version": "v1.4.0",
+        "sum": "h1:n/SP9D5ad1fORl+llWyN+D6qoUETXNZARKjyY2/KVCw="
+      },
+      "github.com/shibumi/go-pathspec": {
+        "version": "v1.3.0",
+        "sum": "h1:QUyMZhFo0Md5B8zV8x2tesohbb5kfbpTi9rBnKh5dkI="
+      },
+      "github.com/shopspring/decimal": {
+        "version": "v1.4.0",
+        "sum": "h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k="
+      },
+      "github.com/sigstore/protobuf-specs": {
+        "version": "v0.5.1",
+        "sum": "h1:/5OPaNuolRJmQfeZLayJGFXMpsRJEdgC6ah1/+7Px7U="
+      },
+      "github.com/sigstore/rekor": {
+        "version": "v1.5.4",
+        "sum": "h1:A9zITTrkRwO+8lfq7L/gBR7rDHHcBQJRI+a0JQo4xDM="
+      },
+      "github.com/sigstore/sigstore": {
+        "version": "v1.10.9",
+        "sum": "h1:7Dcpt+ibnltHQZ8XhaU0dFmhHaf/T491eJfA9WDex4Y="
+      },
+      "github.com/sirupsen/logrus": {
+        "version": "v1.10.2",
+        "sum": "h1:G2SED73/qrAu6YwbdxOD6peLkCBI3z7L+ykJFTXJBBo="
+      },
+      "github.com/skeema/knownhosts": {
+        "version": "v1.3.1",
+        "sum": "h1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnBY8="
+      },
+      "github.com/sourcegraph/conc": {
+        "version": "v0.3.1-0.20240121214520-5f936abd7ae8",
+        "sum": "h1:+jumHNA0Wrelhe64i8F6HNlS8pkoyMv5sreGx2Ry5Rw="
+      },
+      "github.com/spdx/tools-golang": {
+        "version": "v0.5.7",
+        "sum": "h1:+sWcKGnhwp3vLdMqPcLdA6QK679vd86cK9hQWH3AwCg="
+      },
+      "github.com/spf13/afero": {
+        "version": "v1.15.0",
+        "sum": "h1:b/YBCLWAJdFWJTN9cLhiXXcD7mzKn9Dm86dNnfyQw1I="
+      },
+      "github.com/spf13/cast": {
+        "version": "v1.10.0",
+        "sum": "h1:h2x0u2shc1QuLHfxi+cTJvs30+ZAHOGRic8uyGTDWxY="
+      },
+      "github.com/spf13/cobra": {
+        "version": "v1.10.2",
+        "sum": "h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU="
+      },
+      "github.com/spf13/pflag": {
+        "version": "v1.0.10",
+        "sum": "h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk="
+      },
+      "github.com/spf13/viper": {
+        "version": "v1.21.0",
+        "sum": "h1:x5S+0EU27Lbphp4UKm1C+1oQO+rKx36vfCoaVebLFSU="
+      },
+      "github.com/spiffe/go-spiffe/v2": {
+        "version": "v2.7.0",
+        "sum": "h1:uXe1MflJoHw58wAUvxVlcM7WpKtijWG7I1UidcGh6g4="
+      },
+      "github.com/stretchr/objx": {
+        "version": "v0.5.3",
+        "sum": "h1:jmXUvGomnU1o3W/V5h2VEradbpJDwGrzugQQvL0POH4="
+      },
+      "github.com/stretchr/testify": {
+        "version": "v1.12.1",
+        "sum": "h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE="
+      },
+      "github.com/subosito/gotenv": {
+        "version": "v1.6.0",
+        "sum": "h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8="
+      },
+      "github.com/tchap/go-patricia/v2": {
+        "version": "v2.3.3",
+        "sum": "h1:xfNEsODumaEcCcY3gI0hYPZ/PcpVv5ju6RMAhgwZDDc="
+      },
+      "github.com/tetratelabs/wabin": {
+        "version": "v0.0.0-20230304001439-f6f874872834",
+        "sum": "h1:ZF+QBjOI+tILZjBaFj3HgFonKXUcwgJ4djLb6i42S3Q="
+      },
+      "github.com/tetratelabs/wazero": {
+        "version": "v1.12.0",
+        "sum": "h1:DuWcpNu/FzgEXgGBDp8J1Spc+CWOvvtvVyjKlaZopYU="
+      },
+      "github.com/tonistiigi/go-csvvalue": {
+        "version": "v0.0.0-20240814133006-030d3b2625d0",
+        "sum": "h1:2f304B10LaZdB8kkVEaoXvAMVan2tl9AiK4G0odjQtE="
+      },
+      "github.com/toqueteos/webbrowser": {
+        "version": "v1.2.1",
+        "sum": "h1:O7IsnnU7XQyJ1nHMRfAktUUJOAZD3aQyUVnxzhWphCg="
+      },
+      "github.com/twitchtv/twirp": {
+        "version": "v8.1.3+incompatible",
+        "sum": "h1:+F4TdErPgSUbMZMwp13Q/KgDVuI7HJXP61mNV3/7iuU="
+      },
+      "github.com/ulikunitz/xz": {
+        "version": "v0.5.16",
+        "sum": "h1:ld6NyySjx5lowVKwJvMRLnW5nxKX/xnpSiFYZ/Lxur0="
+      },
+      "github.com/valyala/fastjson": {
+        "version": "v1.6.10",
+        "sum": "h1:/yjJg8jaVQdYR3arGxPE2X5z89xrlhS0eGXdv+ADTh4="
+      },
+      "github.com/vektah/gqlparser/v2": {
+        "version": "v2.5.36",
+        "sum": "h1:CN9mKVHgMkc+XftdOWIhb4HEL8wKSYkFAqhf8booa7s="
+      },
+      "github.com/vmihailenco/msgpack/v5": {
+        "version": "v5.4.1",
+        "sum": "h1:cQriyiUvjTwOHg8QZaPihLWeRAAVoCpE00IUPn0Bjt8="
+      },
+      "github.com/vmihailenco/tagparser/v2": {
+        "version": "v2.0.0",
+        "sum": "h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAhO7/IwNM9g="
+      },
+      "github.com/x448/float16": {
+        "version": "v0.8.4",
+        "sum": "h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM="
+      },
+      "github.com/xanzy/ssh-agent": {
+        "version": "v0.3.3",
+        "sum": "h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM="
+      },
+      "github.com/xeipuuv/gojsonpointer": {
+        "version": "v0.0.0-20190905194746-02993c407bfb",
+        "sum": "h1:zGWFAtiMcyryUHoUjUJX0/lt1H2+i2Ka2n+D3DImSNo="
+      },
+      "github.com/xeipuuv/gojsonreference": {
+        "version": "v0.0.0-20180127040603-bd5ef7bd5415",
+        "sum": "h1:EzJWgHovont7NscjpAxXsDA8S8BMYve8Y5+7cuRE7R0="
+      },
+      "github.com/xi2/xz": {
+        "version": "v0.0.0-20171230120015-48954b6210f8",
+        "sum": "h1:nIPpBwaJSVYIxUFsDv3M8ofmx9yWTog9BfvIu0q41lo="
+      },
+      "github.com/xlab/treeprint": {
+        "version": "v1.2.0",
+        "sum": "h1:HzHnuAF1plUN2zGlAFHbSQP2qJ0ZAD3XF5XD7OesXRQ="
+      },
+      "github.com/yashtewari/glob-intersection": {
+        "version": "v0.2.0",
+        "sum": "h1:8iuHdN88yYuCzCdjt0gDe+6bAhUwBeEWqThExu54RFg="
+      },
+      "github.com/youmark/pkcs8": {
+        "version": "v0.0.0-20240726163527-a2c0da244d78",
+        "sum": "h1:ilQV1hzziu+LLM3zUTJ0trRztfwgjqKnBWNtSRkbmwM="
+      },
+      "github.com/zclconf/go-cty": {
+        "version": "v1.19.0",
+        "sum": "h1:IV8WdqYZc2c5rLX9bEoLNXKojBAp0MZPBHMIrCoa/s4="
+      },
+      "github.com/zclconf/go-cty-yaml": {
+        "version": "v1.2.0",
+        "sum": "h1:GDyL4+e/Qe/S0B7YaecMLbVvAR/Mp21CXMOSiCTOi1M="
+      },
+      "go.etcd.io/bbolt": {
+        "version": "v1.5.0",
+        "sum": "h1:S7GAl7Fxv12yohbwFfIbQCGDWbQbtDGPET4P/bD4lxU="
+      },
+      "go.opentelemetry.io/auto/sdk": {
+        "version": "v1.2.1",
+        "sum": "h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64="
+      },
+      "go.opentelemetry.io/contrib/detectors/gcp": {
+        "version": "v1.44.0",
+        "sum": "h1:NmLfL734pJhM0JKaYd2Y28+nY9dPRWYAAbxhRCrKXPw="
+      },
+      "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc": {
+        "version": "v0.71.0",
+        "sum": "h1:B2h3uqicet1CT2N5TOFhS+Gq++9i0/CLmaxvhmhtP5s="
+      },
+      "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp": {
+        "version": "v0.71.0",
+        "sum": "h1:3g7B90UzBltIDKq1/5mrTGxTnOFDV0ICOhLoxiZ8jlg="
+      },
+      "go.opentelemetry.io/otel": {
+        "version": "v1.46.0",
+        "sum": "h1:FHt5/CDyVxi/8IM1CH7VE/rRgq3kLHa2mSTVMO8AWyc="
+      },
+      "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc": {
+        "version": "v1.46.0",
+        "sum": "h1:qkDYCAFiZXLcs1L4aY+tP2wguQ4kURANqHOQMA2et2s="
+      },
+      "go.opentelemetry.io/otel/exporters/otlp/otlptrace": {
+        "version": "v1.46.0",
+        "sum": "h1:OFnwLJr+pF3iHrlGSzbxyuo6/6HyBlnlN1CWEJmBVcw="
+      },
+      "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc": {
+        "version": "v1.46.0",
+        "sum": "h1:w53CDeOA/Kurp7yRsegSr6pbbr759dOvJ+yNmWM6Hxs="
+      },
+      "go.opentelemetry.io/otel/metric": {
+        "version": "v1.46.0",
+        "sum": "h1:yBnkXvgV7AXFILZc5K6IZe/CBFF3OS7BJ8ov6/lj0K8="
+      },
+      "go.opentelemetry.io/otel/sdk": {
+        "version": "v1.46.0",
+        "sum": "h1:h5CNQQjEbuQXY/JfZtgt3i7HVFV3aHPO2OAwO2eTYPI="
+      },
+      "go.opentelemetry.io/otel/sdk/metric": {
+        "version": "v1.46.0",
+        "sum": "h1:0piZ26EG4RBfebb2jhDH6ERCYHoVWduc3kLgPCwSnSE="
+      },
+      "go.opentelemetry.io/otel/trace": {
+        "version": "v1.46.0",
+        "sum": "h1:OULy7ccdJnZtJ0UDYFOIGaCmiWzJ8Vi2G/Rsu60qs1c="
+      },
+      "go.opentelemetry.io/proto/otlp": {
+        "version": "v1.11.0",
+        "sum": "h1:5rrYs0Ykyj50sdU/JU0x8etU+LubXWb+gED6TbEdMIk="
+      },
+      "go.uber.org/atomic": {
+        "version": "v1.11.0",
+        "sum": "h1:ZvwS0R+56ePWxUNi+Atn9dWONBPp/AUETXlHW0DxSjE="
+      },
+      "go.uber.org/multierr": {
+        "version": "v1.11.0",
+        "sum": "h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0="
+      },
+      "go.uber.org/zap": {
+        "version": "v1.28.0",
+        "sum": "h1:IZzaP1Fv73/T/pBMLk4VutPl36uNC+OSUh3JLG3FIjo="
+      },
+      "go.yaml.in/yaml/v2": {
+        "version": "v2.4.4",
+        "sum": "h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ="
+      },
+      "go.yaml.in/yaml/v3": {
+        "version": "v3.0.5",
+        "sum": "h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw="
+      },
+      "go.yaml.in/yaml/v4": {
+        "version": "v4.0.0-rc.3",
+        "sum": "h1:3h1fjsh1CTAPjW7q/EMe+C8shx5d8ctzZTrLcs/j8Go="
+      },
+      "golang.org/x/crypto": {
+        "version": "v0.57.0",
+        "sum": "h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M="
+      },
+      "golang.org/x/exp": {
+        "version": "v0.0.0-20260603202125-055de637280b",
+        "sum": "h1:v1uXiEBHo8QA0LiGCo7UgHMzHT4Kdfpl2zmtH5vaP1Q="
+      },
+      "golang.org/x/mod": {
+        "version": "v0.41.0",
+        "sum": "h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c="
+      },
+      "golang.org/x/net": {
+        "version": "v0.60.0",
+        "sum": "h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU="
+      },
+      "golang.org/x/oauth2": {
+        "version": "v0.36.0",
+        "sum": "h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs="
+      },
+      "golang.org/x/sync": {
+        "version": "v0.23.0",
+        "sum": "h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk="
+      },
+      "golang.org/x/sys": {
+        "version": "v0.48.0",
+        "sum": "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo="
+      },
+      "golang.org/x/term": {
+        "version": "v0.46.0",
+        "sum": "h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE="
+      },
+      "golang.org/x/text": {
+        "version": "v0.42.0",
+        "sum": "h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI="
+      },
+      "golang.org/x/time": {
+        "version": "v0.16.0",
+        "sum": "h1:vMb6ptszcQMkcwiRTAuNNU50gom6++Q/6gY2hDM6VDE="
+      },
+      "golang.org/x/xerrors": {
+        "version": "v0.0.0-20240903120638-7835f813f4da",
+        "sum": "h1:noIWHXmPHxILtqtCOPIhSt0ABwskkZKjD3bXGnZGpNY="
+      },
+      "google.golang.org/api": {
+        "version": "v0.294.0",
+        "sum": "h1:8gASjJxdtcIieB3OqbkLcF0FfbXVNqKtU5iozD1ssvA="
+      },
+      "google.golang.org/genproto": {
+        "version": "v0.0.0-20260715232425-e75dac1f907d",
+        "sum": "h1:C9v1o0/4quuhOAfmRXA2j+we0PqZIp8traLdeogF3Ms="
+      },
+      "google.golang.org/genproto/googleapis/api": {
+        "version": "v0.0.0-20260825221802-da73d73af1c5",
+        "sum": "h1:izFU9hz7aeLI/Mi1J0991ae+xcwRLr7hTqWnB/9aIIU="
+      },
+      "google.golang.org/genproto/googleapis/rpc": {
+        "version": "v0.0.0-20260825221802-da73d73af1c5",
+        "sum": "h1:1VUiZAXyC+zmiFYi+WLtBzr68Cj8wOofHjjrA/kkizc="
+      },
+      "google.golang.org/grpc": {
+        "version": "v1.83.2",
+        "sum": "h1:EManeRomTObA0BU7I8vXgg/78uE5MJ9M8B39EX2WscU="
+      },
+      "google.golang.org/protobuf": {
+        "version": "v1.36.12",
+        "sum": "h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc="
+      },
+      "gopkg.in/evanphx/json-patch.v4": {
+        "version": "v4.13.0",
+        "sum": "h1:czT3CmqEaQ1aanPc5SdlgQrrEIb8w/wwCvWWnfEbYzo="
+      },
+      "gopkg.in/inf.v0": {
+        "version": "v0.9.1",
+        "sum": "h1:73M5CoZyi3ZLMOyDlQh031Cx6N9NDJ2Vvfl76EDAgDc="
+      },
+      "gopkg.in/ini.v1": {
+        "version": "v1.67.3",
+        "sum": "h1:iM9Lhz5MRSGhHVGGwCuzG9KO8PoirCXj/m/qTmOJJQw="
+      },
+      "gopkg.in/warnings.v0": {
+        "version": "v0.1.2",
+        "sum": "h1:wFXVbFY8DY5/xOe1ECiWdKCzZlxgshcYVNkBHstARME="
+      },
+      "gopkg.in/yaml.v3": {
+        "version": "v3.0.1",
+        "sum": "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA="
+      },
+      "helm.sh/helm/v4": {
+        "version": "v4.3.0",
+        "sum": "h1:wLRTNXzy96ro7waurWMsymlUPaCQOj5nokpJZJNen/w="
+      },
+      "k8s.io/api": {
+        "version": "v0.37.0",
+        "sum": "h1:Z//Vj9N7RA/yS2sDmxyeo7h+RR4zbUrd2vrd3Z0TbB4="
+      },
+      "k8s.io/apiextensions-apiserver": {
+        "version": "v0.37.0",
+        "sum": "h1:zRMQ3+/LIE5oZ0tVvXwYHC+dIkSP5cjNWju7AZU1LOI="
+      },
+      "k8s.io/apimachinery": {
+        "version": "v0.37.0",
+        "sum": "h1:Np2AbDtf8x6RDHiD8T9LbKJ9gaegeVNa8yNm5FuGKm0="
+      },
+      "k8s.io/apiserver": {
+        "version": "v0.37.0",
+        "sum": "h1:TXg7OxsOWrAH8J4Zi/gBAZuMw1Dfdd+6cca2h4qjRqo="
+      },
+      "k8s.io/cli-runtime": {
+        "version": "v0.37.0",
+        "sum": "h1:U3XakUeirBQJMz5688r04z74SIHSE7V5SIZ6Ho5JyBM="
+      },
+      "k8s.io/client-go": {
+        "version": "v0.37.0",
+        "sum": "h1:nsN31fy8wBySuZ+QRnKmrjRSQLOG2rvoGN0tKd12zhQ="
+      },
+      "k8s.io/component-base": {
+        "version": "v0.37.0",
+        "sum": "h1:3SdSa4+itMdFTDFTeR8CxKGmSTSMXFlKL4ky8OqjguM="
+      },
+      "k8s.io/klog/v2": {
+        "version": "v2.140.0",
+        "sum": "h1:Tf+J3AH7xnUzZyVVXhTgGhEKnFqye14aadWv7bzXdzc="
+      },
+      "k8s.io/kube-openapi": {
+        "version": "v0.0.0-20260721132016-d427ff9ee9ad",
+        "sum": "h1:oXImqH8mQNk7PmvzKhmN3ddJoY6OnyM225MXwGHPm0A="
+      },
+      "k8s.io/kubectl": {
+        "version": "v0.37.0",
+        "sum": "h1:cici6hiofx93ASldmprDmZF55SfhVt4o3HniltVLjTc="
+      },
+      "k8s.io/utils": {
+        "version": "v0.0.0-20260626114624-be93311217bd",
+        "sum": "h1:Ea7fgQ5we8Y9T0OX5o0dAHzQOBRI07D/dEYRaB9ZZEs="
+      },
+      "modernc.org/libc": {
+        "version": "v1.75.7",
+        "sum": "h1:o3DTP9/0p9pKmY2WCKQaySW6wIiZhNM7wc2lUoyhfew="
+      },
+      "modernc.org/mathutil": {
+        "version": "v1.7.1",
+        "sum": "h1:GCZVGXdaN8gTqB1Mf/usp1Y/hSqgI2vAGGP4jZMCxOU="
+      },
+      "modernc.org/memory": {
+        "version": "v1.12.1",
+        "sum": "h1:nFMiWrpStgZczNl6XI9GnIk/rWhYIyHGUaR04pGbp9g="
+      },
+      "modernc.org/sqlite": {
+        "version": "v1.59.0",
+        "sum": "h1:X1es1GpqBlS/5T+vbM4HLUdaa8OtQx468DF2vrx+38A="
+      },
+      "mvdan.cc/sh/v3": {
+        "version": "v3.13.1",
+        "sum": "h1:DP3TfgZhDkT7lerUdnp6PTGKyxxzz6T+cOlY/xEvfWk="
+      },
+      "oras.land/oras-go/v2": {
+        "version": "v2.6.2",
+        "sum": "h1:N04RXngAp1LJKTG6ifz3xHPipasEkWr+hFmInja5YKo="
+      },
+      "sigs.k8s.io/controller-runtime": {
+        "version": "v0.24.1",
+        "sum": "h1:miPEwrmirImAvgME1L9qebGHrOnGJoVmVdtOU9fRfo4="
+      },
+      "sigs.k8s.io/json": {
+        "version": "v0.0.0-20250730193827-2d320260d730",
+        "sum": "h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg="
+      },
+      "sigs.k8s.io/kustomize/api": {
+        "version": "v0.21.1",
+        "sum": "h1:lzqbzvz2CSvsjIUZUBNFKtIMsEw7hVLJp0JeSIVmuJs="
+      },
+      "sigs.k8s.io/kustomize/kyaml": {
+        "version": "v0.21.1",
+        "sum": "h1:IVlbmhC076nf6foyL6Taw4BkrLuEsXUXNpsE+ScX7fI="
+      },
+      "sigs.k8s.io/randfill": {
+        "version": "v1.0.0",
+        "sum": "h1:JfjMILfT8A6RbawdsK2JXGBR5AQVfd+9TbzrlneTyrU="
+      },
+      "sigs.k8s.io/structured-merge-diff/v6": {
+        "version": "v6.4.2",
+        "sum": "h1:qdOxHwrl2Kaag1aQEarlYcOA9vSyGCp3CIki3aW8c4Q="
+      },
+      "sigs.k8s.io/yaml": {
+        "version": "v1.6.0",
+        "sum": "h1:G8fkbMSAFqgEFgh4b1wmtzDnioxFCUgTZhlbj5P9QYs="
+      }
+    },
+    "build": {
+      "-buildmode": "exe",
+      "-compiler": "gc",
+      "-trimpath": "true",
+      "CGO_ENABLED": "0",
+      "GOARCH": "amd64",
+      "GOOS": "linux",
+      "GOAMD64": "v1"
+    },
+    "path": "github.com/aquasecurity/trivy/cmd/trivy",
+    "main_module": "github.com/aquasecurity/trivy",
+    "main_version": "(devel)"
+  },
+  "exceptions": [],
+  "applicability": [],
+  "trust_method": "verified-upstream-source-reproducible-build-and-independent-govulncheck",
+  "source_packages": {
+    "count": 3145,
+    "imports_sha256": "c83a2a14985047af8e4cac1ad12e173ed3919b6ec3ce192dba953424b0a63ff3"
+  },
+  "binary_functions": {
+    "count": 203497,
+    "names_sha256": "bbba0e8956a1a64c22a24aa61475e706db6fa6435038cb14ff48cc4e55809b0d"
+  },
+  "observed_module_notices": [
+    "GO-2026-5932"
+  ]
+}

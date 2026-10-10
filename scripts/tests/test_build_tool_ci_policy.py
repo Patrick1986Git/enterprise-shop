@@ -21,7 +21,7 @@ class BuildToolCiPolicyTest(unittest.TestCase):
     def test_same_pinned_trivy_authority_is_used_for_images_and_build_tools(self):
         image = re.search(r'TRIVY_IMAGE: (\S+)', self.workflow)[1]
         self.assertEqual(image, SCAN.TRIVY_IMAGE)
-        self.assertRegex(image, r'^ghcr\.io/aquasecurity/trivy:0\.75\.0@sha256:[0-9a-f]{64}$')
+        self.assertRegex(image, r'^local/enterprise-shop-trivy:sha256-[0-9a-f]{64}$')
 
     def test_readonly_pr_gate_and_protected_master_schedule_cannot_silently_disappear(self):
         self.assertIn("github.event_name == 'pull_request'", self.build)
