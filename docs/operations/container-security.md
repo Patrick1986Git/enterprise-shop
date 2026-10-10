@@ -178,6 +178,45 @@ Aqua's official release workflow publishes Cosign image-manifest signatures, Sig
 
 This supplies independent scanner **executable provenance** through Aqua/GitHub/Sigstore and existing runner/gh trust roots. It does not verify the image's Cosign signature, attest every filesystem file, independently audit scanner source, or make self-scan output independent. Immutable digest/amd64/configuration checks establish image identity; self-scan supplies package advisory visibility. Upstream release/signing compromise, runner/gh compromise, scanner defects and advisory publication omissions remain residual boundaries. Every self-scan policy record explicitly denies independent integrity assurance.
 
+### Protected-master Trivy 0.75.0 advisory blocker
+
+Protected master `0eed0d2d999b07eb94a8c169935375145cbfbfa5` fails the auxiliary
+gate in both attempts of [CI #1173](https://github.com/Patrick1986Git/enterprise-shop/actions/runs/38014584443).
+The failing executable is `/usr/local/bin/trivy` in the pinned official scanner
+image, rather than the application, PostgreSQL, or the reviewed Ryuk rebuild.
+Retained raw reports and CycloneDX read back all 408 scanner package PURLs. The
+four blocking HIGH findings cover three distinct CVE IDs:
+
+| CVE | Measured component | Fixed version in the affected release line | Upstream advisory |
+| --- | --- | --- | --- |
+| CVE-2026-78669 | `golang.org/x/net v0.59.0` | `v0.60.0` | [GO-2026-6611](https://pkg.go.dev/vuln/GO-2026-6611) |
+| CVE-2026-78667 | Go stdlib `v1.27.1` | `1.27.2` | [GO-2026-6609](https://pkg.go.dev/vuln/GO-2026-6609) |
+| CVE-2026-78669 | Go stdlib `v1.27.1` | `1.27.2` | [GO-2026-6611](https://pkg.go.dev/vuln/GO-2026-6611) |
+| CVE-2026-97031 | Go stdlib `v1.27.1` | `1.27.2` | [GO-2026-6607](https://pkg.go.dev/vuln/GO-2026-6607) |
+
+The supported Go 1.26 line is fixed at `1.26.9`; this corroborates the compliant
+Ryuk and govulncheck image readback, but Trivy's official source requires Go 1.27.
+On 2026-10-10, the latest stable upstream release remains v0.75.0. Both published
+official v0.75.0 images resolve to index
+`sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa`.
+Their measured executable SHA-256 remains
+`93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e`,
+matching the attested release archive. Provenance verification does not remediate
+these package vulnerabilities, and the gate must continue to block them.
+
+The reviewed v0.75.0 source is commit
+`591e9799316a602e703f0b484f6c6d7b234ec8f3`. A dependency-resolution experiment
+with Go 1.27.2 changes only `x/net` to v0.60.0 and adds its two checksum entries;
+the existing crypto, sys, term and text requirements already satisfy that release.
+No rebuilt executable has been established or selected for CI execution. Prefer
+a patched official stable release with the existing attestation and byte-match
+contract. A repository-owned rebuild requires an explicitly reviewed replacement
+provenance contract, independently verified source and binary advisory results,
+reproducible bytes, complete package/SBOM readback and scanner compatibility
+evidence before promotion. Its own clean self-scan cannot supply that independent
+approval. No CVE exception, threshold change, stale database, or inventory removal
+is authorized by this incident.
+
 ### Update authority and infrastructure boundaries
 
 Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.
