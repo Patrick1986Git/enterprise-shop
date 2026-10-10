@@ -17,6 +17,9 @@ BINARY_SPEC.loader.exec_module(BINARY)
 CANDIDATE_SPEC = importlib.util.spec_from_file_location('ryuk_candidate_evidence', ROOT / 'scripts/ryuk_candidate_evidence.py')
 CANDIDATE = importlib.util.module_from_spec(CANDIDATE_SPEC)
 CANDIDATE_SPEC.loader.exec_module(CANDIDATE)
+SCANNER_SPEC = importlib.util.spec_from_file_location('trivy_candidate_evidence', ROOT / 'scripts/trivy_candidate_evidence.py')
+SCANNER = importlib.util.module_from_spec(SCANNER_SPEC)
+SCANNER_SPEC.loader.exec_module(SCANNER)
 CONTRACT = ROOT / '.github/security/auxiliary-container-scope.json'
 BLOCKING = {'HIGH', 'CRITICAL'}
 DIGEST = re.compile(r'^sha256:[0-9a-f]{64}$')
@@ -51,7 +54,8 @@ def execution_sources(root):
             for p in sorted(paths) if p.is_file()
             and not any(part in {'.git', '.tmp', 'target', '__pycache__'} for part in p.relative_to(root).parts) and
             ('.github/' in p.relative_to(root).as_posix() or p.name == 'Dockerfile'
-             or 'compose' in p.name or p.name == 'ryuk_candidate_evidence.py' or SURFACE.search(p.read_text()))}
+             or 'compose' in p.name or p.name in {'ryuk_candidate_evidence.py', 'trivy_candidate_evidence.py'}
+             or SURFACE.search(p.read_text()))}
 
 
 def inventory(contract, root=ROOT):
@@ -65,7 +69,7 @@ def inventory(contract, root=ROOT):
     refs = dict(re.findall(r'^      ([A-Z_]+_IMAGE): (\S+)$', workflow, re.M))
     require(refs == {v['environment']: v['reference'] for v in images.values() if v.get('environment')},
             'Workflow image references differ from reviewed auxiliary inventory')
-    require(contract['scanner_independent_integrity'] == 'upstream-github-attestation-and-executable-byte-match',
+    require(contract['scanner_independent_integrity'] == SCANNER.METHOD,
             'Self-scan cannot establish independent scanner integrity')
     require(contract['scanner_version'] == '0.75.0', 'Unreviewed scanner version')
     tool = contract['tools']['upx']
@@ -76,8 +80,12 @@ def inventory(contract, root=ROOT):
             'Unreviewed evidence transformation tool')
     for name, image in images.items():
         if image.get('candidate_build'):
-            require(name == 'ryuk', 'Rebuilt candidate authority is restricted to Ryuk')
-            CANDIDATE.inventory(image, read(root / '.github/security/ryuk/candidate.json'))
+            require(name in {'ryuk', 'scanner'}, 'Unreviewed rebuilt candidate authority')
+            if name == 'scanner':
+                require(image['classification'] == 'scanner' and image['governed'], 'Scanner cannot leave governance')
+                SCANNER.inventory(image, read(root / '.github/security/trivy/candidate.json'))
+            else:
+                CANDIDATE.inventory(image, read(root / '.github/security/ryuk/candidate.json'))
         else:
             require(IMAGE.fullmatch(image['reference']), f'{name}: readable tag and immutable registry digest required')
         require(image['platform'] == 'linux/amd64', f'{name}: linux/amd64 required')
@@ -115,6 +123,18 @@ def inventory(contract, root=ROOT):
             'Testcontainers must execute the inventoried local Ryuk with its missing-image guard')
     require(images['scanner']['reference'] in (root / 'scripts/scan-build-tools.py').read_text(),
             'Build-tool and image scanner authority must agree')
+    require(images['scanner'].get('candidate_build') is True and images['scanner']['governed'] is True,
+            'Verified patched scanner cannot leave governance')
+    for job_name, next_job in (('build', 'docker-validation'), ('container-security', 'deploy-pages')):
+        consumer = workflow.split('  ' + job_name + ':\n', 1)[1].split('\n  ' + next_job + ':', 1)[0]
+        require('    needs: trivy-candidate\n' in consumer
+                and 'pattern: trivy-candidate-*' in consumer
+                and 'run: python scripts/load-trivy-candidate.py' in consumer
+                and 'run-id:' not in consumer, 'Scanner must be verified from the same current-HEAD workflow')
+    producer = workflow.split('  trivy-candidate:\n', 1)[1].split('\n  build:', 1)[0]
+    require(all(command in producer for command in ('python scripts/verify-trivy-provenance.py --upstream-only',
+            'python scripts/build-trivy-candidate.py', 'python scripts/verify-trivy-candidate-compatibility.py',
+            'name: Verify complete rebuilt Trivy trust contract')), 'Independent scanner bootstrap cannot disappear')
     job = workflow.split('  container-security:\n', 1)[1].split('\n  deploy-pages:', 1)[0]
     require('    - cron: "23 4 * * 1"' in workflow and '  pull_request:' in workflow
             and '  contents: read\n' in workflow and 'pull_request_target' not in workflow
@@ -169,7 +189,8 @@ def validate(image, evidence, report, bom, scanner_version, directory=None):
     if candidate:
         require(directory is not None, 'Candidate build files required')
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        main_module, receipt = CANDIDATE.validate(image, evidence, report, directory, head)
+        authority = SCANNER if image['classification'] == 'scanner' else CANDIDATE
+        main_module, receipt = authority.validate(image, evidence, report, directory, head)
     else:
         main_module, receipt = BINARY.validate(image, evidence, report, bom, directory) if transformed else (None, None)
     require(report['SchemaVersion'] == 2
@@ -249,6 +270,9 @@ def evaluate(directory):
     require(provenance['verified'] is True and provenance['version'] == contract['scanner_version']
             and provenance['image'] == images['scanner']['reference']
             and provenance['method'] == contract['scanner_independent_integrity'], 'Missing independent scanner provenance')
+    require(provenance['repository_head'] == source and provenance['upstream_attestation_applies_to_rebuilt_binary'] is False,
+            'Rebuilt scanner cannot inherit upstream executable signing authority')
+    SCANNER.validate_upstream(directory / 'scanner-provenance')
     results = {'source_sha': source, 'images': {}, 'errors': {}, 'scanner_integrity': provenance,
                'fixture': {'reference': images['fixture']['reference'], 'governed': False}}
     for name, image in images.items():

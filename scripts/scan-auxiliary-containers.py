@@ -70,9 +70,11 @@ def scan():
             inspect = json.loads(docker('image', 'inspect', ref))[0]
             POLICY.require(inspect['Os'] + '/' + inspect['Architecture'] == 'linux/amd64', 'Wrong resolved platform')
             if image.get('candidate_build'):
-                build = ROOT / '.tmp/ryuk-candidate'
-                reviewed = POLICY.read(POLICY.CANDIDATE.CONTRACT)
-                POLICY.CANDIDATE.validate_build(reviewed, build, source)
+                scanner_candidate = name == 'scanner'
+                authority = POLICY.SCANNER if scanner_candidate else POLICY.CANDIDATE
+                build = ROOT / ('.tmp/trivy-candidate' if scanner_candidate else '.tmp/ryuk-candidate')
+                reviewed = POLICY.read(authority.CONTRACT)
+                authority.validate_build(reviewed, build, source)
                 POLICY.require(inspect['Id'] == reviewed['image_id'], 'Wrong loaded candidate')
                 shutil.copytree(build, item, dirs_exist_ok=True)
                 resolved = reviewed['image_id']

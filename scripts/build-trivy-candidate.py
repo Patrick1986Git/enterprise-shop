@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect a minimal Trivy source rebuild; no candidate is selected by this script."""
+"""Build and independently verify the reviewed minimal Trivy source remediation."""
 import argparse
 import gzip
 import hashlib
@@ -94,7 +94,18 @@ def prepare(data, source):
 def image_archive(binary, ca, source):
     files = {'usr/local/bin/trivy': (binary, 0o755), 'etc/ssl/certs/ca-certificates.crt': (ca, 0o644)}
     files.update({'contrib/' + p.name: (p.read_bytes(), 0o644) for p in sorted((source / 'contrib').glob('*.tpl'))})
-    layer = RYUK.tar_bytes(files)
+    layer_output = io.BytesIO()
+    with tarfile.open(fileobj=layer_output, mode='w', format=tarfile.USTAR_FORMAT) as saved:
+        temporary = tarfile.TarInfo('tmp')
+        temporary.type, temporary.mode = tarfile.DIRTYPE, 0o1777
+        temporary.uid = temporary.gid = temporary.mtime = 0
+        saved.addfile(temporary)
+        for name, (data, mode) in sorted(files.items()):
+            member = tarfile.TarInfo(name)
+            member.size, member.mode = len(data), mode
+            member.uid = member.gid = member.mtime = 0
+            saved.addfile(member, io.BytesIO(data))
+    layer = layer_output.getvalue()
     config = RYUK.canonical({'architecture': 'amd64', 'os': 'linux', 'created': '1970-01-01T00:00:00Z',
         'config': {'Entrypoint': ['/usr/local/bin/trivy'], 'WorkingDir': '/',
                    'Env': ['PATH=/usr/local/bin', 'HOME=/root'],
@@ -107,6 +118,7 @@ def image_archive(binary, ca, source):
     archive = RYUK.tar_bytes({sha(config) + '.json': (config, 0o644), 'manifest.json': (manifest, 0o644),
                               'layer.tar': (layer, 0o644)})
     census = {n: {'sha256': sha(d), 'size': len(d), 'mode': m} for n, (d, m) in files.items()}
+    census['tmp'] = {'type': 'directory', 'mode': 0o1777}
     return reference, image_id, config, layer, archive, census
 
 
@@ -225,6 +237,13 @@ def build(directory):
         if p.is_file() and p.name not in {'build-receipt.json', 'image.tar', 'layer.tar', 'upstream.tar.gz',
                                         'trivy.first', 'trivy.repeat', 'govulncheck'}}
     write(directory / 'build-receipt.json', receipt)
+    spec = importlib.util.spec_from_file_location('trivy_evidence', ROOT / 'scripts/trivy_candidate_evidence.py')
+    evidence = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(evidence)
+    reviewed = json.loads(evidence.CONTRACT.read_text())
+    scope = json.loads((ROOT / '.github/security/auxiliary-container-scope.json').read_text())
+    evidence.inventory(scope['images']['scanner'], reviewed)
+    evidence.validate_build(reviewed, directory, receipt['repository_head'])
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
     require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
             'Loaded image configuration mismatch')

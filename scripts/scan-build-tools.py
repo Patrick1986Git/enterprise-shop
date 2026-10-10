@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TRIVY_IMAGE = 'ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa'
+TRIVY_IMAGE = 'local/enterprise-shop-trivy:sha256-6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c'
 
 
 def module(name, path):
@@ -99,6 +99,12 @@ def main():
         contract = INVENTORY.read_json(INVENTORY.CONTRACT)
         INVENTORY.validate_bom(document, contract)
         scope = INVENTORY.validate_collected(directory, contract)
+        evidence = module('trivy_evidence', ROOT / 'scripts/trivy_candidate_evidence.py')
+        reviewed = INVENTORY.read_json(evidence.CONTRACT)
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        evidence.validate_build(reviewed, ROOT / '.tmp/trivy-candidate', head)
+        evidence.validate_upstream(ROOT / '.tmp/container-security/auxiliary/scanner-provenance')
+        evidence.validate_compatibility(ROOT / '.tmp/trivy-candidate/compatibility', reviewed, head)
         command = docker(Path(args.cache).resolve(), directory)
         download = command + ['image', '--download-db-only']
         if os.environ.get('TRIVY_DB_REPOSITORY'):

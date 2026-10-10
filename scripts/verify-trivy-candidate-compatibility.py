@@ -54,9 +54,11 @@ def packages(report):
 def database(path):
     value = read(path)
     now = datetime.now(timezone.utc)
-    require(value['Version'] == 2 and datetime.fromisoformat(value['UpdatedAt'].replace('Z', '+00:00')) <= now
-            and datetime.fromisoformat(value['NextUpdate'].replace('Z', '+00:00')) > now
-            and datetime.fromisoformat(value['DownloadedAt'].replace('Z', '+00:00')) <= now,
+    updated, next_update, downloaded = (datetime.fromisoformat(value[k].replace('Z', '+00:00'))
+                                       for k in ('UpdatedAt', 'NextUpdate', 'DownloadedAt'))
+    require(value['Version'] == 2 and updated <= downloaded <= now < next_update
+            and (now - updated).total_seconds() < 172800
+            and (next_update - updated).total_seconds() <= 172800,
             'Malformed/stale vulnerability database')
     return value
 
@@ -101,7 +103,7 @@ def collect(build, directory, actual_images=()):
     base = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '4g', '--cpus', '2',
             '--user', f'{os.getuid()}:{os.getgid()}', '--tmpfs', '/tmp:rw,size=256m,mode=1777',
-            '-v', f'{inputs.resolve()}:/input:ro', '-v', f'{cache.resolve()}:/root/.cache/trivy']
+            '-v', f'{inputs.resolve()}:/input:ro', '-v', f'{cache.resolve()}:/cache']
     update = base + ['-v', f'{directory.resolve()}:/evidence']
     certificate = os.environ.get('AUXILIARY_SCAN_CA_BUNDLE')
     if certificate:
@@ -110,12 +112,13 @@ def collect(build, directory, actual_images=()):
     if os.environ.get('TRIVY_DB_REPOSITORY'):
         args += ['--db-repository', os.environ['TRIVY_DB_REPOSITORY']]
     with (directory / 'database-update.log').open('w') as log:
-        subprocess.run(update + [REFERENCE] + args, check=True, stdout=log, stderr=subprocess.STDOUT)
+        subprocess.run(update + [REFERENCE, '--cache-dir', '/cache'] + args, check=True, stdout=log, stderr=subprocess.STDOUT)
     if actual_images:
         with (directory / 'java-database-update.log').open('w') as log:
-            subprocess.run(update + [REFERENCE, 'image', '--download-java-db-only', '--java-db-repository',
+            subprocess.run(update + [REFERENCE, '--cache-dir', '/cache', 'image', '--download-java-db-only', '--java-db-repository',
                                     'ghcr.io/aquasecurity/trivy-java-db:1'], check=True, stdout=log, stderr=subprocess.STDOUT)
     metadata = database(cache / 'db/metadata.json')
+    write(directory / 'database-metadata.json', metadata)
     initial_db = sha((cache / 'db/trivy.db').read_bytes())
     cases = {'vulnerable': ('sbom', '/input/vulnerable.cdx.json'),
              'patched': ('sbom', '/input/patched.cdx.json'),
@@ -127,7 +130,7 @@ def collect(build, directory, actual_images=()):
     for scanner, image in [('reference', REFERENCE), ('candidate', ref)]:
         item = directory / scanner
         item.mkdir()
-        command = base + ['--network', 'none', '-v', f'{item.resolve()}:/evidence', image]
+        command = base + ['--network', 'none', '-v', f'{item.resolve()}:/evidence', image, '--cache-dir', '/cache']
         summaries = {}
         for name, (kind, target) in cases.items():
             scan = [kind, '--skip-db-update', '--ignorefile', '/dev/null', '--scanners', 'vuln', '--list-all-pkgs',
@@ -160,12 +163,13 @@ def collect(build, directory, actual_images=()):
                                                      'HIGH,CRITICAL', '--exit-code', '1', '/input/reference-rootfs'])]:
             with (item / (name + '.log')).open('w') as log:
                 status = subprocess.run(command + options, stdout=log, stderr=subprocess.STDOUT).returncode
-            require(status != 0, 'Incorrect scanner failure/severity behavior: ' + name)
+            require(status == 1 if name == 'severity-positive' else status != 0,
+                    'Incorrect scanner failure/severity behavior: ' + name)
             statuses[name] = status
         empty = item / 'empty-cache'
         empty.mkdir()
         missing = command.copy()
-        missing[missing.index(f'{cache.resolve()}:/root/.cache/trivy')] = f'{empty.resolve()}:/root/.cache/trivy'
+        missing[missing.index(f'{cache.resolve()}:/cache')] = f'{empty.resolve()}:/cache'
         with (item / 'missing-database.log').open('w') as log:
             status = subprocess.run(missing + ['sbom', '--skip-db-update', '/input/patched.cdx.json'],
                                     stdout=log, stderr=subprocess.STDOUT).returncode
@@ -178,7 +182,9 @@ def collect(build, directory, actual_images=()):
     result = {'repository_head': receipt['repository_head'], 'candidate': ref, 'reference_fixture': REFERENCE,
         'reference_fixture_execution_authority': False, 'database': metadata, 'database_sha256': initial_db,
         'actual_images': actual, 'outputs': outputs, 'byte_inputs': {p.relative_to(inputs).as_posix(): sha(p.read_bytes())
-            for p in inputs.rglob('*') if p.is_file()}, 'verified': True}
+            for p in inputs.rglob('*') if p.is_file()}, 'verified': True,
+        'evidence_hashes': {p.relative_to(directory).as_posix(): sha(p.read_bytes()) for p in directory.rglob('*')
+            if p.is_file() and 'inputs' not in p.relative_to(directory).parts and 'cache' not in p.relative_to(directory).parts}}
     write(directory / 'result.json', result)
     shutil.rmtree(inputs)
     shutil.rmtree(cache)

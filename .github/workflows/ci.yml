@@ -69,13 +69,18 @@ jobs:
       - name: Verify original upstream Trivy executable provenance
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/verify-trivy-provenance.py
+        run: python scripts/verify-trivy-provenance.py --upstream-only
 
       - name: Collect independent Trivy candidate build evidence
         run: python scripts/build-trivy-candidate.py
 
       - name: Collect isolated Trivy candidate functional compatibility
         run: python scripts/verify-trivy-candidate-compatibility.py
+
+      - name: Verify complete rebuilt Trivy trust contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/verify-trivy-provenance.py
 
       - name: Upload Trivy candidate collection evidence
         if: always()
@@ -210,6 +215,7 @@ jobs:
           retention-days: 14
 
   build:
+    needs: trivy-candidate
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -220,6 +226,15 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
+
+      - name: Download same-run verified Trivy evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: trivy-candidate-*
+          path: .tmp/trivy-downloads
+
+      - name: Verify and load current-HEAD Trivy executable
+        run: python scripts/load-trivy-candidate.py
 
       - name: Validate live protected-master policy
         run: python scripts/validate-master-protection.py --repository "${{ github.repository }}"
@@ -359,8 +374,8 @@ jobs:
           path: target/generated-docs/site/**
           if-no-files-found: error
 
-      - name: Upload test reports on failure
-        if: failure()
+      - name: Upload test reports
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-reports
@@ -601,13 +616,14 @@ jobs:
         run: ./scripts/historical-forward-restore-rehearsal.sh
 
   container-security:
+    needs: trivy-candidate
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
       # Same reviewed Hadolint executable in the upstream scratch variant; removes vulnerable Alpine packages.
       HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
-      # Trivy v0.75.0, current stable release confirmed from aquasecurity/trivy releases; pinned to the GHCR 0.75.0 image digest.
-      TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.2 and x/net v0.60.0; immutable local configuration digest.
+      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c
       # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
       GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
@@ -623,6 +639,15 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
+
+      - name: Download same-run verified Trivy evidence
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: trivy-candidate-*
+          path: .tmp/trivy-downloads
+
+      - name: Verify and load current-HEAD Trivy executable
+        run: python scripts/load-trivy-candidate.py
 
       - name: Prove unpublished Ryuk candidate build
         run: python scripts/build-ryuk-candidate.py
@@ -667,7 +692,7 @@ jobs:
           }
 
           validate_linux_amd64_image "${HADOLINT_IMAGE}"
-          validate_linux_amd64_image "${TRIVY_IMAGE}"
+          docker image inspect "${TRIVY_IMAGE}" >/dev/null
           validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
           validate_linux_amd64_image "docker.io/library/golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673"
           validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
@@ -732,6 +757,23 @@ jobs:
           docker buildx build --pull --platform linux/amd64 --target builder --load --tag enterprise-shop/builder:ci --metadata-file .tmp/container-security/builder/builder-build.json .
           docker buildx build --pull --platform linux/amd64 --load --tag enterprise-shop/app:ci --metadata-file .tmp/container-security/builder/app-build.json .
           docker build --pull --tag enterprise-shop/postgres:ci docker/postgres
+
+      - name: Compare scanners on actual application PostgreSQL and builder images
+        run: |
+          python scripts/verify-trivy-candidate-compatibility.py \
+            --directory .tmp/trivy-actual-compatibility \
+            --image enterprise-shop/app:ci --image enterprise-shop/postgres:ci --image enterprise-shop/builder:ci
+          python -c "import json, subprocess, sys; from pathlib import Path; sys.path.insert(0, 'scripts'); import trivy_candidate_evidence as e; e.validate_compatibility(Path('.tmp/trivy-actual-compatibility'), json.loads(e.CONTRACT.read_text()), subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), actual_images=True)"
+
+      - name: Upload actual image scanner compatibility
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-actual-image-compatibility
+          path: .tmp/trivy-actual-compatibility/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Record builder and runtime identities
         env:
@@ -914,6 +956,13 @@ jobs:
           name: auxiliary-container-evidence
           path: |
             .tmp/container-security/auxiliary/**
+            !.tmp/container-security/auxiliary/scanner/source/**
+            !.tmp/container-security/auxiliary/scanner/image.tar
+            !.tmp/container-security/auxiliary/scanner/layer.tar
+            !.tmp/container-security/auxiliary/scanner/trivy.*
+            !.tmp/container-security/auxiliary/scanner/govulncheck
+            !.tmp/container-security/auxiliary/scanner/upstream.tar.gz
+            !.tmp/container-security/auxiliary/scanner/sdk.tar.gz
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
