@@ -968,6 +968,20 @@ jobs:
             !.tmp/container-security/auxiliary/scanner/govulncheck
             !.tmp/container-security/auxiliary/scanner/upstream.tar.gz
             !.tmp/container-security/auxiliary/scanner/sdk.tar.gz
+            !.tmp/container-security/auxiliary/ryuk/image.tar
+            !.tmp/container-security/auxiliary/ryuk/layer.tar
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload auxiliary Ryuk image payload
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: auxiliary-ryuk-image-payload
+          path: |
+            .tmp/container-security/auxiliary/ryuk/image.tar
+            .tmp/container-security/auxiliary/ryuk/layer.tar
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

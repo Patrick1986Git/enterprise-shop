@@ -263,7 +263,7 @@
       "threshold": [],
       "identity": {
         "binary": "/usr/local/bin/trivy",
-        "sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
+        "sha256": "93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e",
         "command": [
           "version"
         ],
@@ -295,7 +295,7 @@
   ],
   "execution_sources": {
     ".github/security/trivy/inspect-symbols.go": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
-    ".github/workflows/ci.yml": "f237e41a80fe1faae56577649765fb92da74c4c036209bc1eef1c9aff4bd5ad7",
+    ".github/workflows/ci.yml": "5e78303a5e5cc2a8a850e940298f1f4ea7d8ae781c8d645bd0ef531cd6d9d628",
     ".github/workflows/codeql.yml": "b27308b1f75bda0a7c2b779eea10e7155ee5c74372dda2db5d45c26c86937f25",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
