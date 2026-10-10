@@ -98,6 +98,7 @@ class CompressedGoEvidenceTest(unittest.TestCase):
                         'buildinfo': self.transform['buildinfo'], 'filesystem': self.transform['filesystem'],
                         'upx_marker': self.transform['upx_marker'], 'payload_executed': False,
                         'govulncheck_status': 0, 'govulncheck_sha256': self.digest('govulncheck.json')}
+        self.reviewed_image = copy.deepcopy(self.image)
 
     def put(self, name, data):
         path = self.directory / name
@@ -285,6 +286,10 @@ class CompressedGoEvidenceTest(unittest.TestCase):
                 io.BytesIO((self.directory / 'upstream-provenance-manifest.json').read_bytes()),
                 io.BytesIO((self.directory / 'upstream-provenance.json').read_bytes())]
 
+    def provenance_policy(self, reviewed=None):
+        self.put_json('provenance-policy.json', {'comparisons': {'official_ryuk': reviewed or self.reviewed_image}})
+        return patch.object(BINARY, 'PROVENANCE_POLICY', self.directory / 'provenance-policy.json')
+
     def assert_provenance_requests(self, network):
         self.assertEqual(3, network.call_count)
         token_url = urlsplit(network.call_args_list[0].args[0])
@@ -302,8 +307,28 @@ class CompressedGoEvidenceTest(unittest.TestCase):
             self.assertEqual('Bearer offline-registry-token', request.get_header('Authorization'))
 
     def test_reviewed_provenance_requests_keep_exact_https_hosts_scope_and_digests(self):
-        with patch.object(BINARY.urllib.request, 'urlopen', side_effect=self.provenance_responses()) as network:
+        with self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen',
+                side_effect=self.provenance_responses()) as network:
             BINARY.provenance(self.transform, self.directory, self.image)
+            self.assert_provenance_requests(network)
+
+    def test_actual_official_ryuk_identity_is_accepted(self):
+        reviewed = POLICY.read(POLICY.CONTRACT)['comparisons']['official_ryuk']
+        digest, authority = BINARY.provenance_identity(reviewed['evidence_transform'], reviewed)
+        self.assertEqual(reviewed['reference'].split('@')[1], digest)
+        self.assertEqual(reviewed['evidence_transform']['upstream_provenance'], authority)
+
+    def test_future_official_version_requires_deliberate_policy_adoption(self):
+        image = copy.deepcopy(self.image)
+        image['version'] = '0.15.0'
+        image['reference'] = image['reference'].replace(':0.14.0@', ':0.15.0@')
+        with self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen') as network:
+            with self.assertRaisesRegex(ValueError, 'unreviewed version'):
+                BINARY.provenance(self.transform, self.directory, image)
+            network.assert_not_called()
+        with self.provenance_policy(image), patch.object(BINARY.urllib.request, 'urlopen',
+                side_effect=self.provenance_responses()) as network:
+            BINARY.provenance(self.transform, self.directory, image)
             self.assert_provenance_requests(network)
 
     def test_misleading_registry_forms_fail_before_authentication(self):
@@ -316,7 +341,7 @@ class CompressedGoEvidenceTest(unittest.TestCase):
                           'ghcr.io/testcontainers/ryuk:0.14.0',
                           '\ndocker.io/testcontainers/ryuk:0.14.0'):
             with self.subTest(reference=reference), patch.object(BINARY.urllib.request, 'urlopen') as network:
-                with self.assertRaisesRegex(ValueError, 'Unreviewed provenance registry'):
+                with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
                     BINARY.provenance(self.transform, self.directory, {'reference': reference})
                 network.assert_not_called()
 
@@ -340,17 +365,79 @@ class CompressedGoEvidenceTest(unittest.TestCase):
                     POLICY.inventory(contract)
                 network.assert_not_called()
 
-    def test_suffix_delimiters_cannot_modify_repository_authentication_scope_or_request_hosts(self):
-        # The comparison census pins everything through the first tag colon.
-        # Even malformed tails accepted by that prefix cannot affect these URLs.
+    def test_suffix_delimiters_fail_before_network_access(self):
         for suffix in ('?scope=repository:evil:pull', '&scope=repository:evil:pull', '#fragment',
                        '/../../evil', '@evil.example', '%2f..%2f', '\\evil', '\n'):
             image = copy.deepcopy(self.image)
             image['reference'] += suffix
-            with self.subTest(suffix=suffix), patch.object(BINARY.urllib.request, 'urlopen',
-                    side_effect=self.provenance_responses()) as network:
-                BINARY.provenance(self.transform, self.directory, image)
-                self.assert_provenance_requests(network)
+            with self.subTest(suffix=suffix), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
+                    BINARY.provenance(self.transform, self.directory, image)
+                network.assert_not_called()
+
+    def test_direct_helper_rejects_repository_version_credentials_encoding_and_controls(self):
+        digest = self.image['reference'].split('@')[1]
+        for prefix in ('docker.io/evil/ryuk:0.14.0', 'docker.io/testcontainers/evil:0.14.0',
+                       'docker.io/testcontainers/ryuk:latest', 'docker.io/testcontainers/ryuk:0.15.0',
+                       'docker.io/user:password@testcontainers/ryuk:0.14.0',
+                       'docker.io/testcontainers/../evil:0.14.0', 'docker.io/testcontainers//ryuk:0.14.0',
+                       'docker.io/testcontainers/%2e%2e/ryuk:0.14.0',
+                       'docker.io/testcontainers/ryuk?scope=repository:evil:pull',
+                       'docker.io/testcontainers/ryuk&scope=repository:evil:pull',
+                       'docker.io/testcontainers/ryuk#fragment:0.14.0',
+                       'docker.io/testcontainers/ryuk%26scope=evil:0.14.0',
+                       'docker.io/testcontainers%2fryuk:0.14.0', 'docker.io/testcontainers/ryuk:%30.14.0',
+                       'docker.io/testcontainers/ryuk\\evil:0.14.0', 'docker.io/testcontainers/ryuk\x00:0.14.0',
+                       'docker.io/testcontainers/ryuk\r\n:0.14.0', 'docker.io/testcontainers/ryuk\t:0.14.0'):
+            with self.subTest(prefix=prefix), self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
+                    BINARY.provenance(self.transform, self.directory, {'reference': prefix + '@' + digest})
+                network.assert_not_called()
+
+    def test_direct_helper_rejects_missing_malformed_and_unreviewed_image_digests(self):
+        for tail in ('', 'sha256:', 'sha256:' + '0' * 63, 'sha256:' + '0' * 65,
+                     'sha256:' + 'G' * 64, 'sha256:' + 'A' * 64, 'sha256:' + '0' * 64,
+                     'sha512:' + '0' * 64, 'sha256:%30' + '0' * 63):
+            image = {'reference': 'docker.io/testcontainers/ryuk:0.14.0@' + tail}
+            with self.subTest(tail=tail), self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
+                    BINARY.provenance(self.transform, self.directory, image)
+                network.assert_not_called()
+        for reference in (None, '', 'docker.io/testcontainers/ryuk:0.14.0'):
+            with self.subTest(reference=reference), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaises(ValueError):
+                    BINARY.provenance(self.transform, self.directory, {'reference': reference})
+                network.assert_not_called()
+
+    def test_unreviewed_provenance_identity_fails_before_authentication(self):
+        for path in (('resolved_digest',), ('source_commit',),
+                     ('upstream_provenance', 'manifest_digest'), ('upstream_provenance', 'statement_digest'),
+                     ('upstream_provenance', 'repository'), ('upstream_provenance', 'builder')):
+            spec = copy.deepcopy(self.transform)
+            target = spec if len(path) == 1 else spec[path[0]]
+            target[path[-1]] = 'sha256:' + '0' * 64 + '?scope=evil'
+            with self.subTest(path=path), self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(ValueError, 'unreviewed provenance identity'):
+                    BINARY.provenance(spec, self.directory, self.image)
+                network.assert_not_called()
+
+    def test_malformed_policy_provenance_digests_cannot_be_used_as_request_paths(self):
+        for key in ('manifest_digest', 'statement_digest'):
+            for value in ('sha256:', 'sha256:' + '0' * 63, 'sha256:' + '0' * 64 + '?scope=evil',
+                          'sha256:' + '0' * 64 + '#fragment', '../evil', 'sha256:%2f..%2f', None):
+                image = copy.deepcopy(self.image)
+                image['evidence_transform']['upstream_provenance'][key] = value
+                with self.subTest(key=key, value=value), self.provenance_policy(image), patch.object(BINARY.urllib.request, 'urlopen') as network:
+                    with self.assertRaisesRegex(ValueError, 'malformed provenance digest'):
+                        BINARY.provenance(image['evidence_transform'], self.directory, image)
+                    network.assert_not_called()
+
+    def test_changed_index_bytes_fail_before_authentication(self):
+        self.put('registry-index.raw.json', b'{"manifests":[]}')
+        with self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen') as network:
+            with self.assertRaisesRegex(ValueError, 'image index digest mismatch'):
+                BINARY.provenance(self.transform, self.directory, self.image)
+            network.assert_not_called()
 
     def test_changed_or_malformed_image_digest_fails_measured_identity(self):
         reference = self.image['reference']
@@ -364,18 +451,41 @@ class CompressedGoEvidenceTest(unittest.TestCase):
 
     def test_provenance_response_digest_mismatch_fails_before_statement_request(self):
         responses = [io.BytesIO(b'{"token":"offline-registry-token"}'), io.BytesIO(b'{"layers":[]}')]
-        with patch.object(BINARY.urllib.request, 'urlopen', side_effect=responses) as network:
+        with self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen', side_effect=responses) as network:
             with self.assertRaisesRegex(ValueError, 'Upstream provenance digest mismatch'):
                 BINARY.provenance(self.transform, self.directory, self.image)
             self.assertEqual(2, network.call_count)
 
-    def test_isolated_helper_is_not_an_untrusted_reference_parser_and_real_caller_rejects_scope_input(self):
+    def test_statement_byte_drift_is_rejected(self):
+        responses = self.provenance_responses()
+        responses[2] = io.BytesIO(b'{"subject":[]}')
+        with self.provenance_policy(), patch.object(BINARY.urllib.request, 'urlopen', side_effect=responses) as network:
+            with self.assertRaisesRegex(ValueError, 'Upstream provenance digest mismatch'):
+                BINARY.provenance(self.transform, self.directory, self.image)
+            self.assertEqual(3, network.call_count)
+
+    def test_digest_bound_response_with_wrong_image_subject_is_rejected(self):
+        statement = json.loads((self.directory / 'upstream-provenance.json').read_bytes())
+        statement['subject'][0]['digest']['sha256'] = '0' * 64
+        self.put_json('upstream-provenance.json', statement)
+        upstream = self.transform['upstream_provenance']
+        upstream['statement_digest'] = 'sha256:' + self.digest('upstream-provenance.json')
+        self.put_json('upstream-provenance-manifest.json', {'layers': [{'digest': upstream['statement_digest']}]})
+        upstream['manifest_digest'] = 'sha256:' + self.digest('upstream-provenance-manifest.json')
+        self.put_json('registry-index.raw.json', {'manifests': [{'digest': upstream['manifest_digest']}]})
+        self.image['reference'] = 'docker.io/testcontainers/ryuk:0.14.0@sha256:' + self.digest('registry-index.raw.json')
+        with self.provenance_policy(self.image), patch.object(BINARY.urllib.request, 'urlopen',
+                side_effect=self.provenance_responses()) as network:
+            with self.assertRaisesRegex(ValueError, 'Wrong upstream image provenance subject'):
+                BINARY.provenance(self.transform, self.directory, self.image)
+            self.assertEqual(3, network.call_count)
+
+    def test_isolated_helper_and_real_caller_reject_original_scope_injection(self):
         reference = 'docker.io/testcontainers/ryuk&scope=repository:evil:pull@sha256:' + '0' * 64
-        with patch.object(BINARY.urllib.request, 'urlopen', side_effect=RuntimeError('offline stop')) as network:
-            with self.assertRaisesRegex(RuntimeError, 'offline stop'):
+        with patch.object(BINARY.urllib.request, 'urlopen') as network:
+            with self.assertRaisesRegex(ValueError, 'Official compressed comparison'):
                 BINARY.provenance(self.transform, self.directory, {'reference': reference})
-            query = parse_qs(urlsplit(network.call_args.args[0]).query)
-            self.assertNotEqual(['repository:testcontainers/ryuk:pull'], query['scope'])
+            network.assert_not_called()
         contract = POLICY.read(POLICY.CONTRACT)
         contract['comparisons']['official_ryuk']['reference'] = reference
         with patch.object(BINARY.urllib.request, 'urlopen') as network:
