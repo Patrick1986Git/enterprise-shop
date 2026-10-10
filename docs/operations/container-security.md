@@ -90,33 +90,33 @@ validation. CI reads administration evidence; it does not modify administration.
 
 ### OCI provenance finding and tested trust boundary
 
-`py/incomplete-url-substring-sanitization` reports the registry prefix check in
-`auxiliary_binary_evidence.provenance`. This helper is not a parser for arbitrary
-untrusted references: an isolated caller can inject token query parameters using
-an otherwise Docker-prefixed repository string. The actual collector calls
-`validate-auxiliary-containers.inventory` first. Its official comparison check
-requires `docker.io/testcontainers/ryuk:0.14.0@sha256:`; unlike ordinary inventory
-images, this comparison uses that fixed prefix rather than the generic `IMAGE`
-regex. Thus `removeprefix('docker.io/').split(':', 1)[0]` is necessarily the exact
-`testcontainers/ryuk` repository. Registry, namespace and tag changes or delimiters
-before the tag fail that real caller boundary before any provenance request.
+`py/incomplete-url-substring-sanitization` identified a broad boundary in
+`auxiliary_binary_evidence.provenance`: a direct caller could inject token query
+parameters through a Docker-prefixed repository string. The reviewed collector's
+inventory constrained that input, but the helper now enforces the official Ryuk
+contract independently, before authentication or registry access.
 
-Malformed tails after the fixed tag cannot change the repository/authentication
-scope or fixed HTTPS authentication and registry hosts. This is not a claim that
-the prefix validates all OCI syntax. Collection verifies pulled/platform image
-identity and actual index/manifest/configuration bytes; retained evidence binds
-the measured index digest to the reference. Provenance manifest/blob responses
-must match their reviewed SHA-256 values and source/subject relationships.
+The helper parses only `docker.io/testcontainers/ryuk:<numeric-version>@sha256:<64-lowercase-hex>`
+and requires exact agreement with `comparisons.official_ryuk` in the repository-owned
+auxiliary inventory. Provenance manifest, statement, resolved-image and source
+identities must agree with that policy; request digests must be complete SHA-256
+values. The retained OCI index bytes must match the reviewed image digest and
+contain the pinned provenance manifest. Token service/scope and HTTPS request hosts
+and repository paths are constants, independent of caller strings. The inventory
+uses the same identity validation. Future official versions require deliberate
+updates to the reviewed comparison policy and all corresponding evidence, while
+the Docker registry and `testcontainers/ryuk` repository boundary stays fixed.
 
-Seven deterministic mocked-network regressions exercise actual census rejection,
-misleading registries, credentials, query/fragment/encoded delimiters, path
-components, malformed digest tails, all three request URLs and exact read-only
-token scope, response integrity and the isolated-helper counterexample. Within
-the reviewed caller/data flow the CodeQL finding is not exploitable by these
-inputs, so no speculative production correction is made. The finding remains
-visible for explicit maintainer triage, with no suppression, downgrade or automatic
-dismissal. Altering reviewed repository code/inventory, upstream HTTPS redirects,
-or the external registry itself remains a separate trust boundary.
+Deterministic offline regressions reject misleading prefixes, other repositories,
+credentials, traversal, encoded/query/fragment delimiters, controls, unsupported
+versions and malformed or unreviewed digests before network access. Response-byte
+drift and incorrect provenance subjects remain blocking. Existing source, layer,
+UPX, executable, package and HIGH/CRITICAL evidence checks remain mandatory. Hosted
+Python CodeQL must verify complete source extraction and report the actual finding
+disposition; no suppression or dismissal is authorized. Repository policy changes,
+upstream HTTPS redirects and external registry compromise remain separate trust
+boundaries. Digest-bound BuildKit metadata remains unsigned and does not authenticate
+its claimed signer or builder.
 
 ## Auxiliary execution images
 

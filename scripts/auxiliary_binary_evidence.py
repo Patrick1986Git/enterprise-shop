@@ -9,6 +9,8 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
+PROVENANCE_POLICY = Path(__file__).resolve().parent.parent / '.github/security/auxiliary-container-scope.json'
+
 
 def require(condition, message):
     if not condition:
@@ -76,16 +78,35 @@ def download(url, digest, destination):
     return data
 
 
+def provenance_identity(spec, image):
+    reference = image.get('reference')
+    require(isinstance(reference, str), 'Official compressed comparison: missing reference')
+    parsed = re.fullmatch(r'docker\.io/testcontainers/ryuk:([0-9]+\.[0-9]+\.[0-9]+)@(sha256:[0-9a-f]{64})', reference)
+    require(parsed is not None, 'Official compressed comparison: malformed or unsupported reference')
+    reviewed = json.loads(PROVENANCE_POLICY.read_text())['comparisons']['official_ryuk']
+    require(reference == reviewed['reference'] and parsed[1] == reviewed['version'],
+            'Official compressed comparison: unreviewed version or image digest')
+    expected = reviewed['evidence_transform']
+    require(all(spec.get(key) == expected[key] for key in
+                ('upstream_provenance', 'resolved_digest', 'source_commit')),
+            'Official compressed comparison: unreviewed provenance identity')
+    authority = expected['upstream_provenance']
+    require(all(isinstance(value, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', value)
+                for value in (expected['resolved_digest'], authority['manifest_digest'], authority['statement_digest'])),
+            'Official compressed comparison: malformed provenance digest')
+    return parsed[2], authority
+
+
 def provenance(spec, item, image):
-    authority = spec['upstream_provenance']
-    index = json.loads((item / 'registry-index.raw.json').read_bytes())
+    image_digest, authority = provenance_identity(spec, image)
+    index_bytes = (item / 'registry-index.raw.json').read_bytes()
+    require('sha256:' + sha(index_bytes) == image_digest, 'Upstream provenance image index digest mismatch')
+    index = json.loads(index_bytes)
     require(any(x['digest'] == authority['manifest_digest'] for x in index['manifests']),
             'Upstream provenance is not bound to executed OCI index')
-    repository = image['reference'].removeprefix('docker.io/').split(':', 1)[0]
-    require(image['reference'].startswith('docker.io/'), 'Unreviewed provenance registry')
-    registry = 'https://registry-1.docker.io/v2/' + repository + '/'
+    registry = 'https://registry-1.docker.io/v2/testcontainers/ryuk/'
     token = json.load(urllib.request.urlopen(
-        'https://auth.docker.io/token?service=registry.docker.io&scope=repository:' + repository + ':pull', timeout=60))['token']
+        'https://auth.docker.io/token?service=registry.docker.io&scope=repository:testcontainers/ryuk:pull', timeout=60))['token']
     def get(path, digest):
         request = urllib.request.Request(registry + path, headers={'Authorization': 'Bearer ' + token,
             'Accept': 'application/vnd.oci.image.manifest.v1+json'})
