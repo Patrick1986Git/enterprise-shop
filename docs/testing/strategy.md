@@ -6,6 +6,47 @@ Hosted container-security additionally requires actual Hadolint, installed-gosu-
 
 ## Tooling
 
+### Python and Java/Kotlin CodeQL
+
+The existing Java/Kotlin CodeQL job retains its manual Java 21 Maven verification.
+The independent Python CodeQL job performs no-build `security-extended` analysis
+of all tracked Python tooling and tests. Its database must actually contain each
+tracked source path and identical source bytes; a green job with incomplete
+extraction fails acceptance. The separate Python SARIF category, processed upload,
+decoded extracted-file query and source inventory are documented in
+[the CodeQL security boundary](../operations/container-security.md#repository-owned-codeql-source-analysis).
+
+Run the offline regressions with:
+
+```bash
+python -m unittest scripts.tests.test_validate_github_actions_policy scripts.tests.test_validate_codeql_python_coverage
+python scripts/validate-github-actions-policy.py
+python -m unittest discover -s scripts/tests -p 'test_*.py'
+```
+
+Workflow mutations reject removal of either language, changed build procedures or
+queries, disabled/shared uploads, missing extraction evidence, lost schedule/master
+triggers, privileged triggers, conditional jobs, changed checkout identities,
+unreviewed actions, broadened permissions and Python database-population commands.
+Extraction fixtures reject empty/partial query results, archived-but-unextracted
+files, source changes, unsafe paths and future tracked files missing from analysis.
+They use local temporary fixtures and no external network. Hosted acceptance still
+requires real extraction, query execution and SARIF processing on the exact final
+HEAD for both languages, plus every existing CI/application/security gate. Finding
+counts are review evidence; they are not a guarantee of vulnerability absence.
+
+The permanent required-status fixtures use an independent literal eight-context
+expectation and exercise all 256 subsets, accepting only the complete eight with
+GitHub Actions integration `15368`. The old seven-check set without `Analyze
+Python` is explicitly rejected. Every context's rename, duplication, incorrect or
+missing integration, additional contexts and weakened protection controls remain
+negative cases. See the
+[required protected-master checks](../operations/container-security.md#required-protected-master-checks).
+Run `python -m unittest scripts.tests.test_validate_master_protection` offline.
+The compressed Go suite additionally verifies the actual OCI provenance caller,
+fixed HTTPS request hosts/scope and adversarial delimiters with network mocked:
+`python -m unittest scripts.tests.test_auxiliary_compressed_go`.
+
 - Java 21.
 - Maven Wrapper is present and should be used for repeatable local/CI commands.
 - CI runs `./mvnw -B clean verify`.
@@ -120,11 +161,11 @@ The official CodeQL database extraction, query execution, GitHub code-scanning h
 
 ## Protected-master pull-request gates
 
-The active `master` ruleset is the mechanical merge-enforcement boundary. A red workflow is evidence, but does not block a merge unless its check context is required by that ruleset. The ruleset must therefore require the always-present `build`, `docker-validation`, `container-security`, `dependency-review`, `restore-pr-scope`, and `Analyze Java/Kotlin` checks from GitHub Actions.
+The active `master` ruleset is the mechanical merge-enforcement boundary. A red workflow is evidence, but does not block a merge unless its check context is required by that ruleset. `Protect master` (`20755388`) must require exactly `build`, `docker-validation`, `container-security`, `Analyze Java/Kotlin`, `Analyze Python`, `dependency-review`, `restore-pr-scope`, and `restore-rehearsal`, each from GitHub Actions integration `15368`. Both independent CodeQL jobs are required; the previous seven-check configuration is rejected.
 
 The required `build` job also runs `scripts/validate-master-protection.py` on pull requests, protected-master pushes, and manual dispatches. The script reads the public, read-only repository-ruleset collection and `Protect master` detail endpoints without sending `GITHUB_TOKEN` or any other credential. It fails closed on transport, HTTP, JSON, or schema failure and requires exactly one active repository ruleset, the repository-owned ruleset identity and exact `refs/heads/master` target, no exclusions, pull-request enforcement, review-thread resolution, zero required approvals, the existing merge methods, strict status checks, branch-creation enforcement, and the exact required-check contexts with GitHub Actions integration ID `15368`. Additional checks are treated as drift rather than silently accepted. Offline fixtures test policy behavior without network access.
 
-GitHub's safe public ruleset-detail representation omits `bypass_actors`. The validator therefore distinguishes an absent field from an empty array: it rejects visible non-empty actors, but does not claim that omission proves there are none. A maintainer with repository-administration read access must verify the empty bypass list when intentionally changing the ruleset. No PAT, GitHub App credential, administration permission, or mutation path is supplied to CI.
+GitHub's credential-free public ruleset-detail representation can omit `bypass_actors`. The validator therefore distinguishes an absent field from an empty array: it rejects visible non-empty actors, but does not claim that omission proves there are none. A maintainer with repository-administration read access must verify the empty bypass list when intentionally changing the ruleset. No PAT, GitHub App credential, administration permission, or mutation path is supplied to CI.
 
 The live ruleset remains the enforcement source; the repository policy is a drift detector, not a second protection system. An intentional ruleset or required-job rename must update the live ruleset and this single repository-owned policy in one coordinated change, preserving the exact contexts and integration identity. The check can expose removal of another required context while `build` remains required. It cannot prevent an administrator from simultaneously removing or bypassing `build` itself, and increasing automation privilege would not remove that administrator trust boundary.
 

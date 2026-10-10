@@ -209,7 +209,7 @@
   ],
   "execution_sources": {
     ".github/workflows/ci.yml": "8d5ef07f722e2a78887a043bd3895f88c7bd2cd5847968daa834369ee78b8f5c",
-    ".github/workflows/codeql.yml": "4e116c323895bbd5ecf1ddb39c8e6d4f762dadb606fb5f42337ff2b1f1340d5a",
+    ".github/workflows/codeql.yml": "b27308b1f75bda0a7c2b779eea10e7155ee5c74372dda2db5d45c26c86937f25",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
     "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
@@ -228,6 +228,7 @@
     "scripts/scan-build-tools.py": "aa681f6ff7f1023bf838373ff53db822d24e855b10b50d6e3a8d944cefa80e7c",
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
     "scripts/validate-auxiliary-containers.py": "345e9c55ee55b1ac762251ff3ca5015dd0005af12c51183408f10a75645bdea8",
+    "scripts/validate-github-actions-policy.py": "c3839419538f8e48bf4f8e8cf37ac4078c9838ad3320f2a5ccc812324ea55ac6",
     "scripts/verify-runtime-append-only-integrity.sh": "2d8c3322c817a9d8d86eb37b0fad53b9b32d83b9bd53a4b9de8ec0f6b76a1447",
     "scripts/verify-trivy-provenance.py": "0f22b61da9f9922c8b9ca0f7b37f7d448096d6d561fe973454b7d187cacf9736",
     "src/test/java/com/company/shop/config/ProductionDatabaseReadinessPolicyLifecycleIT.java": "75c4e02383845403fb9a39f7b152f39374917d12f317acb1b4db4148729f4f19",

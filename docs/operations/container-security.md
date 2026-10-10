@@ -1,5 +1,123 @@
 # Container supply-chain security validation
 
+## Repository-owned CodeQL source analysis
+
+[CodeQL](../../.github/workflows/codeql.yml) owns two independent jobs with the same
+reviewed SHA-pinned action and `security-extended` query policy. `Analyze Java/Kotlin`
+retains Java 21, manual database population through the reviewed Ryuk preparation
+and full `./mvnw -B clean verify`, and its existing Code Scanning category. `Analyze
+Python` uses `build-mode: none` on a separate hosted runner. It extracts the clean
+checkout without executing candidate scripts, installing dependencies, building
+Java, or using Docker. Its explicit `/language:python` category keeps its processed
+SARIF upload separate from the existing Java analysis.
+
+Both jobs run for pull requests targeting master, protected-master pushes, the
+existing weekly schedule, and explicit dispatch. Checkout disables persisted
+credentials and selects protected master for the schedule, the immutable PR HEAD
+for pull requests, and the selected ref for push/dispatch. The workflow defaults to
+`contents: read`; each analysis job alone adds `security-events: write`. There is
+no `pull_request_target`, additional secret, job dependency, container, or service.
+
+The Python source boundary includes every Git-tracked `*.py` file, including all
+policy tests. New repository directories are covered without an allowlist update.
+The security-sensitive tooling currently has these responsibilities:
+
+| Sources under `scripts/` | Security responsibility |
+| --- | --- |
+| `validate-auxiliary-containers.py`, `validate-build-tool-vulnerabilities.py`, `validate-container-vulnerability-policy.py`, `scan-build-tools.py` | Fail-closed advisory policy, Trivy/CycloneDX identity and execution ownership; subprocess and environment inputs. |
+| `build-ryuk-candidate.py`, `ryuk_candidate_evidence.py`, `ryuk_client_tests.py`, `check-ryuk-cleanup.py` | Verified source/archive inputs, deterministic builds, source/binary govulncheck, reviewed executable and test identities, real cleanup evidence. |
+| `auxiliary_binary_evidence.py`, `scan-auxiliary-containers.py`, `verify-trivy-provenance.py` | External artifact downloads, tar-member readback, OCI/executable/SBOM identities, scanner provenance and Docker subprocess boundaries. |
+| `build-tool-inventory.py`, `validate-builder-security.py` | Maven collector/classpath/execution evidence, ZIP readback, external JDK advisory downloads and checksum verification. |
+| `validate-github-actions-policy.py`, `validate-master-protection.py`, `validate-maven-wrapper.py`, `restore_pr_scope.py` | Pinned Actions and permissions, live protected-master policy, distribution integrity, immutable changed-file detection and restore decisions. |
+| `prepare-jacoco-ratchet.py`, `validate-jacoco-report.py` | Downloaded artifact integrity and provenance, untrusted coverage XML/JSON, exact non-regression and ratchet decisions. |
+| `openapi_compatibility.py`, `validate_migration_compatibility.py`, `validate-production-configuration.py` | Untrusted contract/schema/configuration inputs, compatibility decisions and operational safety. |
+| `validate-codeql-python-coverage.py` and `tests/*.py` | Actual extracted-source/query/SARIF evidence, archive readback and deterministic offline regressions for these boundaries. |
+
+The job places CodeQL databases and SARIF under `runner.temp`, outside the source
+checkout. It creates no Maven output, downloaded third-party source, dependency
+cache or generated Python inputs there. It deliberately uses no source filters.
+Committed Python files are repository-owned inputs; adding vendored/generated
+sources requires review rather than silently excluding a tracked file.
+
+After successful analysis and processed SARIF upload, the job decodes CodeQL's
+built-in `Diagnostics/ExtractedFiles` query. The offline coverage verifier requires
+every tracked Python path to appear in the actual database query and its archived
+source bytes to match the checkout. Missing/empty/partial extraction, changed
+bytes, linked sources or unsuccessful query execution fail the job. The
+`python-codeql-evidence` artifact retains the exact HEAD, per-file SHA-256 inventory,
+decoded query results and Python SARIF for 14 days. A green analysis or a nonempty
+archive alone is insufficient. The verifier runs after extraction; it does not
+execute scripts to populate the database. Findings remain visible in SARIF and
+Code Scanning for investigation, with no suppression or severity downgrade.
+
+Expect one additional short Python runner job per CodeQL event, generally about
+one minute for this repository, subject to runner startup, bundle/cache and query
+cost. No additional complete Maven build is added. Offline policy regressions
+complement this source analysis; advisory scanning, provenance and actual runtime
+tests retain their separate ownership. Static extraction without installing
+dependencies has limited visibility into dynamically imported/generated code and
+external modules. CodeQL does not establish absence of vulnerabilities or complete
+coverage for shell/Windows Wrapper, workflow expression semantics, downloaded Go
+tools, native Haskell/C++ binaries, registries, compilers or hosted runner/daemon
+infrastructure. Maven, Trivy, govulncheck and existing integrity policies continue
+to cover their reviewed supply-chain boundaries.
+
+### Required protected-master checks
+
+Ruleset `Protect master` (`20755388`) requires exactly eight contexts: `build`,
+`docker-validation`, `container-security`, `Analyze Java/Kotlin`, `Analyze Python`,
+`dependency-review`, `restore-pr-scope` and `restore-rehearsal`. Every context must
+come from GitHub Actions integration `15368`. Both independent CodeQL analyses are
+required merge gates, alongside the existing application, security and restore
+checks.
+
+`scripts/validate-master-protection.py` enforces this permanent exact-eight
+contract against the live ruleset. The previous seven-check set is rejected,
+including omission of `Analyze Python`. Additional, renamed or duplicated
+contexts and incorrect integration IDs fail closed. Strict up-to-date status
+checks, exact `refs/heads/master` targeting without exclusions, active enforcement,
+pull-request requirements, review-thread resolution and the empty bypass policy
+remain unchanged. Missing bypass data in the credential-free API representation
+does not prove an empty bypass list; explicit maintainer readback is required
+when changing the ruleset.
+
+Offline regressions enumerate all 256 subsets and accept only the complete eight,
+with independent literal fixture expectations and negative cases for every
+context's integration, rename and duplication. There is no temporary acceptance
+of seven checks. Intentional future changes must coordinate the live ruleset,
+validator, fixtures and documentation while preserving successful protected-master
+validation. CI reads administration evidence; it does not modify administration.
+
+### OCI provenance finding and tested trust boundary
+
+`py/incomplete-url-substring-sanitization` reports the registry prefix check in
+`auxiliary_binary_evidence.provenance`. This helper is not a parser for arbitrary
+untrusted references: an isolated caller can inject token query parameters using
+an otherwise Docker-prefixed repository string. The actual collector calls
+`validate-auxiliary-containers.inventory` first. Its official comparison check
+requires `docker.io/testcontainers/ryuk:0.14.0@sha256:`; unlike ordinary inventory
+images, this comparison uses that fixed prefix rather than the generic `IMAGE`
+regex. Thus `removeprefix('docker.io/').split(':', 1)[0]` is necessarily the exact
+`testcontainers/ryuk` repository. Registry, namespace and tag changes or delimiters
+before the tag fail that real caller boundary before any provenance request.
+
+Malformed tails after the fixed tag cannot change the repository/authentication
+scope or fixed HTTPS authentication and registry hosts. This is not a claim that
+the prefix validates all OCI syntax. Collection verifies pulled/platform image
+identity and actual index/manifest/configuration bytes; retained evidence binds
+the measured index digest to the reference. Provenance manifest/blob responses
+must match their reviewed SHA-256 values and source/subject relationships.
+
+Seven deterministic mocked-network regressions exercise actual census rejection,
+misleading registries, credentials, query/fragment/encoded delimiters, path
+components, malformed digest tails, all three request URLs and exact read-only
+token scope, response integrity and the isolated-helper counterexample. Within
+the reviewed caller/data flow the CodeQL finding is not exploitable by these
+inputs, so no speculative production correction is made. The finding remains
+visible for explicit maintainer triage, with no suppression, downgrade or automatic
+dismissal. Altering reviewed repository code/inventory, upstream HTTPS redirects,
+or the external registry itself remains a separate trust boundary.
+
 ## Auxiliary execution images
 
 The authoritative [auxiliary inventory](../../.github/security/auxiliary-container-scope.json) records exact tags/digests, registries, linux/amd64, executable byte/version identities, commands, mounts, Docker-socket/network capabilities, inputs, code execution, update/advisory owners, SBOM coverage and classifications. Whole-source SHA-256 receipts cover workflow, Docker/Compose, shell/Python Docker orchestration and Java Testcontainers image surfaces. New surfaces and changes to existing ones fail inventory validation until the image census/classification and source receipts are deliberately reviewed. This is a review boundary for those sources, not a complete interpreter of arbitrary downloaded or dynamically generated code.
@@ -431,7 +549,7 @@ python scripts/validate-github-actions-policy.py
 python -m unittest scripts.tests.test_validate_github_actions_policy
 ```
 
-The local validator enforces reference shape and checkout policy only; it cannot prove that a commit exists in the named repository or matches the adjacent release comment. Verify the official tag-to-commit mapping separately. Successful GitHub job preparation confirms that the repository can resolve the referenced commit, but does not independently validate the version comment.
+The local validator enforces reference shape, checkout policy and the reviewed CI/CodeQL configuration boundaries; it cannot prove that a commit exists in the named repository or matches the adjacent release comment. Verify the official tag-to-commit mapping separately. Successful GitHub job preparation confirms that the repository can resolve the referenced commit, but does not independently validate the version comment.
 
 Before accepting an action update, resolve the intended release in the official repository and verify both the tag and commit object, for example:
 

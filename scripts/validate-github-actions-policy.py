@@ -54,6 +54,82 @@ DEPENDENCY_REVIEW_JOB = re.compile(
 BUILD_JOB = re.compile(
     r"(?ms)^  build:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
+CODEQL_SHA = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
+CODEQL_JOB = re.compile(
+    r"(?ms)^  (?P<id>analyze(?:-python)?):\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
+)
+
+
+def validate_codeql_workflow(path):
+    """Protect the reviewed independent source-analysis and execution boundaries."""
+    contents = path.read_text(encoding="utf-8")
+    errors = []
+    triggers = ("on:\n  pull_request:\n    branches:\n      - master\n  push:\n"
+                "    branches:\n      - master\n  schedule:\n    - cron: \"37 3 * * 3\"\n"
+                "  workflow_dispatch:")
+    if triggers not in contents or "pull_request_target" in contents:
+        errors.append("CodeQL must retain PR/master push, schedule and explicit dispatch triggers")
+    defaults = re.findall(r"(?m)^permissions:\n((?:  \S[^\n]*\n)+)", contents)
+    if defaults != ["  contents: read\n"]:
+        errors.append("CodeQL default workflow permissions must remain contents: read")
+    matches = list(CODEQL_JOB.finditer(contents))
+    jobs = {match['id']: match['body'] for match in matches}
+    job_ids = re.findall(r"(?m)^  ([A-Za-z0-9_-]+):\s*$", contents.split("jobs:\n", 1)[-1])
+    if len(matches) != 2 or job_ids != ["analyze", "analyze-python"]:
+        errors.append("CodeQL requires independent Java/Kotlin and Python jobs")
+    for job_id, body in jobs.items():
+        language = "python" if job_id == "analyze-python" else "java-kotlin"
+        mode = "none" if language == "python" else "manual"
+        required = (f"          languages: {language}\n", f"          build-mode: {mode}\n",
+                    "          queries: security-extended\n",
+                    "    permissions:\n      contents: read\n      security-events: write\n",
+                    "          persist-credentials: false\n",
+                    "          ref: ${{ github.event_name == 'schedule' && 'master' || "
+                    "github.event.pull_request.head.sha || github.ref }}\n",
+                    f"uses: github/codeql-action/init@{CODEQL_SHA}",
+                    f"uses: github/codeql-action/analyze@{CODEQL_SHA}")
+        if any(item not in body for item in required):
+            errors.append(f"CodeQL {language} must retain reviewed action, mode, queries, permissions and checkout")
+        if re.search(r"(?m)^\s+(?:if|needs|container|services|secrets):", body):
+            errors.append(f"CodeQL {language} must remain unconditional and isolated")
+        if re.search(r"(?m)^\s+(?:config|config-file|source-root|paths|paths-ignore|packs|skip-queries):", body):
+            errors.append(f"CodeQL {language} source and security query coverage cannot be restricted")
+        permissions = re.findall(r"(?m)^    permissions:\n((?:      \S[^\n]*\n)+)", body)
+        upload = re.findall(r"(?m)^          upload: *([^\n#]+)", body)
+        if (permissions != ["      contents: read\n      security-events: write\n"]
+                or any(value.strip() != "always" for value in upload)):
+            errors.append(f"CodeQL {language} must execute and upload with least privilege")
+        if language == "java-kotlin":
+            if any(item not in body for item in (
+                    "          java-version: '21'", "run: python scripts/build-ryuk-candidate.py",
+                    "run: ./mvnw -B clean verify", "DOCKER_HOST: unix:///var/run/docker.sock",
+                    "SPRING_PROFILES_ACTIVE: test")):
+                errors.append("CodeQL Java/Kotlin requires reviewed Ryuk and full Java 21 Maven verification")
+            procedure = (f"uses: github/codeql-action/init@{CODEQL_SHA}",
+                         "run: python scripts/build-ryuk-candidate.py", "run: ./mvnw -B clean verify",
+                         f"uses: github/codeql-action/analyze@{CODEQL_SHA}")
+            positions = [body.find(item) for item in procedure]
+            if any(position < 0 for position in positions) or positions != sorted(positions):
+                errors.append("CodeQL Java/Kotlin must populate its database between initialization and analysis")
+            if re.search(r"(?m)^\s+category:", body):
+                errors.append("CodeQL Java/Kotlin must preserve its existing SARIF category")
+        else:
+            if any(item not in body for item in (
+                    "          category: /language:python\n", "          upload: always\n",
+                    "          wait-for-processing: true\n",
+                    "git ls-files -z -- '*.py'", "python scripts/validate-codeql-python-coverage.py",
+                    "bqrs decode --format=json --entities=string,url",
+                    "          name: python-codeql-evidence\n", "          if-no-files-found: error\n")):
+                errors.append("CodeQL Python requires distinct processed SARIF and complete source-extraction evidence")
+            steps = re.split(r"(?m)^      - ", body)[1:]
+            scan = next((i for i, step in enumerate(steps) if f"uses: github/codeql-action/analyze@{CODEQL_SHA}" in step), len(steps))
+            actions = re.findall(r"(?m)^        uses: ([^@\s]+)@", body)
+            if (any(re.search(r"(?m)^        run:", step) for step in steps[:scan + 1])
+                    or actions != ["actions/checkout", "github/codeql-action/init",
+                                   "github/codeql-action/analyze", "actions/upload-artifact"]
+                    or any(token in body for token in ("docker", "mvnw", "pip ", "secrets.", "sudo "))):
+                errors.append("CodeQL Python must not build, install dependencies or execute repository code for extraction")
+    return [f"{path}: {error}" for error in errors]
 
 
 def workflow_files(workflows_dir):
@@ -153,8 +229,10 @@ def resolve_restore_checkout_ref(expression, event_name, github_ref, github_sha)
     return github_ref
 
 
-def validate_workflows(workflows_dir):
+def validate_workflows(workflows_dir, require_codeql=False):
     violations = []
+    if require_codeql and not (workflows_dir / "codeql.yml").is_file():
+        violations.append(f"{workflows_dir}: required Java/Kotlin and Python CodeQL workflow is missing")
     for path in workflow_files(workflows_dir):
         for line_number, reference, uses_indent, lines in action_references(path):
             if reference.startswith("./"):
@@ -173,6 +251,8 @@ def validate_workflows(workflows_dir):
                     f"{path}:{line_number}: {reference} must explicitly set "
                     "persist-credentials: false"
                 )
+        if path.name == "codeql.yml":
+            violations.extend(validate_codeql_workflow(path))
         if path.name == "ci.yml":
             contents = path.read_text(encoding="utf-8")
             if not re.search(r"(?m)^permissions:\s*$\n  contents: read\s*$", contents):
@@ -306,7 +386,7 @@ def main():
     )
     args = parser.parse_args()
 
-    violations = validate_workflows(args.workflows_dir)
+    violations = validate_workflows(args.workflows_dir, require_codeql=True)
     if violations:
         for violation in violations:
             print(violation, file=sys.stderr)
