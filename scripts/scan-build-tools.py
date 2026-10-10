@@ -102,9 +102,9 @@ def main():
         evidence = module('trivy_evidence', ROOT / 'scripts/trivy_candidate_evidence.py')
         reviewed = INVENTORY.read_json(evidence.CONTRACT)
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        evidence.validate_build(reviewed, ROOT / '.tmp/trivy-candidate', head)
+        evidence.validate_build(reviewed, evidence.runtime_directory(), head)
         evidence.validate_upstream(ROOT / '.tmp/container-security/auxiliary/scanner-provenance')
-        evidence.validate_compatibility(ROOT / '.tmp/trivy-candidate/compatibility', reviewed, head)
+        evidence.validate_compatibility(evidence.runtime_directory() / 'compatibility', reviewed, head)
         command = docker(Path(args.cache).resolve(), directory)
         download = command + ['image', '--download-db-only']
         if os.environ.get('TRIVY_DB_REPOSITORY'):

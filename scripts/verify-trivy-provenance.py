@@ -16,6 +16,7 @@ SOURCE_BINARY = '93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8
 SOURCE_COMMIT = '591e9799316a602e703f0b484f6c6d7b234ec8f3'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--upstream-only', action='store_true')
+parser.add_argument('--build', type=Path)
 args = parser.parse_args()
 directory = ROOT / '.tmp/container-security/auxiliary/scanner-provenance'
 directory.mkdir(parents=True, exist_ok=True)
@@ -76,7 +77,7 @@ if not args.upstream_only:
         reviewed = json.loads(evidence.CONTRACT.read_text())
         evidence.inventory(contract['images']['scanner'], reviewed)
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        build = ROOT / '.tmp/trivy-candidate'
+        build = args.build.resolve() if args.build else evidence.runtime_directory()
         metadata, receipt, analysis = evidence.validate_build(reviewed, build, head)
         evidence.validate_upstream(directory)
         compatibility = build / 'compatibility'

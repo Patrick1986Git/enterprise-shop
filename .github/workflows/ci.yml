@@ -72,15 +72,15 @@ jobs:
         run: python scripts/verify-trivy-provenance.py --upstream-only
 
       - name: Collect independent Trivy candidate build evidence
-        run: python scripts/build-trivy-candidate.py
+        run: python scripts/build-trivy-candidate.py --directory .tmp/trivy-candidate
 
       - name: Collect isolated Trivy candidate functional compatibility
-        run: python scripts/verify-trivy-candidate-compatibility.py
+        run: python scripts/verify-trivy-candidate-compatibility.py --build .tmp/trivy-candidate
 
       - name: Verify complete rebuilt Trivy trust contract
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/verify-trivy-provenance.py
+        run: python scripts/verify-trivy-provenance.py --build .tmp/trivy-candidate
 
       - name: Upload Trivy candidate collection evidence
         if: always()
@@ -761,6 +761,7 @@ jobs:
       - name: Compare scanners on actual application PostgreSQL and builder images
         run: |
           python scripts/verify-trivy-candidate-compatibility.py \
+            --build "${RUNNER_TEMP}/enterprise-shop-trivy" \
             --directory .tmp/trivy-actual-compatibility \
             --image enterprise-shop/app:ci --image enterprise-shop/postgres:ci --image enterprise-shop/builder:ci
           python -c "import json, subprocess, sys; from pathlib import Path; sys.path.insert(0, 'scripts'); import trivy_candidate_evidence as e; e.validate_compatibility(Path('.tmp/trivy-actual-compatibility'), json.loads(e.CONTRACT.read_text()), subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), actual_images=True)"
@@ -770,7 +771,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-actual-image-compatibility
-          path: .tmp/trivy-actual-compatibility/**
+          path: |
+            .tmp/trivy-actual-compatibility/**
+            !.tmp/trivy-actual-compatibility/inputs/**
+            !.tmp/trivy-actual-compatibility/cache/**
+            !.tmp/trivy-actual-compatibility/temporary/**
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14

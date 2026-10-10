@@ -17,6 +17,7 @@ SPEC = importlib.util.spec_from_file_location('binary_readback', ROOT / 'scripts
 BINARY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BINARY)
 require, sha = BUILD.require, BUILD.sha
+runtime_directory = BUILD.runtime_directory
 
 
 def messages(data):

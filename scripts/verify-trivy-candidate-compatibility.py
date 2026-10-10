@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import io
+import importlib.util
 import json
 import os
 import shutil
@@ -12,6 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SPEC = importlib.util.spec_from_file_location('trivy_evidence', ROOT / 'scripts/trivy_candidate_evidence.py')
+EVIDENCE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(EVIDENCE)
 REFERENCE = 'ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa'
 REFERENCE_BINARY = '93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e'
 EXPECTED = {('CVE-2026-78669', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
@@ -100,9 +104,14 @@ def collect(build, directory, actual_images=()):
         actual[target.name] = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image]))[0]['Id']
     cache = directory / 'cache'
     cache.mkdir()
+    temporary = directory / 'temporary'
+    temporary.mkdir()
+    # The authoritative Java index blob exceeds 900 MiB. Keep its temporary
+    # download on private disk without exposing the checkout or Docker socket.
+    scratch = ['-v', f'{temporary.resolve()}:/tmp'] if actual_images else ['--tmpfs', '/tmp:rw,size=256m,mode=1777']
     base = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '4g', '--cpus', '2',
-            '--user', f'{os.getuid()}:{os.getgid()}', '--tmpfs', '/tmp:rw,size=256m,mode=1777',
+            '--user', f'{os.getuid()}:{os.getgid()}', *scratch,
             '-v', f'{inputs.resolve()}:/input:ro', '-v', f'{cache.resolve()}:/cache']
     update = base + ['-v', f'{directory.resolve()}:/evidence']
     certificate = os.environ.get('AUXILIARY_SCAN_CA_BUNDLE')
@@ -184,17 +193,18 @@ def collect(build, directory, actual_images=()):
         'actual_images': actual, 'outputs': outputs, 'byte_inputs': {p.relative_to(inputs).as_posix(): sha(p.read_bytes())
             for p in inputs.rglob('*') if p.is_file()}, 'verified': True,
         'evidence_hashes': {p.relative_to(directory).as_posix(): sha(p.read_bytes()) for p in directory.rglob('*')
-            if p.is_file() and 'inputs' not in p.relative_to(directory).parts and 'cache' not in p.relative_to(directory).parts}}
+            if p.is_file() and not {'inputs', 'cache', 'temporary'}.intersection(p.relative_to(directory).parts)}}
     write(directory / 'result.json', result)
     shutil.rmtree(inputs)
     shutil.rmtree(cache)
+    shutil.rmtree(temporary)
     print('Verified image/rootfs/SBOM/convert/package/severity/database compatibility with pinned positive and negative fixtures.')
     return result
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--build', type=Path, default=ROOT / '.tmp/trivy-candidate')
+    parser.add_argument('--build', type=Path, default=EVIDENCE.runtime_directory())
     parser.add_argument('--directory', type=Path, default=ROOT / '.tmp/trivy-compatibility')
     parser.add_argument('--image', action='append', default=[])
     args = parser.parse_args()

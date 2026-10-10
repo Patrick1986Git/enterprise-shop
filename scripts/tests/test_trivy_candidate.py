@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 ROOT = Path(__file__).parents[2]
 SPEC = importlib.util.spec_from_file_location('trivy_builder', ROOT / 'scripts/build-trivy-candidate.py')
@@ -21,6 +22,13 @@ SPEC.loader.exec_module(EVIDENCE)
 
 
 class TrivyBuildTest(unittest.TestCase):
+    def test_scanner_runtime_stays_outside_the_maven_source_tree(self):
+        with patch.dict('os.environ', {'RUNNER_TEMP': '/tmp/runner-proof'}):
+            self.assertEqual(Path('/tmp/runner-proof/enterprise-shop-trivy'), BUILD.runtime_directory())
+        with patch.dict('os.environ', {'RUNNER_TEMP': str(ROOT / '.tmp')}):
+            with self.assertRaisesRegex(ValueError, 'outside the checkout'):
+                BUILD.runtime_directory()
+
     def test_private_read_only_module_cache_can_be_removed(self):
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory) / 'cache'

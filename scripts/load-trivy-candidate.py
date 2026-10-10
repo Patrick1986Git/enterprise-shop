@@ -17,6 +17,7 @@ SPEC.loader.exec_module(EVIDENCE)
 
 def load(downloads, directory):
     require, sha = EVIDENCE.require, EVIDENCE.sha
+    require(not directory.is_relative_to(ROOT.resolve()), 'Loaded scanner source must stay outside the checkout')
     require(not directory.exists(), 'Scanner evidence directory already exists')
     core = downloads / 'trivy-candidate-collection'
     shutil.copytree(core / 'trivy-candidate', directory)
@@ -65,7 +66,7 @@ def load(downloads, directory):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--downloads', type=Path, default=ROOT / '.tmp/trivy-downloads')
-    parser.add_argument('--directory', type=Path, default=ROOT / '.tmp/trivy-candidate')
+    parser.add_argument('--directory', type=Path, default=EVIDENCE.runtime_directory())
     args = parser.parse_args()
     try:
         load(args.downloads.resolve(), args.directory.resolve())

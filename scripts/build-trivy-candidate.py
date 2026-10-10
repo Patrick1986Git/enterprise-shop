@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -36,6 +37,12 @@ SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/bu
 RYUK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RYUK)
 sha, require, write = RYUK.sha, RYUK.require, RYUK.write
+
+
+def runtime_directory():
+    directory = Path(os.environ.get('RUNNER_TEMP', tempfile.gettempdir())) / 'enterprise-shop-trivy'
+    require(not directory.resolve().is_relative_to(ROOT.resolve()), 'Scanner source evidence must stay outside the checkout')
+    return directory
 
 
 def source_files(source):
@@ -275,7 +282,7 @@ def build(directory):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--directory', type=Path, default=ROOT / '.tmp/trivy-candidate')
+    parser.add_argument('--directory', type=Path, default=runtime_directory())
     args = parser.parse_args()
     try:
         build(args.directory.resolve())
