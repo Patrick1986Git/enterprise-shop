@@ -313,7 +313,7 @@
     "scripts/run-dev.sh": "d16cefda7b73d82550aecef27e25b9bb7a3361e81f7821fffd3a9735831576b7",
     "scripts/run-gosu-govulncheck.sh": "f2466620d3c3388db8b1af20da70076e4d1e522365c4596518b0e5bca17f4d4c",
     "scripts/ryuk_candidate_evidence.py": "cc4a44decb16b9f3f2b3a6fc2dde292792e0638426df297c8d657ac656be9057",
-    "scripts/scan-auxiliary-containers.py": "8da05a3b31ebb13edb414ec22a0088951784608ac936e4b93fddfbba0f764830",
+    "scripts/scan-auxiliary-containers.py": "3b793fbcd0401eea641631b915a10e0750e10bc2d1c309723a336a7cd7239833",
     "scripts/scan-build-tools.py": "f23686c5c315c53b175029d5e6f40f07ea83c45fcf6544a958d20be956b86e50",
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
     "scripts/trivy_candidate_evidence.py": "500795e65417fcbe0b0cbb56689235bccc1b1fa27a12e4ff019201dc31171b38",

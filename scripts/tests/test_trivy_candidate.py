@@ -72,6 +72,21 @@ class TrivyBuildTest(unittest.TestCase):
             (source / 'fixture').symlink_to('absent')
             self.assertEqual({'fixture': BUILD.sha(b'symlink:absent')}, BUILD.source_files(source))
 
+    def test_auxiliary_copy_retains_complete_upstream_fixture_link_bytes(self):
+        spec = importlib.util.spec_from_file_location('scan_auxiliary', ROOT / 'scripts/scan-auxiliary-containers.py')
+        scan = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(scan)
+        with tempfile.TemporaryDirectory() as directory:
+            source, target = Path(directory) / 'source', Path(directory) / 'target'
+            source.mkdir()
+            (source / 'dangling-fixture').symlink_to('absent')
+            (source / 'file').write_text('upstream bytes')
+            (source / 'linked-fixture').symlink_to('file')
+            expected = BUILD.source_files(source)
+            scan.copy_candidate_evidence(source, target)
+            self.assertEqual(expected, BUILD.source_files(target))
+            self.assertTrue((target / 'dangling-fixture').is_symlink())
+
     def test_empty_package_report_is_not_compatible_clean_output(self):
         with self.assertRaisesRegex(ValueError, 'package inventory'):
             COMPAT.packages({'SchemaVersion': 2, 'Trivy': {'Version': '0.75.0'}, 'Results': []})
