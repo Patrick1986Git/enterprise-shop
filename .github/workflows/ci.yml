@@ -56,6 +56,152 @@ jobs:
           license-check: false
           show-openssf-scorecard: false
 
+  trivy-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
+
+      - name: Verify original upstream Trivy executable provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/verify-trivy-provenance.py
+
+      - name: Collect independent Trivy candidate build evidence
+        run: python scripts/build-trivy-candidate.py
+
+      - name: Upload Trivy candidate collection evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-collection
+          path: |
+            .tmp/trivy-candidate/**
+            !.tmp/trivy-candidate/cache-*/**
+            !.tmp/trivy-candidate/source/**
+            !.tmp/trivy-candidate/trivy.*
+            !.tmp/trivy-candidate/govulncheck
+            !.tmp/trivy-candidate/image.tar
+            !.tmp/trivy-candidate/layer.tar
+            !.tmp/trivy-candidate/upstream.tar.gz
+            !.tmp/trivy-candidate/transport/**
+            .tmp/container-security/auxiliary/scanner-provenance/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 00
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/00') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-00
+          path: .tmp/trivy-candidate/transport/00
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 01
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/01') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-01
+          path: .tmp/trivy-candidate/transport/01
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 02
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/02') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-02
+          path: .tmp/trivy-candidate/transport/02
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 03
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/03') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-03
+          path: .tmp/trivy-candidate/transport/03
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 04
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/04') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-04
+          path: .tmp/trivy-candidate/transport/04
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 05
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/05') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-05
+          path: .tmp/trivy-candidate/transport/05
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 06
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/06') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-06
+          path: .tmp/trivy-candidate/transport/06
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 07
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/07') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-07
+          path: .tmp/trivy-candidate/transport/07
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 08
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/08') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-08
+          path: .tmp/trivy-candidate/transport/08
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 09
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/09') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-09
+          path: .tmp/trivy-candidate/transport/09
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 10
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/10') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-10
+          path: .tmp/trivy-candidate/transport/10
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload candidate payload 11
+        if: always() && hashFiles('.tmp/trivy-candidate/transport/11') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-candidate-payload-11
+          path: .tmp/trivy-candidate/transport/11
+          if-no-files-found: error
+          retention-days: 14
+
   build:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

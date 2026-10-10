@@ -59,7 +59,8 @@ class AuxiliaryPolicyTest(unittest.TestCase):
                 POLICY.inventory(self.contract, root)
 
     def test_complete_executed_image_inventory_includes_library_ryuk(self):
-        self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk'}, set(POLICY.inventory(self.contract)))
+        self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk', 'scanner-builder'},
+                         set(POLICY.inventory(self.contract)))
 
     def test_new_workflow_container_cannot_bypass_review(self):
         self.source_change(lambda r: (r / '.github/workflows/new.yml').write_text('jobs:\n  new:\n    container: ubuntu:latest\n'))
