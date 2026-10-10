@@ -46,6 +46,7 @@ def execution_sources(root):
     paths |= set(root.glob('src/test/**/*.java'))
     paths |= set(root.glob('**/Dockerfile')) - set(root.glob('target/**/Dockerfile'))
     paths |= set(root.glob('*compose*.y*ml'))
+    paths |= set(root.glob('.github/security/trivy/*.go'))
     return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(paths) if p.is_file()
             and not any(part in {'.git', '.tmp', 'target', '__pycache__'} for part in p.relative_to(root).parts) and

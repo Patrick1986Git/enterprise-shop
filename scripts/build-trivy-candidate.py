@@ -25,6 +25,12 @@ GO_MOD_SHA = '54eb7f4afb4f86650b63d72deb206c73f24f5fbf1f20e93e93e380eba1ab11c5'
 GO_SUM_SHA = 'f0792bca7d673d64f10e76910532f3a1252301ac8e7a0c68aebd31fd5cd4c3b1'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
+SDK_SHA = 'ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5'
+SDK_TOOLS = {
+    'bin/go': BUILDER_BINARY,
+    'bin/gofmt': '5583dbb3339147fee7cdb067eb3cd4a50015b48c27084377f49d93833aa4ad77',
+    'pkg/tool/linux_amd64/compile': '8d4484dbaa31c4c6cec965aadd42efaa1e8d59e4a30ca3b466b502c377c29121',
+    'pkg/tool/linux_amd64/link': 'b7567a824e05fa24240edbf883e77e536914f22444c6946f1cd4a904b315f9c2'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
 RYUK = importlib.util.module_from_spec(SPEC)
@@ -35,6 +41,15 @@ sha, require, write = RYUK.sha, RYUK.require, RYUK.write
 def source_files(source):
     return {p.relative_to(source).as_posix(): sha(('symlink:' + os.readlink(p)).encode() if p.is_symlink() else p.read_bytes())
             for p in sorted(source.rglob('*')) if p.is_file() or p.is_symlink()}
+
+
+def remove_cache(cache):
+    def writable(function, path, error):
+        # Go intentionally makes downloaded module directories read-only.
+        # This callback applies only to this build's disposable private cache.
+        Path(path).parent.chmod(0o755)
+        function(path)
+    shutil.rmtree(cache, onerror=writable)
 
 
 def prepare(data, source):
@@ -102,6 +117,27 @@ def run(command, script, directory, name, timeout=1800):
     require(result.returncode == 0, name + ' failed; retained log: ' + str(directory / (name + '.log')))
 
 
+def verify_compiler(directory):
+    url = 'https://go.dev/dl/go1.27.2.linux-amd64.tar.gz'
+    with urllib.request.urlopen(url, timeout=120) as response:
+        data = response.read()
+    require(sha(data) == SDK_SHA, 'Official Go archive changed')
+    (directory / 'sdk.tar.gz').write_bytes(data)
+    cid = subprocess.check_output(['docker', 'create', BUILDER], text=True).strip()
+    try:
+        with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
+            for name, digest in SDK_TOOLS.items():
+                require(sha(archive.extractfile('go/' + name).read()) == digest, 'Wrong official Go tool bytes')
+                target = directory / ('sdk-' + name.replace('/', '_'))
+                subprocess.run(['docker', 'cp', cid + ':/usr/local/go/' + name, str(target)], check=True)
+                require(sha(target.read_bytes()) == digest, 'Builder compiler differs from official Go archive')
+                target.unlink()
+    finally:
+        subprocess.run(['docker', 'rm', cid], check=True)
+    write(directory / 'compiler-sdk-receipt.json', {'archive_url': url, 'archive_sha256': SDK_SHA,
+        'builder': BUILDER, 'byte_matches': SDK_TOOLS})
+
+
 def build(directory):
     require(not directory.exists(), 'Candidate directory already exists')
     directory.mkdir(parents=True)
@@ -120,6 +156,7 @@ def build(directory):
         (directory / ('builder-' + name + '.json')).write_bytes(raw)
     require(json.loads((directory / 'builder-manifest.json').read_text())['config']['digest'] == BUILDER_ID,
             'Builder manifest/configuration mismatch')
+    verify_compiler(directory)
     command = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--user', f'{os.getuid()}:{os.getgid()}',
                '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
                '--pids-limit', '512', '--memory', '10g', '--cpus', '2',
@@ -147,6 +184,11 @@ def build(directory):
     binary = (directory / 'trivy.first').read_bytes()
     require(binary == (directory / 'trivy.repeat').read_bytes(), 'Nonreproducible scanner executable')
     require(hashes == source_files(source), 'Build modified upstream source')
+    inspector = ROOT / '.github/security/trivy/inspect-symbols.go'
+    run(command[:3] + ['--network', 'none'] + command[3:] + [
+        '-v', f'{(directory / "cache-first").resolve()}:/cache', '-v', f'{inspector.resolve()}:/verifier/inspect-symbols.go:ro'],
+        'go run -mod=readonly /verifier/inspect-symbols.go /evidence/trivy.first > /evidence/binary-symbols.json',
+        directory, 'binary-symbol-readback')
     first = image_archive(binary, (directory / 'first-ca-certificates.crt').read_bytes(), source)
     repeated = image_archive((directory / 'trivy.repeat').read_bytes(), (directory / 'repeat-ca-certificates.crt').read_bytes(), source)
     require(first == repeated, 'Nonreproducible scratch image')
@@ -157,6 +199,8 @@ def build(directory):
         'patch_sha256': PATCH_SHA, 'source_files': hashes, 'go_mod_sha256': GO_MOD_SHA, 'go_sum_sha256': GO_SUM_SHA,
         'builder': BUILDER, 'builder_image_id': BUILDER_ID, 'builder_manifest': BUILDER_MANIFEST,
         'builder_binary_sha256': BUILDER_BINARY, 'go_version': '1.27.2', 'flags': FLAGS,
+        'sdk_sha256': SDK_SHA, 'sdk_tools': SDK_TOOLS,
+        'symbol_reader_sha256': sha(inspector.read_bytes()),
         'cgo_enabled': '0', 'upx': False, 'independent_cold_caches': True,
         'binary_sha256': sha(binary), 'repeat_sha256': sha((directory / 'trivy.repeat').read_bytes()),
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),
@@ -185,13 +229,13 @@ def build(directory):
     require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
             'Loaded image configuration mismatch')
     for name in ('first', 'repeat', 'analysis'):
-        shutil.rmtree(directory / ('cache-' + name))
+        remove_cache(directory / ('cache-' + name))
     # Small separately named artifacts permit independent byte readback without
     # duplicating source files or relying on an artifact service's large-file limit.
     payload = directory / 'payload.tar.gz'
     with payload.open('wb') as output, gzip.GzipFile(fileobj=output, mode='wb', mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode='w|') as saved:
-            for name in ('image.tar', 'trivy.repeat', 'govulncheck', 'upstream.tar.gz'):
+            for name in ('image.tar', 'trivy.repeat', 'govulncheck', 'upstream.tar.gz', 'sdk.tar.gz'):
                 saved.add(directory / name, arcname=name)
     transport = directory / 'transport'
     transport.mkdir()

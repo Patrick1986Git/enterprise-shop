@@ -74,6 +74,9 @@ jobs:
       - name: Collect independent Trivy candidate build evidence
         run: python scripts/build-trivy-candidate.py
 
+      - name: Collect isolated Trivy candidate functional compatibility
+        run: python scripts/verify-trivy-candidate-compatibility.py
+
       - name: Upload Trivy candidate collection evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -88,8 +91,12 @@ jobs:
             !.tmp/trivy-candidate/image.tar
             !.tmp/trivy-candidate/layer.tar
             !.tmp/trivy-candidate/upstream.tar.gz
+            !.tmp/trivy-candidate/sdk.tar.gz
             !.tmp/trivy-candidate/transport/**
             .tmp/container-security/auxiliary/scanner-provenance/**
+            .tmp/trivy-compatibility/**
+            !.tmp/trivy-compatibility/inputs/**
+            !.tmp/trivy-compatibility/cache/**
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
@@ -662,6 +669,7 @@ jobs:
           validate_linux_amd64_image "${HADOLINT_IMAGE}"
           validate_linux_amd64_image "${TRIVY_IMAGE}"
           validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
+          validate_linux_amd64_image "docker.io/library/golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673"
           validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
           docker image inspect "${RYUK_IMAGE}" >/dev/null
           validate_linux_amd64_image "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"
