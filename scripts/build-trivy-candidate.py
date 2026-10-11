@@ -236,10 +236,8 @@ def build(directory):
     receipt['tool_sha256'] = sha((directory / 'govulncheck').read_bytes())
     for mode, args in [('source', ['-mode=source', '-json', './cmd/trivy']),
                        ('binary', ['-mode=binary', '-json', '/evidence/trivy.first'])]:
-        with (directory / f'{mode}-govulncheck.json').open('w') as out, (directory / f'{mode}-govulncheck.log').open('w') as err:
-            status = subprocess.run(analyzer + [BUILDER, '/evidence/govulncheck'] + args,
-                                    stdout=out, stderr=err, timeout=1800).returncode
-        receipt['analysis'][mode] = {'status': status, 'sha256': sha((directory / f'{mode}-govulncheck.json').read_bytes())}
+        receipt['analysis'][mode] = RYUK.ADVISORY.collect(
+            analyzer + [BUILDER, '/evidence/govulncheck'], args, directory, mode, 1800)
     receipt['evidence_hashes'] = {p.name: sha(p.read_bytes()) for p in directory.iterdir()
         if p.is_file() and p.name not in {'build-receipt.json', 'image.tar', 'layer.tar', 'upstream.tar.gz',
                                         'trivy.first', 'trivy.repeat', 'govulncheck'}}

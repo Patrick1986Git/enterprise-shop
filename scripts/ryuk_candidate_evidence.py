@@ -5,10 +5,12 @@ import io
 import json
 import re
 import tarfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SPEC = importlib.util.spec_from_file_location('go_advisory_acquisition', ROOT / 'scripts/go_advisory_acquisition.py')
+ADVISORY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(ADVISORY)
 TEST_SPEC = importlib.util.spec_from_file_location('ryuk_client_tests', ROOT / 'scripts/ryuk_client_tests.py')
 CLIENT_TESTS = importlib.util.module_from_spec(TEST_SPEC)
 TEST_SPEC.loader.exec_module(CLIENT_TESTS)
@@ -30,7 +32,8 @@ def sha(data):
 def messages(data):
     text, result = data.decode().strip(), []
     while text:
-        message, end = json.JSONDecoder().raw_decode(text)
+        message, end = json.JSONDecoder(object_pairs_hook=ADVISORY.unique_object).raw_decode(text)
+        require(isinstance(message, dict), 'Malformed Go analysis stream')
         result.append(message)
         text = text[end:].lstrip()
     require(result, 'Missing JSON evidence')
@@ -120,9 +123,8 @@ def validate_build(candidate, directory, head, analysis=True):
                     and configs[0]['scanner_name'] == 'govulncheck'
                     and configs[0]['scanner_version'] == candidate['govulncheck_version']
                     and configs[0]['db'] == 'https://vuln.go.dev', 'Wrong candidate govulncheck authority')
-            now = datetime.now(timezone.utc)
-            modified = datetime.fromisoformat(configs[0]['db_last_modified'].replace('Z', '+00:00'))
-            require(modified <= now and (now - modified).total_seconds() < 172800, 'Stale Go advisory evidence')
+            ADVISORY.validate(directory, mode, evidence, configs[0])
+            require(not any('error' in m for m in stream), 'Go advisory service failure cannot be clean')
             sboms = [m['SBOM'] for m in stream if 'SBOM' in m]
             require(len(sboms) == 1 and sboms[0]['go_version'] == 'go' + candidate['go_version']
                     and sboms[0]['roots'] == [metadata['main_module']], 'Wrong source/binary Go identity')
