@@ -6,7 +6,8 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from test_go_advisory_acquisition import NOW, MODIFIED, fixture
 from unittest.mock import patch
 
 ROOT = Path(__file__).parents[2]
@@ -225,11 +226,16 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
                               EVIDENCE.sha(json.dumps(functions, separators=(',', ':')).encode())}}
         self.streams = {}
         self.receipt = {'analysis': {}}
+        self.acquired_at = NOW
+        clock_patch = patch.object(EVIDENCE.BUILD.RYUK.ADVISORY, 'datetime', wraps=datetime)
+        clock = clock_patch.start()
+        self.addCleanup(clock_patch.stop)
+        clock.now.return_value = NOW
         for mode in ('source', 'binary'):
             self.streams[mode] = [
                 {'config': {'scan_mode': mode, 'scan_level': 'symbol', 'scanner_name': 'govulncheck',
                             'scanner_version': BUILD.TOOL, 'db': 'https://vuln.go.dev',
-                            'db_last_modified': (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()}},
+                            'db_last_modified': MODIFIED}},
                 {'SBOM': {'go_version': 'go1.27.2', 'roots': [self.metadata['path' if mode == 'source' else 'main_module']],
                           'modules': [{'path': 'golang.org/x/net', 'version': 'v0.60.0'}]}},
                 {'osv': {'id': 'GO-FIXTURE', 'affected': [{'package': {'name': 'golang.org/x/crypto'},
@@ -241,7 +247,9 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
         for mode, stream in self.streams.items():
             data = ''.join(json.dumps(m) + '\n' for m in stream).encode()
             (self.directory / (mode + '-govulncheck.json')).write_bytes(data)
-            self.receipt['analysis'].setdefault(mode, {'status': 0})['sha256'] = EVIDENCE.sha(data)
+            status = self.receipt['analysis'].get(mode, {}).get('status', 0)
+            self.receipt['analysis'][mode] = fixture(self.directory, mode, now=self.acquired_at)
+            self.receipt['analysis'][mode]['status'] = status
         return EVIDENCE.advisory_analysis(self.candidate, self.receipt, self.directory, self.metadata, self.packages)
 
     def test_module_notice_remains_visible_only_when_all_affected_code_is_absent(self):
@@ -259,14 +267,14 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'authority'):
             self.validate()
 
-    def test_unavailable_or_stale_service_cannot_be_clean(self):
-        self.streams['source'][0]['config']['db_last_modified'] = '2026-01-01T00:00:00Z'
+    def test_stale_acquisition_cannot_be_clean(self):
+        self.acquired_at = NOW - timedelta(days=3)
         with self.assertRaisesRegex(ValueError, 'Stale'):
             self.validate()
 
     def test_future_advisory_metadata_is_rejected(self):
         self.streams['source'][0]['config']['db_last_modified'] = '2099-01-01T00:00:00Z'
-        with self.assertRaisesRegex(ValueError, 'Stale'):
+        with self.assertRaisesRegex(ValueError, 'Future/contradictory'):
             self.validate()
 
     def test_complete_compiled_module_inventory_is_required(self):

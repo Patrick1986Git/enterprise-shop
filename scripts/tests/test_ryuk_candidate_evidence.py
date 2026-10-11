@@ -9,6 +9,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+from test_go_advisory_acquisition import NOW, MODIFIED, fixture
 
 ROOT = Path(__file__).parents[2]
 SPEC = importlib.util.spec_from_file_location('policy', ROOT / 'scripts/validate-auxiliary-containers.py')
@@ -25,6 +26,10 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
+        clock_patch = patch.object(CANDIDATE.ADVISORY, 'datetime', wraps=datetime)
+        clock = clock_patch.start()
+        self.addCleanup(clock_patch.stop)
+        clock.now.return_value = NOW
         self.candidate = json.loads(CANDIDATE.CONTRACT.read_text())
         self.image = copy.deepcopy(POLICY.read(POLICY.CONTRACT)['images']['ryuk'])
         header = bytearray(64)
@@ -88,10 +93,10 @@ class CandidateEvidenceTest(unittest.TestCase):
         for mode in ['source', 'binary']:
             stream = [{'config': {'scan_mode': mode, 'scan_level': 'symbol', 'scanner_name': 'govulncheck',
                        'scanner_version': 'v1.8.0', 'db': 'https://vuln.go.dev',
-                       'db_last_modified': datetime.now(timezone.utc).isoformat()}},
+                       'db_last_modified': MODIFIED}},
                       {'SBOM': {'go_version': 'go1.26.9', 'roots': [metadata['main_module']], 'modules': modules}}]
             self.put(mode + '-govulncheck.json', '\n'.join(json.dumps(m) for m in stream).encode())
-            self.receipt['analysis'][mode] = {'status': 0, 'sha256': CANDIDATE.sha((self.directory / (mode + '-govulncheck.json')).read_bytes())}
+            self.receipt['analysis'][mode] = fixture(self.directory, mode)
         self.save()
         now = datetime.now(timezone.utc)
         self.evidence = {'reference': reference, 'platform': 'linux/amd64', 'image_id': image_id,
@@ -130,17 +135,17 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.assertEqual([], self.validate()['blocked'])
 
     def test_authentic_go_1_26_9_source_and_binary_reports_clear_gate(self):
-        fixture = ROOT / 'scripts/tests/fixtures/ryuk-go-1.26.9'
-        proof = json.loads((fixture / 'provenance.json').read_text())
+        retained = ROOT / 'scripts/tests/fixtures/ryuk-go-1.26.9'
+        proof = json.loads((retained / 'provenance.json').read_text())
         for mode in ['source', 'binary']:
-            data = gzip.decompress((fixture / (mode + '-govulncheck.json.gz')).read_bytes())
+            data = gzip.decompress((retained / (mode + '-govulncheck.json.gz')).read_bytes())
             self.assertEqual(proof['analysis'][mode]['sha256'], CANDIDATE.sha(data))
             self.put(mode + '-govulncheck.json', data)
-            self.receipt['analysis'][mode] = proof['analysis'][mode]
-        # Evaluate retained authentic bytes at their observation time; runtime freshness remains strict.
-        with patch.object(CANDIDATE, 'datetime', wraps=datetime) as clock:
-            clock.now.return_value = datetime.fromisoformat(proof['observed_at'])
-            self.assertEqual([], self.validate()['blocked'])
+            stream = CANDIDATE.messages(data)
+            self.receipt['analysis'][mode] = fixture(self.directory, mode,
+                modified=stream[0]['config']['db_last_modified'])
+        # Authentic analyzer bytes inside a synthetic acquisition envelope, not hosted retrieval proof.
+        self.assertEqual([], self.validate()['blocked'])
 
     def test_vulnerable_go_standard_library_cannot_be_a_clean_candidate(self):
         self.put('buildinfo.txt', (self.directory / 'buildinfo.txt').read_bytes().replace(b'go1.26.9', b'go1.23.12'))
@@ -169,10 +174,10 @@ class CandidateEvidenceTest(unittest.TestCase):
                     # Package-level findings must block even without a function trace.
                     finding['trace'] = [{'module': 'stdlib', 'version': 'v1.26.8'}]
                     self.put(path.name, clean + b'\n' + json.dumps({'finding': finding}).encode())
-                    self.receipt['analysis'][mode]['sha256'] = CANDIDATE.sha(path.read_bytes())
+                    self.receipt['analysis'][mode] = fixture(self.directory, mode)
                     with self.assertRaisesRegex(ValueError, 'advisory findings'): self.validate()
             self.put(path.name, clean)
-            self.receipt['analysis'][mode]['sha256'] = CANDIDATE.sha(clean)
+            self.receipt['analysis'][mode] = fixture(self.directory, mode)
 
     def test_wrong_builder_digest_fails_closed(self):
         self.receipt['builder'] = self.receipt['builder'].split('@')[0] + '@sha256:' + 'a' * 64
@@ -189,14 +194,14 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.image['reference'] = 'local/unreviewed-ryuk:latest'
         with self.assertRaises(ValueError): self.validate()
 
-    def test_stale_go_advisory_evidence_fails_closed(self):
+    def test_tampered_go_database_revision_fails_closed(self):
         for mode in ['source', 'binary']:
             path = self.directory / (mode + '-govulncheck.json')
             stream = CANDIDATE.messages(path.read_bytes())
-            stream[0]['config']['db_last_modified'] = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
+            stream[0]['config']['db_last_modified'] = '2026-10-07T00:00:00Z'
             self.put(path.name, '\n'.join(json.dumps(m) for m in stream).encode())
-            self.receipt['analysis'][mode]['sha256'] = CANDIDATE.sha(path.read_bytes())
-            with self.assertRaisesRegex(ValueError, 'Stale Go advisory'): self.validate()
+            self.receipt['analysis'][mode] = fixture(self.directory, mode)
+            with self.assertRaisesRegex(ValueError, 'contradictory Go database revision'): self.validate()
 
     def test_standard_library_high_or_critical_is_always_blocking(self):
         before = json.loads((ROOT / '.github/security/ryuk/official-0.14.0-advisories.json').read_text())
@@ -245,7 +250,7 @@ class CandidateEvidenceTest(unittest.TestCase):
     def test_reachable_vulnerable_function_invalidates_evidence(self):
         path = self.directory / 'source-govulncheck.json'
         self.put(path.name, path.read_bytes() + b'\n{"finding":{"osv":"GO-2026-5746","trace":[{"function":"containerExtractToDir"}]}}')
-        self.receipt['analysis']['source']['sha256'] = CANDIDATE.sha(path.read_bytes())
+        self.receipt['analysis']['source'] = fixture(self.directory, 'source')
         with self.assertRaisesRegex(ValueError, 'advisory findings'): self.validate()
 
     def test_daemon_package_in_source_graph_invalidates_evidence(self):

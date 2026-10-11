@@ -13,6 +13,9 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SPEC = importlib.util.spec_from_file_location('go_advisory_acquisition', ROOT / 'scripts/go_advisory_acquisition.py')
+ADVISORY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(ADVISORY)
 TEST_SPEC = importlib.util.spec_from_file_location('ryuk_client_tests', ROOT / 'scripts/ryuk_client_tests.py')
 ryuk_client_tests = importlib.util.module_from_spec(TEST_SPEC)
 TEST_SPEC.loader.exec_module(ryuk_client_tests)
@@ -165,9 +168,8 @@ def build(directory, analyze=True):
         receipt['tool_sha256'] = sha((directory / 'govulncheck').read_bytes())
         receipt['evidence_hashes']['govulncheck-buildinfo.txt'] = sha((directory / 'govulncheck-buildinfo.txt').read_bytes())
         for mode, args in [('source', ['-mode=source', '-json', '.']), ('binary', ['-mode=binary', '-json', '/evidence/ryuk'])]:
-            with (directory / f'{mode}-govulncheck.json').open('w') as out, (directory / f'{mode}-govulncheck.log').open('w') as err:
-                status = subprocess.run(command[:-2] + ['/tmp/go/bin/govulncheck'] + args, stdout=out, stderr=err, timeout=600).returncode
-            receipt['analysis'][mode] = {'status': status, 'sha256': sha((directory / f'{mode}-govulncheck.json').read_bytes())}
+            receipt['analysis'][mode] = ADVISORY.collect(
+                command[:-2] + ['/tmp/go/bin/govulncheck'], args, directory, mode, 600)
         write(directory / 'build-receipt.json', receipt)
         require(all(v['status'] == 0 for v in receipt['analysis'].values()), 'Candidate govulncheck failed')
     reviewed = ROOT / '.github/security/ryuk/candidate.json'

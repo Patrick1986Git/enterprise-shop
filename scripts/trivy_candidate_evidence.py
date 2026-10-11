@@ -4,7 +4,6 @@ import json
 import re
 import tarfile
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +21,7 @@ runtime_directory = BUILD.runtime_directory
 
 def messages(data):
     text, result, cursor = data.decode(), [], 0
-    decoder = json.JSONDecoder()
+    decoder = json.JSONDecoder(object_pairs_hook=BUILD.RYUK.ADVISORY.unique_object)
     while cursor < len(text):
         cursor = re.compile(r'\s*').match(text, cursor).end()
         if cursor == len(text):
@@ -113,9 +112,7 @@ def advisory_analysis(candidate, receipt, directory, metadata, source_packages):
         require(len(configs) == 1 and configs[0]['scan_mode'] == mode and configs[0]['scan_level'] == 'symbol'
                 and configs[0]['scanner_name'] == 'govulncheck' and configs[0]['scanner_version'] == BUILD.TOOL
                 and configs[0]['db'] == 'https://vuln.go.dev', 'Self-scan/wrong advisory authority')
-        now = datetime.now(timezone.utc)
-        modified = datetime.fromisoformat(configs[0]['db_last_modified'].replace('Z', '+00:00'))
-        require(modified <= now and (now - modified).total_seconds() < 172800, 'Stale independent Go advisory evidence')
+        BUILD.RYUK.ADVISORY.validate(directory, mode, evidence, configs[0])
         sboms = [m['SBOM'] for m in stream if 'SBOM' in m]
         require(len(sboms) == 1 and sboms[0]['go_version'] == 'go1.27.2'
                 and sboms[0]['roots'] == [metadata['path'] if mode == 'source' else metadata['main_module']],
