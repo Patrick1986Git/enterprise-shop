@@ -110,9 +110,9 @@ def inventory(contract, root=ROOT):
             'The policy fixture cannot become a trusted execution image')
     if images['ryuk'].get('candidate_build'):
         comparison = contract['comparisons']['official_ryuk']
-        require(comparison['reference'].startswith('docker.io/testcontainers/ryuk:0.14.0@sha256:')
-                and comparison['evidence_transform']['method'] == 'upx-deterministic-go-readback'
+        require(comparison['evidence_transform']['method'] == 'upx-deterministic-go-readback'
                 and comparison['exceptions'] == [], 'Official compressed comparison must remain available')
+        BINARY.provenance_identity(comparison['evidence_transform'], comparison)
         for source in [workflow, (root / '.github/workflows/codeql.yml').read_text()]:
             require('python scripts/build-ryuk-candidate.py' in source, 'Build exact candidate before Testcontainers')
     ryuk = images['ryuk']['reference'].removeprefix('docker.io/')

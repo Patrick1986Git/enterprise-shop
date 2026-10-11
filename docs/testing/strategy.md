@@ -43,8 +43,10 @@ missing integration, additional contexts and weakened protection controls remain
 negative cases. See the
 [required protected-master checks](../operations/container-security.md#required-protected-master-checks).
 Run `python -m unittest scripts.tests.test_validate_master_protection` offline.
-The compressed Go suite additionally verifies the actual OCI provenance caller,
-fixed HTTPS request hosts/scope and adversarial delimiters with network mocked:
+The compressed Go suite additionally verifies independent helper and collector
+validation against the reviewed official Ryuk policy, rejection before network
+access, deliberate future version adoption, fixed HTTPS request hosts/scope and
+response-byte/subject integrity with network mocked:
 `python -m unittest scripts.tests.test_auxiliary_compressed_go`.
 
 - Java 21.
