@@ -351,7 +351,7 @@ Production uses `baseline-on-migrate: false`. Supported fresh deployments migrat
 
 Databases first migrated before dedicated Flyway credentials were required may still be owned by the runtime identity. Merely configuring a new `FLYWAY_USER` does not change existing PostgreSQL ownership. Production startup therefore checks, after Flyway and Hibernate initialization, that the runtime connection does not own any of the three V45-protected ADMIN action-log tables and fails if legacy ownership remains.
 
-Use `scripts/transfer-prod-db-ownership.sh` only as a reviewed maintenance operation for that legacy state. It requires a separate PostgreSQL superuser administrative connection through `DATABASE_ADMIN_URL`/`DATABASE_ADMIN_USER`, the exact expected `DATABASE_NAME`, `LEGACY_RUNTIME_USER`, `FLYWAY_USER`, and optional `APP_SCHEMA`. The script validates identifiers and the connected database, refuses equal roles, and refuses `REASSIGN OWNED` when the legacy role owns another database, a tablespace, or objects outside the selected application schema. Within those safeguards, reassignment covers the current database's schema-managed tables, indexes, sequences, functions, text-search objects, extensions, schema, and database ownership; the script then restores current and default runtime DML, sequence, and function grants. It never reads or prints a database password; supply the administrative password through the normal `PGPASSWORD`/password-file mechanism.
+Use `scripts/transfer-prod-db-ownership.sh` only as a reviewed maintenance operation for that legacy state. It requires a separate PostgreSQL superuser administrative connection through `DATABASE_ADMIN_URL`/`DATABASE_ADMIN_USER`, the exact expected `DATABASE_NAME`, `LEGACY_RUNTIME_USER`, `FLYWAY_USER`, and optional `APP_SCHEMA`. The script validates identifiers and the connected database, refuses equal roles, and refuses `REASSIGN OWNED` when the legacy role owns another database, a tablespace, or objects outside the selected application schema and the repository-owned administrator_lifecycle schema added by V51. Within those safeguards, reassignment covers the current database's schema-managed tables, indexes, sequences, functions, text-search objects, extensions, schema, and database ownership; the script then restores current and default runtime grants while revoking direct role DML. It never reads or prints a database password; supply the administrative password through the normal `PGPASSWORD`/password-file mechanism.
 
 For an existing database, use this ordering:
 
@@ -366,7 +366,7 @@ Do not grant the runtime role membership in the migration or administrative role
 
 ## Least-privilege runtime grants
 
-The runtime role has `LOGIN`, `CONNECT` on `enterprise_shop_dev`, `USAGE` on schema `public`, DML privileges on existing application tables, sequence privileges needed by generated IDs, and function execution where required. It is explicitly kept as `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` and does not own the PostgreSQL server.
+The runtime role has `LOGIN`, `CONNECT` on `enterprise_shop_dev`, `USAGE` on schema `public`, DML privileges on ordinary application tables, sequence privileges needed by generated IDs, and function execution where required. Direct INSERT/UPDATE/DELETE on `roles` and `user_roles` is revoked; V51 uses constrained ROLE_USER registration and owner-checking triggers that survive blanket public-schema DML refreshes. The runtime has no access to the private administrator promotion schema. It is explicitly kept as `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION` and does not own the PostgreSQL server.
 
 The operator-history tables (`notification_admin_action_logs`, `outbox_event_admin_action_logs`,
 `reservation_expiration_admin_action_logs`, and `stripe_payment_conflict_dispositions`) are append-only for non-owner
@@ -408,8 +408,8 @@ Persistence integration tests use independent Testcontainers PostgreSQL containe
 ## Schema ownership
 
 Application `ROLE_ADMIN` is data in the `roles` and `user_roles` tables, not a PostgreSQL role or login. The repository's
-local database-role bootstrap, production runtime identity, Flyway identity, and PostgreSQL administrative identity do
-not establish a first application administrator. No production operator mutation is supported until the identity,
+local database-role bootstrap does not establish a first application administrator. The approved local owner uses the
+separate [offline operator runbook](./local-administrator.md) after V51. No production operator mutation is supported until the identity,
 approval, least-privilege, transaction, and evidence decisions in the
 [administrator lifecycle boundary](../architecture/administrator-lifecycle-boundary.md) are resolved. In particular,
 do not grant the runtime identity a bootstrap capability or use an ordinary Flyway migration to select a human admin.

@@ -18,8 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.company.shop.module.user.dto.AuthResponseDTO;
 import com.company.shop.module.user.dto.LoginRequestDTO;
 import com.company.shop.module.user.dto.RegisterRequestDTO;
-import com.company.shop.module.user.entity.Role;
-import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.InvalidCredentialsException;
 import com.company.shop.module.user.exception.UserAlreadyExistsException;
 import com.company.shop.module.user.exception.UserRoleNotConfiguredException;
@@ -77,15 +75,11 @@ public class AuthServiceImpl implements AuthService {
 	public void register(RegisterRequestDTO request) {
 		String normalizedEmail = emailNormalizer.normalize(request.getEmail());
 
-		User user = new User(normalizedEmail, passwordEncoder.encode(request.getPassword()), request.getFirstName(),
-				request.getLastName());
-
-		Role userRole = roleRepository.findByName(SecurityConstants.ROLE_USER)
+		roleRepository.findByName(SecurityConstants.ROLE_USER)
 				.orElseThrow(() -> new UserRoleNotConfiguredException(SecurityConstants.ROLE_USER));
-
-		user.addRole(userRole);
 		try {
-			userRepository.saveAndFlush(user);
+			userRepository.createRegisteredUser(normalizedEmail, passwordEncoder.encode(request.getPassword()),
+					request.getFirstName(), request.getLastName());
 		} catch (DataIntegrityViolationException ex) {
 			if (isEmailUniqueConstraintViolation(ex)) {
 				throw new UserAlreadyExistsException();

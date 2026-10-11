@@ -71,7 +71,7 @@ BEGIN
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relowner = legacy_oid
-      AND n.nspname <> current_setting('shop.app_schema')
+      AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
       AND NOT (
           n.nspname = 'pg_toast'
           AND (
@@ -81,7 +81,7 @@ BEGIN
                   JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
                   WHERE parent.reltoastrelid = c.oid
                     AND parent.relowner = legacy_oid
-                    AND parent_namespace.nspname = current_setting('shop.app_schema')
+                    AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
               )
               OR EXISTS (
                   SELECT 1
@@ -91,7 +91,7 @@ BEGIN
                   JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
                   WHERE toast_index.indexrelid = c.oid
                     AND parent.relowner = legacy_oid
-                    AND parent_namespace.nspname = current_setting('shop.app_schema')
+                    AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
               )
           )
       )
@@ -106,7 +106,7 @@ BEGIN
     FROM pg_type t
     JOIN pg_namespace n ON n.oid = t.typnamespace
     WHERE t.typowner = legacy_oid
-      AND n.nspname <> current_setting('shop.app_schema')
+      AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
       AND NOT (
           n.nspname = 'pg_toast'
           AND EXISTS (
@@ -116,7 +116,7 @@ BEGIN
               JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
               WHERE toast_table.oid = t.typrelid
                 AND parent.relowner = legacy_oid
-                AND parent_namespace.nspname = current_setting('shop.app_schema')
+                AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
           )
       )
     ORDER BY t.oid
@@ -129,23 +129,23 @@ BEGIN
        OR EXISTS (SELECT 1 FROM pg_tablespace WHERE spcowner = legacy_oid)
        OR EXISTS (
            SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-           WHERE p.proowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
+           WHERE p.proowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
        )
        OR EXISTS (
            SELECT 1 FROM pg_namespace WHERE nspowner = legacy_oid
-             AND nspname <> current_setting('shop.app_schema')
+             AND nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
        )
        OR EXISTS (
            SELECT 1 FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
-           WHERE e.extowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
+           WHERE e.extowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
        )
        OR EXISTS (
            SELECT 1 FROM pg_ts_config c JOIN pg_namespace n ON n.oid = c.cfgnamespace
-           WHERE c.cfgowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
+           WHERE c.cfgowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
        )
        OR EXISTS (
            SELECT 1 FROM pg_ts_dict d JOIN pg_namespace n ON n.oid = d.dictnamespace
-           WHERE d.dictowner = legacy_oid AND n.nspname <> current_setting('shop.app_schema')
+           WHERE d.dictowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
        ) THEN
         RAISE EXCEPTION 'Legacy runtime owns objects outside the intended database/schema boundary';
     END IF;
@@ -162,6 +162,9 @@ SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO %I', :'app_schema'
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', :'flyway_user', :'app_schema', :'legacy_runtime') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO %I', :'flyway_user', :'app_schema', :'legacy_runtime') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA %I GRANT EXECUTE ON FUNCTIONS TO %I', :'flyway_user', :'app_schema', :'legacy_runtime') \gexec
+SELECT format('REVOKE INSERT, UPDATE, DELETE ON %I.roles, %I.user_roles FROM %I', :'app_schema', :'app_schema', :'legacy_runtime')
+WHERE to_regclass(format('%I.roles', :'app_schema')) IS NOT NULL
+  AND to_regclass(format('%I.user_roles', :'app_schema')) IS NOT NULL \gexec
 
 DO $$
 BEGIN
@@ -170,7 +173,7 @@ BEGIN
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         JOIN pg_roles r ON r.oid = c.relowner
-        WHERE n.nspname = current_setting('shop.app_schema')
+        WHERE n.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
           AND r.rolname = current_setting('shop.legacy_runtime')
     ) THEN
         RAISE EXCEPTION 'Runtime ownership remains after transfer';

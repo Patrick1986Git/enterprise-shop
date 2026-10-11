@@ -146,6 +146,7 @@ grant_current_objects() {
 SELECT format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I', :'runtime_user') \gexec
 SELECT format('GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO %I', :'runtime_user') \gexec
 SELECT format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I', :'runtime_user') \gexec
+SELECT format('REVOKE INSERT, UPDATE, DELETE ON public.roles, public.user_roles FROM %I', :'runtime_user') \gexec
 SQL
 }
 
@@ -157,6 +158,8 @@ grant_current_objects "$SOURCE_CONTAINER"
 export PGPASSWORD="$RUNTIME_PASSWORD"
 docker exec --env PGPASSWORD -i "$SOURCE_CONTAINER" psql --host 127.0.0.1 \
   --username "$RUNTIME_USER" --dbname "$DATABASE" < scripts/restore-rehearsal-fixture.sql
+docker exec "$SOURCE_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 \
+  --command "INSERT INTO user_roles (user_id, role_id) SELECT '10000000-0000-0000-0000-000000000001', id FROM roles WHERE name = 'ROLE_USER';"
 
 backup_started=$(date +%s)
 docker exec "$SOURCE_CONTAINER" pg_dump --username "$ADMIN_USER" --dbname "$DATABASE" \
@@ -181,8 +184,8 @@ DO $$
 DECLARE invalid_count integer;
 BEGIN
   SELECT count(*) INTO invalid_count FROM flyway_schema_history WHERE NOT success;
-  IF invalid_count <> 0 OR (SELECT max(version::integer) FROM flyway_schema_history) <> 50 THEN
-    RAISE EXCEPTION 'Flyway history is not complete through V50';
+  IF invalid_count <> 0 OR (SELECT max(version::integer) FROM flyway_schema_history) <> 51 THEN
+    RAISE EXCEPTION 'Flyway history is not complete through V51';
   END IF;
   IF NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'uuid-ossp')
      OR NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'unaccent') THEN
@@ -223,6 +226,16 @@ BEGIN
      OR (SELECT count(*) FROM reservation_expiration_admin_action_logs WHERE id='a2000000-0000-0000-0000-000000000001') <> 1 THEN
     RAISE EXCEPTION 'restored ADMIN history invariant failed';
   END IF;
+  IF to_regprocedure('public.register_role_user(text,text,text,text)') IS NULL
+     OR to_regprocedure('administrator_lifecycle.promote_zero_administrator(uuid,text,text)') IS NULL
+     OR (SELECT count(*) FROM pg_trigger WHERE tgname IN
+         ('users_serialize', 'users_lifecycle_guard', 'roles_guard', 'user_roles_guard',
+          'promotion_evidence_append_only') AND NOT tgisinternal) <> 5
+     OR EXISTS (SELECT FROM administrator_lifecycle.operator_identity)
+     OR EXISTS (SELECT FROM administrator_lifecycle.promotion_evidence)
+     OR EXISTS (SELECT FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE r.name='ROLE_ADMIN') THEN
+    RAISE EXCEPTION 'local administrator boundary or zero-admin restore invariant failed';
+  END IF;
 END $$;
 SQL
 )
@@ -230,7 +243,7 @@ docker exec -i "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATA
   --set=ON_ERROR_STOP=1 <<<"$verify_sql"
 
 owner_result=$(docker exec "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATABASE" --tuples-only --no-align -c \
-  "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p','S','v','m','f') AND pg_get_userbyid(c.relowner) <> '$MIGRATION_USER';")
+  "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','administrator_lifecycle') AND c.relkind IN ('r','p','S','v','m','f') AND pg_get_userbyid(c.relowner) <> '$MIGRATION_USER';")
 [[ "$owner_result" == 0 ]] || fail "migration identity does not own every application relation"
 runtime_owned=$(docker exec "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATABASE" --tuples-only --no-align -c \
   "SELECT count(*) FROM pg_class WHERE relowner=(SELECT oid FROM pg_roles WHERE rolname='$RUNTIME_USER');")
@@ -252,6 +265,15 @@ for table in notification_admin_action_logs outbox_event_admin_action_logs reser
   grep -Eq 'ERROR:[[:space:]]+42501:' <<<"$denial" || fail "runtime DELETE was not denied with 42501 on $table"
 done
 
+for forbidden_sql in \
+  "INSERT INTO user_roles SELECT '10000000-0000-0000-0000-000000000001',id FROM roles WHERE name='ROLE_ADMIN';" \
+  "SELECT administrator_lifecycle.promote_zero_administrator('10000000-0000-0000-0000-000000000001','$DATABASE','local');" \
+  "SELECT * FROM administrator_lifecycle.promotion_evidence;"; do
+  denial=$(docker exec --env PGPASSWORD "$TARGET_CONTAINER" psql --host 127.0.0.1 \
+    --username "$RUNTIME_USER" --dbname "$DATABASE" --set=VERBOSITY=verbose --command "$forbidden_sql" 2>&1 || true)
+  grep -Eq 'ERROR:[[:space:]]+42501:' <<<"$denial" || fail "restored runtime administrator boundary was not enforced"
+done
+
 docker exec --env PGPASSWORD "$TARGET_CONTAINER" psql --host 127.0.0.1 \
   --username "$RUNTIME_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 --command \
   "INSERT INTO categories(name,slug) VALUES ('Runtime restore DML','runtime-restore-dml'); DELETE FROM categories WHERE slug='runtime-restore-dml';" >/dev/null
@@ -270,4 +292,4 @@ printf '%s\n' \
   "target_postgresql=$target_version" "dump_sha256=$dump_digest" "dump_bytes=$dump_size" \
   "backup_seconds=$backup_seconds" "restore_seconds=$restore_seconds" \
   "flyway_validation=passed" "ownership_privileges=passed" "data_invariants=passed" \
-  "application_readiness=passed" "cleanup=armed"
+  "administrator_boundary=passed" "application_readiness=passed" "cleanup=armed"

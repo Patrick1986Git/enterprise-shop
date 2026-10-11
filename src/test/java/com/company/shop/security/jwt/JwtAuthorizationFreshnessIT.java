@@ -64,6 +64,7 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
 
     @Test
     void issuedAdminToken_shouldStopAuthorizingImmediatelyAfterAccountIsSoftDeleted() throws Exception {
+        createUser("jwt-continuity-" + UUID.randomUUID() + "@example.com", ROLE_ADMIN);
         User admin = createUser("jwt-admin-" + UUID.randomUUID() + "@example.com", ROLE_ADMIN);
         String token = login(admin.getEmail());
 

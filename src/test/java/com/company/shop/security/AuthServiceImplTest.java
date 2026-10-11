@@ -147,7 +147,7 @@ class AuthServiceImplTest {
                 .isInstanceOf(UserRoleNotConfiguredException.class)
                 .hasMessageContaining(SecurityConstants.ROLE_USER);
 
-        verify(userRepository, never()).saveAndFlush(any());
+        verify(userRepository, never()).createRegisteredUser(any(), any(), any(), any());
     }
 
     @Test
@@ -160,7 +160,7 @@ class AuthServiceImplTest {
                 "duplicate key",
                 new SQLException("duplicate key"),
                 "ux_users_email_lower");
-        when(userRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("constraint", constraint));
+        when(userRepository.createRegisteredUser(any(), any(), any(), any())).thenThrow(new DataIntegrityViolationException("constraint", constraint));
 
         assertThatThrownBy(() -> service.register(request))
                 .isInstanceOf(UserAlreadyExistsException.class)
@@ -177,7 +177,7 @@ class AuthServiceImplTest {
                 "duplicate key",
                 new SQLException("duplicate key"),
                 "USERS_EMAIL_KEY");
-        when(userRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("constraint", constraint));
+        when(userRepository.createRegisteredUser(any(), any(), any(), any())).thenThrow(new DataIntegrityViolationException("constraint", constraint));
 
         assertThatThrownBy(() -> service.register(request))
                 .isInstanceOf(UserAlreadyExistsException.class)
@@ -194,7 +194,7 @@ class AuthServiceImplTest {
                 new SQLException("unrelated violation"),
                 "fk_user_roles_role");
         DataIntegrityViolationException failure = new DataIntegrityViolationException("constraint", constraint);
-        when(userRepository.saveAndFlush(any())).thenThrow(failure);
+        when(userRepository.createRegisteredUser(any(), any(), any(), any())).thenThrow(failure);
 
         assertThatThrownBy(() -> service.register(request))
                 .isSameAs(failure);
@@ -209,7 +209,7 @@ class AuthServiceImplTest {
 
         service.register(request);
 
-        verify(userRepository).saveAndFlush(any());
+        verify(userRepository).createRegisteredUser("new@example.com", "encoded-pass", "John", "Doe");
     }
 
     private RegisterRequestDTO request(String email) {

@@ -14,6 +14,7 @@ import com.company.shop.module.user.exception.CurrentPasswordIncorrectException;
 import com.company.shop.module.user.dto.UserUpdateDTO;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.UserNotFoundException;
+import com.company.shop.module.user.exception.UserAdministratorContinuityException;
 import com.company.shop.module.user.mapper.UserMapper;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.security.CurrentUserProvider;
@@ -58,6 +59,7 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public void changeCurrentUserPassword(PasswordChangeRequestDTO request) {
+		repository.acquireAdministratorLifecycleLock();
 		User user = getCurrentUserEntity();
 		if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
 			throw new CurrentPasswordIncorrectException();
@@ -67,6 +69,7 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public UserResponseDTO update(UUID id, UserUpdateDTO dto) {
+		repository.acquireAdministratorLifecycleLock();
 		repository.acquireCommerceLifecycleLock(id);
 		User user = repository.findActiveById(id)
 				.orElseThrow(UserNotFoundException::new);
@@ -79,16 +82,19 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public void delete(UUID id) {
+		repository.acquireAdministratorLifecycleLock();
 		repository.acquireCommerceLifecycleLock(id);
 		User user = repository.findActiveById(id)
 				.orElseThrow(UserNotFoundException::new);
 
+		protectAdministratorContinuity(user);
 		user.markDeleted();
 	}
 
 	@Override
 	public UserResponseDTO disable(UUID id) {
 		User user = findActiveAfterLifecycleLock(id);
+		protectAdministratorContinuity(user);
 		user.disable();
 		return mapper.toDto(user);
 	}
@@ -96,13 +102,23 @@ public class UserServiceImpl implements UserService {
 	@Override
 	public UserResponseDTO enable(UUID id) {
 		User user = findActiveAfterLifecycleLock(id);
+		if (!user.isEnabled() && isAdmin(user) && !repository.existsOtherUsableAdministrator(id)) {
+			throw new UserAdministratorContinuityException();
+		}
 		user.enable();
 		return mapper.toDto(user);
 	}
 
 	private User findActiveAfterLifecycleLock(UUID id) {
+		repository.acquireAdministratorLifecycleLock();
 		repository.acquireCommerceLifecycleLock(id);
 		return repository.findActiveById(id).orElseThrow(UserNotFoundException::new);
+	}
+
+	private void protectAdministratorContinuity(User user) {
+		if (user.isEnabled() && isAdmin(user) && !repository.existsOtherUsableAdministrator(user.getId())) {
+			throw new UserAdministratorContinuityException();
+		}
 	}
 
 	@Override

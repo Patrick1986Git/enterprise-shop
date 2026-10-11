@@ -115,7 +115,14 @@ class OrderNotificationPipelineIT extends PostgresContainerSupport {
         OutboxEvent event = createdEvents.getFirst();
         assertThat(notificationRepository.count()).isZero();
 
-        jdbcTemplate.update("UPDATE users SET email = ? WHERE id = ?", "changed@example.com", user.getId());
+        // Trusted fixture maintenance keeps the historical-payload assertion independent of runtime identity guards.
+        jdbcTemplate.execute("""
+                DO $$ BEGIN
+                    ALTER TABLE public.users DISABLE TRIGGER users_lifecycle_guard;
+                    UPDATE public.users SET email='changed@example.com' WHERE id='%s'::uuid;
+                    ALTER TABLE public.users ENABLE TRIGGER users_lifecycle_guard;
+                END $$;
+                """.formatted(user.getId()));
         OutboxEventProcessingResult outboxResult = outboxEventProcessor.processPendingBatch(10);
 
         assertThat(outboxResult.processedCount()).isOne();

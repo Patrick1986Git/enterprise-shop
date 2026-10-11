@@ -15,6 +15,19 @@ import com.company.shop.module.user.entity.User;
 
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
 
+    @Query(value = "SELECT pg_advisory_xact_lock(1094995278, 1)", nativeQuery = true)
+    void acquireAdministratorLifecycleLock();
+
+    @Query(value = "SELECT public.register_role_user(:email, :password, :firstName, :lastName)", nativeQuery = true)
+    UUID createRegisteredUser(@Param("email") String email, @Param("password") String password,
+            @Param("firstName") String firstName, @Param("lastName") String lastName);
+
+    @Query("""
+            SELECT COUNT(u) > 0 FROM User u JOIN u.roles r
+            WHERE u.id <> :excludedId AND u.deleted = false AND u.enabled = true AND r.name = 'ROLE_ADMIN'
+            """)
+    boolean existsOtherUsableAdministrator(@Param("excludedId") UUID excludedId);
+
     @Query(value = "SELECT pg_advisory_xact_lock(hashtextextended(CAST(:userId AS text), 0))", nativeQuery = true)
     void acquireCommerceLifecycleLock(@Param("userId") UUID userId);
 

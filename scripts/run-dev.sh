@@ -193,6 +193,7 @@ WITH role_attributes AS (
   ) AS ok
   FROM pg_tables
   WHERE schemaname = 'public'
+    AND tablename NOT IN ('roles', 'user_roles')
 ), sequence_privileges AS (
   SELECT bool_and(
     has_sequence_privilege(current_user, format('%I.%I', sequence_schema, sequence_name), 'USAGE,SELECT,UPDATE')

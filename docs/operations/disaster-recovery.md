@@ -17,7 +17,7 @@ Application write rate, database size, network and restore throughput, Flyway mi
 
 The recovery point must contain a transactionally consistent set of:
 
-- users, roles, and user-role membership;
+- users, credential versions, roles, user-role membership, and administrator promotion evidence/configuration;
 - categories, products, product images and reviews, including stock, ratings, search vectors, and optimistic-lock versions;
 - carts and cart items;
 - orders and immutable order-item/user snapshots, discounts, checkout idempotency keys, reservation expiry timestamps, and reservation work/claim/recovery state;
@@ -94,9 +94,11 @@ Missing or inconsistent Flyway history, checksum mismatch, unsupported PostgreSQ
 
 Restore preserves application `ROLE_ADMIN` assignments only as of the selected recovery point. It must not promote a
 User, enable a disabled User, or resurrect a retired User as a side effect. If the restored point has no usable
-administrator, ADMIN operations remain unavailable: the repository has no supported zero-administrator recovery command.
-Do not substitute the runtime, Flyway, or restore identity for the unresolved operator contract. The fail-closed recovery
-boundary and required owner decisions are recorded in the
+administrator, production ADMIN recovery remains subject to a separate deployment review. The approved sole local owner
+may reconstruct and explicitly configure the dedicated operator, verify an eligible UUID against a new local login, and
+invoke one freshly confirmed recovery using the [local runbook](./local-administrator.md). Rotate JWT signing material
+before serving requests: restoring older credential versions could make previously stale tokens valid. Do not substitute
+runtime, Flyway or restore credentials for the operator. The trust boundary and remaining production decisions are in the
 [administrator lifecycle boundary](../architecture/administrator-lifecycle-boundary.md).
 
 ## Evidence levels and rehearsal contract
@@ -139,13 +141,13 @@ owner-preserving restore as the synthetic administrator after recreating the ori
 faithfully exercises the documented portable owner and ACL contract; `--no-owner` is not used because it would replace
 that evidence with restore-session ownership.
 
-The target checks Flyway history through V50, extensions and Polish search, owners and owner-specific default ACLs,
+The target checks Flyway history through V51, extensions and Polish search, owners and owner-specific default ACLs,
 ordinary runtime DML, all three V45 history protections with SQLSTATE `42501`, migration maintenance, UUID generation,
 and deterministic recovery markers for identity/roles, catalog/image/stock/version, cart, snapshots, payment/provider,
 webhook, reservation recovery, outbox, notification, and ADMIN history state. Finally, production-profile startup must
 pass Flyway validation, Hibernate validation, the ownership validator, and readiness. No authenticated API smoke is
-performed: the fixture is deliberately not an application login bootstrap and the unresolved administrator recovery
-boundary remains fail closed.
+performed by that script: the fixture is deliberately not an application login bootstrap. AdministratorLifecycleIT
+separately proves promotion, JWT freshness, evidence/ACL preservation, and explicitly configured recovery after restore.
 
 The script emits only versions, commit, digest, size, durations, and pass/fail summaries. A trap removes both apps,
 both databases and their anonymous storage, the isolated network, and the temporary dump on success or failure. The

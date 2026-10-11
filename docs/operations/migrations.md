@@ -48,8 +48,14 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V48 | `V48__normalize_product_image_gallery_order.sql` | Backfills deterministic product-image positions, makes the position required, and replaces the gallery lookup index. |
 | V49 | `V49__snapshot_product_review_author_name.sql` | Adds and backfills an optional review-author snapshot used when a user is retired. |
 | V50 | `V50__add_user_credential_version.sql` | Adds a non-null credential version with a default of zero. |
+| V51 | `V51__administrator_lifecycle_foundation.sql` | Adds constrained registration, local operator promotion and evidence, role DML restrictions, and serialized administrator continuity guards. Requires coordinated maintenance. |
 
 ## Rolling schema compatibility boundary
+
+V51 requires old writers to be stopped before migration: the preceding registration implementation writes `user_roles`
+directly and is intentionally denied after V51. Start only the new application after Flyway/Hibernate validation. This
+local lifecycle approval is not production deployment approval. Do not run old and new writers together or downgrade
+the migrated schema; the manifest records `coordinated-maintenance`.
 
 Restore compatibility and rolling schema compatibility are different claims. A restore rehearsal proves that historical
 data can be restored and migrated forward for the current application. Rolling compatibility means the immediately
