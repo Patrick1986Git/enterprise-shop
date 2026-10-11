@@ -27,3 +27,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO shop_dev;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO shop_dev;
+SELECT 'REVOKE INSERT, UPDATE, DELETE ON public.roles, public.user_roles FROM shop_dev'
+WHERE to_regclass('public.roles') IS NOT NULL AND to_regclass('public.user_roles') IS NOT NULL \gexec

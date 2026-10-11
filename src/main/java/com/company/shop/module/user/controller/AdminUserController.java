@@ -104,7 +104,8 @@ public class AdminUserController {
 			@ApiResponse(responseCode = "200", description = "User disabled and existing access tokens invalidated."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
-			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", description = "Administrator continuity must be preserved.")
 	})
 	public UserResponseDTO disableUser(@PathVariable UUID id) {
 		return service.disable(id);
@@ -117,7 +118,8 @@ public class AdminUserController {
 			@ApiResponse(responseCode = "200", description = "User enabled; tokens issued before suspension remain invalid."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
-			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", description = "Administrator continuity must be preserved.")
 	})
 	public UserResponseDTO enableUser(@PathVariable UUID id) {
 		return service.enable(id);
@@ -134,7 +136,8 @@ public class AdminUserController {
 			@ApiResponse(responseCode = "204", description = "User deleted successfully."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
 			@ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),
-			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError")
+			@ApiResponse(responseCode = "404", ref = "#/components/responses/NotFoundError"),
+			@ApiResponse(responseCode = "409", description = "Administrator continuity must be preserved.")
 	})
 	public void deleteUser(
 			@Parameter(description = "User identifier.")

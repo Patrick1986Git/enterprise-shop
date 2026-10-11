@@ -50,4 +50,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"postgres_user" IN SCHEMA public
   GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"app_db_user";
 ALTER DEFAULT PRIVILEGES FOR ROLE :"postgres_user" IN SCHEMA public
   GRANT EXECUTE ON FUNCTIONS TO :"app_db_user";
+SELECT format('REVOKE INSERT, UPDATE, DELETE ON public.roles, public.user_roles FROM %I', :'app_db_user')
+WHERE to_regclass('public.roles') IS NOT NULL AND to_regclass('public.user_roles') IS NOT NULL \gexec
 SQL

@@ -8,6 +8,7 @@ public final class UserErrorCodes {
     public static final String USER_INVALID_CREDENTIALS = "USER_INVALID_CREDENTIALS";
     public static final String USER_CURRENT_PASSWORD_INCORRECT = "USER_CURRENT_PASSWORD_INCORRECT";
     public static final String USER_ROLE_NOT_CONFIGURED = "USER_ROLE_NOT_CONFIGURED";
+    public static final String USER_ADMINISTRATOR_CONTINUITY_REQUIRED = "USER_ADMINISTRATOR_CONTINUITY_REQUIRED";
 
     private UserErrorCodes() {
     }

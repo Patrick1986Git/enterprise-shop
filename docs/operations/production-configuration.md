@@ -123,6 +123,10 @@ the sender.
 
 ## Deployment handoff
 
+V51's local administrator operator contract does not authorize production operator use. Review the
+[administrator lifecycle boundary](../architecture/administrator-lifecycle-boundary.md) before production approval.
+V51 requires coordinated maintenance with preceding application writers stopped; it is not a rolling deployment.
+
 Before rollout, the deployment owner must:
 
 1. configure finite PostgreSQL `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` values

@@ -6,8 +6,6 @@ INSERT INTO users (id, email, password, first_name, last_name, credential_versio
 VALUES ('10000000-0000-0000-0000-000000000001', 'restore-rehearsal@example.invalid',
         '$synthetic-not-a-login-secret$', 'Restore', 'Rehearsal', 7);
 
-INSERT INTO user_roles (user_id, role_id)
-SELECT '10000000-0000-0000-0000-000000000001', id FROM roles WHERE name = 'ROLE_USER';
 
 INSERT INTO categories (id, name, slug, description)
 VALUES ('20000000-0000-0000-0000-000000000001', 'Synthetic recovery category',

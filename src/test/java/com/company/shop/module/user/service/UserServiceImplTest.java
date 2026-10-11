@@ -22,9 +22,11 @@ import com.company.shop.module.user.entity.Role;
 import com.company.shop.module.user.entity.User;
 import com.company.shop.module.user.exception.UserNotFoundException;
 import com.company.shop.module.user.exception.CurrentPasswordIncorrectException;
+import com.company.shop.module.user.exception.UserAdministratorContinuityException;
 import com.company.shop.module.user.mapper.UserMapper;
 import com.company.shop.module.user.repository.UserRepository;
 import com.company.shop.security.CurrentUserProvider;
+import com.company.shop.security.SecurityConstants;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -42,6 +44,45 @@ class UserServiceImplTest {
     private PasswordEncoder passwordEncoder;
 
     private UserServiceImpl service;
+
+    @Test
+    void disableAndDelete_shouldRejectFinalAdministratorAfterGlobalThenUserLock() {
+        UUID id = UUID.randomUUID();
+        User admin = new User("admin@example.com", "encoded", "Owner", "Account");
+        admin.addRole(new Role(SecurityConstants.ROLE_ADMIN));
+        when(userRepository.findActiveById(id)).thenReturn(Optional.of(admin));
+        assertThatThrownBy(() -> service.disable(id)).isInstanceOf(UserAdministratorContinuityException.class);
+        assertThatThrownBy(() -> service.delete(id)).isInstanceOf(UserAdministratorContinuityException.class);
+        assertThat(admin.isEnabled()).isTrue();
+        assertThat(admin.isDeleted()).isFalse();
+        var order = org.mockito.Mockito.inOrder(userRepository);
+        order.verify(userRepository).acquireAdministratorLifecycleLock();
+        order.verify(userRepository).acquireCommerceLifecycleLock(id);
+        order.verify(userRepository).findActiveById(id);
+    }
+
+    @Test
+    void disable_shouldAllowAdministratorWhenAnotherIsUsable() {
+        UUID id = UUID.randomUUID();
+        User admin = new User("admin@example.com", "encoded", "Owner", "Account");
+        admin.addRole(new Role(SecurityConstants.ROLE_ADMIN));
+        when(userRepository.findActiveById(id)).thenReturn(Optional.of(admin));
+        when(userRepository.existsOtherUsableAdministrator(admin.getId())).thenReturn(true);
+        service.disable(id);
+        assertThat(admin.isEnabled()).isFalse();
+        assertThat(admin.getCredentialVersion()).isOne();
+    }
+
+    @Test
+    void enable_shouldRequireOperatorRecoveryForZeroAdministratorState() {
+        UUID id = UUID.randomUUID();
+        User admin = new User("admin@example.com", "encoded", "Owner", "Account");
+        admin.addRole(new Role(SecurityConstants.ROLE_ADMIN));
+        admin.disable();
+        when(userRepository.findActiveById(id)).thenReturn(Optional.of(admin));
+        assertThatThrownBy(() -> service.enable(id)).isInstanceOf(UserAdministratorContinuityException.class);
+        assertThat(admin.isEnabled()).isFalse();
+    }
 
     @BeforeEach
     void setUp() {

@@ -18,6 +18,12 @@
       "rationale": "The non-null credential version supplies a database default for preceding-version inserts.",
       "previousRevisionEvidence": "Historical source and SQL review; old inserts receive credential_version zero.",
       "ownerReview": "Retrospective classification recorded by the rolling-compatibility audit."
+    },
+    "V51": {
+      "classification": "coordinated-maintenance",
+      "rationale": "Role DML restrictions and database lifecycle guards intentionally reject the V50 registration writer and final-administrator removals. Stop old application writers before applying V51; this is not a rolling-safe release.",
+      "previousRevisionEvidence": "V50 source review proves registration writes user_roles directly. Current-version PostgreSQL tests must prove constrained ROLE_USER registration, runtime denial, atomic promotion, shared-lock concurrency, and restore without automatic elevation. No mixed-version serving is authorized.",
+      "ownerReview": "The sole owner explicitly approved the local operator, target verification, retry and audit contract on 2026-10-11. Production deployment and production operator policy remain unapproved."
     }
   }
 }
