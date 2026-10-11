@@ -162,14 +162,15 @@ def build(directory, analyze=True):
     require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
             'Loaded candidate configuration differs')
     if analyze:
-        subprocess.run(command + [f'go install golang.org/x/vuln/cmd/govulncheck@{TOOL}; '
+        analyzer = ADVISORY.isolated_analyzer(command, 'ryuk-candidate-build:/tmp')
+        subprocess.run(analyzer + [f'go install golang.org/x/vuln/cmd/govulncheck@{TOOL}; '
             'cp /tmp/go/bin/govulncheck /evidence/govulncheck; '
             'go version -m /evidence/govulncheck > /evidence/govulncheck-buildinfo.txt'], check=True)
         receipt['tool_sha256'] = sha((directory / 'govulncheck').read_bytes())
         receipt['evidence_hashes']['govulncheck-buildinfo.txt'] = sha((directory / 'govulncheck-buildinfo.txt').read_bytes())
         for mode, args in [('source', ['-mode=source', '-json', '.']), ('binary', ['-mode=binary', '-json', '/evidence/ryuk'])]:
             receipt['analysis'][mode] = ADVISORY.collect(
-                command[:-2] + ['/tmp/go/bin/govulncheck'], args, directory, mode, 600)
+                analyzer[:-2] + ['/evidence/govulncheck'], args, directory, mode, 600)
         write(directory / 'build-receipt.json', receipt)
         require(all(v['status'] == 0 for v in receipt['analysis'].values()), 'Candidate govulncheck failed')
     reviewed = ROOT / '.github/security/ryuk/candidate.json'

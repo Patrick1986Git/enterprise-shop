@@ -16,7 +16,11 @@ govulncheck() {
   docker run --rm --interactive --init --platform linux/amd64 \
     --user "$(id -u):$(id -g)" --env HOME=/tmp --env GOPATH=/tmp/go \
     --env CGO_ENABLED=0 --env "GOVERSION=$GOSU_BINARY_GO_VERSION" \
-    --volume govulncheck:/tmp --mount "type=bind,src=$PWD,dst=/wd,ro" --workdir /wd \
+    --env GOENV=off --env GOTOOLCHAIN=local --env GOSUMDB=sum.golang.org \
+    --env GOPROXY=https://proxy.golang.org \
+    --env GOPRIVATE= --env GONOSUMDB= --env GONOPROXY= \
+    --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+    --mount "type=bind,src=$PWD,dst=/wd,ro" --workdir /wd \
     "$GOSU_GOVULNCHECK_IMAGE" sh -euc \
     'go install golang.org/x/vuln/cmd/govulncheck@v1.1.4 >/dev/null; exec "$GOPATH/bin/govulncheck" "$@"' -- "$@"
 }
