@@ -162,6 +162,7 @@ def scan():
                           '-v', f'{analysis.resolve()}:/analysis:ro']
                 if certificate:
                     govuln += ['-v', f'{Path(certificate).resolve()}:/run/scan-ca.pem:ro', '-e', 'SSL_CERT_FILE=/run/scan-ca.pem']
+                govuln = POLICY.CANDIDATE.ADVISORY.isolated_analyzer(govuln, 'ryuk-govulncheck:/tmp')
                 govuln += [analysis_image, 'sh', '-ec',
                            'go install golang.org/x/vuln/cmd/govulncheck@v1.1.4; '
                            'exec /tmp/go/bin/govulncheck -mode=binary -json "$1"', '--',

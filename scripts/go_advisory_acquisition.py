@@ -11,6 +11,38 @@ ENDPOINT = DATABASE + '/index/db.json'
 MAX_AGE = 172800
 
 
+def isolated_analyzer(command, cache_mount):
+    """Replace the reviewed shared cache with an empty per-process tmpfs."""
+    require(command[:3] == ['docker', 'run', '--rm'], 'Analyzer requires a disposable container')
+    require(isinstance(cache_mount, str) and re.fullmatch(r'[a-z0-9][a-z0-9_.-]*:/tmp', cache_mount),
+            'Wrong analyzer cache destination')
+    require(command.count(cache_mount) == 1, 'Missing/ambiguous analyzer cache mount')
+    index = command.index(cache_mount)
+    require(index > 0 and command[index - 1] in ('-v', '--volume'), 'Wrong analyzer cache mount')
+    settings = {'GOENV': 'off', 'GOSUMDB': 'sum.golang.org', 'GOPROXY': 'https://proxy.golang.org',
+                'GOTOOLCHAIN': 'local', 'GOPRIVATE': '', 'GONOSUMDB': '', 'GONOPROXY': ''}
+    for i, option in enumerate(command):
+        require(option not in ('--mount', '--tmpfs'), 'Unexpected analyzer cache overlay')
+        if option in ('-v', '--volume'):
+            mount = command[i + 1].split(':')
+            require(len(mount) in (2, 3), 'Malformed analyzer volume')
+            destination = mount[1]
+            require(not (destination == '/tmp' or destination.startswith('/tmp/'))
+                    or command[i + 1] == cache_mount, 'Unexpected analyzer cache overlay')
+        if option in ('-e', '--env'):
+            key, separator, value = command[i + 1].partition('=')
+            if key in settings:
+                require(separator and value == settings[key], 'Weakened analyzer module verification')
+            if key in {'HOME', 'GOPATH', 'GOMODCACHE', 'GOCACHE', 'GOTMPDIR', 'TMPDIR'}:
+                require(separator and (value == '/tmp' or value.startswith('/tmp/'))
+                        and '..' not in value.split('/'), 'Analyzer cache escapes private tmpfs')
+    result = command.copy()
+    del result[index - 1:index + 1]
+    result[3:3] = ['--tmpfs', '/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777', '-e', 'HOME=/tmp'] + [
+        value for key, setting in settings.items() for value in ('-e', key + '=' + setting)]
+    return result
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
