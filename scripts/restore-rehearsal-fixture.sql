@@ -6,6 +6,13 @@ INSERT INTO users (id, email, password, first_name, last_name, credential_versio
 VALUES ('10000000-0000-0000-0000-000000000001', 'restore-rehearsal@example.invalid',
         '$synthetic-not-a-login-secret$', 'Restore', 'Rehearsal', 7);
 
+WITH observation AS MATERIALIZED (SELECT clock_timestamp() AS observed)
+INSERT INTO password_recovery_challenges
+    (id,user_id,format_version,verifier,issued_credential_version,created_at,expires_at)
+SELECT '11000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001',
+       1, decode(repeat('00',32),'hex'), 7, observed, observed + INTERVAL '15 minutes'
+FROM observation;
+
 
 INSERT INTO categories (id, name, slug, description)
 VALUES ('20000000-0000-0000-0000-000000000001', 'Synthetic recovery category',

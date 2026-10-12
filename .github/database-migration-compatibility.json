@@ -19,6 +19,12 @@
       "previousRevisionEvidence": "Historical source and SQL review; old inserts receive credential_version zero.",
       "ownerReview": "Retrospective classification recorded by the rolling-compatibility audit."
     },
+    "V52": {
+      "classification": "rolling-safe",
+      "rationale": "Adds an unwired challenge table and guards that do not alter preceding User, role or application writes. No recovery bean, HTTP entrypoint, delivery or activation is introduced.",
+      "previousRevisionEvidence": "V51 source review proves that preceding writers neither reference nor depend on password_recovery_challenges. PostgreSQL tests and the historical-forward restore rehearsal verify unchanged registration, JWT and administrator controls after V52.",
+      "ownerReview": "The owner explicitly approved the non-public local/test foundation on 2026-10-12: 15-minute verifier-only challenges, no ADMIN/inactive recovery, no deletion or real delivery. Production/end-user activation remains unapproved."
+    },
     "V51": {
       "classification": "coordinated-maintenance",
       "rationale": "Role DML restrictions and database lifecycle guards intentionally reject the V50 registration writer and final-administrator removals. Stop old application writers before applying V51; this is not a rolling-safe release.",

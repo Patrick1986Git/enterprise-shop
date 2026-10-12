@@ -6,6 +6,26 @@ Auxiliary container governance runs offline with `python -m unittest discover -s
 
 Hosted container-security additionally requires actual Hadolint, installed-gosu-version govulncheck, image resolution, raw Trivy evidence, CycloneDX conversion, upstream scanner executable provenance and auxiliary policy decisions. Existing Maven tooling, builder, application/PostgreSQL, Java 21 clean verify, Surefire/Failsafe, compiler warnings, JaCoCo, Dependency Review, compatibility, restore and CodeQL contracts remain mandatory. CI and CodeQL build the exact unpublished Ryuk candidate before Maven. Testcontainers executes its content-addressed local reference; runtime assertions verify configuration identity, the writable Docker socket and removal of all observed resources after JVM exit. The official compressed image remains separate comparison provenance, with its UPX and exact-byte regression path preserved. Complete package readback does not authorize HIGH/CRITICAL findings. Scheduled protected-master coverage is configured and regression-checked, not claimed to have executed this draft before merge.
 
+## Local/test password-recovery foundation
+
+PasswordRecoveryTokenTest, PasswordRecoveryChallengeTest and PasswordRecoveryServiceTest cover purpose/format binding,
+canonical parsing, the JDK constant-time comparator, exact expiry equality and canonical replacement validation.
+PasswordRecoveryFoundationIT uses real PostgreSQL with separate runtime/migration/operator identities. It exercises
+both winning race orders, observed advisory waits, rollback/overflow/timeout/deadlock, JWT invalidation, immutable state,
+inactive/ADMIN exclusions, runtime privileges and dump/restore invalidation. A test-only memory capture receives raw
+material only after commit; assertions never print it. Application/JAR checks prove no recovery bean, mapping or packaged
+capture. Existing administrator and JWT tests remain required.
+
+Build the reviewed Ryuk candidate first, then use the normal Java 21 wrapper lifecycle. Focused examples:
+
+```bash
+./mvnw -Dtest=PasswordRecoveryTokenTest,PasswordRecoveryChallengeTest,PasswordRecoveryServiceTest test
+./mvnw -Dit.test=PasswordRecoveryFoundationIT,AdministratorLifecycleIT,JwtAuthorizationFreshnessIT verify
+```
+
+The complete clean verify, JaCoCo, migration/OpenAPI, security and restore gates remain unchanged. Local fixture policy
+is not public admission/timing proof or real mail/provider readiness.
+
 ## Tooling
 
 ### Python and Java/Kotlin CodeQL

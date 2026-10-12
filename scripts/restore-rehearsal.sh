@@ -184,8 +184,13 @@ DO $$
 DECLARE invalid_count integer;
 BEGIN
   SELECT count(*) INTO invalid_count FROM flyway_schema_history WHERE NOT success;
-  IF invalid_count <> 0 OR (SELECT max(version::integer) FROM flyway_schema_history) <> 51 THEN
-    RAISE EXCEPTION 'Flyway history is not complete through V51';
+  IF invalid_count <> 0 OR (SELECT max(version::integer) FROM flyway_schema_history) <> 52 THEN
+    RAISE EXCEPTION 'Flyway history is not complete through V52';
+  END IF;
+  IF (SELECT count(*) FROM password_recovery_challenges
+      WHERE id='11000000-0000-0000-0000-000000000001' AND issued_credential_version=7
+        AND consumed_at IS NULL AND revoked_at IS NULL) <> 1 THEN
+    RAISE EXCEPTION 'recovery verifier history was not restored';
   END IF;
   IF NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'uuid-ossp')
      OR NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'unaccent') THEN
@@ -284,6 +289,13 @@ docker exec "$TARGET_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DAT
 docker exec --env PGPASSWORD "$TARGET_CONTAINER" psql --host 127.0.0.1 \
   --username "$RUNTIME_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 --command \
   "INSERT INTO categories(name,slug) VALUES ('UUID collision check','uuid-collision-check');" >/dev/null
+
+# Explicit restore maintenance; expiry alone cannot prevent rollback of consumed authority.
+docker exec "$TARGET_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 \
+  --command "UPDATE password_recovery_challenges SET revoked_at=clock_timestamp() WHERE consumed_at IS NULL AND revoked_at IS NULL;" >/dev/null
+remaining_recovery=$(docker exec "$TARGET_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --tuples-only --no-align \
+  --command "SELECT count(*) FROM password_recovery_challenges WHERE consumed_at IS NULL AND revoked_at IS NULL;")
+[[ "$remaining_recovery" == 0 ]] || fail "restored recovery authority was not invalidated"
 
 start_app "$TARGET_APP" "$TARGET_CONTAINER"
 commit_sha=$(git rev-parse HEAD 2>/dev/null || printf unknown)
