@@ -341,8 +341,8 @@ class LocalAdministratorRecoveryIT {
                 }
             }
             for (String table : new String[]{"emergency_secrets", "authorizations"}) {
-                rejected(() -> owner().execute("UPDATE administrator_recovery." + table + " SET consumed_at=NULL WHERE target_user_id='" + admin + "'"), "23514");
-                rejected(() -> owner().execute("UPDATE administrator_recovery." + table + " SET created_at=created_at-INTERVAL '1 second' WHERE target_user_id='" + admin + "'"), "23514");
+                rejected(() -> owner().update("UPDATE administrator_recovery." + table + " SET consumed_at=NULL WHERE target_user_id=?", admin), "23514");
+                rejected(() -> owner().update("UPDATE administrator_recovery." + table + " SET created_at=created_at-INTERVAL '1 second' WHERE target_user_id=?", admin), "23514");
             }
             rejected(() -> owner().execute("UPDATE administrator_recovery.reset_evidence SET operation='RESET_SOLE_ADMIN'"), "42501");
             assertThat(evidenceCount(admin)).isOne();
