@@ -7,12 +7,17 @@ verifiers, exactly 15-minute expiration, one open challenge per User, newest com
 authority, atomic one-time consumption and no automatic deletion.
 
 **End-user password recovery remains unsupported.** There is no recovery controller, OpenAPI operation, delivery worker,
-activation property, operator reset command or real courier. The package-private PasswordRecoveryService has no Spring
+activation property or real courier supplied by V52. The package-private PasswordRecoveryService has no Spring
 stereotype or configuration factory; only same-package tests construct it. ArchUnit and application-context tests protect
 this boundary. MemoryRecoveryCapture exists only in test sources and is absent from the packaged application.
 
 Missing, disabled, retired and ROLE_ADMIN Users are ineligible at issuance and consumption. No operation changes email,
 roles, enabled or deleted state. This foundation is separate from V51's local offline administrator promotion.
+
+V53 separately implements the owner's approved local sole-ADMIN credential recovery using pre-enrolled independent
+emergency proof and a distinct reset-only identity. It does not activate or broaden V52. The separate
+[administrator credential contract](./local-administrator-credential-recovery.md) and
+[local runbook](../operations/local-administrator-credential-recovery.md) govern that manually invoked capability.
 
 ## Cryptographic and password contracts
 

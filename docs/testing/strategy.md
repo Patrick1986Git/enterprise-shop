@@ -241,6 +241,16 @@ Run the narrow offline fixtures with `python -m unittest discover -s scripts/tes
 
 ## Practical guidance
 
+`LocalAdministratorRecoveryIT` uses real PostgreSQL 18 for owner-only current-password enrollment, private verifier
+isolation, reset-only privilege rejection, PostgreSQL's exact ten-minute deadline, supersession, both password-change
+race orders, eligibility races, observed advisory locks, one-use contention, rollback/overflow/deadlock, uncertain commit,
+session/capability revocation and same-name restore invalidation with retained historical receipts. Unit/launcher tests
+cover canonical proof parsing, terminal/argument boundaries, validation, safe parameter binding and secret-free errors.
+ArchUnit and application-context checks prevent application/public activation. Synthetic dump files are deleted, not
+uploaded; these tests do not establish external custody, independently durable rejected-attempt auditing or production
+readiness. The [local administrator credential contract](../architecture/local-administrator-credential-recovery.md)
+defines those approved limits.
+
 - Prefer the narrowest useful test for the changed behavior.
 - Use WebMvc tests for endpoint contracts and security expectations.
 - Use service/unit tests for business rules and orchestration.

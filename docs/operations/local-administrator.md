@@ -7,6 +7,10 @@ the [administrator lifecycle boundary](../architecture/administrator-lifecycle-b
 maintenance with old writers stopped. Keep PostgreSQL administrator, migration, runtime and operator logins distinct.
 Use a local terminal with Python 3.9+ and PostgreSQL 18 `psql`; do not run the operator command from CI or replica startup.
 
+An enabled sole ADMIN with a lost password still blocks this promotion command. Use only the separately approved
+[credential-recovery runbook](./local-administrator-credential-recovery.md) if independent emergency proof was enrolled
+before loss. This operator gains no credential-reset, enrollment or authorization privileges.
+
 The owner controls the local machine and database administration. Create a fresh dedicated operator LOGIN manually using
 the PostgreSQL administrative session, with `NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` and
 no memberships or owned objects. Set its credential interactively with `psql`'s `\password` command so the password is

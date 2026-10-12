@@ -115,6 +115,13 @@ class ArchitectureRulesTest {
                     .should().dependOnClassesThat()
                     .haveFullyQualifiedName("com.company.shop.module.user.service.PasswordRecoveryService");
 
+    @ArchTest
+    static final ArchRule offlineAdministratorRecoveryMustHaveNoApplicationCaller =
+            noClasses()
+                    .that().resideOutsideOfPackage("com.company.shop.module.user.operator..")
+                    .should().dependOnClassesThat()
+                    .resideInAPackage("com.company.shop.module.user.operator..");
+
 
     @ArchTest
     static final ArchRule businessModulesMustNotAccessForeignRepositoriesOrServices =

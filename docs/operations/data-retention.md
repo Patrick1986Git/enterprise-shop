@@ -65,6 +65,11 @@ and outbox content must never hold raw reset credentials. Later deletion require
 and backup decisions. Restoring old state requires revocation of all open challenges before future recovery activation;
 revocation retains history.
 
+V53's private local administrator enrollment/authorization history and reset receipts also have no automatic deletion or
+retention cutoff. Successful reset consumption and restore-time revocation preserve history. Only secret verifiers and
+non-secret operation metadata are retained; receipts exclude passwords, hashes, raw proof and JWTs. Rejected transactions
+have no independently durable attempt ledger. Privileged backup/restore can roll back evidence to its recovered point.
+
 ## Stripe webhook invariant
 
 `stripe_webhook_events.stripe_event_id` is the exact durable provider-event replay barrier. The
