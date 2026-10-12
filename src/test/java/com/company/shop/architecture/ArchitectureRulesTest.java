@@ -39,6 +39,7 @@ class ArchitectureRulesTest {
             "com.company.shop.module.user.api.internal.CurrentUserAssociationFacade",
             Set.of("cart", "product"));
     private static final Set<String> DURABLE_COORDINATION_TYPES = Set.of(
+            "com.company.shop.module.user.service.PasswordRecoveryService",
             "com.company.shop.module.notification.delivery.NotificationDeliveryMetrics",
             "com.company.shop.module.notification.delivery.NotificationDeliveryProcessor",
             "com.company.shop.module.notification.delivery.NotificationDeliveryTransactionalWorker",
@@ -106,6 +107,13 @@ class ArchitectureRulesTest {
                     .that().resideInAPackage("..repository..")
                     .and().haveSimpleNameEndingWith("Repository")
                     .should().beInterfaces();
+
+    @ArchTest
+    static final ArchRule recoveryFoundationMustHaveNoProductionCaller =
+            noClasses()
+                    .that().doNotHaveFullyQualifiedName("com.company.shop.module.user.service.PasswordRecoveryService")
+                    .should().dependOnClassesThat()
+                    .haveFullyQualifiedName("com.company.shop.module.user.service.PasswordRecoveryService");
 
 
     @ArchTest

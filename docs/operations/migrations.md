@@ -49,6 +49,7 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V49 | `V49__snapshot_product_review_author_name.sql` | Adds and backfills an optional review-author snapshot used when a user is retired. |
 | V50 | `V50__add_user_credential_version.sql` | Adds a non-null credential version with a default of zero. |
 | V51 | `V51__administrator_lifecycle_foundation.sql` | Adds constrained registration, local operator promotion and evidence, role DML restrictions, and serialized administrator continuity guards. Requires coordinated maintenance. |
+| V52 | `V52__password_recovery_foundation.sql` | Adds verifier-only, one-time challenge persistence and guards. The local/test foundation is unwired; no recovery endpoint or delivery is activated. |
 
 ## Rolling schema compatibility boundary
 

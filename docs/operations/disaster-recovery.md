@@ -17,7 +17,8 @@ Application write rate, database size, network and restore throughput, Flyway mi
 
 The recovery point must contain a transactionally consistent set of:
 
-- users, credential versions, roles, user-role membership, and administrator promotion evidence/configuration;
+- users, credential versions, roles, user-role membership, administrator promotion evidence/configuration, and
+  verifier-only password-recovery challenge history;
 - categories, products, product images and reviews, including stock, ratings, search vectors, and optimistic-lock versions;
 - carts and cart items;
 - orders and immutable order-item/user snapshots, discounts, checkout idempotency keys, reservation expiry timestamps, and reservation work/claim/recovery state;
@@ -92,6 +93,13 @@ Restore only into an isolated, empty target. Keep application traffic and all wo
 
 Missing or inconsistent Flyway history, checksum mismatch, unsupported PostgreSQL version, absent dictionary/extension support, incomplete roles/owners/default privileges, failed constraints/triggers, unsafe sequences, or unexplained Stripe divergence are stop conditions—not reasons to repair history or relax validation.
 
+V52's internal recovery foundation has no production activation path. Before any future reviewed recovery activation,
+keep traffic and couriers stopped and explicitly revoke all open restored password_recovery_challenges using the
+migration/maintenance identity; verify zero open rows. An older backup can restore a challenge consumed later, and JWT
+key rotation does not invalidate opaque reset credentials. Retain history and never replay delivery. The
+[recovery boundary](../architecture/password-recovery-boundary.md) supplies the maintenance SQL; the exact-version
+rehearsal and recovery integration test exercise it. No automatic challenge cleanup or restore replay is authorized.
+
 Restore preserves application `ROLE_ADMIN` assignments only as of the selected recovery point. It must not promote a
 User, enable a disabled User, or resurrect a retired User as a side effect. If the restored point has no usable
 administrator, production ADMIN recovery remains subject to a separate deployment review. The approved sole local owner
@@ -141,7 +149,7 @@ owner-preserving restore as the synthetic administrator after recreating the ori
 faithfully exercises the documented portable owner and ACL contract; `--no-owner` is not used because it would replace
 that evidence with restore-session ownership.
 
-The target checks Flyway history through V51, extensions and Polish search, owners and owner-specific default ACLs,
+The target checks Flyway history through V52, extensions and Polish search, owners and owner-specific default ACLs,
 ordinary runtime DML, all three V45 history protections with SQLSTATE `42501`, migration maintenance, UUID generation,
 and deterministic recovery markers for identity/roles, catalog/image/stock/version, cart, snapshots, payment/provider,
 webhook, reservation recovery, outbox, notification, and ADMIN history state. Finally, production-profile startup must
@@ -163,7 +171,7 @@ a genuine history containing only V1–V48. Its V48 fixture predates `author_nam
 named and blank-name review authors plus the broader exact-version recovery markers. Before current startup it proves
 the fresh target is still V48, the V49/V50 columns are absent, the rows exist, and migration ownership/runtime
 non-ownership survived. Current production-profile startup must then apply exactly the migration inventory after V48
-(currently V49 and V50), preserve historical checksum fingerprints, backfill `Alex Morgan` and `Anonymous`, enforce
+(currently V49–V52), preserve historical checksum fingerprints, backfill `Alex Morgan` and `Anonymous`, enforce
 the author-name and non-negative credential-version constraints, retain the broader business data and V45 protections,
 preserve owner/default-privilege boundaries, pass normal Hibernate validation, and become ready. A final isolated
 startup after deliberate V48 checksum corruption must fail closed; the script never repairs, baselines, or edits history

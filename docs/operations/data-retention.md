@@ -57,6 +57,14 @@ business, security, legal, and deployment owned.
 
 **None currently proven.**
 
+## Password-recovery verifier history
+
+V52 retains verifier-only challenge history without automatic deletion. The approved local/test 15-minute expiry controls
+validity, not retention. Terminal authority cannot reopen, and runtime DELETE/TRUNCATE is guarded. Generic notification
+and outbox content must never hold raw reset credentials. Later deletion requires explicit retention, privileged maintenance
+and backup decisions. Restoring old state requires revocation of all open challenges before future recovery activation;
+revocation retains history.
+
 ## Stripe webhook invariant
 
 `stripe_webhook_events.stripe_event_id` is the exact durable provider-event replay barrier. The
