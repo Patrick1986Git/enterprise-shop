@@ -71,7 +71,7 @@ BEGIN
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE c.relowner = legacy_oid
-      AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+      AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
       AND NOT (
           n.nspname = 'pg_toast'
           AND (
@@ -81,7 +81,7 @@ BEGIN
                   JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
                   WHERE parent.reltoastrelid = c.oid
                     AND parent.relowner = legacy_oid
-                    AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+                    AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
               )
               OR EXISTS (
                   SELECT 1
@@ -91,7 +91,7 @@ BEGIN
                   JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
                   WHERE toast_index.indexrelid = c.oid
                     AND parent.relowner = legacy_oid
-                    AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+                    AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
               )
           )
       )
@@ -106,7 +106,7 @@ BEGIN
     FROM pg_type t
     JOIN pg_namespace n ON n.oid = t.typnamespace
     WHERE t.typowner = legacy_oid
-      AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+      AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
       AND NOT (
           n.nspname = 'pg_toast'
           AND EXISTS (
@@ -116,7 +116,7 @@ BEGIN
               JOIN pg_namespace parent_namespace ON parent_namespace.oid = parent.relnamespace
               WHERE toast_table.oid = t.typrelid
                 AND parent.relowner = legacy_oid
-                AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+                AND parent_namespace.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
           )
       )
     ORDER BY t.oid
@@ -129,23 +129,23 @@ BEGIN
        OR EXISTS (SELECT 1 FROM pg_tablespace WHERE spcowner = legacy_oid)
        OR EXISTS (
            SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-           WHERE p.proowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+           WHERE p.proowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
        )
        OR EXISTS (
            SELECT 1 FROM pg_namespace WHERE nspowner = legacy_oid
-             AND nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+             AND nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
        )
        OR EXISTS (
            SELECT 1 FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
-           WHERE e.extowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+           WHERE e.extowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
        )
        OR EXISTS (
            SELECT 1 FROM pg_ts_config c JOIN pg_namespace n ON n.oid = c.cfgnamespace
-           WHERE c.cfgowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+           WHERE c.cfgowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
        )
        OR EXISTS (
            SELECT 1 FROM pg_ts_dict d JOIN pg_namespace n ON n.oid = d.dictnamespace
-           WHERE d.dictowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+           WHERE d.dictowner = legacy_oid AND n.nspname NOT IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
        ) THEN
         RAISE EXCEPTION 'Legacy runtime owns objects outside the intended database/schema boundary';
     END IF;
@@ -173,7 +173,7 @@ BEGIN
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         JOIN pg_roles r ON r.oid = c.relowner
-        WHERE n.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle')
+        WHERE n.nspname IN (current_setting('shop.app_schema'), 'administrator_lifecycle', 'administrator_recovery')
           AND r.rolname = current_setting('shop.legacy_runtime')
     ) THEN
         RAISE EXCEPTION 'Runtime ownership remains after transfer';

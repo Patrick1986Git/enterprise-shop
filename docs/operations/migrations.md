@@ -50,6 +50,7 @@ Migrations live under `src/main/resources/db/migration` and are applied in versi
 | V50 | `V50__add_user_credential_version.sql` | Adds a non-null credential version with a default of zero. |
 | V51 | `V51__administrator_lifecycle_foundation.sql` | Adds constrained registration, local operator promotion and evidence, role DML restrictions, and serialized administrator continuity guards. Requires coordinated maintenance. |
 | V52 | `V52__password_recovery_foundation.sql` | Adds verifier-only, one-time challenge persistence and guards. The local/test foundation is unwired; no recovery endpoint or delivery is activated. |
+| V53 | `V53__local_administrator_credential_recovery.sql` | Adds private, explicitly configured local sole-ADMIN emergency enrollment, ten-minute authorization, constrained reset and retained receipts. Creates no login and changes no preceding writers or V51 operator grants. |
 
 ## Rolling schema compatibility boundary
 

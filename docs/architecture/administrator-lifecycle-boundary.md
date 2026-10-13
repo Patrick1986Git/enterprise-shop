@@ -8,6 +8,10 @@ User with `deleted=false`, `enabled=true`, and `ROLE_ADMIN`. A fresh database le
 registration always creates only `ROLE_USER`. No migration, startup task, replica, or public HTTP request promotes a User.
 Additional-administrator management remains deferred. Production operator use remains unapproved.
 
+V53's separately approved [local credential recovery](./local-administrator-credential-recovery.md) preserves an existing
+sole ADMIN and requires pre-enrolled independent emergency proof. It neither changes zero-admin eligibility nor adds
+privileges to this bootstrap operator.
+
 The owner provisions and revokes a dedicated PostgreSQL login, keeps its password in an owner-only libpq password file
 outside Git and CI, and verifies the target UUID against their own locally authenticated account. Every invocation and
 retry requires confirmation of the operation, database, and UUID. Confirmation prevents mistakes; database authentication

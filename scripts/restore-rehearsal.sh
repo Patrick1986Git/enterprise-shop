@@ -161,6 +161,21 @@ docker exec --env PGPASSWORD -i "$SOURCE_CONTAINER" psql --host 127.0.0.1 \
 docker exec "$SOURCE_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 \
   --command "INSERT INTO user_roles (user_id, role_id) SELECT '10000000-0000-0000-0000-000000000001', id FROM roles WHERE name = 'ROLE_USER';"
 
+# Trusted synthetic history, deliberately inactive: no operator is configured or automatically restored.
+docker exec -i "$SOURCE_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 <<'SQL'
+INSERT INTO administrator_recovery.emergency_secrets
+    (id,target_user_id,database_name,environment_name,verifier,enrolled_by,enrolled_credential_version,created_at)
+VALUES ('12000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',
+    current_database(),'local',decode(repeat('00',32),'hex'),session_user,7,clock_timestamp());
+WITH observation AS MATERIALIZED (SELECT clock_timestamp() AS now)
+INSERT INTO administrator_recovery.authorizations
+    (id,secret_id,target_user_id,database_name,environment_name,operator_login,authorized_by,
+     expected_credential_version,created_at,expires_at)
+SELECT '13000000-0000-0000-0000-000000000001','12000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',current_database(),'local','synthetic_unconfigured_reset',
+    session_user,7,now,now+INTERVAL '10 minutes' FROM observation;
+SQL
+
 backup_started=$(date +%s)
 docker exec "$SOURCE_CONTAINER" pg_dump --username "$ADMIN_USER" --dbname "$DATABASE" \
   --format=custom --file=/tmp/rehearsal.dump
@@ -184,13 +199,21 @@ DO $$
 DECLARE invalid_count integer;
 BEGIN
   SELECT count(*) INTO invalid_count FROM flyway_schema_history WHERE NOT success;
-  IF invalid_count <> 0 OR (SELECT max(version::integer) FROM flyway_schema_history) <> 52 THEN
-    RAISE EXCEPTION 'Flyway history is not complete through V52';
+  IF invalid_count <> 0 OR (SELECT max(version::integer) FROM flyway_schema_history) <> 53 THEN
+    RAISE EXCEPTION 'Flyway history is not complete through V53';
   END IF;
   IF (SELECT count(*) FROM password_recovery_challenges
       WHERE id='11000000-0000-0000-0000-000000000001' AND issued_credential_version=7
         AND consumed_at IS NULL AND revoked_at IS NULL) <> 1 THEN
     RAISE EXCEPTION 'recovery verifier history was not restored';
+  END IF;
+  IF (SELECT count(*) FROM administrator_recovery.emergency_secrets
+      WHERE id='12000000-0000-0000-0000-000000000001' AND consumed_at IS NULL AND revoked_at IS NULL) <> 1
+     OR (SELECT count(*) FROM administrator_recovery.authorizations
+      WHERE id='13000000-0000-0000-0000-000000000001' AND consumed_at IS NULL AND revoked_at IS NULL) <> 1
+     OR EXISTS (SELECT FROM administrator_recovery.operator_identity)
+     OR EXISTS (SELECT FROM administrator_recovery.reset_evidence) THEN
+    RAISE EXCEPTION 'local credential recovery history/configuration invariant failed';
   END IF;
   IF NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'uuid-ossp')
      OR NOT EXISTS (SELECT FROM pg_extension WHERE extname = 'unaccent') THEN
@@ -248,7 +271,7 @@ docker exec -i "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATA
   --set=ON_ERROR_STOP=1 <<<"$verify_sql"
 
 owner_result=$(docker exec "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATABASE" --tuples-only --no-align -c \
-  "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','administrator_lifecycle') AND c.relkind IN ('r','p','S','v','m','f') AND pg_get_userbyid(c.relowner) <> '$MIGRATION_USER';")
+  "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','administrator_lifecycle','administrator_recovery') AND c.relkind IN ('r','p','S','v','m','f') AND pg_get_userbyid(c.relowner) <> '$MIGRATION_USER';")
 [[ "$owner_result" == 0 ]] || fail "migration identity does not own every application relation"
 runtime_owned=$(docker exec "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATABASE" --tuples-only --no-align -c \
   "SELECT count(*) FROM pg_class WHERE relowner=(SELECT oid FROM pg_roles WHERE rolname='$RUNTIME_USER');")
@@ -279,6 +302,15 @@ for forbidden_sql in \
   grep -Eq 'ERROR:[[:space:]]+42501:' <<<"$denial" || fail "restored runtime administrator boundary was not enforced"
 done
 
+for forbidden_sql in \
+  "SELECT * FROM administrator_recovery.emergency_secrets;" \
+  "SELECT * FROM administrator_recovery.authorizations;" \
+  "SELECT administrator_recovery.invalidate_restored_authority();"; do
+  denial=$(docker exec --env PGPASSWORD "$TARGET_CONTAINER" psql --host 127.0.0.1 \
+    --username "$RUNTIME_USER" --dbname "$DATABASE" --set=VERBOSITY=verbose --command "$forbidden_sql" 2>&1 || true)
+  grep -Eq 'ERROR:[[:space:]]+42501:' <<<"$denial" || fail "runtime accessed private credential recovery authority"
+done
+
 docker exec --env PGPASSWORD "$TARGET_CONTAINER" psql --host 127.0.0.1 \
   --username "$RUNTIME_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 --command \
   "INSERT INTO categories(name,slug) VALUES ('Runtime restore DML','runtime-restore-dml'); DELETE FROM categories WHERE slug='runtime-restore-dml';" >/dev/null
@@ -296,6 +328,13 @@ docker exec "$TARGET_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DAT
 remaining_recovery=$(docker exec "$TARGET_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --tuples-only --no-align \
   --command "SELECT count(*) FROM password_recovery_challenges WHERE consumed_at IS NULL AND revoked_at IS NULL;")
 [[ "$remaining_recovery" == 0 ]] || fail "restored recovery authority was not invalidated"
+docker exec "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 \
+  --command "SELECT administrator_recovery.invalidate_restored_authority();" >/dev/null
+docker exec "$TARGET_CONTAINER" psql --username "$ADMIN_USER" --dbname "$DATABASE" --set=ON_ERROR_STOP=1 \
+  --command "SELECT administrator_recovery.terminate_operator_sessions();" >/dev/null
+remaining_admin_recovery=$(docker exec "$TARGET_CONTAINER" psql --username "$MIGRATION_USER" --dbname "$DATABASE" --tuples-only --no-align \
+  --command "SELECT (SELECT count(*) FROM administrator_recovery.emergency_secrets WHERE consumed_at IS NULL AND revoked_at IS NULL)+(SELECT count(*) FROM administrator_recovery.authorizations WHERE consumed_at IS NULL AND revoked_at IS NULL);")
+[[ "$remaining_admin_recovery" == 0 ]] || fail "restored administrator proof was not invalidated"
 
 start_app "$TARGET_APP" "$TARGET_CONTAINER"
 commit_sha=$(git rev-parse HEAD 2>/dev/null || printf unknown)

@@ -18,7 +18,8 @@ Application write rate, database size, network and restore throughput, Flyway mi
 The recovery point must contain a transactionally consistent set of:
 
 - users, credential versions, roles, user-role membership, administrator promotion evidence/configuration, and
-  verifier-only password-recovery challenge history;
+  verifier-only password-recovery challenge history, private local ADMIN emergency verifier/authorization history,
+  reset receipts and reset-operator configuration;
 - categories, products, product images and reviews, including stock, ratings, search vectors, and optimistic-lock versions;
 - carts and cart items;
 - orders and immutable order-item/user snapshots, discounts, checkout idempotency keys, reservation expiry timestamps, and reservation work/claim/recovery state;
@@ -100,6 +101,17 @@ key rotation does not invalidate opaque reset credentials. Retain history and ne
 [recovery boundary](../architecture/password-recovery-boundary.md) supplies the maintenance SQL; the exact-version
 rehearsal and recovery integration test exercise it. No automatic challenge cleanup or restore replay is authorized.
 
+V53's approved local ADMIN recovery requires an additional owner step before restored traffic: execute
+`administrator_recovery.invalidate_restored_authority()` through the trusted administrative session. This invalidates
+pending authorizations and unconsumed emergency verifiers and disables/revokes reset-operator capability. After that
+transaction commits, execute `administrator_recovery.terminate_operator_sessions()` and verify success, preserving
+history. The local Java command performs both phases. Do this even if the restored database has the same name. An older backup can revive a spent
+secret and remove successful receipts; neither expiry nor UUID/database-name checks establish non-replay. Fresh enrollment
+requires current account control after explicit fresh operator provisioning/configuration. Loss of that control remains
+fail closed. Remove pre-restore JWT keys from active and previous verification configuration before restart. The
+[local credential-recovery runbook](./local-administrator-credential-recovery.md) defines these steps; production operation
+remains unapproved.
+
 Restore preserves application `ROLE_ADMIN` assignments only as of the selected recovery point. It must not promote a
 User, enable a disabled User, or resurrect a retired User as a side effect. If the restored point has no usable
 administrator, production ADMIN recovery remains subject to a separate deployment review. The approved sole local owner
@@ -149,7 +161,7 @@ owner-preserving restore as the synthetic administrator after recreating the ori
 faithfully exercises the documented portable owner and ACL contract; `--no-owner` is not used because it would replace
 that evidence with restore-session ownership.
 
-The target checks Flyway history through V52, extensions and Polish search, owners and owner-specific default ACLs,
+The target checks Flyway history through V53, extensions and Polish search, owners and owner-specific default ACLs,
 ordinary runtime DML, all three V45 history protections with SQLSTATE `42501`, migration maintenance, UUID generation,
 and deterministic recovery markers for identity/roles, catalog/image/stock/version, cart, snapshots, payment/provider,
 webhook, reservation recovery, outbox, notification, and ADMIN history state. Finally, production-profile startup must
@@ -171,7 +183,7 @@ a genuine history containing only V1–V48. Its V48 fixture predates `author_nam
 named and blank-name review authors plus the broader exact-version recovery markers. Before current startup it proves
 the fresh target is still V48, the V49/V50 columns are absent, the rows exist, and migration ownership/runtime
 non-ownership survived. Current production-profile startup must then apply exactly the migration inventory after V48
-(currently V49–V52), preserve historical checksum fingerprints, backfill `Alex Morgan` and `Anonymous`, enforce
+(currently V49–V53), preserve historical checksum fingerprints, backfill `Alex Morgan` and `Anonymous`, enforce
 the author-name and non-negative credential-version constraints, retain the broader business data and V45 protections,
 preserve owner/default-privilege boundaries, pass normal Hibernate validation, and become ready. A final isolated
 startup after deliberate V48 checksum corruption must fail closed; the script never repairs, baselines, or edits history
