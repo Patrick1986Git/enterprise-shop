@@ -147,10 +147,10 @@ class StatelessApiClientHttpIT {
 
         HttpResponse<String> duplicate = send("POST", "/api/v1/auth/register", registration(email), null);
         assertThat(duplicate.statusCode()).isEqualTo(409);
-        assertThat(json.readTree(duplicate.body()).path("errorCode").asText()).isEqualTo("USER_ALREADY_EXISTS");
+        assertThat(json.readTree(duplicate.body()).path("errorCode").asString()).isEqualTo("USER_ALREADY_EXISTS");
         HttpResponse<String> invalid = send("POST", "/api/v1/auth/register", Map.of(), null);
         assertThat(invalid.statusCode()).isEqualTo(400);
-        assertThat(json.readTree(invalid.body()).path("errorCode").asText()).isEqualTo("VALIDATION_FAILED");
+        assertThat(json.readTree(invalid.body()).path("errorCode").asString()).isEqualTo("VALIDATION_FAILED");
 
         for (String proof : List.of("invalid-proof", "stale-proof")) {
             assertThat(send("GET", "/api/v1/me", null, token, "X-CSRF-TOKEN", proof).statusCode()).isEqualTo(200);
@@ -259,9 +259,9 @@ class StatelessApiClientHttpIT {
         HttpResponse<String> response = send("POST", "/api/v1/auth/login", Map.of("email", email, "password", password), null);
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = json.readTree(response.body());
-        assertThat(body.path("type").asText()).isEqualTo("Bearer");
+        assertThat(body.path("type").asString()).isEqualTo("Bearer");
         assertThat(body.has("refreshToken")).isFalse();
-        String token = body.path("token").asText();
+        String token = body.path("token").asString();
         assertThat(tokens.validate(token)).isTrue();
         issuedTokens.add(token);
         return token;
