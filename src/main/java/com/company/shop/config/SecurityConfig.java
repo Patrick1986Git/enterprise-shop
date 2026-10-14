@@ -36,6 +36,7 @@ public class SecurityConfig {
     private final CorsProperties corsProperties;
 
     private static final String WEBHOOKS_URL = "/api/v1/webhooks/**";
+    private static final String STATELESS_API_URL = "/api/v1/**";
     private static final String ADMIN_URL = "/api/v1/admin/**";
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter,
@@ -51,7 +52,7 @@ public class SecurityConfig {
         http
             .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers(WEBHOOKS_URL)
+                .ignoringRequestMatchers(STATELESS_API_URL)
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)

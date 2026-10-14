@@ -41,9 +41,17 @@ These documentation matchers support local development and documentation generat
 - Other non-public routes require authentication.
 - Current-user controllers use `@PreAuthorize("isAuthenticated()")`.
 
-## Webhooks and CSRF
+## Stateless API and CSRF
 
-- CSRF is ignored only for `/api/v1/webhooks/**`.
+- The owner-approved CSRF exemption is limited to `/api/v1/**`, including public registration/login and authenticated customer/ADMIN mutations. CSRF remains enabled outside that scope. This supersedes the former webhook-only exception within the versioned API; it does not authorize global CSRF disabling.
+- Protected API requests authenticate only through an explicitly supplied `Authorization: Bearer` header. Cookies, `JSESSIONID`, and security contexts saved in HTTP sessions cannot authenticate them. Form login and HTTP Basic remain disabled. Registration assigns only `ROLE_USER`; the offline administrator lifecycle is unchanged.
+- Browsers automatically attach some credentials, such as cookies, but do not automatically supply this application's bearer header. Login returns a JWT in JSON and establishes no cookie or authenticated session. Clients must deliberately consume that response and supply the token on subsequent requests. The exemption therefore also covers login without introducing an ambient login identity or account-switching mechanism.
+- API clients and local Swagger UI do not acquire or submit CSRF tokens. The deferred CSRF repository is not materialized for exempt requests, so normal API traffic creates no CSRF session or cookie. Missing, invalid, or previously obtained CSRF proof has no authority over API authentication or authorization.
+- CORS is an independent browser origin restriction, not a substitute for CSRF protection, authentication, or authorization. The explicit origin allowlist and credential setting remain unchanged; allowing credentialed CORS does not make cookies API authentication credentials.
+- Introducing cookie/session/Basic authentication or any other automatically supplied authentication mechanism requires a new CSRF security review **before activation**, including registration/login and any affected API paths. Future surfaces outside the exemption retain CSRF protection; they must not be moved into it without that review.
+
+## Webhook authenticity
+
 - `/api/v1/webhooks/**` is public at the HTTP authorization layer so Stripe can call it.
 - Stripe webhook authenticity is enforced in `PaymentServiceImpl` through Stripe signature construction/verification using the configured webhook secret.
 

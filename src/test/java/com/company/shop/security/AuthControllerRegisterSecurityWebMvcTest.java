@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,10 +51,11 @@ class AuthControllerRegisterSecurityWebMvcTest {
     }
 
     @Test
-    void registerSecurityContract_shouldReturnForbiddenAndNotCallServiceWithoutCsrf() throws Exception {
+    void registerSecurityContract_shouldRejectDisallowedOriginBeforeService() throws Exception {
         RegisterRequestDTO request = new RegisterRequestDTO("user@example.com", "secret123", "secret123", "John", "Doe");
 
         mockMvc.perform(post("/api/v1/auth/register")
+                        .header("Origin", "https://untrusted.example")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
@@ -64,11 +64,10 @@ class AuthControllerRegisterSecurityWebMvcTest {
     }
 
     @Test
-    void registerSecurityContract_shouldAllowAnonymousRequestWithCsrfAndCallService() throws Exception {
+    void registerSecurityContract_shouldAllowAnonymousRequestWithoutCsrfAndCallService() throws Exception {
         RegisterRequestDTO request = new RegisterRequestDTO("user@example.com", "secret123", "secret123", "John", "Doe");
 
         mockMvc.perform(post("/api/v1/auth/register")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
