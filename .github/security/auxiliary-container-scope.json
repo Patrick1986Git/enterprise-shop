@@ -334,7 +334,8 @@
     "src/test/java/com/company/shop/persistence/migration/ProductionDatabaseIdentityIT.java": "6a4a1368d0402a3e4e27657a7aea8eff4a827fee925ac01fceef744e2865bdc8",
     "src/test/java/com/company/shop/persistence/support/PostgresContainerSupport.java": "e4207244b664c2ccb6c03f8fe0fb306ba578175a0fb2c320258787aefbefd5ea",
     "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicy.java": "f4322920c1bb7da4021e9d46416edbb32c34736a7b294b73f9f45d132c35e03c",
-    "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicyTest.java": "355eb3dcef586d6f26f196219074ab0cfd150adda12e12ea40dd00cd8cee7bd9"
+    "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicyTest.java": "355eb3dcef586d6f26f196219074ab0cfd150adda12e12ea40dd00cd8cee7bd9",
+    "src/test/java/com/company/shop/security/StatelessApiClientHttpIT.java": "6a126f049d38626473963419f6b068af8a8b0bfe926b6576856cb14c37df2016"
   },
   "tools": {
     "upx": {
