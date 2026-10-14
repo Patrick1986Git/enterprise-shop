@@ -292,11 +292,11 @@ class AdminUserControllerWebMvcTest {
         }
 
         @Test
-        void updateUser_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void updateUser_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UserUpdateDTO request = new UserUpdateDTO("John", "Doe");
 
             mockMvc.perform(put(ADMIN_USER_BY_ID_URL, UUID.randomUUID())
-                            .with(user("admin").roles("ADMIN"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -544,11 +544,11 @@ class AdminUserControllerWebMvcTest {
         }
 
         @Test
-        void deleteUser_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void deleteUser_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID id = UUID.randomUUID();
 
             mockMvc.perform(delete(ADMIN_USER_BY_ID_URL, id)
-                            .with(user("admin").roles("ADMIN")))
+                            .header("Authorization", "Bearer forged-token"))
                     .andExpect(status().isForbidden());
 
             verifyNoInteractions(userService);

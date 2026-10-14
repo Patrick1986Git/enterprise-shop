@@ -179,7 +179,11 @@ class StatelessApiClientHttpIT {
         assertSessionCannotAuthenticate(session, cookie, email);
 
         assertSessionCannotAuthenticate(session, cookie, administratorEmail);
-        assertThat(send("GET", "/api/v1/admin/users", null, login(administratorEmail, PASSWORD), "Cookie", cookie).statusCode()).isEqualTo(200);
+        HttpResponse<String> bearerResponse = send("GET", "/api/v1/admin/users", null, login(administratorEmail, PASSWORD), "Cookie", cookie);
+        assertThat(bearerResponse.statusCode()).isEqualTo(200);
+        String returnedCookie = bearerResponse.headers().firstValue("Set-Cookie").orElse(cookie).split(";", 2)[0];
+        assertThat(send("GET", "/api/v1/admin/users", null, null, "Cookie", returnedCookie).statusCode()).isEqualTo(403);
+        assertThat(send("DELETE", "/api/v1/me/cart", null, null, "Cookie", returnedCookie).statusCode()).isEqualTo(403);
     }
 
     @Test
@@ -274,9 +278,14 @@ class StatelessApiClientHttpIT {
         if (body != null) request.header("Content-Type", "application/json");
         request.method(method, body == null ? HttpRequest.BodyPublishers.noBody()
                 : HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)));
-        HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+        HttpRequest builtRequest = request.build();
+        int sessionsBefore = SESSIONS.size();
+        HttpResponse<String> response = client.send(builtRequest, HttpResponse.BodyHandlers.ofString());
         if (path.startsWith("/api/v1/")) {
-            assertThat(response.headers().allValues("Set-Cookie").isEmpty()).isTrue();
+            assertThat(SESSIONS.size()).isEqualTo(sessionsBefore);
+            if (builtRequest.headers().firstValue("Cookie").isEmpty()) {
+                assertThat(response.headers().allValues("Set-Cookie").isEmpty()).isTrue();
+            }
         }
         return response;
     }

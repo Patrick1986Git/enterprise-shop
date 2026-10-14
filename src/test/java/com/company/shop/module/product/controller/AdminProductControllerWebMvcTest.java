@@ -193,11 +193,11 @@ class AdminProductControllerWebMvcTest {
         }
 
         @Test
-        void createProduct_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void createProduct_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             ProductCreateDTO request = sampleCreateDto();
 
             mockMvc.perform(post(ADMIN_PRODUCTS_URL)
-                            .with(user("admin").roles("ADMIN"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -501,12 +501,12 @@ class AdminProductControllerWebMvcTest {
         }
 
         @Test
-        void updateProduct_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void updateProduct_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID id = UUID.randomUUID();
             ProductUpdateDTO request = sampleUpdateDto();
 
             mockMvc.perform(put(ADMIN_PRODUCT_BY_ID_URL, id)
-                            .with(user("admin").roles("ADMIN"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -758,11 +758,11 @@ class AdminProductControllerWebMvcTest {
         }
 
         @Test
-        void deleteProduct_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void deleteProduct_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID id = UUID.randomUUID();
 
             mockMvc.perform(delete(ADMIN_PRODUCT_BY_ID_URL, id)
-                            .with(user("admin").roles("ADMIN")))
+                            .header("Authorization", "Bearer forged-token"))
                     .andExpect(status().isForbidden());
 
             verifyNoInteractions(productService);
