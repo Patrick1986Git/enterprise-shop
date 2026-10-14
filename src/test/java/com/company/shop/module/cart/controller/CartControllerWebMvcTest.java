@@ -125,11 +125,11 @@ class CartControllerWebMvcTest {
         }
 
         @Test
-        void addCartItem_shouldReturnForbiddenForAuthenticatedWhenCsrfMissing() throws Exception {
+        void addCartItem_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             AddToCartRequestDTO request = new AddToCartRequestDTO(UUID.randomUUID(), 2);
 
             mockMvc.perform(post("/api/v1/me/cart/items")
-                            .with(user("user").roles("USER"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -305,11 +305,11 @@ class CartControllerWebMvcTest {
         }
 
         @Test
-        void updateCartItemQuantity_shouldReturnForbiddenForAuthenticatedWhenCsrfMissing() throws Exception {
+        void updateCartItemQuantity_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID productId = UUID.randomUUID();
 
             mockMvc.perform(patch("/api/v1/me/cart/items/{productId}", productId)
-                            .with(user("user").roles("USER"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"quantity\":2}"))
                     .andExpect(status().isForbidden());
@@ -466,9 +466,9 @@ class CartControllerWebMvcTest {
         }
 
         @Test
-        void removeCartItem_shouldReturnForbiddenForAuthenticatedWhenCsrfMissing() throws Exception {
+        void removeCartItem_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             mockMvc.perform(delete("/api/v1/me/cart/items/{productId}", UUID.randomUUID())
-                            .with(user("user").roles("USER")))
+                            .header("Authorization", "Bearer forged-token"))
                     .andExpect(status().isForbidden());
 
             verify(cartService, never()).removeItem(any(UUID.class));
@@ -522,9 +522,9 @@ class CartControllerWebMvcTest {
         }
 
         @Test
-        void clearCart_shouldReturnForbiddenForAuthenticatedWhenCsrfMissing() throws Exception {
+        void clearCart_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             mockMvc.perform(delete("/api/v1/me/cart")
-                            .with(user("user").roles("USER")))
+                            .header("Authorization", "Bearer forged-token"))
                     .andExpect(status().isForbidden());
 
             verify(cartService, never()).clearCart();

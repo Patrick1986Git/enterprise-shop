@@ -100,14 +100,14 @@ class ProductReviewControllerWebMvcTest {
         }
 
         @Test
-        void createReview_shouldReturnForbiddenForAuthenticatedWhenCsrfMissing() throws Exception {
+        void createReview_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             ProductReviewRequestDTO request = new ProductReviewRequestDTO(
                     UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
                     5,
                     "Świetny produkt");
 
             mockMvc.perform(post(REVIEWS_URL)
-                            .with(user("user").roles("USER"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -393,11 +393,11 @@ class ProductReviewControllerWebMvcTest {
         }
 
         @Test
-        void deleteReview_shouldReturnForbiddenForAuthenticatedWhenCsrfMissing() throws Exception {
+        void deleteReview_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID reviewId = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
             mockMvc.perform(delete(REVIEW_BY_ID_URL, reviewId)
-                            .with(user("user").roles("USER")))
+                            .header("Authorization", "Bearer forged-token"))
                     .andExpect(status().isForbidden());
 
             verifyNoInteractions(productReviewService);

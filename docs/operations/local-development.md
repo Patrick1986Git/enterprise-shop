@@ -58,6 +58,18 @@ docker compose --profile full up -d --build --wait
 
 The app service waits for PostgreSQL to become healthy and for `database-role-bootstrap` to complete successfully before starting.
 
+## Local Swagger UI authentication
+
+After startup, open `http://localhost:8080/swagger-ui/index.html` and select the generated authentication operations.
+Register an ordinary account, then log in. These operations require no CSRF token or preliminary cookie/session request.
+Use Swagger UI's **Authorize** control with the returned JWT for protected operations; the UI supplies the bearer header.
+Other API clients must explicitly supply that same header. Cookies alone do not sign a client in.
+
+Registration never creates an administrator. Use the separately authorized [local administrator runbook](./local-administrator.md)
+for that lifecycle. Do not copy passwords, JWTs, or request bodies into logs or shared artifacts. Runtime Swagger UI and
+OpenAPI remain disabled in production. The [security architecture](../architecture/security-architecture.md) records the
+API-scoped CSRF decision and the review required before introducing automatically supplied authentication credentials.
+
 ## Maven and Testcontainers verification
 
 Use a Java 21 JDK and the checked-in Maven Wrapper. Unit tests do not need the Ryuk build or Go analysis tooling:

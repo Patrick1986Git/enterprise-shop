@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -100,7 +99,9 @@ class AuthLoginSecurityContractWebMvcTest {
                 .andExpect(header().string("X-Request-Id", "login-success"))
                 .andExpect(jsonPath("$.token").value("jwt-value"))
                 .andExpect(jsonPath("$.type").value("Bearer"))
-                .andExpect(jsonPath("$.refreshToken").doesNotExist());
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(header().doesNotExist("Set-Cookie"))
+                .andExpect(result -> assertThat(result.getRequest().getSession(false)).isNull());
     }
 
     @Test
@@ -210,7 +211,6 @@ class AuthLoginSecurityContractWebMvcTest {
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder login(
             String email, String password, String requestId) throws Exception {
         return post("/api/v1/auth/login")
-                .with(csrf())
                 .header("X-Request-Id", requestId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(new Login(email, password)));

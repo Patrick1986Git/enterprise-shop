@@ -1,6 +1,7 @@
 package com.company.shop.config;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -159,21 +166,17 @@ class SecurityConfigWebMvcTest {
     }
 
     @Test
-    void publicPostAuth_shouldRequireCsrfToken() throws Exception {
+    void publicPostAuth_shouldAllowAnonymousWithoutCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType("application/json")
                         .content("{\"email\":\"user@example.com\",\"password\":\"secret\"}"))
-                .andExpect(status().isForbidden());
-
-        mockMvc.perform(post("/api/v1/auth/login")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("{\"email\":\"user@example.com\",\"password\":\"secret\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Set-Cookie"))
+                .andExpect(result -> assertThat(result.getRequest().getSession(false)).isNull());
     }
 
     @Test
-    void publicPostRegister_shouldRequireCsrfToken() throws Exception {
+    void publicPostRegister_shouldAllowAnonymousWithoutCsrf() throws Exception {
         String registerBody = """
                 {
                   "email": "user@example.com",
@@ -187,13 +190,9 @@ class SecurityConfigWebMvcTest {
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType("application/json")
                         .content(registerBody))
-                .andExpect(status().isForbidden());
-
-        mockMvc.perform(post("/api/v1/auth/register")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content(registerBody))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(header().doesNotExist("Set-Cookie"))
+                .andExpect(result -> assertThat(result.getRequest().getSession(false)).isNull());
     }
 
     @Test
@@ -306,14 +305,12 @@ class SecurityConfigWebMvcTest {
         String body = "{\"productId\":\"" + UUID.randomUUID() + "\",\"rating\":5,\"comment\":\"great\"}";
 
         mockMvc.perform(post("/api/v1/reviews")
-                        .with(csrf())
                         .contentType("application/json")
                         .content(body))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/v1/reviews")
                         .with(user("user").roles("USER"))
-                        .with(csrf())
                         .contentType("application/json")
                         .content(body))
                 .andExpect(status().isCreated());
@@ -323,30 +320,26 @@ class SecurityConfigWebMvcTest {
     void methodSecuredDeleteReview_shouldRequireAuthenticatedUser() throws Exception {
         UUID reviewId = UUID.randomUUID();
 
-        mockMvc.perform(delete("/api/v1/reviews/{reviewId}", reviewId)
-                        .with(csrf()))
+        mockMvc.perform(delete("/api/v1/reviews/{reviewId}", reviewId))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(delete("/api/v1/reviews/{reviewId}", reviewId)
-                        .with(user("user").roles("USER"))
-                        .with(csrf()))
+                        .with(user("user").roles("USER")))
                 .andExpect(status().isNoContent());
     }
 
     @Test
-    void checkout_shouldRequireCsrfToken() throws Exception {
+    void checkout_shouldDenyAnonymousWithoutCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/me/orders/checkout")
-                        .with(user("user").roles("USER"))
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void checkout_shouldNotBeBlockedBySecurity_whenAuthenticatedUserProvidesCsrf() throws Exception {
+    void checkout_shouldNotBeBlockedBySecurity_whenAuthenticatedUserHasNoCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/me/orders/checkout")
                         .with(user("user").roles("USER"))
-                        .with(csrf())
                         .header("Idempotency-Key", "checkout-key")
                         .contentType("application/json")
                         .content("{}"))
@@ -354,116 +347,114 @@ class SecurityConfigWebMvcTest {
     }
 
     @Test
-    void cartPatch_shouldRequireCsrfToken() throws Exception {
+    void cartPatch_shouldDenyAnonymousWithoutCsrf() throws Exception {
         UUID productId = UUID.randomUUID();
 
         mockMvc.perform(patch("/api/v1/me/cart/items/{productId}", productId)
-                        .with(user("user").roles("USER"))
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void cartPatch_shouldNotBeBlockedBySecurity_whenAuthenticatedUserProvidesCsrf() throws Exception {
+    void cartPatch_shouldNotBeBlockedBySecurity_whenAuthenticatedUserHasNoCsrf() throws Exception {
         UUID productId = UUID.randomUUID();
 
         mockMvc.perform(patch("/api/v1/me/cart/items/{productId}", productId)
                         .with(user("user").roles("USER"))
-                        .with(csrf())
                         .contentType("application/json")
                         .content("{}"))
-                // 400 confirms request passed security layer (auth + csrf) and failed later on request validation/handling.
+                // 400 confirms request passed security layer (authentication) and failed later on request validation/handling.
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void cartDelete_shouldRequireCsrfToken() throws Exception {
-        mockMvc.perform(delete("/api/v1/me/cart")
-                        .with(user("user").roles("USER")))
+    void cartDelete_shouldDenyAnonymousWithoutCsrf() throws Exception {
+        mockMvc.perform(delete("/api/v1/me/cart"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void cartDelete_shouldNotBeBlockedBySecurity_whenAuthenticatedUserProvidesCsrf() throws Exception {
+    void cartDelete_shouldNotBeBlockedBySecurity_whenAuthenticatedUserHasNoCsrf() throws Exception {
         mockMvc.perform(delete("/api/v1/me/cart")
-                        .with(user("user").roles("USER"))
-                        .with(csrf()))
+                        .with(user("user").roles("USER")))
                 .andExpect(status().isNoContent());
     }
 
     @Test
-    void adminProductCreate_shouldRequireCsrfToken() throws Exception {
+    void adminProductCreate_shouldDenyAnonymousWithoutCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/admin/products")
-                        .with(user("admin").roles("ADMIN"))
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void adminProductCreate_shouldNotBeBlockedBySecurity_whenAdminProvidesCsrf() throws Exception {
+    void adminProductCreate_shouldNotBeBlockedBySecurity_whenAdminHasNoCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/admin/products")
                         .with(user("admin").roles("ADMIN"))
-                        .with(csrf())
                         .contentType("application/json")
                         .content("{}"))
-                // 400 confirms request passed security layer (admin + csrf) and failed later on request validation/handling.
+                // 400 confirms request passed security layer (admin authorization) and failed later on request validation/handling.
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void adminProductCreate_shouldDenyUserRole_evenWithCsrf() throws Exception {
+    void adminProductCreate_shouldDenyUserRole_withoutCsrf() throws Exception {
         mockMvc.perform(post("/api/v1/admin/products")
                         .with(user("user").roles("USER"))
-                        .with(csrf())
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void adminProductCreate_shouldDenyAnonymous_evenWithCsrf() throws Exception {
-        mockMvc.perform(post("/api/v1/admin/products")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("{}"))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void adminCategoryUpdate_shouldEnforceRoleAndCsrf() throws Exception {
+    void adminCategoryUpdate_shouldEnforceRoleWithoutCsrf() throws Exception {
         UUID categoryId = UUID.randomUUID();
 
         mockMvc.perform(put("/api/v1/admin/categories/{id}", categoryId)
-                        .with(csrf())
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/v1/admin/categories/{id}", categoryId)
                         .with(user("user").roles("USER"))
-                        .with(csrf())
                         .contentType("application/json")
                         .content("{}"))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/v1/admin/categories/{id}", categoryId)
                         .with(user("admin").roles("ADMIN"))
-                        .with(csrf())
                         .contentType("application/json")
                         .content("{}"))
-                // 400 confirms request passed security layer (admin + csrf) and failed later on request validation/handling.
+                // 400 confirms request passed security layer (admin authorization) and failed later on request validation/handling.
                 .andExpect(status().isBadRequest());
     }
 
-    @Test
-    void checkout_shouldDenyAnonymous_evenWithCsrf() throws Exception {
-        mockMvc.perform(post("/api/v1/me/orders/checkout")
-                        .with(csrf())
-                        .contentType("application/json")
-                        .content("{}"))
+    @ParameterizedTest
+    @ValueSource(strings = {"USER", "ADMIN"})
+    void storedSessionSecurityContext_shouldNotAuthenticateApiRequests(String role) throws Exception {
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new UsernamePasswordAuthenticationToken("session-user", null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + role))));
+        var session = new MockHttpSession();
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+
+        for (String path : List.of("/api/v1/me", "/api/v1/admin/users")) {
+            mockMvc.perform(get(path).session(session))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(delete("/api/v1/me/cart").session(session))
                 .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/css/csrf-probe", "/api/v10/auth/register", "/api/v1-other/auth/register"})
+    void outsideApiScope_shouldStillRequireCsrf(String path) throws Exception {
+        mockMvc.perform(post(path).with(user("user").roles("USER")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path).with(user("user").roles("USER")).with(csrf()))
+                .andExpect(status().isNotFound());
     }
 
     private static Stream<String> publicGetEndpoints() {

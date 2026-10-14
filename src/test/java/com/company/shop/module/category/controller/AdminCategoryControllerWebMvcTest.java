@@ -187,11 +187,11 @@ class AdminCategoryControllerWebMvcTest {
         }
 
         @Test
-        void createCategory_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void createCategory_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             CategoryCreateDTO request = new CategoryCreateDTO("Laptopy", "Wszystkie laptopy", null);
 
             mockMvc.perform(post(ADMIN_CATEGORIES_URL)
-                            .with(user("admin").roles("ADMIN"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -420,12 +420,12 @@ class AdminCategoryControllerWebMvcTest {
         }
 
         @Test
-        void updateCategory_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void updateCategory_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID id = UUID.randomUUID();
             CategoryCreateDTO request = new CategoryCreateDTO("Laptopy", "Opis", null);
 
             mockMvc.perform(put(ADMIN_CATEGORY_BY_ID_URL, id)
-                            .with(user("admin").roles("ADMIN"))
+                            .header("Authorization", "Bearer forged-token")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden());
@@ -657,11 +657,11 @@ class AdminCategoryControllerWebMvcTest {
         }
 
         @Test
-        void deleteCategory_shouldReturnForbiddenForAdminWhenCsrfMissing() throws Exception {
+        void deleteCategory_shouldReturnForbiddenForForgedBearerWithoutCsrf() throws Exception {
             UUID id = UUID.randomUUID();
 
             mockMvc.perform(delete(ADMIN_CATEGORY_BY_ID_URL, id)
-                            .with(user("admin").roles("ADMIN")))
+                            .header("Authorization", "Bearer forged-token"))
                     .andExpect(status().isForbidden());
 
             verify(categoryService, never()).delete(eq(id));
