@@ -60,6 +60,7 @@ public class CartController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
             @ApiResponse(responseCode = "200", description = "Product added to cart."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
@@ -80,6 +81,7 @@ public class CartController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
             @ApiResponse(responseCode = "200", description = "Cart item quantity updated."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")

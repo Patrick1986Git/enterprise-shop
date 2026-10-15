@@ -61,6 +61,7 @@ public class CurrentUserOrderController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
             @ApiResponse(responseCode = "201", description = "Order created successfully."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")

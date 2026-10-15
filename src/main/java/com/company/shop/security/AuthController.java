@@ -34,6 +34,7 @@ public class AuthController {
 	        summary = "Authenticate a user and return a JWT access token"
 	)
 	@ApiResponses(value = {
+		@ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
 			@ApiResponse(responseCode = "200", description = "Authentication successful."),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
 	})
@@ -52,6 +53,7 @@ public class AuthController {
 	        summary = "Register a new user account"
 	)
 	@ApiResponses(value = {
+		@ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
 			@ApiResponse(responseCode = "201", description = "User account registered successfully."),
 			@ApiResponse(responseCode = "409", ref = "#/components/responses/ConflictError")
 	})

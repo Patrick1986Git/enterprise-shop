@@ -64,6 +64,7 @@ public class AdminCategoryController {
 	        security = @SecurityRequirement(name = "bearerAuth")
 	)
 	@ApiResponses(value = {
+		@ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
 			@ApiResponse(responseCode = "201", description = "Category created successfully."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),
@@ -85,6 +86,7 @@ public class AdminCategoryController {
 	        security = @SecurityRequirement(name = "bearerAuth")
 	)
 	@ApiResponses(value = {
+		@ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
 			@ApiResponse(responseCode = "200", description = "Category updated successfully."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError"),

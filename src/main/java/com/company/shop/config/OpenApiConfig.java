@@ -87,6 +87,7 @@ public class OpenApiConfig {
                         .addResponses("ForbiddenError", errorResponse("Authenticated user does not have permission"))
                         .addResponses("NotFoundError", errorResponse("Requested resource or endpoint was not found"))
                         .addResponses("ConflictError", errorResponse("Request conflicts with the current resource state"))
+                        .addResponses("UnsupportedMediaTypeError", errorResponse("Unsupported request media type"))
                         .addResponses("InternalServerError", errorResponse("Unexpected server error")));
     }
 

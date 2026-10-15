@@ -20,6 +20,7 @@ import com.company.shop.module.order.service.StripePaymentConflictDispositionCom
 import com.company.shop.module.order.service.StripePaymentConflictDispositionQueryService;
 import com.company.shop.module.order.service.StripePaymentConflictQueryService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -57,6 +58,7 @@ public class AdminStripePaymentConflictController {
     @Operation(operationId = "appendStripePaymentConflictDisposition",
             summary = "Append a non-financial investigation disposition",
             security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError")
     public StripePaymentConflictDispositionResponseDTO appendDisposition(
             @PathVariable UUID conflictId, @Valid @RequestBody StripePaymentConflictDispositionRequestDTO request) {
         return dispositionCommandService.append(conflictId, request.actionType());
