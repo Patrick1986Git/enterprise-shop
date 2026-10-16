@@ -69,14 +69,34 @@ def database(path):
 
 def collect(build, directory, actual_images=()):
     require(not directory.exists(), 'Compatibility directory already exists')
-    directory.mkdir(parents=True)
+    directory.mkdir(parents=True, mode=0o700)
+    try:
+        return collect_isolated(build, directory, actual_images)
+    finally:
+        for name in ('inputs', 'cache', 'temporary'):
+            path = directory / name
+            if path.exists():
+                shutil.rmtree(path)
+
+
+def download_database(command, directory, name):
+    with (directory / (name + '.log')).open('w') as log:
+        try:
+            subprocess.run(command, check=True, stdout=log, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as error:
+            raise ValueError(f'{name} failed (exit {error.returncode}); inspect {name}.log. '
+                             'If it reports no space left on device, free runner disk space before retrying; '
+                             f'available bytes: {shutil.disk_usage(directory).free}') from None
+
+
+def collect_isolated(build, directory, actual_images):
     receipt = read(build / 'build-receipt.json')
     ref = receipt['image_reference']
     require(receipt['binary_sha256'] == receipt['repeat_sha256'] and receipt['go_version'] == '1.27.2'
             and receipt['repository_head'] == subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
             'Wrong build evidence before compatibility execution')
     inputs = directory / 'inputs'
-    inputs.mkdir()
+    inputs.mkdir(mode=0o700)
     for name in ('vulnerable', 'patched', 'malformed'):
         shutil.copyfile(ROOT / f'scripts/tests/fixtures/build-tool-sbom/{name}.cdx.json', inputs / f'{name}.cdx.json')
     shutil.copyfile(build / 'image.tar', inputs / 'candidate.tar')
@@ -103,12 +123,19 @@ def collect(build, directory, actual_images=()):
         subprocess.run(['docker', 'save', '-o', str(target), image], check=True)
         actual[target.name] = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image]))[0]['Id']
     cache = directory / 'cache'
-    cache.mkdir()
+    cache.mkdir(mode=0o700)
     temporary = directory / 'temporary'
-    temporary.mkdir()
-    # The authoritative Java index blob exceeds 900 MiB. Keep its temporary
-    # download on private disk without exposing the checkout or Docker socket.
-    scratch = ['-v', f'{temporary.resolve()}:/tmp'] if actual_images else ['--tmpfs', '/tmp:rw,size=256m,mode=1777']
+    temporary.mkdir(mode=0o700)
+    # OCI staging and go-getter retain two compressed copies before extraction.
+    # Use the existing private runner disk for both DBs, including the >900 MiB Java index.
+    minimum_free = (8 if actual_images else 2) * 1024 ** 3
+    free = shutil.disk_usage(temporary).free
+    write(directory / 'scratch-storage.json', {'storage': 'private-runner-disk',
+        'minimum_free_bytes': minimum_free, 'available_bytes': free,
+        'uid': os.getuid(), 'gid': os.getgid(), 'mode': oct(temporary.stat().st_mode & 0o777)})
+    require(free >= minimum_free, f'Insufficient Trivy compatibility disk space: need {minimum_free} available bytes, '
+            f'found {free}; free runner disk space before retrying')
+    scratch = ['-v', f'{temporary.resolve()}:/tmp']
     base = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '4g', '--cpus', '2',
             '--user', f'{os.getuid()}:{os.getgid()}', *scratch,
@@ -120,12 +147,10 @@ def collect(build, directory, actual_images=()):
     args = ['image', '--download-db-only']
     if os.environ.get('TRIVY_DB_REPOSITORY'):
         args += ['--db-repository', os.environ['TRIVY_DB_REPOSITORY']]
-    with (directory / 'database-update.log').open('w') as log:
-        subprocess.run(update + [REFERENCE, '--cache-dir', '/cache'] + args, check=True, stdout=log, stderr=subprocess.STDOUT)
+    download_database(update + [REFERENCE, '--cache-dir', '/cache'] + args, directory, 'database-update')
     if actual_images:
-        with (directory / 'java-database-update.log').open('w') as log:
-            subprocess.run(update + [REFERENCE, '--cache-dir', '/cache', 'image', '--download-java-db-only', '--java-db-repository',
-                                    'ghcr.io/aquasecurity/trivy-java-db:1'], check=True, stdout=log, stderr=subprocess.STDOUT)
+        download_database(update + [REFERENCE, '--cache-dir', '/cache', 'image', '--download-java-db-only', '--java-db-repository',
+                                   'ghcr.io/aquasecurity/trivy-java-db:1'], directory, 'java-database-update')
     metadata = database(cache / 'db/metadata.json')
     write(directory / 'database-metadata.json', metadata)
     initial_db = sha((cache / 'db/trivy.db').read_bytes())
@@ -195,9 +220,6 @@ def collect(build, directory, actual_images=()):
         'evidence_hashes': {p.relative_to(directory).as_posix(): sha(p.read_bytes()) for p in directory.rglob('*')
             if p.is_file() and not {'inputs', 'cache', 'temporary'}.intersection(p.relative_to(directory).parts)}}
     write(directory / 'result.json', result)
-    shutil.rmtree(inputs)
-    shutil.rmtree(cache)
-    shutil.rmtree(temporary)
     print('Verified image/rootfs/SBOM/convert/package/severity/database compatibility with pinned positive and negative fixtures.')
     return result
 

@@ -64,6 +64,7 @@ public class AdminProductController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
             @ApiResponse(responseCode = "201", description = "Product created successfully."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError")
@@ -83,6 +84,7 @@ public class AdminProductController {
             security = @SecurityRequirement(name = "bearerAuth")
     )
     @ApiResponses(value = {
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
             @ApiResponse(responseCode = "200", description = "Product updated successfully."),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/ForbiddenError"),

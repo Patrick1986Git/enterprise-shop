@@ -65,6 +65,7 @@ class StatelessApiClientHttpIT {
     private static final String OPERATOR = "client_operator";
     private static final String DB_PASSWORD = "synthetic_database_password";
     private static final String PASSWORD = "SyntheticPassword123!";
+    private static final String UNTRUSTED_MARKER = "synthetic-untrusted-media-marker";
     private static final String NEW_PASSWORD = "ReplacementPassword456!";
     private static final Map<String, HttpSession> SESSIONS = new ConcurrentHashMap<>();
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
@@ -121,7 +122,7 @@ class StatelessApiClientHttpIT {
     @AfterEach
     void secretsShouldStayOutOfApplicationLogs(CapturedOutput output) {
         String logs = output.getAll();
-        for (String secret : List.of(PASSWORD, NEW_PASSWORD, DB_PASSWORD)) {
+        for (String secret : List.of(PASSWORD, NEW_PASSWORD, DB_PASSWORD, UNTRUSTED_MARKER)) {
             assertThat(logs.contains(secret)).isFalse();
         }
         for (String token : issuedTokens) {
@@ -224,13 +225,15 @@ class StatelessApiClientHttpIT {
         assertThat(send("POST", "/api/v1/auth/register", registration(email), null, "Origin", "https://untrusted.example").statusCode()).isEqualTo(403);
         assertThat(send("OPTIONS", "/api/v1/auth/register", null, null, "Origin", "null",
                 "Access-Control-Request-Method", "POST").statusCode()).isEqualTo(403);
-        for (String contentType : List.of("text/plain", "application/x-www-form-urlencoded", "multipart/form-data")) {
+        for (String contentType : List.of("text/plain", "application/x-www-form-urlencoded")) {
             HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/auth/register"))
                     .header("Content-Type", contentType).header("Origin", "http://localhost:3000")
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(registration(email)))).build();
-            // Preserve the existing generic exception contract for unsupported media types.
-            assertThat(client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(500);
+            assertApiError(client.send(request, HttpResponse.BodyHandlers.ofString()), 415, "UNSUPPORTED_MEDIA_TYPE");
         }
+        // Missing multipart framing fails in the servlet parser, before MVC body conversion.
+        assertApiError(sendRaw("POST", "/api/v1/auth/register", json.writeValueAsString(registration(email)),
+                "multipart/form-data", null), 500, null);
         assertThat(runtime.queryForObject("SELECT count(*) FROM users WHERE email=?", Long.class, email)).isZero();
         assertThat(send("POST", "/api/v1/auth/register", registration(email), null, "Origin", "http://localhost:3000").statusCode()).isEqualTo(201);
         assertThat(send("GET", "/api/v1/me", null, login(email, PASSWORD), "Origin", "https://untrusted.example").statusCode()).isEqualTo(403);
@@ -238,6 +241,94 @@ class StatelessApiClientHttpIT {
             assertThat(send("POST", path, Map.of(), login(email, PASSWORD)).statusCode()).isEqualTo(403);
         }
         assertThat(send("POST", "/api/v1/webhooks/stripe", Map.of(), null, "Stripe-Signature", "invalid").statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void unsupportedMediaTypes_shouldRejectTypedBodiesWithoutChangingProtectedState() throws Exception {
+        String email = email();
+        String rejectedEmail = email();
+        register(email);
+        String userToken = login(email, PASSWORD);
+        String adminToken = login(administratorEmail, PASSWORD);
+        UUID userId = runtime.queryForObject("SELECT id FROM users WHERE email=?", UUID.class, email);
+        String categoryBody = json.writeValueAsString(Map.of("name", "Media audit " + UUID.randomUUID()));
+        HttpResponse<String> category = send("POST", "/api/v1/admin/categories", json.readTree(categoryBody), adminToken);
+        assertThat(category.statusCode()).isEqualTo(201);
+        String categoryId = json.readTree(category.body()).path("id").asString();
+        String id = UUID.randomUUID().toString();
+        String registrationBody = json.writeValueAsString(registration(rejectedEmail));
+        String loginBody = json.writeValueAsString(Map.of("email", email, "password", PASSWORD));
+        String passwordBody = json.writeValueAsString(Map.of("currentPassword", PASSWORD,
+                "newPassword", NEW_PASSWORD, "newPasswordRepeat", NEW_PASSWORD));
+        List<String[]> requests = List.of(
+                new String[] {"POST", "/api/v1/auth/register", null, registrationBody},
+                new String[] {"POST", "/api/v1/auth/login", null, loginBody},
+                new String[] {"POST", "/api/v1/me/cart/items", userToken, "{\"productId\":\"" + id + "\",\"quantity\":1}"},
+                new String[] {"PATCH", "/api/v1/me/cart/items/" + id, userToken, "{\"quantity\":2}"},
+                new String[] {"POST", "/api/v1/me/orders/checkout", userToken, "{}"},
+                new String[] {"PUT", "/api/v1/me/password", userToken, passwordBody},
+                new String[] {"POST", "/api/v1/reviews", userToken, "{\"productId\":\"" + id + "\",\"rating\":5,\"comment\":\"Synthetic\"}"},
+                new String[] {"POST", "/api/v1/admin/categories", adminToken, categoryBody},
+                new String[] {"PUT", "/api/v1/admin/categories/" + categoryId, adminToken, categoryBody},
+                new String[] {"POST", "/api/v1/admin/products", adminToken, "{}"},
+                new String[] {"PUT", "/api/v1/admin/products/" + id, adminToken, "{}"},
+                new String[] {"PUT", "/api/v1/admin/users/" + userId, adminToken, "{\"firstName\":\"Changed\",\"lastName\":\"Rejected\"}"},
+                new String[] {"POST", "/api/v1/admin/orders/stripe-payment-conflicts/" + id + "/dispositions", adminToken, "{}"});
+        Map<String, String> before = protectedState();
+        for (String mediaType : List.of("text/plain", "application/x-www-form-urlencoded",
+                "multipart/form-data; boundary=synthetic-boundary", "application/octet-stream", "application/xml")) {
+            for (String[] request : requests) {
+                String body = mediaType.startsWith("multipart/")
+                        ? "--synthetic-boundary\r\nContent-Disposition: form-data; name=\"payload\"\r\n"
+                                + "Content-Type: application/json\r\n\r\n" + request[3] + "\r\n--synthetic-boundary--\r\n"
+                        : mediaType.equals("application/x-www-form-urlencoded") ? "payload=" + java.net.URLEncoder.encode(request[3], java.nio.charset.StandardCharsets.UTF_8)
+                        : request[3];
+                assertApiError(sendRaw(request[0], request[1], body, mediaType, request[2]), 415, "UNSUPPORTED_MEDIA_TYPE");
+            }
+            assertThat(sendRaw("POST", "/api/v1/me/cart/items", "{}", mediaType, null).statusCode()).isEqualTo(403);
+            assertThat(sendRaw("POST", "/api/v1/admin/categories", categoryBody, mediaType, userToken).statusCode()).isEqualTo(403);
+        }
+        assertApiError(sendRaw("POST", "/api/v1/auth/register", UNTRUSTED_MARKER,
+                "application/x-" + UNTRUSTED_MARKER, null), 415, "UNSUPPORTED_MEDIA_TYPE");
+        assertThat(protectedState()).isEqualTo(before);
+        assertThat(runtime.queryForObject("SELECT count(*) FROM users WHERE email=?", Long.class, rejectedEmail)).isZero();
+        assertApiError(sendRaw("POST", "/api/v1/auth/register", "{ malformed", "application/json", null), 400, "REQUEST_INVALID");
+        HttpResponse<String> missingFields = send("POST", "/api/v1/auth/register", Map.of(), null);
+        assertThat(missingFields.statusCode()).isEqualTo(400);
+        assertThat(json.readTree(missingFields.body()).path("errorCode").asString()).isEqualTo("VALIDATION_FAILED");
+        assertApiError(sendRaw("POST", "/api/v1/auth/register", "", "application/json", null), 400, "REQUEST_INVALID");
+        assertThat(send("GET", "/api/v1/me", null, userToken).statusCode()).isEqualTo(200);
+        assertThat(send("POST", "/api/v1/auth/register", registration(rejectedEmail), null).statusCode()).isEqualTo(201);
+    }
+
+    private Map<String, String> protectedState() {
+        Map<String, String> state = new java.util.LinkedHashMap<>();
+        for (String table : List.of("roles", "users", "user_roles", "categories", "products", "product_images",
+                "carts", "cart_items", "orders", "order_items", "payments", "product_reviews", "stripe_payment_conflict_dispositions")) {
+            state.put(table, runtime.queryForObject("SELECT md5(COALESCE(string_agg(to_jsonb(t)::text, ',' ORDER BY to_jsonb(t)::text), '')) FROM "
+                    + table + " t", String.class));
+        }
+        return state;
+    }
+
+    private void assertApiError(HttpResponse<String> response, int status, String code) throws Exception {
+        assertThat(response.statusCode()).isEqualTo(status);
+        assertThat(response.headers().firstValue("Content-Type").orElseThrow()).startsWith("application/json");
+        JsonNode error = json.readTree(response.body());
+        assertThat(error.size()).isEqualTo(5);
+        assertThat(error.path("status").asInt()).isEqualTo(status);
+        assertThat(error.path("message").asString()).isNotBlank();
+        if (status == 415) assertThat(error.path("message").asString()).isEqualTo("Unsupported request media type.");
+        assertThat(error.path("errorCode").isNull() ? null : error.path("errorCode").asString()).isEqualTo(code);
+        assertThat(error.path("errors").isNull()).isTrue();
+        assertThat(java.time.LocalDateTime.parse(error.path("timestamp").asString())).isNotNull();
+    }
+
+    private HttpResponse<String> sendRaw(String method, String path, String body, String contentType, String token) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).timeout(Duration.ofSeconds(30))
+                .header("Content-Type", contentType).header("Accept-Language", "en").header("Idempotency-Key", "synthetic-media-audit");
+        if (token != null) request.header("Authorization", "Bearer " + token);
+        return client.send(request.method(method, HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private void assertSessionCannotAuthenticate(HttpSession session, String cookie, String email) throws Exception {

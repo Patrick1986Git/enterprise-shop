@@ -460,8 +460,39 @@ class OpenApiDocsSmokeTest {
                 "ForbiddenError",
                 "NotFoundError",
                 "ConflictError",
+                "UnsupportedMediaTypeError",
                 "InternalServerError")
                 .forEach(responseName -> assertApiErrorResponseComponent(responses, responseName));
+    }
+
+    @Test
+    void openApiDocs_shouldDocumentUnsupportedMediaTypeOnlyForTypedRequestBodies() throws Exception {
+        Map<String, Object> paths = paths(readOpenApi(API_DOCS_ENDPOINT));
+        for (String[] operation : List.of(
+                new String[] {"/api/v1/auth/register", "post"},
+                new String[] {"/api/v1/auth/login", "post"},
+                new String[] {"/api/v1/me/cart/items", "post"},
+                new String[] {"/api/v1/me/cart/items/{productId}", "patch"},
+                new String[] {"/api/v1/me/orders/checkout", "post"},
+                new String[] {"/api/v1/me/password", "put"},
+                new String[] {"/api/v1/reviews", "post"},
+                new String[] {"/api/v1/admin/categories", "post"},
+                new String[] {"/api/v1/admin/categories/{id}", "put"},
+                new String[] {"/api/v1/admin/products", "post"},
+                new String[] {"/api/v1/admin/products/{id}", "put"},
+                new String[] {"/api/v1/admin/users/{id}", "put"},
+                new String[] {"/api/v1/admin/orders/stripe-payment-conflicts/{conflictId}/dispositions", "post"})) {
+            assertResponseRef(paths, operation[0], operation[1], "415",
+                    "#/components/responses/UnsupportedMediaTypeError");
+        }
+        for (String[] operation : List.of(
+                new String[] {"/api/v1/products", "get"},
+                new String[] {"/api/v1/me/cart", "delete"},
+                new String[] {"/api/v1/webhooks/stripe", "post"})) {
+            Map<?, ?> path = (Map<?, ?>) paths.get(operation[0]);
+            Map<?, ?> method = (Map<?, ?>) path.get(operation[1]);
+            assertThat(((Map<?, ?>) method.get("responses")).containsKey("415")).isFalse();
+        }
     }
 
     @Test

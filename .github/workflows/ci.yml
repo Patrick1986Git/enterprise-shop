@@ -102,6 +102,7 @@ jobs:
             .tmp/trivy-compatibility/**
             !.tmp/trivy-compatibility/inputs/**
             !.tmp/trivy-compatibility/cache/**
+            !.tmp/trivy-compatibility/temporary/**
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
