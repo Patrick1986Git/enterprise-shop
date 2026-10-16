@@ -52,7 +52,7 @@ class BuildToolInventoryTest(unittest.TestCase):
         current = self.contract['inventory']
         self.assertEqual(expected, {x.split(':')[1] for x in current['model_plugins']})
         self.assertEqual(set(current['plugins']), set(current['model_plugins']) |
-                         {'org.apache.maven.plugins:maven-dependency-plugin:3.10.0'})
+                         {'org.apache.maven.plugins:maven-dependency-plugin:3.11.0'})
         for root, graph in current['plugins'].items():
             g, a, v = root.split(':')
             self.assertIn(f'{g}:{a}:jar::{v}', graph['realm'])
@@ -69,15 +69,39 @@ class BuildToolInventoryTest(unittest.TestCase):
         self.assertEqual(INVENTORY.REQUIRED_PROCESSORS,
                          INVENTORY.processor_roots(self.processors(INVENTORY.REQUIRED_PROCESSORS)))
 
-    def test_beanutils_remediation_is_owned_in_both_realms(self):
+    def test_security_remediations_are_owned_in_both_realms(self):
         current = self.contract['inventory']
         for name in ('maven-site-plugin', 'maven-dependency-plugin'):
             roots = [k for k in current['plugins'] if k.split(':')[1] == name]
             self.assertEqual(1, len(roots))
             self.assertIn('commons-beanutils:commons-beanutils:jar::1.11.0',
                           current['plugins'][roots[0]]['realm'])
+            self.assertIn('org.codehaus.plexus:plexus-utils:jar::4.0.3',
+                          current['plugins'][roots[0]]['realm'])
         self.assertFalse(any(x.startswith('commons-beanutils:commons-beanutils:')
                              and x.endswith(':1.9.4') for x in current['components']))
+
+    def test_docker_execution_rejects_unreviewed_dependency_plugin_versions(self):
+        for version in ('3.10.0', '3.12.0'):
+            direct = {f'org.apache.maven.plugins:maven-dependency-plugin:{version}':
+                      {'resolved': set(), 'realm': set()}}
+            with self.subTest(version=version), \
+                    patch.object(INVENTORY, 'evidence', return_value=([], {})), \
+                    patch.object(INVENTORY, 'realm_graphs', side_effect=[{}, {}, {}, direct]), \
+                    self.assertRaisesRegex(ValueError, 'Missing Docker direct plugin'):
+                INVENTORY.collect(self.directory, self.contract)
+
+    def test_changed_dependency_plugin_transitive_requires_review(self):
+        root = 'org.apache.maven.plugins:maven-dependency-plugin:3.11.0'
+        for kind in ('resolved', 'realm'):
+            changed = copy.deepcopy(self.contract['inventory'])
+            intended = 'org.codehaus.plexus:plexus-utils:jar::4.0.3'
+            unreviewed = 'org.codehaus.plexus:plexus-utils:jar::4.0.4'
+            self.assertIn(intended, changed['plugins'][root][kind])
+            changed['plugins'][root][kind] = [unreviewed if value == intended else value
+                                             for value in changed['plugins'][root][kind]]
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, 'graph changed'):
+                INVENTORY.validate_inventory(changed, self.contract)
 
     def test_new_plugin_requires_reviewed_inventory_change(self):
         changed = copy.deepcopy(self.contract['inventory'])

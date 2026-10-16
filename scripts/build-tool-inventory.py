@@ -384,7 +384,7 @@ def collect(directory, contract):
     for root, graph in actual.items():
         require(configured.get(root) == graph, 'Executing realm differs from effective resolution')
     direct = realm_graphs(docker, docker_artifacts, 'actual')
-    dependency = 'org.apache.maven.plugins:maven-dependency-plugin:3.10.0'
+    dependency = 'org.apache.maven.plugins:maven-dependency-plugin:3.11.0'
     require(dependency in direct, 'Missing Docker direct plugin')
     for root, graph in direct.items():
         require(root not in configured or configured[root] == graph,
