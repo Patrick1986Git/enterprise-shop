@@ -27,7 +27,34 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
         self.assertTrue(any(diagnostic in error for error in errors), errors)
 
     def test_reviewed_dual_language_workflow_passes(self):
+        reviewed_sha = "24c54180a607b1449ed407dd24f251e4e9147c8d"
+        self.assertEqual(reviewed_sha, POLICY.CODEQL_SHA)
+        references = [reference for _, reference, _, _ in POLICY.action_references(
+            SCRIPT.parents[1] / ".github/workflows/codeql.yml"
+        ) if reference.startswith("github/codeql-action/")]
+        self.assertEqual([f"github/codeql-action/{action}@{reviewed_sha}"
+                          for action in ("init", "analyze", "init", "analyze")], references)
         self.assertEqual([], self.validate(self.workflow))
+
+    def test_previous_codeql_release_is_no_longer_reviewed(self):
+        previous_sha = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
+        for action in ("init", "analyze"):
+            with self.subTest(action=action):
+                self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
+                            f"github/codeql-action/{action}@{previous_sha}", "reviewed action")
+
+    def test_unreviewed_full_codeql_shas_are_rejected(self):
+        for revision in (SHA, "f" * 40):
+            for action in ("init", "analyze"):
+                with self.subTest(revision=revision, action=action):
+                    self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
+                                f"github/codeql-action/{action}@{revision}", "reviewed action")
+
+    def test_language_jobs_cannot_be_reordered(self):
+        java, python = self.workflow.split("  analyze-python:\n", 1)
+        header, java = java.split("  analyze:\n", 1)
+        errors = self.validate(header + "  analyze-python:\n" + python + "  analyze:\n" + java)
+        self.assertTrue(any("independent Java/Kotlin and Python" in error for error in errors), errors)
 
     def test_either_language_job_cannot_disappear(self):
         for job in ("analyze", "analyze-python"):

@@ -297,7 +297,7 @@
   "execution_sources": {
     ".github/security/trivy/inspect-symbols.go": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
     ".github/workflows/ci.yml": "324fcf03fd8a24225b29244c0d223af5e876a446dae75741266fb05cd951a0bf",
-    ".github/workflows/codeql.yml": "b27308b1f75bda0a7c2b779eea10e7155ee5c74372dda2db5d45c26c86937f25",
+    ".github/workflows/codeql.yml": "b692b21589bc97e408e300da2d141464996f3db531473676c8f644c5c9442565",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
     "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
@@ -320,7 +320,7 @@
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
     "scripts/trivy_candidate_evidence.py": "7e156d05780861b6289ccd34d0a94c6c4f625925d97fa274643adaa92e29fa8b",
     "scripts/validate-auxiliary-containers.py": "e7c24fafd0c208cd85375d3805db753990ae3fa3772c501855b7cb668a423b53",
-    "scripts/validate-github-actions-policy.py": "c3839419538f8e48bf4f8e8cf37ac4078c9838ad3320f2a5ccc812324ea55ac6",
+    "scripts/validate-github-actions-policy.py": "5cfc82756021375523cec61968c6cbcc2ee66250db4a25ef72b576d1f630a367",
     "scripts/verify-runtime-append-only-integrity.sh": "2d8c3322c817a9d8d86eb37b0fad53b9b32d83b9bd53a4b9de8ec0f6b76a1447",
     "scripts/verify-trivy-candidate-compatibility.py": "831ca8b0224e47f0163aa30f80542108b8b0a95c4c2b4cfc3e80bb223aaf23ae",
     "scripts/verify-trivy-provenance.py": "accf66be7c8ed93f948b9a2309e65e18828e18a624f7d51bf522dbb3441b3d31",
