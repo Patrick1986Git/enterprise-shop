@@ -1,5 +1,6 @@
 package com.company.shop.common.exception;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
@@ -7,6 +8,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +17,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -26,11 +31,16 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.company.shop.config.SecurityConfig;
+import com.company.shop.module.cart.controller.CartController;
+import com.company.shop.module.cart.service.CartService;
+import com.company.shop.module.category.controller.AdminCategoryController;
+import com.company.shop.module.category.service.CategoryService;
 import com.company.shop.module.product.controller.ProductController;
 import com.company.shop.module.product.exception.ProductNotFoundException;
 import com.company.shop.module.product.service.ProductService;
@@ -44,6 +54,8 @@ import tools.jackson.databind.ObjectMapper;
 @WebMvcTest(controllers = {
 		AuthController.class,
 		ProductController.class,
+		CartController.class,
+		AdminCategoryController.class,
 		ApiErrorContractWebMvcTest.TestBusinessExceptionController.class
 })
 @Import({ WebMvcSliceTestConfig.class, SecurityConfig.class, ApiErrorContractWebMvcTest.TestControllerConfig.class })
@@ -62,10 +74,79 @@ class ApiErrorContractWebMvcTest {
 	private ProductService productService;
 
 	@MockitoBean
+	private CartService cartService;
+
+	@MockitoBean
+	private CategoryService categoryService;
+
+	@MockitoBean
 	private JwtTokenProvider jwtTokenProvider;
 
 	@MockitoBean
 	private UserDetailsServiceImpl userDetailsService;
+
+	@ParameterizedTest
+	@CsvSource({
+			"text/plain,en,Unsupported request media type.",
+			"application/x-www-form-urlencoded,en,Unsupported request media type.",
+			"multipart/form-data,en,Unsupported request media type.",
+			"text/plain,pl,Nieobsługiwany typ treści żądania.",
+			"application/x-www-form-urlencoded,pl,Nieobsługiwany typ treści żądania.",
+			"multipart/form-data,pl,Nieobsługiwany typ treści żądania."
+	})
+	void unsupportedMediaType_shouldReturnLocalizedContractWithoutCallingAuthService(
+			String contentType, String language, String message) throws Exception {
+		for (String path : new String[] { "/api/v1/auth/register", "/api/v1/auth/login" }) {
+			ResultActions result = mockMvc.perform(post(path)
+					.header("Accept-Language", language)
+					.contentType(contentType)
+					.content("synthetic-untrusted-body"));
+
+			assertApiErrorShape(result, 415, "UNSUPPORTED_MEDIA_TYPE")
+					.andExpect(jsonPath("$.message").value(message))
+					.andExpect(jsonPath("$.errors").value(nullValue()))
+					.andExpect(r -> assertThat(r.getResolvedException())
+							.isExactlyInstanceOf(HttpMediaTypeNotSupportedException.class));
+		}
+		verifyNoInteractions(authService);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "text/plain", "application/x-www-form-urlencoded", "multipart/form-data" })
+	void unsupportedMediaType_shouldPreserveSecurityAndNeverCallMutationServices(String contentType) throws Exception {
+		mockMvc.perform(post("/api/v1/me/cart/items").contentType(contentType).content("{}"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(post("/api/v1/admin/categories").with(user("test").roles("USER"))
+				.contentType(contentType).content("{}"))
+				.andExpect(status().isForbidden());
+
+		assertApiErrorShape(mockMvc.perform(post("/api/v1/me/cart/items").with(user("test").roles("USER"))
+				.contentType(contentType).content("{}")), 415, "UNSUPPORTED_MEDIA_TYPE");
+		assertApiErrorShape(mockMvc.perform(post("/api/v1/admin/categories").with(user("admin").roles("ADMIN"))
+				.contentType(contentType).content("{\"name\":\"Synthetic category\"}")), 415, "UNSUPPORTED_MEDIA_TYPE");
+		verifyNoInteractions(cartService, categoryService);
+	}
+
+	@Test
+	void unexpectedServerFailureWithMediaTypeCause_shouldRemainGenericServerError() throws Exception {
+		org.mockito.Mockito.when(productService.findBySlug("server-failure"))
+				.thenThrow(new IllegalStateException("synthetic-internal-diagnostic",
+						new HttpMediaTypeNotSupportedException("synthetic-content-type")));
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/products/slug/server-failure")
+				.header("Accept-Language", "en")), 500, null)
+				.andExpect(jsonPath("$.message").value(
+						"An unexpected server error occurred. Please contact support if the problem persists."))
+				.andExpect(jsonPath("$.errors").value(nullValue()));
+	}
+
+	@Test
+	void unsupportedMethodAndUnmatchedRoute_shouldKeepTheirExistingContracts() throws Exception {
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/auth/register")), 500, null)
+				.andExpect(r -> assertThat(r.getResolvedException())
+						.isExactlyInstanceOf(org.springframework.web.HttpRequestMethodNotSupportedException.class));
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/auth/missing")), 404, "ENDPOINT_NOT_FOUND");
+		verifyNoInteractions(authService);
+	}
 
 	@Test
 	void validationFailed_shouldReturnLocalizedContractInEnglish() throws Exception {

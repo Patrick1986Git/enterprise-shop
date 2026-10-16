@@ -51,6 +51,7 @@ public class UserController {
 	@Operation(operationId = "changeCurrentUserPassword", summary = "Change the authenticated user's password",
 			security = @SecurityRequirement(name = "bearerAuth"))
 	@ApiResponses(value = {
+		@ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaTypeError"),
 			@ApiResponse(responseCode = "204", description = "Password changed; previously issued access tokens are invalid."),
 			@ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequestError"),
 			@ApiResponse(responseCode = "401", ref = "#/components/responses/UnauthorizedError")
