@@ -61,7 +61,7 @@ class BuildToolInventoryTest(unittest.TestCase):
     def test_required_processors_and_every_resolved_processor_component_are_owned(self):
         current = self.contract['inventory']
         self.assertEqual({'org.mapstruct:mapstruct-processor:jar::1.6.3',
-                          'org.hibernate.orm:hibernate-processor:jar::7.4.12.Final'},
+                          'org.hibernate.orm:hibernate-processor:jar::7.4.13.Final'},
                          INVENTORY.REQUIRED_PROCESSORS)
         self.assertLessEqual(INVENTORY.REQUIRED_PROCESSORS, set(current['processor_roots']))
         self.assertLessEqual(set(current['processor_roots']), set(current['processors']))
@@ -102,8 +102,8 @@ class BuildToolInventoryTest(unittest.TestCase):
                 INVENTORY.processor_roots(self.processors(INVENTORY.REQUIRED_PROCESSORS - {missing}))
 
     def test_unreviewed_hibernate_processor_version_fails_in_both_compiler_executions(self):
-        intended = 'org.hibernate.orm:hibernate-processor:jar::7.4.12.Final'
-        for version in ('7.4.11.Final', '7.4.13.Final'):
+        intended = 'org.hibernate.orm:hibernate-processor:jar::7.4.13.Final'
+        for version in ('7.4.12.Final', '7.4.14.Final'):
             changed = INVENTORY.REQUIRED_PROCESSORS - {intended} | {
                 f'org.hibernate.orm:hibernate-processor:jar::{version}'}
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'Required processor absent'):
@@ -125,6 +125,16 @@ class BuildToolInventoryTest(unittest.TestCase):
             changed[key].pop()
             with self.subTest(key=key), self.assertRaises(ValueError):
                 INVENTORY.validate_inventory(changed, self.contract)
+
+    def test_changed_hibernate_processor_transitive_requires_review(self):
+        changed = copy.deepcopy(self.contract['inventory'])
+        intended = 'org.hibernate.orm:hibernate-core:jar::7.4.13.Final'
+        unreviewed = 'org.hibernate.orm:hibernate-core:jar::7.4.14.Final'
+        for key in ('processors', 'components'):
+            self.assertIn(intended, changed[key])
+            changed[key] = [unreviewed if value == intended else value for value in changed[key]]
+        with self.assertRaisesRegex(ValueError, 'graph changed'):
+            INVENTORY.validate_inventory(changed, self.contract)
 
     def test_failed_empty_or_truncated_resolution_stream_fails(self):
         path = self.artifact()
