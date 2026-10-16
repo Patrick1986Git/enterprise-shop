@@ -2,6 +2,8 @@ import importlib.util
 import copy
 import io
 import json
+import os
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -121,6 +123,171 @@ class TrivyBuildTest(unittest.TestCase):
         self.assertEqual(BUILD.BUILDER_BINARY, builder['identity']['sha256'])
         self.assertTrue(builder['governed'])
         self.assertEqual(['HIGH', 'CRITICAL'], builder['threshold'])
+
+
+class TrivyCompatibilityStorageTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.build = self.root / 'build'
+        self.build.mkdir()
+        self.candidate = b'candidate fixture'
+        self.reference = b'reference fixture'
+        self.failure = None
+        self.commands = []
+        self.runs = []
+        source = self.root / 'source'
+        source.mkdir()
+        archive = BUILD.image_archive(self.candidate, b'CA', source)[4]
+        (self.build / 'image.tar').write_bytes(archive)
+        COMPAT.write(self.build / 'build-receipt.json', {'image_reference': 'local/candidate:fixture',
+            'binary_sha256': COMPAT.sha(self.candidate), 'repeat_sha256': COMPAT.sha(self.candidate),
+            'go_version': '1.27.2', 'repository_head': 'fixture-head'})
+        for target, replacement in ((patch.object(COMPAT.subprocess, 'run'), self.run_command),
+                                    (patch.object(COMPAT.subprocess, 'check_output'), self.output),
+                                    (patch.object(COMPAT, 'REFERENCE_BINARY', COMPAT.sha(self.reference)), None),
+                                    (patch.object(COMPAT.shutil, 'disk_usage'), (20 * 1024 ** 3,) * 3)):
+            mocked = target.start()
+            self.addCleanup(target.stop)
+            if callable(replacement):
+                mocked.side_effect = replacement
+            elif isinstance(replacement, tuple):
+                mocked.return_value = COMPAT.shutil._ntuple_diskusage(*replacement)
+
+    def output(self, command, **kwargs):
+        if command[0] == 'git':
+            return 'fixture-head'
+        if command[1] == 'create':
+            return 'fixture-container'
+        return json.dumps([{'Id': 'sha256:actual-fixture'}]).encode()
+
+    def run_command(self, command, **kwargs):
+        self.commands.append(command)
+        if command[1] == 'cp':
+            Path(command[-1]).write_bytes(self.reference)
+        elif command[1] == 'save':
+            Path(command[command.index('-o') + 1]).write_bytes(b'actual image archive')
+        elif command[1] == 'run':
+            self.runs.append(command)
+            mounts = {value.split(':')[1]: Path(value.split(':')[0])
+                      for index, value in enumerate(command) if index and command[index - 1] == '-v'}
+            if '--download-db-only' in command:
+                for name in ('/tmp', '/cache'):
+                    self.assertEqual([], list(mounts[name].iterdir()))
+                    self.assertEqual(os.getuid(), mounts[name].stat().st_uid)
+                    self.assertEqual(os.getgid(), mounts[name].stat().st_gid)
+                    self.assertEqual(0o700, mounts[name].stat().st_mode & 0o777)
+                (mounts['/tmp'] / 'partial').write_bytes(b'staging')
+                if self.failure:
+                    kwargs['stdout'].write('no space left on device\n')
+                    raise subprocess.CalledProcessError(1, command)
+                db = mounts['/cache'] / 'db'
+                db.mkdir()
+                (db / 'trivy.db').write_bytes(b'fresh database')
+                now = COMPAT.datetime.now(COMPAT.timezone.utc)
+                COMPAT.write(db / 'metadata.json', {'Version': 2, 'UpdatedAt': now.isoformat(),
+                    'DownloadedAt': now.isoformat(), 'NextUpdate': (now + timedelta(hours=6)).isoformat()})
+            elif '--download-java-db-only' in command:
+                pass
+            elif '--output' in command:
+                output = mounts['/evidence'] / Path(command[command.index('--output') + 1]).name
+                if 'convert' in command:
+                    COMPAT.write(output, {'bomFormat': 'CycloneDX', 'specVersion': '1.7',
+                        'components': [{'purl': 'pkg:generic/fixture@1'}]})
+                else:
+                    name = output.name.removesuffix('.raw.json')
+                    findings = COMPAT.EXPECTED if name == 'reference-rootfs' else (
+                        {('CVE-2025-48734', 'commons-beanutils:commons-beanutils', '1.9.4', 'HIGH')}
+                        if name == 'vulnerable' else set())
+                    COMPAT.write(output, {'SchemaVersion': 2, 'Trivy': {'Version': '0.75.0'},
+                        'Metadata': {'ImageID': 'sha256:actual-fixture'}, 'Results': [{
+                            'Packages': [{'Identifier': {'PURL': 'pkg:generic/fixture@1'}}],
+                            'Vulnerabilities': [dict(zip(('VulnerabilityID', 'PkgName', 'InstalledVersion', 'Severity'), v))
+                                                for v in findings]}]})
+            else:
+                return subprocess.CompletedProcess(command, 1)
+        return subprocess.CompletedProcess(command, 0)
+
+    def assert_cleaned(self, directory):
+        for name in ('inputs', 'cache', 'temporary'):
+            self.assertFalse((directory / name).exists())
+
+    def test_both_paths_use_private_disk_with_unchanged_container_boundaries(self):
+        for images in ([], ['local/actual:fixture']):
+            with self.subTest(images=images):
+                self.runs.clear()
+                directory = self.root / ('actual' if images else 'reference')
+                self.assertTrue(COMPAT.collect(self.build, directory, images)['verified'])
+                storage = COMPAT.read(directory / 'scratch-storage.json')
+                self.assertEqual((8 if images else 2) * 1024 ** 3, storage['minimum_free_bytes'])
+                for command in self.runs:
+                    self.assertNotIn('--tmpfs', command)
+                    self.assertIn(f'{directory}/temporary:/tmp', command)
+                    self.assertIn(f'{directory}/inputs:/input:ro', command)
+                    mounts = {value.split(':')[1]: value.split(':')[0]
+                              for index, value in enumerate(command) if index and command[index - 1] == '-v'}
+                    self.assertEqual({'/tmp', '/input', '/cache', '/evidence'}, set(mounts))
+                    self.assertIn(mounts['/cache'], {str(directory / 'cache'),
+                        str(directory / 'reference/empty-cache'), str(directory / 'candidate/empty-cache')})
+                    for option, value in (('--user', f'{os.getuid()}:{os.getgid()}'), ('--cap-drop', 'ALL'),
+                                          ('--security-opt', 'no-new-privileges'), ('--pids-limit', '128'),
+                                          ('--memory', '4g'), ('--cpus', '2')):
+                        self.assertEqual(value, command[command.index(option) + 1])
+                    self.assertIn('--read-only', command)
+                    self.assertNotIn('/var/run/docker.sock', ' '.join(command))
+                    if '--download-db-only' not in command and '--download-java-db-only' not in command:
+                        self.assertEqual('none', command[command.index('--network') + 1])
+                self.assert_cleaned(directory)
+
+    def test_low_capacity_blocks_before_database_execution_and_cleans_private_state(self):
+        for images in ([], ['local/actual:fixture']):
+            directory = self.root / ('low-actual' if images else 'low-reference')
+            with patch.object(COMPAT.shutil, 'disk_usage', return_value=COMPAT.shutil._ntuple_diskusage(1, 1, 0)):
+                with self.assertRaisesRegex(ValueError, 'Insufficient.*free runner disk space'):
+                    COMPAT.collect(self.build, directory, images)
+            self.assertFalse(self.runs)
+            self.assertFalse((directory / 'result.json').exists())
+            self.assertTrue((directory / 'scratch-storage.json').exists())
+            self.assert_cleaned(directory)
+
+    def test_download_exhaustion_is_secret_free_and_the_next_run_has_fresh_state(self):
+        directory = self.root / 'failed'
+        self.failure = True
+        with patch.dict(os.environ, {'TRIVY_DB_REPOSITORY': 'https://registry.invalid/db?token=secret-fixture'}):
+            with self.assertRaisesRegex(ValueError, 'database-update.log.*free runner disk space') as failure:
+                COMPAT.collect(self.build, directory)
+        self.assertNotIn('secret-fixture', str(failure.exception))
+        self.assertFalse((directory / 'result.json').exists())
+        self.assertIn('no space left', (directory / 'database-update.log').read_text())
+        self.assert_cleaned(directory)
+        self.failure = False
+        self.assertTrue(COMPAT.collect(self.build, self.root / 'fresh')['verified'])
+
+    def test_existing_directory_is_rejected_without_deleting_another_runs_data(self):
+        directory = self.root / 'existing'
+        directory.mkdir()
+        marker = directory / 'temporary'
+        marker.mkdir()
+        (marker / 'other-run').write_text('keep')
+        with self.assertRaisesRegex(ValueError, 'already exists'):
+            COMPAT.collect(self.build, directory)
+        self.assertEqual('keep', (marker / 'other-run').read_text())
+        self.assertFalse(self.commands)
+
+    def test_early_invalid_build_cleans_inputs_without_emitting_success(self):
+        (self.build / 'image.tar').write_bytes(b'malformed archive')
+        directory = self.root / 'invalid'
+        with self.assertRaises(tarfile.ReadError):
+            COMPAT.collect(self.build, directory)
+        self.assert_cleaned(directory)
+        self.assertFalse((directory / 'result.json').exists())
+
+    def test_uploaded_evidence_excludes_private_storage_in_both_paths(self):
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        for directory in ('trivy-compatibility', 'trivy-actual-compatibility'):
+            for name in ('inputs', 'cache', 'temporary'):
+                self.assertIn(f'!.tmp/{directory}/{name}/**', workflow)
 
 
 class TrivyTrustContractTest(unittest.TestCase):
