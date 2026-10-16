@@ -21,7 +21,7 @@ CONTRACT = ROOT / '.github/security/build-tool-inventory.json'
 IDENTITY = 'enterprise-shop-build-tools'
 DISTRIBUTION_PACKAGE = 'org.apache.maven:apache-maven:pom::3.10.0'
 REQUIRED_PROCESSORS = {'org.mapstruct:mapstruct-processor:jar::1.6.3',
-                       'org.hibernate.orm:hibernate-processor:jar::7.4.12.Final'}
+                       'org.hibernate.orm:hibernate-processor:jar::7.4.13.Final'}
 TOKEN = re.compile(r'^[A-Za-z0-9_.+\-]+$')
 SHA256 = re.compile(r'^[0-9a-f]{64}$')
 
@@ -384,7 +384,7 @@ def collect(directory, contract):
     for root, graph in actual.items():
         require(configured.get(root) == graph, 'Executing realm differs from effective resolution')
     direct = realm_graphs(docker, docker_artifacts, 'actual')
-    dependency = 'org.apache.maven.plugins:maven-dependency-plugin:3.10.0'
+    dependency = 'org.apache.maven.plugins:maven-dependency-plugin:3.11.0'
     require(dependency in direct, 'Missing Docker direct plugin')
     for root, graph in direct.items():
         require(root not in configured or configured[root] == graph,
