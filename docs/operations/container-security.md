@@ -199,6 +199,28 @@ The governed scanner still requires zero unaccepted HIGH/CRITICAL findings and e
 
 The read-only `trivy-candidate` CI job verifies upstream provenance, repeats the builds, performs independent analysis and exercises pinned BeanUtils vulnerable/patched/malformed fixtures, original and rebuilt rootfs, image scans, raw JSON, conversion, package/PURL readback and missing-database/severity failures. All comparison scans run offline without a Docker socket after an authoritative database refresh. The known vulnerable upstream scanner is an isolated comparison fixture with no repository scan authority. The container-security job also compares both scanners against exports of the actual application, PostgreSQL and Docker builder images. Package identities, all findings and configured failure statuses must agree; original scanner rootfs must still produce exactly the four historical blockers while the patched candidate produces none.
 
+Both compatibility paths mount a new, exclusively created mode-0700 runner-owned
+`temporary` directory at `/tmp`, separate from read-only inputs, the fresh private
+cache and retained evidence. The container runs as that owner's UID/GID with the
+existing read-only rootfs, capability drop, no-new-privileges and CPU/memory/PID
+limits. Trivy stages the OCI archive before go-getter makes another compressed
+copy and extracts into the cache: a 128.03 MiB archive already needs more than
+256 MiB scratch. The former reference-only tmpfs limit therefore failed even
+though the first download completed. The existing actual-image disk-backed
+boundary also accommodates the Java index blob exceeding 900 MiB.
+
+Before downloading, `scratch-storage.json` records available runner-disk bytes
+and the required free-space floor: 2 GiB for ordinary vulnerability DB staging
+and extraction, 8 GiB when Java DB and actual-image analysis are needed. These
+are headroom checks, not reservations or filesystem quotas; concurrent runner
+usage and future DB growth can still exhaust disk. The finite runner filesystem
+and existing job timeout bound this disposable allocation. Low space or any
+download failure blocks compatibility, retaining a safe diagnostic and log;
+there is no stale-cache fallback. Inputs, cache and scratch are removed on both
+success and failure, existing output directories are rejected, and all three
+are excluded from uploaded evidence and the Docker build context. No host
+temporary root, checkout, socket or secrets are exposed through `/tmp`.
+
 Build and container-security depend on this job and download only artifacts from the same workflow run. Loaded source/SDK/binary evidence lives at `$RUNNER_TEMP/enterprise-shop-trivy` (locally, the system temporary directory), outside the checkout: upstream fixture symlinks remain intact without weakening the repository compiler-warning source-tree policy. The producer uses `.tmp/trivy-candidate` only in its dedicated job, which does not run Maven. `load-trivy-candidate.py` checks ordered payload chunks and their hashes, reconstructs original source and actual binary/image bytes, replays the independent trust and behavior evidence against the current checkout HEAD, and only then loads the local image. Raw evidence is uploaded even on failure and retained for fourteen days. Missing or changed source, manifest, builder, binary, image, package, function, advisory, provenance or behavior evidence blocks execution. Monday protected-master and exact-PR-head scans repeat this contract.
 
 To reproduce with normal authenticated upstream access, start from an exact clean checkout and run:
