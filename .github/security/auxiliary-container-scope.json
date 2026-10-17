@@ -296,8 +296,8 @@
   ],
   "execution_sources": {
     ".github/security/trivy/inspect-symbols.go": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
-    ".github/workflows/ci.yml": "a2900b65a30a81cf34358dd9a26aeaa23e80efa2bb983e80f61c12c0e4732477",
-    ".github/workflows/codeql.yml": "b692b21589bc97e408e300da2d141464996f3db531473676c8f644c5c9442565",
+    ".github/workflows/ci.yml": "60b77ceac4baadfeeea5d50beac0b094ccc2ed03107311a9a504679e5f84ea1d",
+    ".github/workflows/codeql.yml": "cc9b044ad19150bfc785fb864391748d60a00602de228b345644f48349a5407c",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
     "docker/postgres/Dockerfile": "1187f5c6fd3a3fcb0d69c27c1c27a87894e2e24295813149025707dfe15047b1",
