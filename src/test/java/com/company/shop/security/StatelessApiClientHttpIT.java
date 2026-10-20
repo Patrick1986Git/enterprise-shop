@@ -301,6 +301,22 @@ class StatelessApiClientHttpIT {
         assertThat(send("POST", "/api/v1/auth/register", registration(rejectedEmail), null).statusCode()).isEqualTo(201);
     }
 
+    @Test
+    void unsupportedMethod_shouldReturnLocalizedContractWithoutChangingProtectedState() throws Exception {
+        Map<String, String> before = protectedState();
+        for (String language : List.of("en", "pl")) {
+            HttpResponse<String> response = send("GET", "/api/v1/auth/register?probe=" + UNTRUSTED_MARKER,
+                    Map.of("probe", UNTRUSTED_MARKER), null,
+                    "Accept-Language", language, "X-Probe", UNTRUSTED_MARKER);
+            assertApiError(response, 405, "METHOD_NOT_ALLOWED");
+            assertThat(response.headers().allValues("Allow")).containsExactly("POST");
+            assertThat(json.readTree(response.body()).path("message").asString()).isEqualTo(
+                    language.equals("pl") ? "Niedozwolona metoda żądania." : "Request method not allowed.");
+            assertThat(response.body()).doesNotContain(UNTRUSTED_MARKER);
+        }
+        assertThat(protectedState()).isEqualTo(before);
+    }
+
     private Map<String, String> protectedState() {
         Map<String, String> state = new java.util.LinkedHashMap<>();
         for (String table : List.of("roles", "users", "user_roles", "categories", "products", "product_images",

@@ -336,7 +336,7 @@
     "src/test/java/com/company/shop/persistence/support/PostgresContainerSupport.java": "e4207244b664c2ccb6c03f8fe0fb306ba578175a0fb2c320258787aefbefd5ea",
     "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicy.java": "f4322920c1bb7da4021e9d46416edbb32c34736a7b294b73f9f45d132c35e03c",
     "src/test/java/com/company/shop/persistence/support/ReviewedRyukImagePullPolicyTest.java": "355eb3dcef586d6f26f196219074ab0cfd150adda12e12ea40dd00cd8cee7bd9",
-    "src/test/java/com/company/shop/security/StatelessApiClientHttpIT.java": "007b7778debeeb67fd882b797acf0900828978199b1fd20b2f0b1a507d3c9494"
+    "src/test/java/com/company/shop/security/StatelessApiClientHttpIT.java": "605d4e91cfd87f3091fb05cbe7855d4e517f9e8c1decb47c4bf8ab4f0330985d"
   },
   "tools": {
     "upx": {

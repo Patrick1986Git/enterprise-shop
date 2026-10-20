@@ -19,6 +19,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -173,6 +174,15 @@ public class GlobalExceptionHandler {
 				"UNSUPPORTED_MEDIA_TYPE");
 
 		return new ResponseEntity<>(apiError, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+	}
+
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public ResponseEntity<ApiError> handleHttpRequestMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+		ApiError apiError = new ApiError(HttpStatus.METHOD_NOT_ALLOWED.value(),
+				messageService.getMessage("error.request.method.not.allowed"),
+				"METHOD_NOT_ALLOWED");
+
+		return new ResponseEntity<>(apiError, ex.getHeaders(), HttpStatus.METHOD_NOT_ALLOWED);
 	}
 
 	@ExceptionHandler(ConstraintViolationException.class)
