@@ -126,7 +126,7 @@ The authoritative [auxiliary inventory](../../.github/security/auxiliary-contain
 | --- | --- |
 | Hadolint v2.14.0 scratch | Parses candidate Dockerfiles with repository read-only access and networking disabled. No OS packages. Its static Haskell executable/dependency graph is not represented by Trivy; upstream Hadolint/Haskell advisory review remains necessary. |
 | Trivy 0.75.0 | Security authority with Docker-socket access in existing image scans and writable evidence/cache. Auxiliary scans use read-only exported archives without a socket. OS/Go-package self-scan is advisory visibility, not independent scanner integrity proof. |
-| Go 1.26.9 Alpine 3.24 | Installs and executes govulncheck v1.1.4 against pinned gosu source; read-only source, per-process empty tmpfs cache, Go-service networking, no socket. Results control PostgreSQL exception applicability. OS/Go-toolchain package findings block at HIGH/CRITICAL. |
+| Go 1.26.9 Alpine 3.24 | Rebuilds gosu from checksum-bound source and reviewed module locks; runs govulncheck v1.1.4 against patched source and installed binary. Analysis uses read-only inputs, per-process empty tmpfs cache, Go-service networking and no socket. OS/Go-toolchain package findings block at HIGH/CRITICAL. |
 | Alpine 3.20 fixture | Immutable target for Trivy ignorefile/configuration regression plus release-identity probe; no analysis authority or candidate-code execution. End-of-life, with no current audit findings. It is mechanically excluded from trusted execution evidence and supplies no exception authority. Its role does not require deliberate vulnerabilities. |
 | Rebuilt Ryuk 0.14.0 candidate | Runner-local scratch reaper, exact release source plus reviewed Moby client/API migration, Go 1.26.9 and unchanged cleanup algorithm. Content-addressed configuration, repeat executable builds, direct raw/SBOM, source/binary govulncheck, socket/execution/cleanup assertions. No CVE exceptions. |
 
@@ -521,6 +521,57 @@ Protected-master CI run #1075 found HIGH `CVE-2026-84782` in `libssl3` and `open
 
 CI run #496 found HIGH `CVE-2026-33630` in `c-ares 1.34.5-r0`, inherited by the PostgreSQL 18 Alpine image. Because Alpine provided the fixed `1.34.6-r0` package, the PostgreSQL Dockerfile applies a targeted `apk upgrade --no-cache c-ares` to the final image. No policy exception was added; CI rebuilds and rescans the final image through the existing raw-report, SBOM, and blocking-policy workflow.
 
+## gosu GO-2026-6686 remediation
+
+[GO-2026-6686](https://vuln.go.dev/ID/GO-2026-6686.json), also
+[CVE-2026-61801 / GHSA-mjcv-p78q-w5fw](https://github.com/moby/sys/security/advisories/GHSA-mjcv-p78q-w5fw),
+affects `github.com/moby/sys/user` before v0.4.1. Official gosu 1.19 contains
+v0.1.0. Source govulncheck confirms `main -> SetupUser -> GetExecUserPath`;
+binary analysis also reports the finding. Malicious account files can exhaust
+memory while resolving users and groups. This is a reachable dependency finding.
+
+The PostgreSQL entrypoint invokes `gosu postgres` before initialization and
+server startup when launched as root. Compose mounts the database data directory,
+not `/etc/passwd` or `/etc/group`; SQL role names do not select the OS user.
+No checked-in application input supplies account-file bytes. The database
+container nevertheless has a writable root filesystem. Deployment overrides and
+compromised account files remain environmental risks, so constrained exposure
+does not justify suppressing the finding.
+
+Until a suitable official release is reviewed, the Dockerfile rebuilds the exact
+gosu 1.19 commit with only `moby/sys/user` updated to v0.4.1. The
+[receipt](../../.github/security/gosu/candidate.json) binds the source archive
+checksum, immutable governed Go 1.26.9 image, module versions/checksums, patched
+lockfiles and executable digest. Two builds use independent empty compiler caches
+and must match each other and the reviewed digest. Builds retain symbols, disable
+CGO and automatic toolchain downloads, and require linux/amd64. The executable
+honestly records an unversioned `(devel)` main module; it is a repository rebuild.
+Only this executable enters the existing PostgreSQL 18 runtime stage. Optional
+`proxy_ca` BuildKit secret mounts support trusted build proxies without adding
+session certificates to the final image.
+
+CI verifies the source tag/commit, overlays the two reviewed lockfiles and checks
+every remaining source byte against the immutable Git tree. Installed ELF bytes,
+compiler, dependency checksums and build settings must match the receipt before
+the unchanged upstream source applicability wrapper runs. An additional binary
+govulncheck is blocking. Text, JSON, installed bytes and runtime evidence are
+retained in `auxiliary-container-policy-result`. Raw Trivy reports, CycloneDX
+SBOMs and existing HIGH/CRITICAL gates remain mandatory. No exception or threshold
+change is introduced; this executable does not need the earlier CVE-2025-68121
+exception described below.
+
+`scripts/test-gosu-runtime.py --image enterprise-shop/postgres:ci` exercises the
+actual image: named/numeric UID/GID, supplementary groups, HOME, PID 1, exec status
+and signals; bounded malicious account-file parsing; PostgreSQL 18 startup,
+restart, dictionary loading, logical restore and ownership. It uses uniquely
+labeled disposable containers and volumes. Ordinary Java Testcontainers tests
+remain required; their upstream image alone cannot validate the rebuilt gosu.
+
+A newer PostgreSQL tag alone does not demonstrate a fix while its gosu is still
+affected. Switching privilege-transition tools, accepting a package waiver or
+using an unverified binary does not preserve the reviewed security boundary.
+A future official replacement requires the same provenance and runtime checks.
+
 ## gosu CVE-2025-68121 triage
 
 CI run #481 failed only at PostgreSQL CRITICAL policy enforcement because Trivy detected `CVE-2025-68121` in the Go standard library metadata for `usr/local/bin/gosu`, inherited from the official PostgreSQL Alpine image then in use. The Enterprise Shop PostgreSQL Dockerfile only copies Polish full-text-search dictionary files into that base image.
@@ -561,8 +612,9 @@ test -x govulncheck-with-excludes.sh
 test -f version.go
 grep -F 'const Version = "1.19"' version.go
 
-# CI additionally binds GOVERSION to the installed gosu binary; see the auxiliary policy below.
-GOLANG_IMAGE=docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 ./govulncheck-with-excludes.sh ./...
+cd ../..
+cp docker/postgres/gosu/go.mod docker/postgres/gosu/go.sum .tmp/gosu-source/
+GOSU_GOVULNCHECK_IMAGE=docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 bash scripts/run-gosu-govulncheck.sh
 ```
 
 ## SBOM artifacts

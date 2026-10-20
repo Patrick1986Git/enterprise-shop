@@ -917,7 +917,11 @@ jobs:
           grep -F 'const Version = "1.19"' version.go
 
           cd ../..
+          cp docker/postgres/gosu/go.mod docker/postgres/gosu/go.sum .tmp/gosu-source/
           bash scripts/run-gosu-govulncheck.sh
+
+      - name: Verify patched gosu privilege transition and PostgreSQL runtime
+        run: python scripts/test-gosu-runtime.py --image enterprise-shop/postgres:ci --output .tmp/container-security/gosu/runtime.json
 
       - name: Test component-aware vulnerability policy
         run: python -m unittest discover -s scripts/tests -p 'test_*.py'
@@ -998,6 +1002,8 @@ jobs:
           path: |
             .tmp/container-security/auxiliary/policy-result.json
             .tmp/container-security/gosu/*.txt
+            .tmp/container-security/gosu/*.json
+            .tmp/container-security/gosu/gosu
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
