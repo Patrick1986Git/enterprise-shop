@@ -168,12 +168,12 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
-	public ResponseEntity<ApiError> handleHttpMediaTypeNotSupported() {
+	public ResponseEntity<ApiError> handleHttpMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
 		ApiError apiError = new ApiError(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
 				messageService.getMessage("error.request.unsupported.media.type"),
 				"UNSUPPORTED_MEDIA_TYPE");
 
-		return new ResponseEntity<>(apiError, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+		return new ResponseEntity<>(apiError, ex.getHeaders(), HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 	}
 
 	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)

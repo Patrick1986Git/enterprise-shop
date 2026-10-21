@@ -32,6 +32,10 @@ import org.springframework.boot.web.servlet.ServletListenerRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
@@ -43,6 +47,8 @@ import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 import com.company.shop.security.jwt.JwtTokenProvider;
+import com.company.shop.module.user.dto.RegisterRequestDTO;
+import com.company.shop.module.cart.dto.UpdateCartItemRequestDTO;
 
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpSessionEvent;
@@ -96,6 +102,7 @@ class StatelessApiClientHttpIT {
     @Autowired private JdbcTemplate runtime;
     @Autowired private JwtTokenProvider tokens;
     @Autowired private UserDetailsServiceImpl userDetails;
+    @Autowired private RequestMappingHandlerAdapter handlerAdapter;
 
     private final String administratorEmail = email();
     private final List<String> issuedTokens = new ArrayList<>();
@@ -302,6 +309,40 @@ class StatelessApiClientHttpIT {
     }
 
     @Test
+    void unsupportedMediaType_shouldPreserveNegotiationHeadersAndLocalizationWithoutChangingProtectedState() throws Exception {
+        String email = email();
+        register(email);
+        String token = login(email, PASSWORD);
+        Map<String, String> before = protectedState();
+        for (String language : List.of("en", "pl")) {
+            for (String method : List.of("POST", "PATCH")) {
+                boolean patch = method.equals("PATCH");
+                Class<?> bodyType = patch ? UpdateCartItemRequestDTO.class : RegisterRequestDTO.class;
+                List<MediaType> supported = new ArrayList<>(handlerAdapter.getMessageConverters().stream()
+                        .flatMap(converter -> converter.getSupportedMediaTypes(bodyType).stream()).distinct().toList());
+                MimeTypeUtils.sortBySpecificity(supported);
+                assertThat(supported).isNotEmpty();
+                HttpHeaders expected = new HttpHeaders();
+                expected.setAccept(supported);
+                String path = patch ? "/api/v1/me/cart/items/" + UUID.randomUUID() : "/api/v1/auth/register";
+                HttpResponse<String> response = sendRaw(method, path, UNTRUSTED_MARKER, "text/plain",
+                        patch ? token : null, language);
+                assertApiError(response, 415, "UNSUPPORTED_MEDIA_TYPE", language);
+                assertThat(response.headers().allValues(HttpHeaders.ACCEPT)).containsExactlyElementsOf(expected.get(HttpHeaders.ACCEPT));
+                if (patch) {
+                    expected.setAcceptPatch(supported);
+                    assertThat(response.headers().allValues(HttpHeaders.ACCEPT_PATCH))
+                            .containsExactlyElementsOf(expected.get(HttpHeaders.ACCEPT_PATCH));
+                } else {
+                    assertThat(response.headers().allValues(HttpHeaders.ACCEPT_PATCH)).isEmpty();
+                }
+                assertThat(response.body()).doesNotContain(UNTRUSTED_MARKER);
+            }
+        }
+        assertThat(protectedState()).isEqualTo(before);
+    }
+
+    @Test
     void unsupportedMethod_shouldReturnLocalizedContractWithoutChangingProtectedState() throws Exception {
         String email = email();
         register(email);
@@ -342,21 +383,30 @@ class StatelessApiClientHttpIT {
     }
 
     private void assertApiError(HttpResponse<String> response, int status, String code) throws Exception {
+        assertApiError(response, status, code, "en");
+    }
+
+    private void assertApiError(HttpResponse<String> response, int status, String code, String language) throws Exception {
         assertThat(response.statusCode()).isEqualTo(status);
         assertThat(response.headers().firstValue("Content-Type").orElseThrow()).startsWith("application/json");
         JsonNode error = json.readTree(response.body());
         assertThat(error.size()).isEqualTo(5);
         assertThat(error.path("status").asInt()).isEqualTo(status);
         assertThat(error.path("message").asString()).isNotBlank();
-        if (status == 415) assertThat(error.path("message").asString()).isEqualTo("Unsupported request media type.");
+        if (status == 415) assertThat(error.path("message").asString()).isEqualTo(
+                language.equals("pl") ? "Nieobsługiwany typ treści żądania." : "Unsupported request media type.");
         assertThat(error.path("errorCode").isNull() ? null : error.path("errorCode").asString()).isEqualTo(code);
         assertThat(error.path("errors").isNull()).isTrue();
         assertThat(java.time.LocalDateTime.parse(error.path("timestamp").asString())).isNotNull();
     }
 
     private HttpResponse<String> sendRaw(String method, String path, String body, String contentType, String token) throws Exception {
+        return sendRaw(method, path, body, contentType, token, "en");
+    }
+
+    private HttpResponse<String> sendRaw(String method, String path, String body, String contentType, String token, String language) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).timeout(Duration.ofSeconds(30))
-                .header("Content-Type", contentType).header("Accept-Language", "en").header("Idempotency-Key", "synthetic-media-audit");
+                .header("Content-Type", contentType).header("Accept-Language", language).header("Idempotency-Key", "synthetic-media-audit");
         if (token != null) request.header("Authorization", "Bearer " + token);
         return client.send(request.method(method, HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
     }
