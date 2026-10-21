@@ -13,6 +13,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -32,6 +33,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -139,13 +141,37 @@ class ApiErrorContractWebMvcTest {
 				.andExpect(jsonPath("$.errors").value(nullValue()));
 	}
 
-	@Test
-	void unsupportedMethodAndUnmatchedRoute_shouldKeepTheirExistingContracts() throws Exception {
-		assertApiErrorShape(mockMvc.perform(get("/api/v1/auth/register")), 500, null)
+	@ParameterizedTest
+	@CsvSource({
+			"en,Request method not allowed.",
+			"pl,Niedozwolona metoda żądania."
+	})
+	void unsupportedMethodAndUnmatchedRoute_shouldReturnDistinctContracts(String language, String message) throws Exception {
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/auth/register")
+				.header("Accept-Language", language)), 405, "METHOD_NOT_ALLOWED")
+				.andExpect(header().string("Allow", "POST"))
+				.andExpect(jsonPath("$.message").value(message))
+				.andExpect(jsonPath("$.errors").value(nullValue()))
 				.andExpect(r -> assertThat(r.getResolvedException())
-						.isExactlyInstanceOf(org.springframework.web.HttpRequestMethodNotSupportedException.class));
+						.isExactlyInstanceOf(HttpRequestMethodNotSupportedException.class));
 		assertApiErrorShape(mockMvc.perform(get("/api/v1/auth/missing")), 404, "ENDPOINT_NOT_FOUND");
 		verifyNoInteractions(authService);
+	}
+
+	@Test
+	void unsupportedMethod_shouldPreserveSecurityAndNeverCallMutationServices() throws Exception {
+		mockMvc.perform(get("/api/v1/me/cart/items"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/admin/categories"))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/admin/categories").with(user("test").roles("USER")))
+				.andExpect(status().isForbidden());
+
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/me/cart/items").with(user("test").roles("USER"))),
+				405, "METHOD_NOT_ALLOWED").andExpect(header().string("Allow", "POST"));
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/admin/categories").with(user("admin").roles("ADMIN"))),
+				405, "METHOD_NOT_ALLOWED").andExpect(header().string("Allow", "POST"));
+		verifyNoInteractions(cartService, categoryService);
 	}
 
 	@Test
