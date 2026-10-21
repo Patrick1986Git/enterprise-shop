@@ -113,6 +113,10 @@ class GosuCacheExecutionTests(unittest.TestCase):
             wrapper = source / 'govulncheck-with-excludes.sh'
             wrapper.write_text('#!/usr/bin/env bash\nset -euo pipefail\ngovulncheck ./...\n')
             wrapper.chmod(0o755)
+            (root / 'scripts').mkdir()
+            (root / 'scripts/validate-gosu-provenance.py').write_text(
+                "from pathlib import Path\n"
+                "assert Path('.tmp/container-security/gosu/gosu').read_bytes() == b'installed-gosu-fixture'\n")
             script = root / 'run.sh'
             script.write_text(edit((ROOT / 'scripts/run-gosu-govulncheck.sh').read_text()))
             trace = root / 'trace.json'

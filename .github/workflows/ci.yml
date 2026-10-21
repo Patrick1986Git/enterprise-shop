@@ -623,13 +623,13 @@ jobs:
     env:
       # Same reviewed Hadolint executable in the upstream scratch variant; removes vulnerable Alpine packages.
       HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
-      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.2 and x/net v0.60.0; immutable local configuration digest.
-      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c
+      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.3 and x/net v0.60.0; immutable local configuration digest.
+      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7
       # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
-      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0
+      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
-      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-0c88a43b0dbf5f47247aae36c687e69bda0ec11d49d198f3e2f7a77932a44e2a
+      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-3c17d8d04c78734ed9d9bd42d26c193f7fecacada8e27fee84585dc72f017af9
       # Human-readable gosu release tag; CI verifies that it resolves to the pinned immutable commit before govulncheck.
       GOSU_SOURCE_TAG: "1.19"
       GOSU_SOURCE_COMMIT: 6456aaa0f3c854d199d0f037f068eb97515b7513
@@ -695,14 +695,14 @@ jobs:
           validate_linux_amd64_image "${HADOLINT_IMAGE}"
           docker image inspect "${TRIVY_IMAGE}" >/dev/null
           validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
-          validate_linux_amd64_image "docker.io/library/golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673"
+          validate_linux_amd64_image "docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd"
           validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
           docker image inspect "${RYUK_IMAGE}" >/dev/null
           validate_linux_amd64_image "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"
 
           docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
           docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.75.0'
-          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.9 linux/amd64'
+          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.10 linux/amd64'
           docker run --rm --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}" cat /etc/alpine-release | grep -E '^3\.20\.'
 
       - name: Verify upstream Trivy executable provenance
@@ -917,7 +917,11 @@ jobs:
           grep -F 'const Version = "1.19"' version.go
 
           cd ../..
+          cp docker/postgres/gosu/go.mod docker/postgres/gosu/go.sum .tmp/gosu-source/
           bash scripts/run-gosu-govulncheck.sh
+
+      - name: Verify patched gosu privilege transition and PostgreSQL runtime
+        run: python scripts/test-gosu-runtime.py --image enterprise-shop/postgres:ci --output .tmp/container-security/gosu/runtime.json
 
       - name: Test component-aware vulnerability policy
         run: python -m unittest discover -s scripts/tests -p 'test_*.py'
@@ -998,6 +1002,8 @@ jobs:
           path: |
             .tmp/container-security/auxiliary/policy-result.json
             .tmp/container-security/gosu/*.txt
+            .tmp/container-security/gosu/*.json
+            .tmp/container-security/gosu/gosu
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
