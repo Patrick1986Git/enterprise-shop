@@ -567,6 +567,11 @@ restart, dictionary loading, logical restore and ownership. It uses uniquely
 labeled disposable containers and volumes. Ordinary Java Testcontainers tests
 remain required; their upstream image alone cannot validate the rebuilt gosu.
 
+The account-file fixtures use synthetic records with `x` credential placeholders.
+The writer checks both record sets before creating files and permits only the
+exact malformed account line needed by the parser-limit regression. Guard tests
+preserve every parser input byte and reject unexpected credential fields.
+
 A newer PostgreSQL tag alone does not demonstrate a fix while its gosu is still
 affected. Switching privilege-transition tools, accepting a package waiver or
 using an unverified binary does not preserve the reviewed security boundary.

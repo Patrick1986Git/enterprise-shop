@@ -19,15 +19,27 @@ LABEL = "enterprise-shop.gosu-regression"
 MARKER = "GOSU_UNEXPECTED_COMMAND_EXECUTION"
 PROBE = ('printf "uid=%s\\ngid=%s\\ngroups=%s\\nhome=%s\\npid=%s\\n" '
          '"$(id -u)" "$(id -g)" "$(id -G)" "$HOME" "$$"')
-PASSWD = ("root:x:0:0:root:/root:/bin/sh\n"
-          "fixture:x:12345:23456:fixture:/tmp/fixture:/bin/sh\n")
-GROUP = ("root:x:0:\nfixturegroup:x:23456:\n"
-         "alpha:x:12346:fixture\nbeta:x:12347:fixture\n")
+ACCOUNT_RECORDS = ("root:x:0:0:root:/root:/bin/sh\n"
+                   "fixture:x:12345:23456:fixture:/tmp/fixture:/bin/sh\n")
+GROUP_RECORDS = ("root:x:0:\nfixturegroup:x:23456:\n"
+                 "alpha:x:12346:fixture\nbeta:x:12347:fixture\n")
+MALFORMED_ACCOUNT_RECORD = "x" * (128 * 1024)
 
 
 def require(condition, message):
     if not condition:
         raise AssertionError(message)
+
+
+def validate_fixture_records(records, field_count):
+    lines = records.splitlines()
+    require(lines, "synthetic fixture records must not be empty")
+    for line in lines:
+        if field_count == 7 and line == MALFORMED_ACCOUNT_RECORD:
+            continue
+        fields = line.split(":")
+        require(len(fields) == field_count and fields[1] == "x",
+                "synthetic fixture records require the expected fields and x placeholder")
 
 
 class RuntimeChecks:
@@ -81,18 +93,20 @@ class RuntimeChecks:
                 "created container label mismatch")
         return container
 
-    def fixture(self, directory, passwd=PASSWD, group=GROUP):
+    def fixture(self, directory, account_records=ACCOUNT_RECORDS, group_records=GROUP_RECORDS):
+        validate_fixture_records(account_records, 7)
+        validate_fixture_records(group_records, 4)
         directory.mkdir(mode=0o755)
         directory.chmod(0o755)
-        for name, content in (("passwd", passwd), ("group", group)):
+        for name, content in (("passwd", account_records), ("group", group_records)):
             path = directory / name
             path.write_text(content)
             path.chmod(0o644)
         return directory
 
-    def run(self, name, command, *, directory=None, passwd=PASSWD, group=GROUP,
+    def run(self, name, command, *, directory=None, account_records=ACCOUNT_RECORDS, group_records=GROUP_RECORDS,
             entrypoint="/usr/local/bin/gosu", expected=0):
-        fixtures = self.fixture(directory / name, passwd, group) if directory is not None else None
+        fixtures = self.fixture(directory / name, account_records, group_records) if directory is not None else None
         container = self.create(name, command, entrypoint=entrypoint, fixtures=fixtures)
         start = time.monotonic()
         result = self.docker("start", "--attach", container, check=False)
@@ -113,9 +127,9 @@ class RuntimeChecks:
         require(set(map(int, actual["groups"].split())) == set(groups), f"{name}: {actual}")
         require(actual["home"] == home and actual["pid"] == "1", f"{name}: {actual}")
 
-    def bounded_error(self, name, passwd, group, error, directory, spec="fixture"):
+    def bounded_error(self, name, account_records, group_records, error, directory, spec="fixture"):
         result = self.run(name, [spec, "/bin/sh", "-ec", f"printf {MARKER}"],
-                          directory=directory, passwd=passwd, group=group, expected=1)
+                          directory=directory, account_records=account_records, group_records=group_records, expected=1)
         require(MARKER not in result.stdout + result.stderr, f"{name}: command executed")
         require(error in result.stderr, f"{name}: missing {error!r}: {result.stderr[:1000]}")
 
@@ -138,24 +152,25 @@ class RuntimeChecks:
         self.identity("unmapped-numeric-ids", "34567:45678", 34567, 45678, [45678], "/", directory)
         self.run("exec-exit-status", ["fixture", "/bin/sh", "-ec", "exit 37"],
                  directory=directory, expected=37)
-        self.bounded_error("unknown-user", PASSWD, GROUP, "no matching entries in passwd file",
+        self.bounded_error("unknown-user", ACCOUNT_RECORDS, GROUP_RECORDS, "no matching entries in passwd file",
                            directory, "unmapped_fixture_name")
 
     def malformed_accounts(self, directory):
         # >1 MiB line: exercises ParseGroupFilter's new Scanner ceiling.
-        self.bounded_error("group-line-limit", PASSWD, GROUP + "huge:x:12348:" + "x" * (1024 * 1024) + "\n",
+        self.bounded_error("group-line-limit", ACCOUNT_RECORDS,
+                           GROUP_RECORDS + "huge:x:12348:" + "x" * (1024 * 1024) + "\n",
                            "token too long", directory)
         # >64 KiB passwd line: existing Scanner limit, retained by the update.
-        self.bounded_error("passwd-line-limit", PASSWD + "x" * (128 * 1024) + "\n", GROUP,
+        self.bounded_error("passwd-line-limit", ACCOUNT_RECORDS + MALFORMED_ACCOUNT_RECORD + "\n", GROUP_RECORDS,
                            "token too long", directory)
         # Short valid lines distinguish the 10 MiB read ceiling from token limits.
-        group_line = "other:x:23457:notfixture\n"
-        oversized_group = GROUP + group_line * ((10 * 1024 * 1024 // len(group_line)) + 1)
-        self.bounded_error("group-file-limit", PASSWD, oversized_group,
+        group_record = "other:x:23457:notfixture\n"
+        oversized_group_records = GROUP_RECORDS + group_record * ((10 * 1024 * 1024 // len(group_record)) + 1)
+        self.bounded_error("group-file-limit", ACCOUNT_RECORDS, oversized_group_records,
                            "file exceeds 10485760 bytes", directory)
-        passwd_line = "other:x:23457:23457:other:/tmp:/bin/sh\n"
-        oversized_passwd = PASSWD + passwd_line * ((10 * 1024 * 1024 // len(passwd_line)) + 1)
-        self.bounded_error("passwd-file-limit", oversized_passwd, GROUP,
+        account_record = "other:x:23457:23457:other:/tmp:/bin/sh\n"
+        oversized_account_records = ACCOUNT_RECORDS + account_record * ((10 * 1024 * 1024 // len(account_record)) + 1)
+        self.bounded_error("passwd-file-limit", oversized_account_records, GROUP_RECORDS,
                            "file exceeds 10485760 bytes", directory)
 
     def signal_contract(self):

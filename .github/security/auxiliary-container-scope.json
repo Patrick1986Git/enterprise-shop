@@ -318,7 +318,7 @@
     "scripts/scan-auxiliary-containers.py": "e5d3ab33b35212667ddfac22a92cf0c61e7e238b132bb1b300d9a099138d9966",
     "scripts/scan-build-tools.py": "4ae8185162eb922a521c12d075706671cb2684669b2bb54bb634cdbb89590dfc",
     "scripts/scan-docker-builder.sh": "22df258ffc63d8f559c22f6238810e53b351ef8339ab6d2f012355eebab2f7c6",
-    "scripts/test-gosu-runtime.py": "f510ae246d90e782ffc97e1f8db544e81e23112cc657646a68d0c6ef26e8854a",
+    "scripts/test-gosu-runtime.py": "2655f47e0c1ff2d32f87df4dea2c1177e6ca2d5ddd6ef2799472a8012ef64815",
     "scripts/trivy_candidate_evidence.py": "7e156d05780861b6289ccd34d0a94c6c4f625925d97fa274643adaa92e29fa8b",
     "scripts/validate-auxiliary-containers.py": "e7c24fafd0c208cd85375d3805db753990ae3fa3772c501855b7cb668a423b53",
     "scripts/validate-github-actions-policy.py": "5cfc82756021375523cec61968c6cbcc2ee66250db4a25ef72b576d1f630a367",
