@@ -18,7 +18,8 @@ EVIDENCE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(EVIDENCE)
 REFERENCE = 'ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa'
 REFERENCE_BINARY = '93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e'
-EXPECTED = {('CVE-2026-78669', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
+EXPECTED = {('CVE-2026-111943', 'stdlib', 'v1.27.1', 'HIGH'),
+            ('CVE-2026-78669', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
             ('CVE-2026-78667', 'stdlib', 'v1.27.1', 'HIGH'),
             ('CVE-2026-78669', 'stdlib', 'v1.27.1', 'HIGH'),
             ('CVE-2026-97031', 'stdlib', 'v1.27.1', 'HIGH')}
@@ -92,7 +93,7 @@ def download_database(command, directory, name):
 def collect_isolated(build, directory, actual_images):
     receipt = read(build / 'build-receipt.json')
     ref = receipt['image_reference']
-    require(receipt['binary_sha256'] == receipt['repeat_sha256'] and receipt['go_version'] == '1.27.2'
+    require(receipt['binary_sha256'] == receipt['repeat_sha256'] and receipt['go_version'] == '1.27.3'
             and receipt['repository_head'] == subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
             'Wrong build evidence before compatibility execution')
     inputs = directory / 'inputs'
@@ -188,7 +189,7 @@ def collect_isolated(build, directory, actual_images):
                 findings(read(item / 'vulnerable.raw.json'), True), 'Missing known HIGH positive finding')
         require(not summaries['patched']['blocked'], 'Negative fixture has blocking findings')
         require(set(map(tuple, summaries['reference-rootfs']['blocked'])) == EXPECTED,
-                'Known vulnerable scanner fixture did not retain all four blockers')
+                'Known vulnerable scanner fixture differs from the reviewed blocking findings')
         require(not summaries['candidate-rootfs']['blocked'] and not summaries['candidate-image']['blocked'],
                 'Actual candidate still has HIGH/CRITICAL findings')
         statuses = {}

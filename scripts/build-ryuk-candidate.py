@@ -21,7 +21,7 @@ ryuk_client_tests = importlib.util.module_from_spec(TEST_SPEC)
 TEST_SPEC.loader.exec_module(ryuk_client_tests)
 SOURCE = 'b3726afd6cc2c36628abcc08e9cabac43f587384'
 ARCHIVE_SHA = '7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d'
-BUILDER = 'docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0'
+BUILDER = 'docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
 
@@ -148,7 +148,7 @@ def build(directory, analyze=True):
     write(directory / 'filesystem-census.json', census)
     receipt = {'upstream_source_sha': SOURCE, 'upstream_archive_sha256': ARCHIVE_SHA,
         'patch_sha256': sha(patch.read_bytes()), 'source_files': source_hashes,
-        'builder': BUILDER, 'builder_image_id': inspect['Id'], 'go_version': '1.26.9',
+        'builder': BUILDER, 'builder_image_id': inspect['Id'], 'go_version': '1.26.10',
         'flags': flags, 'cgo_enabled': '0', 'upx': False, 'binary_sha256': sha(binary),
         'repeat_sha256': sha((directory / 'ryuk.repeat').read_bytes()),
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),

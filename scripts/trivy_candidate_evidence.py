@@ -64,7 +64,7 @@ def inventory(image, candidate):
     require(image['reference'] == candidate['image_reference']
             == 'local/enterprise-shop-trivy:sha256-' + candidate['image_id'].removeprefix('sha256:')
             and image['identity']['sha256'] == candidate['binary_sha256']
-            and image['go_version'] == candidate['go_version'] == '1.27.2', 'Unreviewed scanner executable')
+            and image['go_version'] == candidate['go_version'] == '1.27.3', 'Unreviewed scanner executable')
     require(candidate.get('exceptions') == [] and candidate.get('applicability') == []
             and image.get('exceptions', []) == [] and image.get('applicability', []) == [],
             'No scanner advisory exception or applicability waiver is authorized')
@@ -78,7 +78,7 @@ def inventory(image, candidate):
             and candidate['go_mod_sha256'] == BUILD.GO_MOD_SHA and candidate['go_sum_sha256'] == BUILD.GO_SUM_SHA,
             'Unreviewed source or Go manifest patch')
     metadata = candidate['buildinfo']
-    require(metadata['go_version'] == '1.27.2' and metadata['path'] == 'github.com/aquasecurity/trivy/cmd/trivy'
+    require(metadata['go_version'] == '1.27.3' and metadata['path'] == 'github.com/aquasecurity/trivy/cmd/trivy'
             and metadata['main_module'] == 'github.com/aquasecurity/trivy' and metadata['main_version'] == '(devel)'
             and metadata['dependencies']['golang.org/x/net'] == {
                 'version': 'v0.60.0', 'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='},
@@ -95,7 +95,7 @@ def advisory_analysis(candidate, receipt, directory, metadata, source_packages):
     imported = {p['ImportPath'] for p in source_packages}
     compiled_modules = {p['Module']['Path'] for p in source_packages if p.get('Module')}
     symbols = json.loads((directory / 'binary-symbols.json').read_text())
-    require(symbols['binary_sha256'] == candidate['binary_sha256'] and symbols['reader_go_version'] == 'go1.27.2'
+    require(symbols['binary_sha256'] == candidate['binary_sha256'] and symbols['reader_go_version'] == 'go1.27.3'
             and symbols['function_count'] == len(symbols['functions']) > 10000
             and symbols['functions'] == sorted(symbols['functions']), 'Missing/incomplete actual executable function readback')
     require(symbols['function_count'] == candidate['binary_functions']['count']
@@ -114,7 +114,7 @@ def advisory_analysis(candidate, receipt, directory, metadata, source_packages):
                 and configs[0]['db'] == 'https://vuln.go.dev', 'Self-scan/wrong advisory authority')
         BUILD.RYUK.ADVISORY.validate(directory, mode, evidence, configs[0])
         sboms = [m['SBOM'] for m in stream if 'SBOM' in m]
-        require(len(sboms) == 1 and sboms[0]['go_version'] == 'go1.27.2'
+        require(len(sboms) == 1 and sboms[0]['go_version'] == 'go1.27.3'
                 and sboms[0]['roots'] == [metadata['path'] if mode == 'source' else metadata['main_module']],
                 'Incomplete source/binary advisory readback')
         observed = {(m['path'], m.get('version', '')) for m in sboms[0]['modules']}
@@ -213,7 +213,7 @@ def validate_build(candidate, directory, head, analysis=True):
         require(sha((directory / 'govulncheck').read_bytes()) == receipt['tool_sha256'] == candidate['tool_sha256'],
                 'Independent analyzer executable changed')
         tool = buildinfo((directory / 'govulncheck-buildinfo.txt').read_text())
-        require(tool['go_version'] == '1.27.2' and tool['path'] == 'golang.org/x/vuln/cmd/govulncheck'
+        require(tool['go_version'] == '1.27.3' and tool['path'] == 'golang.org/x/vuln/cmd/govulncheck'
                 and tool['main_module'] == 'golang.org/x/vuln' and tool['main_version'] == BUILD.TOOL
                 and re.search(r'\tmod\tgolang.org/x/vuln\t' + re.escape(BUILD.TOOL) + r'\t' + re.escape(BUILD.TOOL_SUM),
                               (directory / 'govulncheck-buildinfo.txt').read_text()), 'Wrong independent analyzer authority')
@@ -310,7 +310,7 @@ def validate(image, evidence, report, directory, head):
     require(len(results) == 1 and results[0]['Target'] == 'usr/local/bin/trivy' and results[0]['Type'] == 'gobinary',
             'Missing actual scanner executable package inventory')
     expected = {(name, dep['version']) for name, dep in metadata['dependencies'].items()}
-    expected |= {(metadata['main_module'], ''), ('stdlib', 'v1.27.2')}
+    expected |= {(metadata['main_module'], ''), ('stdlib', 'v1.27.3')}
     require({(p['Name'], p.get('Version', '')) for p in results[0]['Packages']} == expected,
             'Incomplete scanner source/executable/raw package readback')
     receipt['independent_advisory_evaluation'] = summaries

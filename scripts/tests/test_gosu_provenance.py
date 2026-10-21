@@ -14,7 +14,7 @@ SPEC = importlib.util.spec_from_file_location("gosu_provenance", SCRIPT)
 POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
 
-BUILDINFO = """/evidence/gosu: go1.26.9
+BUILDINFO = """/evidence/gosu: go1.26.10
 \tpath\tgithub.com/tianon/gosu
 \tmod\tgithub.com/tianon/gosu\t(devel)\t
 \tdep\tgithub.com/moby/sys/user\tv0.4.1\th1:RgjRlaDKi/Xmyrz4t8lyzXT6v2ooFeO/7xtchmhVWE0=
@@ -159,7 +159,7 @@ class GosuProvenanceTest(unittest.TestCase):
                     self.validate()
 
     def test_compiler_main_module_and_build_flag_changes_fail(self):
-        for old, new in (("go1.26.9", "go1.24.6"), ("(devel)", "v1.19.0"),
+        for old, new in (("go1.26.10", "go1.24.6"), ("go1.26.10", "go1.26.9"), ("(devel)", "v1.19.0"),
                          ("CGO_ENABLED=0", "CGO_ENABLED=1"), ("GOARCH=amd64", "GOARCH=arm64"),
                          ("-compiler=gc", "-compiler=gccgo"), ("-trimpath=true", "-trimpath=false")):
             with self.subTest(old=old):

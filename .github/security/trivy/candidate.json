@@ -4,32 +4,32 @@
   "patch_sha256": "9fd37166f858e711be6df21fed4d716a7a98951c9a18cde3789cb743770f13c3",
   "go_mod_sha256": "54eb7f4afb4f86650b63d72deb206c73f24f5fbf1f20e93e93e380eba1ab11c5",
   "go_sum_sha256": "f0792bca7d673d64f10e76910532f3a1252301ac8e7a0c68aebd31fd5cd4c3b1",
-  "builder": "docker.io/library/golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673",
-  "builder_image_id": "sha256:0a761904b78c29eba4ec83bd83b7312db1e113dcd92da7fc669843ad9bca56a1",
-  "builder_manifest": "sha256:3b15ba438c60ab8fabe5fee3b11025c0049e358b31feff384648f11fc8e335f8",
-  "builder_binary_sha256": "548d3c32f83fa81152f543eb1526be7884cfe0526eb5e9ce29d3eca14786e7e0",
-  "go_version": "1.27.2",
+  "builder": "docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd",
+  "builder_image_id": "sha256:2101eb697fc5b5b7f64252fe6bf7a21c4a06a51852c71c3424d44e3f824cbb52",
+  "builder_manifest": "sha256:cd410a5c6686417875bc4815688e96ae9769f8562debc545d29fe58e73d174f0",
+  "builder_binary_sha256": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b",
+  "go_version": "1.27.3",
   "flags": "-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags=\"-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0\"",
-  "sdk_sha256": "ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5",
+  "sdk_sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
   "sdk_tools": {
-    "bin/go": "548d3c32f83fa81152f543eb1526be7884cfe0526eb5e9ce29d3eca14786e7e0",
-    "bin/gofmt": "5583dbb3339147fee7cdb067eb3cd4a50015b48c27084377f49d93833aa4ad77",
-    "pkg/tool/linux_amd64/compile": "8d4484dbaa31c4c6cec965aadd42efaa1e8d59e4a30ca3b466b502c377c29121",
-    "pkg/tool/linux_amd64/link": "b7567a824e05fa24240edbf883e77e536914f22444c6946f1cd4a904b315f9c2"
+    "bin/go": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b",
+    "bin/gofmt": "fd464d1c9098a6714d06bd3fcd2a1fedcdd291e710241160ebb663bf99adf2f8",
+    "pkg/tool/linux_amd64/compile": "c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283",
+    "pkg/tool/linux_amd64/link": "c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe"
   },
   "symbol_reader_sha256": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
   "cgo_enabled": "0",
   "upx": false,
   "independent_cold_caches": true,
-  "binary_sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
-  "repeat_sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
-  "image_reference": "local/enterprise-shop-trivy:sha256-6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c",
-  "image_id": "sha256:6f88ec766c6db9ca32e417aa9a4bf494d0450f5b4bcc7e94971a5e51e9fd737c",
-  "archive_sha256": "798aaeac6eadd6f485cf7bd3f93bc0f00e014b96bf77177ed36e9ceb61ff7bc3",
-  "layer_sha256": "a8ec9deebae5c540b00b5037dda39c49fad7200207ef37bc563c443b7699292a",
+  "binary_sha256": "590bcdfe542ce7c8e40ba925cc0438f8c26204b4780bc694cc9dac40109c2fbb",
+  "repeat_sha256": "590bcdfe542ce7c8e40ba925cc0438f8c26204b4780bc694cc9dac40109c2fbb",
+  "image_reference": "local/enterprise-shop-trivy:sha256-ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7",
+  "image_id": "sha256:ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7",
+  "archive_sha256": "5bf4a3b2ff53dc835b7eba844af7e224991fbb9c6d6fc77226e79170835740d8",
+  "layer_sha256": "d4011b2877251e68b144f66fb5c2774366b1e76d0b89f22b360af35f80ae1104",
   "filesystem": {
     "usr/local/bin/trivy": {
-      "sha256": "9f6b44b190a20806ff7a0c1563dd9122bbf51efd42074926cdfebb7aae5dc362",
+      "sha256": "590bcdfe542ce7c8e40ba925cc0438f8c26204b4780bc694cc9dac40109c2fbb",
       "size": 172540064,
       "mode": 493
     },
@@ -70,10 +70,10 @@
   },
   "govulncheck_version": "v1.8.0",
   "govulncheck_sum": "h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U=",
-  "tool_sha256": "cf227122610d4926988781d85029b9bc4f231b5821a0b63c70c0a019b46a14d1",
+  "tool_sha256": "3a6bd4978d9e640dcd9e1f44df0f6125a298123a2129e35ec36e2119875a9f37",
   "schema_version": 1,
   "buildinfo": {
-    "go_version": "1.27.2",
+    "go_version": "1.27.3",
     "dependencies": {
       "cel.dev/expr": {
         "version": "v0.25.2",
@@ -1605,8 +1605,8 @@
     "imports_sha256": "c83a2a14985047af8e4cac1ad12e173ed3919b6ec3ce192dba953424b0a63ff3"
   },
   "binary_functions": {
-    "count": 203497,
-    "names_sha256": "bbba0e8956a1a64c22a24aa61475e706db6fa6435038cb14ff48cc4e55809b0d"
+    "count": 203499,
+    "names_sha256": "ba13956f729c368fa2dbb1b6246c9135e8540c82346f0e56f165987ec9c5371c"
   },
   "observed_module_notices": [
     "GO-2026-5932"

@@ -143,7 +143,7 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
         (self.build / 'image.tar').write_bytes(archive)
         COMPAT.write(self.build / 'build-receipt.json', {'image_reference': 'local/candidate:fixture',
             'binary_sha256': COMPAT.sha(self.candidate), 'repeat_sha256': COMPAT.sha(self.candidate),
-            'go_version': '1.27.2', 'repository_head': 'fixture-head'})
+            'go_version': '1.27.3', 'repository_head': 'fixture-head'})
         for target, replacement in ((patch.object(COMPAT.subprocess, 'run'), self.run_command),
                                     (patch.object(COMPAT.subprocess, 'check_output'), self.output),
                                     (patch.object(COMPAT, 'REFERENCE_BINARY', COMPAT.sha(self.reference)), None),
@@ -294,20 +294,20 @@ class TrivyTrustContractTest(unittest.TestCase):
     def setUp(self):
         self.candidate = {'image_id': 'sha256:' + 'a' * 64,
             'image_reference': 'local/enterprise-shop-trivy:sha256-' + 'a' * 64,
-            'binary_sha256': 'b' * 64, 'repeat_sha256': 'b' * 64, 'go_version': '1.27.2',
+            'binary_sha256': 'b' * 64, 'repeat_sha256': 'b' * 64, 'go_version': '1.27.3',
             'exceptions': [], 'applicability': [], 'builder': BUILD.BUILDER,
             'builder_image_id': BUILD.BUILDER_ID, 'builder_manifest': BUILD.BUILDER_MANIFEST,
             'builder_binary_sha256': BUILD.BUILDER_BINARY, 'sdk_sha256': BUILD.SDK_SHA, 'sdk_tools': BUILD.SDK_TOOLS,
             'upstream_source_sha': BUILD.SOURCE, 'upstream_archive_sha256': BUILD.ARCHIVE_SHA,
             'patch_sha256': BUILD.PATCH_SHA, 'go_mod_sha256': BUILD.GO_MOD_SHA, 'go_sum_sha256': BUILD.GO_SUM_SHA,
             'flags': BUILD.FLAGS, 'upx': False, 'independent_cold_caches': True,
-            'buildinfo': {'go_version': '1.27.2', 'path': 'github.com/aquasecurity/trivy/cmd/trivy',
+            'buildinfo': {'go_version': '1.27.3', 'path': 'github.com/aquasecurity/trivy/cmd/trivy',
                 'main_module': 'github.com/aquasecurity/trivy', 'main_version': '(devel)',
                 'dependencies': {'golang.org/x/net': {'version': 'v0.60.0',
                     'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='}},
                 'build': {'CGO_ENABLED': '0', 'GOARCH': 'amd64', 'GOOS': 'linux', 'GOAMD64': 'v1',
                           '-buildmode': 'exe', '-trimpath': 'true'}}}
-        self.image = {'reference': self.candidate['image_reference'], 'go_version': '1.27.2',
+        self.image = {'reference': self.candidate['image_reference'], 'go_version': '1.27.3',
                       'identity': {'sha256': self.candidate['binary_sha256']}, 'exceptions': [], 'applicability': []}
 
     def validate(self):
@@ -324,12 +324,30 @@ class TrivyTrustContractTest(unittest.TestCase):
 
     def test_vulnerable_compiler_or_net_module_is_rejected(self):
         for mutate in (lambda v: v['buildinfo'].update(go_version='1.27.1'),
+                       lambda v: v['buildinfo'].update(go_version='1.27.2'),
                        lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.59.0')):
             old = copy.deepcopy(self.candidate)
             mutate(self.candidate)
             with self.assertRaisesRegex(ValueError, 'vulnerable'):
                 self.validate()
             self.candidate = old
+
+    def test_raw_inventory_requires_the_patched_actual_standard_library(self):
+        metadata = self.candidate['buildinfo']
+        report = {'Results': [{'Target': 'usr/local/bin/trivy', 'Type': 'gobinary',
+            'Packages': [{'Name': name, 'Version': version} for name, version in
+                [(metadata['main_module'], ''), ('stdlib', 'v1.27.3'), ('golang.org/x/net', 'v0.60.0')]]}]}
+        proof = {'image_id': self.candidate['image_id'], 'resolved_digest': self.candidate['image_id'],
+                 'identity_authority': 'local-configuration-and-archive'}
+        with tempfile.TemporaryDirectory() as temporary:
+            contract = Path(temporary) / 'candidate.json'
+            contract.write_text(json.dumps(self.candidate))
+            with patch.object(EVIDENCE, 'CONTRACT', contract), patch.object(EVIDENCE, 'validate_build',
+                    return_value=(metadata, {}, {})):
+                EVIDENCE.validate(self.image, proof, report, Path(temporary), 'fixture-head')
+                report['Results'][0]['Packages'][1]['Version'] = 'v1.27.2'
+                with self.assertRaisesRegex(ValueError, 'package readback'):
+                    EVIDENCE.validate(self.image, proof, report, Path(temporary), 'fixture-head')
 
     def test_source_patch_and_go_manifests_cannot_drift(self):
         for key in ('upstream_source_sha', 'upstream_archive_sha256', 'patch_sha256', 'go_mod_sha256', 'go_sum_sha256'):
@@ -386,7 +404,7 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
         self.packages = [{'ImportPath': 'net/http'}, {'ImportPath': 'golang.org/x/net/http2',
                          'Module': {'Path': 'golang.org/x/net'}}]
         functions = sorted(['net/http.F' + str(i) for i in range(10001)])
-        self.symbols = {'binary_sha256': 'b' * 64, 'reader_go_version': 'go1.27.2',
+        self.symbols = {'binary_sha256': 'b' * 64, 'reader_go_version': 'go1.27.3',
                         'function_count': len(functions), 'functions': functions}
         self.candidate = {'binary_sha256': 'b' * 64, 'observed_module_notices': ['GO-FIXTURE'],
                           'binary_functions': {'count': len(functions), 'names_sha256':
@@ -403,7 +421,7 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
                 {'config': {'scan_mode': mode, 'scan_level': 'symbol', 'scanner_name': 'govulncheck',
                             'scanner_version': BUILD.TOOL, 'db': 'https://vuln.go.dev',
                             'db_last_modified': MODIFIED}},
-                {'SBOM': {'go_version': 'go1.27.2', 'roots': [self.metadata['path' if mode == 'source' else 'main_module']],
+                {'SBOM': {'go_version': 'go1.27.3', 'roots': [self.metadata['path' if mode == 'source' else 'main_module']],
                           'modules': [{'path': 'golang.org/x/net', 'version': 'v0.60.0'}]}},
                 {'osv': {'id': 'GO-FIXTURE', 'affected': [{'package': {'name': 'golang.org/x/crypto'},
                          'ecosystem_specific': {'imports': [{'path': 'golang.org/x/crypto/openpgp'}]}}]}},
@@ -486,7 +504,7 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
 
     def test_replaced_module_build_information_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'Unsupported/replaced'):
-            EVIDENCE.buildinfo('fixture: go1.27.2\n\t=>\tlocal/module\n')
+            EVIDENCE.buildinfo('fixture: go1.27.3\n\t=>\tlocal/module\n')
 
     def test_truncated_stream_is_rejected(self):
         with self.assertRaises(json.JSONDecodeError):

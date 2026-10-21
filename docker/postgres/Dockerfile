@@ -1,4 +1,4 @@
-FROM docker.io/library/golang:1.26.9-alpine3.24@sha256:cdfd4fe2da6b225d8b40c6b7a105736e548e83ff56d5d8f9394446eeb5eb84e0 AS gosu-builder
+FROM docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS gosu-builder
 
 ENV CGO_ENABLED=0 \
     GOOS=linux \
@@ -23,14 +23,14 @@ COPY gosu/go.mod gosu/go.sum ./
 RUN --mount=type=secret,id=proxy_ca \
     set -eu; \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
-    test "$(go env GOVERSION)" = go1.26.9; \
+    test "$(go env GOVERSION)" = go1.26.10; \
     go mod download; \
     go mod verify; \
     mkdir /out; \
     GOCACHE=/tmp/gosu-cache-first go build -mod=readonly -trimpath -buildvcs=false -ldflags='-d -w' -o /out/gosu .; \
     GOCACHE=/tmp/gosu-cache-repeat go build -mod=readonly -trimpath -buildvcs=false -ldflags='-d -w' -o /out/gosu.repeat .; \
     cmp /out/gosu /out/gosu.repeat; \
-    printf '%s\n' 'f7cfbac4f5a278c883e03db925dbd717be533f4aa2ddb60bbc9a5baa7106d49a  /out/gosu' > /out/gosu.sha256; \
+    printf '%s\n' '077de39980df05ec3897fbadf39a3105ddbd430e8fb714e9eb97b5bc57a8f094  /out/gosu' > /out/gosu.sha256; \
     sha256sum -c /out/gosu.sha256; \
     go version -m /out/gosu
 
