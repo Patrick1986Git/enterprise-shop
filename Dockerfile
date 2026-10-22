@@ -9,7 +9,7 @@ RUN apt-get update \
 
 COPY --chmod=0444 docker/java-security/blocked.certs /tmp/enterprise-shop-blocked.certs
 COPY --chmod=0555 docker/java-security/with-verified-blocklist.sh /usr/local/bin/with-verified-blocklist
-RUN printf '%s  %s\n' 96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded /opt/java/openjdk/lib/security/blocked.certs | sha256sum --check --status \
+RUN test "$(sha256sum /opt/java/openjdk/lib/security/blocked.certs)" = '96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded  /opt/java/openjdk/lib/security/blocked.certs' \
     && cp /tmp/enterprise-shop-blocked.certs /opt/java/openjdk/lib/security/blocked.certs \
     && chmod 0444 /opt/java/openjdk/lib/security/blocked.certs \
     && rm /tmp/enterprise-shop-blocked.certs \
@@ -28,7 +28,7 @@ FROM eclipse-temurin:21-jre-jammy AS runtime
 
 COPY --chmod=0444 docker/java-security/blocked.certs /tmp/enterprise-shop-blocked.certs
 COPY --chmod=0555 docker/java-security/with-verified-blocklist.sh /usr/local/bin/with-verified-blocklist
-RUN printf '%s  %s\n' 96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded /opt/java/openjdk/lib/security/blocked.certs | sha256sum --check --status \
+RUN test "$(sha256sum /opt/java/openjdk/lib/security/blocked.certs)" = '96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded  /opt/java/openjdk/lib/security/blocked.certs' \
     && cp /tmp/enterprise-shop-blocked.certs /opt/java/openjdk/lib/security/blocked.certs \
     && chmod 0444 /opt/java/openjdk/lib/security/blocked.certs \
     && rm /tmp/enterprise-shop-blocked.certs \
