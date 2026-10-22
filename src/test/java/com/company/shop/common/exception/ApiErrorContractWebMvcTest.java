@@ -13,6 +13,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -27,6 +28,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -108,9 +110,55 @@ class ApiErrorContractWebMvcTest {
 					.andExpect(jsonPath("$.message").value(message))
 					.andExpect(jsonPath("$.errors").value(nullValue()))
 					.andExpect(r -> assertThat(r.getResolvedException())
-							.isExactlyInstanceOf(HttpMediaTypeNotSupportedException.class));
+							.isExactlyInstanceOf(HttpMediaTypeNotSupportedException.class))
+					.andExpect(this::assertFrameworkMediaTypeHeaders);
 		}
 		verifyNoInteractions(authService);
+	}
+
+	@ParameterizedTest
+	@CsvSource({
+			"en,Unsupported request media type.",
+			"pl,Nieobsługiwany typ treści żądania."
+	})
+	void unsupportedPatchMediaType_shouldPreserveFrameworkHeaders(String language, String message) throws Exception {
+		assertApiErrorShape(mockMvc.perform(patch("/api/v1/me/cart/items/00000000-0000-0000-0000-000000000001")
+				.with(user("test").roles("USER"))
+				.header("Accept-Language", language)
+				.contentType(MediaType.TEXT_PLAIN).content("synthetic-untrusted-body")), 415, "UNSUPPORTED_MEDIA_TYPE")
+				.andExpect(jsonPath("$.message").value(message))
+				.andExpect(jsonPath("$.errors").value(nullValue()))
+				.andExpect(this::assertFrameworkMediaTypeHeaders);
+		verifyNoInteractions(cartService);
+	}
+
+	@Test
+	void mediaTypeException_withoutSupportedTypes_shouldNotInventHeaders() throws Exception {
+		assertApiErrorShape(mockMvc.perform(get("/api/v1/test/unsupported-media-type-without-supported-types")
+				.with(user("test").roles("USER"))),
+				415, "UNSUPPORTED_MEDIA_TYPE")
+				.andExpect(r -> {
+					assertThat(r.getResolvedException()).isExactlyInstanceOf(HttpMediaTypeNotSupportedException.class);
+					var exception = (HttpMediaTypeNotSupportedException) r.getResolvedException();
+					assertThat(exception.getHeaders().isEmpty()).isTrue();
+				})
+				.andExpect(header().doesNotExist(HttpHeaders.ACCEPT))
+				.andExpect(header().doesNotExist(HttpHeaders.ACCEPT_PATCH));
+		verifyNoInteractions(authService);
+	}
+
+	private void assertFrameworkMediaTypeHeaders(org.springframework.test.web.servlet.MvcResult result) {
+		assertThat(result.getResolvedException()).isExactlyInstanceOf(HttpMediaTypeNotSupportedException.class);
+		var exception = (HttpMediaTypeNotSupportedException) result.getResolvedException();
+		assertThat(exception.getSupportedMediaTypes()).isNotEmpty();
+		assertThat(exception.getHeaders().getAccept()).containsExactlyElementsOf(exception.getSupportedMediaTypes());
+		if ("PATCH".equals(result.getRequest().getMethod())) {
+			assertThat(exception.getHeaders().getAcceptPatch()).containsExactlyElementsOf(exception.getSupportedMediaTypes());
+		} else {
+			assertThat(result.getResponse().getHeader(HttpHeaders.ACCEPT_PATCH)).isNull();
+		}
+		exception.getHeaders().forEach((name, values) ->
+				assertThat(result.getResponse().getHeaders(name)).as("Framework headers %s: %s", exception.getHeaders(), name).containsExactlyElementsOf(values));
 	}
 
 	@ParameterizedTest
@@ -303,6 +351,11 @@ class ApiErrorContractWebMvcTest {
 		@GetMapping("/business-unknown")
 		void businessUnknown() {
 			throw new UnknownCodeBusinessException();
+		}
+
+		@GetMapping("/unsupported-media-type-without-supported-types")
+		void unsupportedMediaTypeWithoutSupportedTypes() throws HttpMediaTypeNotSupportedException {
+			throw new HttpMediaTypeNotSupportedException("synthetic-internal-diagnostic");
 		}
 
 		@GetMapping("/access-denied")
