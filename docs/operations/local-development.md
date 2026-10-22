@@ -27,7 +27,9 @@ To prepare only PostgreSQL and the runtime role without starting Maven or Spring
 ./scripts/run-dev.sh --prepare-only
 ```
 
-The script starts PostgreSQL with `docker compose up -d --wait postgres`, checks whether the application role `${APP_DB_USER:-shop_dev}` can authenticate, has least-privilege role attributes, and has the required runtime database grants, and runs `database-role-bootstrap` only when the role is missing, authentication fails, attributes are unsafe, or required privileges are unavailable. Normal startup then uses `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run` through `exec` so `Ctrl+C` is delivered directly to Spring Boot. `--prepare-only` performs the same database preparation and final validation, then exits successfully without starting Spring Boot.
+The script requires Docker Compose and Python 3. Before any Compose startup or role bootstrap, a read-only preflight compares the installed `/usr/local/bin/gosu` with the existing [reviewed candidate receipt](../../.github/security/gosu/candidate.json). For an existing running or stopped service container, it copies only that executable to memory and starts the verified container with `--no-recreate --no-build --wait`. It never automatically replaces an existing database container. With no container and no existing PostgreSQL 18 named volume, it checks a cached image through `docker image save`, or allows the Dockerfile's hash-checked build when no image exists. A named volume without its service container requires operator review before startup.
+
+After that preflight, the script checks whether the application role `${APP_DB_USER:-shop_dev}` can authenticate, has least-privilege role attributes, and has the required runtime database grants, and runs `database-role-bootstrap` only when the role is missing, authentication fails, attributes are unsafe, or required privileges are unavailable. Normal startup then uses `SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run` through `exec` so `Ctrl+C` is delivered directly to Spring Boot. `--prepare-only` performs the same database preparation and final validation, then exits successfully without starting Spring Boot.
 
 The host application started by `run-dev.sh` always uses `APP_DB_USER` and `APP_DB_PASSWORD` for the datasource. `DATABASE_USERNAME` and `DATABASE_PASSWORD` must either be unset or match those runtime values; conflicting overrides fail fast instead of being ignored. `APP_DB_USER` must differ from `POSTGRES_USER`, so the host application cannot run as the PostgreSQL administrator. Flyway remains separate and continues to use `FLYWAY_USER` and `FLYWAY_PASSWORD`, which default to the local admin/bootstrap identity.
 
@@ -44,11 +46,38 @@ Manual bootstrap is normally required only for a new `enterprise_shop_postgres18
 ## Database-only startup for Eclipse or manual Maven runs
 
 ```bash
-docker compose up -d --wait postgres
-docker compose run --rm --no-deps --build database-role-bootstrap
+./scripts/run-dev.sh --prepare-only
 ```
 
-PostgreSQL is a long-running service, so it uses `up --wait`. `database-role-bootstrap` is a one-shot administrative task, so it uses `run`; successful termination with exit code 0 is expected, and `--rm` removes the temporary one-off container. After those commands complete, start Spring Boot from Eclipse or Maven with the `dev` profile. No YAML edits are required for the default host port and credentials.
+After preparation completes, start Spring Boot from Eclipse or Maven with the `dev` profile. No YAML edits are required for the default host port and credentials. `database-role-bootstrap` remains a one-shot administrative task; successful termination with exit code 0 is expected, and `--rm` removes its temporary container.
+
+## Adopting a reviewed PostgreSQL image
+
+A committed Dockerfile and successful CI describe a newly built image. They do not change an executable inside an existing local container. Compose can reuse a running container, restart a stopped one, or create a container from a cached image without rebuilding after a Dockerfile-only change. The startup preflight therefore checks actual executable bytes, including stopped containers, rather than trusting a tag, label or version string. Missing/unreadable evidence, an unexpected digest, unsupported architecture, or Docker failure stops startup before Compose or database-role bootstrap can mutate anything.
+
+The check establishes the reviewed gosu identity only; it is not an image-wide vulnerability scan or a new provenance attestation. It supports the receipt's `linux/amd64` platform. Cached-image inspection uses temporary local disk space for an image archive and rejects unsupported links or ambiguous archive layouts. Run it without concurrent image/container changes. Direct Compose commands bypass this safeguard; use `run-dev.sh` for ordinary local startup.
+
+Image adoption is a separate, operator-controlled maintenance operation. Do not run the following procedure as an automatic startup repair:
+
+1. Identify the intended Compose project and PostgreSQL 18 service. Confirm its existing mount is `enterprise_shop_postgres18_volume` at `/var/lib/postgresql`; preserve the current image identity for rollback. Do not dump container configuration or credentials into logs.
+2. Secure a current verified backup and independently preserved role, credential and ADMIN recovery provisioning outside the repository. Follow the [disaster recovery runbook](disaster-recovery.md) and [local administrator runbook](local-administrator.md). Verify recoverability using a separate disposable target before scheduling downtime; keep locally preserved backups intact.
+3. Build the current reviewed image before downtime, then check its executable without creating or starting a container:
+
+   ```bash
+   docker compose build postgres
+   python3 scripts/check-local-postgres-gosu.py --image "$(docker compose config --images postgres)"
+   ```
+
+4. Once the operator has approved maintenance, stop application writers. Explicitly replace only the PostgreSQL service using the reviewed local image and the unchanged named volume:
+
+   ```bash
+   docker compose up -d --no-deps --no-build --force-recreate --wait postgres
+   ./scripts/run-dev.sh --prepare-only
+   ```
+
+5. Check health, runtime-role validation and the expected Flyway history before resuming writers. Retain the backup, recovery material and previous image until the application and persistent data are verified. Do not initialize a new cluster, change PostgreSQL major versions, delete the volume, or use volume-removing/prune commands as part of adoption.
+
+Reattaching the unchanged volume is not backup restoration and does not require V52/V53 recovery invalidation. If an actual restore becomes necessary, follow the restore and ADMIN recovery contracts in the linked runbooks, including their explicit invalidation and reprovisioning steps. This procedure does not authorize automated live replacement.
 
 ## Full Compose startup
 
@@ -56,7 +85,7 @@ PostgreSQL is a long-running service, so it uses `up --wait`. `database-role-boo
 docker compose --profile full up -d --build --wait
 ```
 
-The app service waits for PostgreSQL to become healthy and for `database-role-bootstrap` to complete successfully before starting.
+The app service waits for PostgreSQL to become healthy and for `database-role-bootstrap` to complete successfully before starting. This direct Compose command can replace existing containers and bypasses the host-startup preflight. For an existing persistent development database, use the reviewed-image maintenance procedure above before intentionally updating the full stack.
 
 ## Local Swagger UI authentication
 
