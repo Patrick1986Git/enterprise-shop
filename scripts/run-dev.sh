@@ -250,9 +250,21 @@ export DATABASE_USERNAME="$APP_DB_USER"
 export DATABASE_PASSWORD="$APP_DB_PASSWORD"
 
 require_command docker
+require_command python3
 
-log "Starting PostgreSQL with Docker Compose from $repo_root"
-docker compose up -d --wait postgres
+log "Checking local PostgreSQL gosu against the reviewed security receipt"
+postgres_startup=$(python3 "$script_dir/check-local-postgres-gosu.py") || exit 1
+case "$postgres_startup" in
+  existing)
+    log "Starting the verified existing PostgreSQL container without rebuilding or replacing it"
+    docker compose up -d --wait --no-recreate --no-build postgres
+    ;;
+  first-start)
+    log "Starting PostgreSQL for the first time from the reviewed image or Dockerfile"
+    docker compose up -d --wait --no-recreate postgres
+    ;;
+  *) fail "Unexpected PostgreSQL security preflight result; startup stopped" ;;
+esac
 
 log "Checking whether application role $APP_DB_USER can authenticate, has least-privilege attributes, and has required grants"
 if check_app_role; then
