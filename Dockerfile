@@ -7,16 +7,32 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y unzip libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --chmod=0444 docker/java-security/blocked.certs /tmp/enterprise-shop-blocked.certs
+COPY --chmod=0555 docker/java-security/with-verified-blocklist.sh /usr/local/bin/with-verified-blocklist
+RUN printf '%s  %s\n' 96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded /opt/java/openjdk/lib/security/blocked.certs | sha256sum --check --status \
+    && cp /tmp/enterprise-shop-blocked.certs /opt/java/openjdk/lib/security/blocked.certs \
+    && chmod 0444 /opt/java/openjdk/lib/security/blocked.certs \
+    && rm /tmp/enterprise-shop-blocked.certs \
+    && /usr/local/bin/with-verified-blocklist /opt/java/openjdk/lib/security/blocked.certs true
+
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 RUN chmod +x ./mvnw
 
-RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -DskipTests dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2 /usr/local/bin/with-verified-blocklist /opt/java/openjdk/lib/security/blocked.certs ./mvnw -B -DskipTests dependency:go-offline
 
 COPY src/ src/
-RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 /usr/local/bin/with-verified-blocklist /opt/java/openjdk/lib/security/blocked.certs ./mvnw -B -DskipTests package
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
+
+COPY --chmod=0444 docker/java-security/blocked.certs /tmp/enterprise-shop-blocked.certs
+COPY --chmod=0555 docker/java-security/with-verified-blocklist.sh /usr/local/bin/with-verified-blocklist
+RUN printf '%s  %s\n' 96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded /opt/java/openjdk/lib/security/blocked.certs | sha256sum --check --status \
+    && cp /tmp/enterprise-shop-blocked.certs /opt/java/openjdk/lib/security/blocked.certs \
+    && chmod 0444 /opt/java/openjdk/lib/security/blocked.certs \
+    && rm /tmp/enterprise-shop-blocked.certs \
+    && /usr/local/bin/with-verified-blocklist /opt/java/openjdk/lib/security/blocked.certs true
 
 LABEL org.opencontainers.image.title="Enterprise Shop" \
       org.opencontainers.image.description="Spring Boot application for the Enterprise Shop backend" \
@@ -34,4 +50,4 @@ COPY --from=builder /workspace/target/enterprise-shop-*.jar /app/app.jar
 
 USER app:app
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/usr/local/bin/with-verified-blocklist", "/opt/java/openjdk/lib/security/blocked.certs", "/opt/java/openjdk/bin/java", "-XX:MaxRAMPercentage=75.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/app.jar"]

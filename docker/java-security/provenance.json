@@ -1,0 +1,29 @@
+{
+  "purpose": "Partial certificate-trust mitigation; no CVE suppression or claim of complete remediation",
+  "repository": "openjdk/jdk21u",
+  "vendor_mirror": "adoptium/jdk21u",
+  "commit": "85974eed594aa5a9e13a6a20713156ed8d9cd0ed",
+  "patch": "8395142: CA Enhancements",
+  "sources": [
+    {
+      "path": "make/jdk/src/classes/build/tools/blockedcertsconverter/BlockedCertsConverter.java",
+      "git_blob": "9103f47bd4d958cd5d07d7c917d906f5b96388ef",
+      "sha256": "fbcbe17f71b64fc5dade61e4da42cc2544b860d9cd8096355413832b624dca65"
+    },
+    {
+      "path": "src/java.base/share/data/blockedcertsconverter/blocked.certs.pem",
+      "git_blob": "59b08d76b8c4b56d5bd30740bfb75829c9a8cb37",
+      "sha256": "23daaddff18ed3800bf38937b51cd91045777719baa19437d812afeb9b44b64e"
+    }
+  ],
+  "generation": "Unmodified official converter, Java 21, java.base/sun.security.util exported to the converter only",
+  "sha256": "2596bb6dda83c66d96c5a252d7b2ae1f24cc1ae3f1890223b4f3591a8d52bf10",
+  "bytes": 5608,
+  "algorithm": "SHA-256",
+  "fingerprints": 86,
+  "reviewed_base_blocklist_sha256": "96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded",
+  "inherited_fingerprints_retained": 38,
+  "incident_certificates": 16,
+  "added_fingerprints_including_alternate_encodings": 48,
+  "canonical_oracle_artifact_comparison": "Unavailable: owner and execution environment downloads returned HTTP 403; identity is not assumed"
+}
