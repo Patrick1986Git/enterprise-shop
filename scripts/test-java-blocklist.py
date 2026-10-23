@@ -70,7 +70,7 @@ def verify(output):
                   '--mount', f'type=bind,src={FIXTURES},dst=/fixtures,readonly']
         build = [*common, '--user', f'{os.getuid()}:{os.getgid()}',
                  '--mount', f'type=bind,src={work},dst=/work',
-                 '--mount', f'type=bind,src={ROOT / "scripts/tests/java"},dst=/source,readonly',
+                 '--mount', f'type=bind,src={ROOT / "src/test/java"},dst=/source,readonly',
                  '--entrypoint', GUARD, images['builder'], BLOCKLIST]
         run([*build, JAVA + 'javac', '-d', '/work', '/source/BlocklistRegression.java'])
         # Generate disposable local CA/server keys; no private material is committed or uploaded.

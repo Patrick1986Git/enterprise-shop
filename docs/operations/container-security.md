@@ -487,7 +487,10 @@ against the resolved configuration IDs of both actual CI images. The maintained
 offline suite uses two incident chains with their original and alternate
 encodings: ECDSA s to n-s and RSA outer AlgorithmIdentifier NULL removal. Fixture
 hashes, source commit/blob identities and derivation are retained under
-`scripts/tests/fixtures/java-blocklist`. The Java harness verifies signatures and
+`scripts/tests/fixtures/java-blocklist`. The standalone main class in
+`src/test/java/BlocklistRegression.java` is compiled by the Java source policy
+and by the image runner; it has no JUnit tests and is not selected by Surefire or
+Failsafe. It verifies signatures and
 unchanged signed content at a fixed incident date, then requires the specific
 untrusted-certificate rejection with affected roots deliberately restored in an
 isolated custom store. An isolated original-vendor-blocklist control must accept

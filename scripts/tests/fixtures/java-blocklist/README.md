@@ -30,7 +30,8 @@ method reflectively on the intermediate. Replace only that intermediate with
 returned variants 0/1 and encode the chain as described above. Regeneration is a
 reviewed maintenance operation, never a network dependency of regression tests.
 
-The Java harness independently checks signatures, unchanged signed content and
+The standalone `src/test/java/BlocklistRegression.java` harness independently
+checks signatures, unchanged signed content and
 the expected signature/encoding distinction. Its fixed incident date prevents
 fixture expiry from masking blocklist behavior. An original-blocklist control
 must accept all four chains; the mitigation must reject each specifically as an
