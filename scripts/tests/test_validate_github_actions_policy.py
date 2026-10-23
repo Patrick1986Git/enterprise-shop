@@ -27,7 +27,7 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
         self.assertTrue(any(diagnostic in error for error in errors), errors)
 
     def test_reviewed_dual_language_workflow_passes(self):
-        reviewed_sha = "24c54180a607b1449ed407dd24f251e4e9147c8d"
+        reviewed_sha = "6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee"
         self.assertEqual(reviewed_sha, POLICY.CODEQL_SHA)
         references = [reference for _, reference, _, _ in POLICY.action_references(
             SCRIPT.parents[1] / ".github/workflows/codeql.yml"
@@ -37,11 +37,19 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
         self.assertEqual([], self.validate(self.workflow))
 
     def test_previous_codeql_release_is_no_longer_reviewed(self):
-        previous_sha = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
-        for action in ("init", "analyze"):
-            with self.subTest(action=action):
-                self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
-                            f"github/codeql-action/{action}@{previous_sha}", "reviewed action")
+        for previous_sha in ("24c54180a607b1449ed407dd24f251e4e9147c8d",
+                             "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"):
+            for action in ("init", "analyze"):
+                with self.subTest(previous_sha=previous_sha, action=action):
+                    self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
+                                f"github/codeql-action/{action}@{previous_sha}", "reviewed action")
+
+    def test_mutable_and_short_codeql_references_are_rejected(self):
+        for revision in ("v4", "v4.39.0", "main", POLICY.CODEQL_SHA[:7]):
+            for action in ("init", "analyze"):
+                with self.subTest(revision=revision, action=action):
+                    self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
+                                f"github/codeql-action/{action}@{revision}", "full 40-character")
 
     def test_unreviewed_full_codeql_shas_are_rejected(self):
         for revision in (SHA, "f" * 40):

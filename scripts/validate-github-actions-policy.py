@@ -54,7 +54,7 @@ DEPENDENCY_REVIEW_JOB = re.compile(
 BUILD_JOB = re.compile(
     r"(?ms)^  build:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
-CODEQL_SHA = "24c54180a607b1449ed407dd24f251e4e9147c8d"
+CODEQL_SHA = "6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee"
 CODEQL_JOB = re.compile(
     r"(?ms)^  (?P<id>analyze(?:-python)?):\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
