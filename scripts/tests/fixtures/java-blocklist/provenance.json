@@ -1,0 +1,69 @@
+{
+  "chain_repository": "https://github.com/galadran/we-have-a-problem.com",
+  "chain_commit": "2086d67fb486982ab58aab2c965855aadf4c4a24",
+  "converter_commit": "85974eed594aa5a9e13a6a20713156ed8d9cd0ed",
+  "converter_method": "BlockedCertsConverter.altEncodings; signatures independently verified",
+  "validation_date": "2026-10-22T12:00:00Z",
+  "files": {
+    "ecdsa-0.pem": {
+      "sha256": "ab6483de0cb01d53d59275baf74d2766f3599e57a48d3319e4a5536c268ac696",
+      "source_chain": "dv-g3b-emudhra.we-have-a-problem.com.pem",
+      "variant": 0,
+      "transform": "original",
+      "source_path": "chains/dv-g3b-emudhra.we-have-a-problem.com.pem",
+      "source_git_blob": "ad8f25d298de8807590544ed59d4fd1d780d91d8",
+      "source_sha256": "ab6483de0cb01d53d59275baf74d2766f3599e57a48d3319e4a5536c268ac696"
+    },
+    "ecdsa-1.pem": {
+      "sha256": "ea59a6743185d8dada568f38fd2624ae9658d9dab003459b72805d8dc7e31de0",
+      "source_chain": "dv-g3b-emudhra.we-have-a-problem.com.pem",
+      "variant": 1,
+      "transform": "ECDSA s -> n-s",
+      "source_path": "chains/dv-g3b-emudhra.we-have-a-problem.com.pem",
+      "source_git_blob": "ad8f25d298de8807590544ed59d4fd1d780d91d8",
+      "source_sha256": "ab6483de0cb01d53d59275baf74d2766f3599e57a48d3319e4a5536c268ac696"
+    },
+    "rsa-0.pem": {
+      "sha256": "3641ff8e872e4c90d5691edb09894914121b267e6a50455347c5f28708fa1af2",
+      "source_chain": "dv-g3b-aaa-emudhra.we-have-a-problem.com.pem",
+      "variant": 0,
+      "transform": "original",
+      "source_path": "chains/dv-g3b-aaa-emudhra.we-have-a-problem.com.pem",
+      "source_git_blob": "10f6cbde87a8d0f16c15a91e0c904d32a5c4eded",
+      "source_sha256": "3641ff8e872e4c90d5691edb09894914121b267e6a50455347c5f28708fa1af2"
+    },
+    "rsa-1.pem": {
+      "sha256": "9d49f752140ef01a049e75e787de5e15db81be83b65299e6ca502eee5f3fd1ba",
+      "source_chain": "dv-g3b-aaa-emudhra.we-have-a-problem.com.pem",
+      "variant": 1,
+      "transform": "RSA outer AlgorithmIdentifier NULL removal",
+      "source_path": "chains/dv-g3b-aaa-emudhra.we-have-a-problem.com.pem",
+      "source_git_blob": "10f6cbde87a8d0f16c15a91e0c904d32a5c4eded",
+      "source_sha256": "3641ff8e872e4c90d5691edb09894914121b267e6a50455347c5f28708fa1af2"
+    },
+    "ecdsa-root.pem": {
+      "sha256": "36e68e205b53c67c7a013894e0d5c8583063468118d1ce78ecbc2200d1dd185c",
+      "certificate_sha256": "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b",
+      "source": "Official OpenJDK 21 source; isolated test-only restored trust anchor",
+      "source_repository": "adoptium/jdk21u",
+      "source_commit": "85974eed594aa5a9e13a6a20713156ed8d9cd0ed",
+      "source_path": "src/java.base/share/data/cacerts/emsigneccrootcag3",
+      "source_git_blob": "a286f81c2f451665e44617c3c70b12f435a8724d",
+      "source_sha256": "d3b7a0daef1021232f43d9758898d621b3d3210cf41077d1372d7b9c82da3445"
+    },
+    "rsa-root.pem": {
+      "sha256": "a5ddabd1602ae1c66ce11ad078e734cc473dcb8e9f573037832d8536ae3de90b",
+      "certificate_sha256": "d7a7a0fb5d7e2731d771e9484ebcdef71d5f0c3e0a2948782bc83ee0ea699ef4",
+      "source": "Official OpenJDK 21 source; isolated test-only restored trust anchor",
+      "source_repository": "adoptium/jdk21u",
+      "source_commit": "85974eed594aa5a9e13a6a20713156ed8d9cd0ed",
+      "source_path": "src/java.base/share/data/cacerts/comodoaaaca",
+      "source_git_blob": "76fc7fcf5f6ab266c7703200cfb37b4ce9089353",
+      "source_sha256": "38adf765d6b7a344ca811a5f694d737859b83e5bf6186bfcf69b557f95c1b7a5"
+    },
+    "vendor-blocked.certs": {
+      "sha256": "96572f243f31c2ef81a6e627542e596f6a9295cff3c7ae095c1b595cb1457ded",
+      "source": "Temurin 21 JDK base sha256:742daacb9316be4b6fc60258f6e4ac2a11882f6c597373c92290a57bfad0d2e0; isolated unmitigated control only"
+    }
+  }
+}

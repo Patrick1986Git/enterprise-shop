@@ -440,7 +440,17 @@ file, each stage requires its reviewed original digest. A changed base blocklist
 therefore stops the build for review instead of silently discarding new vendor
 or custom restrictions. Both Maven invocations and application startup require
 the installed file to be readable and match the complete mitigation digest
-before executing Java. Missing, altered or externally replaced data fails closed.
+before executing Java. Missing, altered or externally replaced data detected at
+that check fails closed. The guard hashes file contents through standard input;
+filenames containing newlines or backslashes never enter checksum-record parsing.
+Stable symlinks are checked through their current target. This startup check
+does not make the later JVM file read atomic: an actor able to replace the file
+or its parent after verification can race it. The image keeps these paths and
+the guard root-owned and unwritable by the application user. Do not mount mutable
+security data, permit application writes to Java security directories, or override
+the guarded entrypoint. Builder root, Docker operators and arbitrary JVM/security
+provider overrides remain trusted administrative capabilities, not a boundary
+enforced by this script. A running JVM is not continuously reverified.
 The application remains UID 10001, and its JVM is executed directly for normal
 signal and exit-status behavior. Image collection records both stage hashes and
 successful guarded Java execution alongside existing image/source identities.
@@ -471,6 +481,26 @@ Focused guard/provenance checks run with the existing Python policy suite:
 ```bash
 python -m unittest discover -s scripts/tests -p 'test_java_blocklist.py'
 ```
+
+`scripts/record-docker-builder.sh` also runs `scripts/test-java-blocklist.py`
+against the resolved configuration IDs of both actual CI images. The maintained
+offline suite uses two incident chains with their original and alternate
+encodings: ECDSA s to n-s and RSA outer AlgorithmIdentifier NULL removal. Fixture
+hashes, source commit/blob identities and derivation are retained under
+`scripts/tests/fixtures/java-blocklist`. The Java harness verifies signatures and
+unchanged signed content at a fixed incident date, then requires the specific
+untrusted-certificate rejection with affected roots deliberately restored in an
+isolated custom store. An isolated original-vendor-blocklist control must accept
+the same chains, preventing expiry or missing roots from masking regressions.
+
+Each image also performs legitimate loopback TLS, hostname-mismatch rejection
+and unknown-CA rejection with disposable CA/server keys, plus six fail-closed
+guard negatives. The runtime user must not be able to write the guard or security
+paths. Containers have no external network; no private keys or production trust
+changes are retained. These four representative certificate variants are durable
+regression coverage, distinct from the earlier 42-variant research qualification.
+They do not establish complete bypass coverage or production Stripe/SMTP readiness.
+Results are stored in `java-blocklist-regression.json` with the builder evidence.
 
 ### Inventory and execution ownership
 

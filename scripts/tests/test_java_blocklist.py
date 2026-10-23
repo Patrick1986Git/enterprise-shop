@@ -1,6 +1,8 @@
 import hashlib
 import json
 import os
+import signal
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -70,6 +72,76 @@ class JavaBlocklistTest(unittest.TestCase):
     def test_command_exit_status_is_preserved(self):
         result = subprocess.run(['/bin/sh', str(GUARD), str(self.blocklist), '/bin/sh', '-c', 'exit 37'])
         self.assertEqual(37, result.returncode)
+
+    def test_newline_path_cannot_redirect_checksum_verification(self):
+        tampered = Path(str(self.blocklist) + '\nignored')
+        tampered.write_text('tampered')
+        self.assertNotEqual(0, self.invoke(tampered).returncode)
+        self.assertFalse(self.marker.exists())
+
+    def test_adversarial_filenames_verify_the_requested_contents(self):
+        original = self.blocklist.read_bytes()
+        for name in ('line\nbreak', 'back\\slash', '-leading-dash', 'space and\ttab'):
+            with self.subTest(name=name):
+                path = self.directory / name
+                path.write_bytes(original)
+                self.assertEqual(0, self.invoke(path).returncode)
+                self.assertTrue(self.marker.exists())
+                self.marker.unlink()
+                path.write_bytes(b'tampered')
+                self.assertNotEqual(0, self.invoke(path).returncode)
+                self.assertFalse(self.marker.exists())
+
+    def test_symlink_verifies_current_target_and_rejects_replaced_or_missing_target(self):
+        link = self.directory / 'linked-blocklist'
+        link.symlink_to(self.blocklist)
+        self.assertEqual(0, self.invoke(link).returncode)
+        self.marker.unlink()
+        replacement = self.directory / 'replacement'
+        replacement.write_bytes(b'tampered')
+        replacement.replace(self.blocklist)
+        self.assertNotEqual(0, self.invoke(link).returncode)
+        self.assertFalse(self.marker.exists())
+        self.blocklist.unlink()
+        self.assertNotEqual(0, self.invoke(link).returncode)
+        self.assertFalse(self.marker.exists())
+
+    def test_fifo_is_rejected_without_waiting_for_a_writer(self):
+        fifo = self.directory / 'fifo'
+        os.mkfifo(fifo)
+        result = subprocess.run(['/bin/sh', str(GUARD), str(fifo)],
+                                capture_output=True, timeout=5)
+        self.assertNotEqual(0, result.returncode)
+
+    def test_unreadable_data_prevents_start(self):
+        self.blocklist.chmod(0)
+        self.addCleanup(self.blocklist.chmod, 0o600)
+        self.assertNotEqual(0, self.invoke().returncode)
+        self.assertFalse(self.marker.exists())
+
+    def test_arguments_process_identity_and_signal_delivery_are_preserved(self):
+        argument = 'space ; $HOME " literal'
+        command = [sys.executable, '-u', '-c',
+                   'import os,sys,time; print(os.getpid()); print(sys.argv[1]); time.sleep(30)', argument]
+        with subprocess.Popen(['/bin/sh', str(GUARD), str(self.blocklist), *command],
+                              stdout=subprocess.PIPE, text=True) as process:
+            try:
+                self.assertEqual(process.pid, int(process.stdout.readline()))
+                self.assertEqual(argument, process.stdout.readline().rstrip('\n'))
+                process.send_signal(signal.SIGTERM)
+                self.assertEqual(-signal.SIGTERM, process.wait(timeout=5))
+            finally:
+                if process.poll() is None:
+                    process.kill()
+
+    def test_retained_fixtures_are_immutable_and_inherited_restrictions_remain(self):
+        fixtures = ROOT / 'scripts/tests/fixtures/java-blocklist'
+        receipt = json.loads((fixtures / 'provenance.json').read_text())
+        for name, entry in receipt['files'].items():
+            self.assertEqual(entry['sha256'], hashlib.sha256((fixtures / name).read_bytes()).hexdigest())
+        inherited = set((fixtures / 'vendor-blocked.certs').read_text().splitlines()[1:])
+        self.assertEqual(38, len(inherited))
+        self.assertTrue(inherited <= set(self.blocklist.read_text().splitlines()[1:]))
 
     def test_both_stages_guard_base_identity_installation_and_java_execution(self):
         dockerfile = (ROOT / 'Dockerfile').read_text()
