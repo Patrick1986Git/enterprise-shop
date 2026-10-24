@@ -28,14 +28,19 @@ public class RequestIdFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         String requestId = resolveRequestId(request.getHeader(REQUEST_ID_HEADER));
+        String previousRequestId = MDC.get(REQUEST_ID_MDC_KEY);
 
         MDC.put(REQUEST_ID_MDC_KEY, requestId);
-        response.setHeader(REQUEST_ID_HEADER, requestId);
 
         try {
+            response.setHeader(REQUEST_ID_HEADER, requestId);
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(REQUEST_ID_MDC_KEY);
+            if (previousRequestId != null) {
+                MDC.put(REQUEST_ID_MDC_KEY, previousRequestId);
+            } else {
+                MDC.remove(REQUEST_ID_MDC_KEY);
+            }
         }
     }
 
