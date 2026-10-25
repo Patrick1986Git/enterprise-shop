@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.title="Enterprise Shop PostgreSQL" \
 ARG TSEARCH_DIR=/usr/local/share/postgresql/tsearch_data
 
 RUN --mount=type=secret,id=proxy_ca,target=/etc/ssl/certs/ca-certificates.crt \
-    apk upgrade --no-cache c-ares libcrypto3 libssl3 libuuid
+    apk upgrade --no-cache brotli-libs c-ares libcrypto3 libssl3 libuuid
 
 COPY --from=gosu-builder --chmod=0755 /out/gosu /usr/local/bin/gosu
 
