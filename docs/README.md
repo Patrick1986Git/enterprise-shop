@@ -2,6 +2,24 @@
 
 This `docs/` folder contains practical documentation that is currently grounded in the codebase and repository workflows. API contracts should come from generated documentation, not manually duplicated endpoint inventories.
 
+## Task-oriented navigation
+
+Choose the relevant row and follow only the links needed for the task. These are starting points; verify current source, tests, and dependencies rather than treating the guide as an exhaustive inventory. Module responsibilities and boundaries remain in the existing module map and architecture documents.
+
+Java package paths in the table are relative to the [production source root](../src/main/java/com/company/shop/) or [test source root](../src/test/java/com/company/shop/), as indicated by the column.
+
+| Task | Guidance to consult as needed | Code or configuration | Tests and verification locations |
+| --- | --- | --- | --- |
+| Business-module behavior or boundaries | [Module map](./architecture/module-map.md), [overview](./architecture/overview.md), [ArchUnit rules](./architecture/archunit.md) | `module/`; choose the owning module from the module map. | Matching `module/` package; `architecture/` for dependency/layering rules. |
+| Shared errors, validation, or configuration | [Overview](./architecture/overview.md), [error handling](./architecture/error-handling.md) | `common/`, `validation/`, `config/` | Matching `common/`, `validation/`, `config/` packages; affected module tests. |
+| Authentication, authorization, JWT, or current-user handling | [Security architecture](./architecture/security-architecture.md) | `security/`, `config/`, and affected `module/` code | `security/`, `config/`, and affected module WebMvc/integration tests. |
+| Database, persistence, or Flyway | [Database operations](./operations/database.md), [migration rules and compatibility](./operations/migrations.md) | [Migrations](../src/main/resources/db/migration/), owning `module/` entities/repositories, [compatibility decisions](../.github/database-migration-compatibility.json) | `persistence/` and affected module integration tests; [migration compatibility validator](../scripts/validate_migration_compatibility.py) and its tests in [scripts/tests/](../scripts/tests/). |
+| CI, CodeQL, or JaCoCo | [Testing strategy](./testing/strategy.md#tooling), [coverage governance](./testing/strategy.md#coverage-reporting) | [Workflows](../.github/workflows/) (`ci.yml`, `codeql.yml`, `jacoco-ratchet.yml`), [pom.xml](../pom.xml), [coverage baseline](../.github/coverage/jacoco-baseline.json) | Policy validators in [scripts/](../scripts/) and their regressions in [scripts/tests/](../scripts/tests/); workflow jobs provide the hosted verification paths. |
+| Docker or Maven/build-tool security | [Container security and reproduction](./operations/container-security.md), [Maven advisory boundary](./operations/container-security.md#maven-build-tool-advisory-boundary) | [Dockerfile](../Dockerfile), [PostgreSQL Dockerfile](../docker/postgres/Dockerfile), [wrapper configuration](../.mvn/), [mvnw](../mvnw), [pom.xml](../pom.xml), [security policies](../.github/security/), [scripts/](../scripts/) | Matching [scripts/tests/](../scripts/tests/) policy regressions; `persistence/support/` for Testcontainers/Ryuk execution. Follow the runbook for real scanner, image, and provenance evidence. |
+| Operational scripts, startup, role ownership, or restore | [Local development](./operations/local-development.md), [production configuration](./operations/production-configuration.md), [database operations](./operations/database.md), [disaster recovery](./operations/disaster-recovery.md); [local administrator](./operations/local-administrator.md) and [credential recovery](./operations/local-administrator-credential-recovery.md) for operator tools | [scripts/](../scripts/), [Compose](../docker-compose.yml), [application resources](../src/main/resources/) | Matching [scripts/tests/](../scripts/tests/), `config/`, `persistence/`, and affected module tests; Docker/restore jobs in [CI](../.github/workflows/ci.yml). Read the owning runbook's safety and ownership boundaries before executing operational scripts. |
+
+Use the [testing strategy](./testing/strategy.md) for focused Maven/Python commands and full verification prerequisites, including Java 21, Docker/PostgreSQL, and reviewed Ryuk preparation. Focused local checks do not replace required CI, CodeQL, coverage, or other applicable gates. For cross-module or security, API, persistence, transaction/concurrency, or operational impact, follow affected callers and consumers and expand to their tests and guidance.
+
 ## Policy
 - [`documentation-policy.md`](./documentation-policy.md) — documentation source-of-truth rules, manual documentation scope, and future API documentation automation direction.
 
