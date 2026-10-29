@@ -127,6 +127,51 @@ class TrivyBuildTest(unittest.TestCase):
         self.assertEqual(['HIGH', 'CRITICAL'], builder['threshold'])
 
 
+class TrivyRuntimeEnvironmentTest(unittest.TestCase):
+    def test_reviewed_docker29_settings_are_accepted_in_either_order(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None],
+                       ['GOMAXPROCS=1', 'GOMEMLIMIT=7GiB', None]):
+            with self.subTest(values=values):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_duplicate_keys_are_rejected_even_when_values_agree(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=7GiB', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=off', None],
+                       ['GOMAXPROCS=1', 'GOMAXPROCS=1', None],
+                       ['GOMAXPROCS=1', 'GOMAXPROCS=2', None]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_missing_wrong_extra_and_malformed_settings_are_rejected(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (None, {}, (), [], [None], ['GOMEMLIMIT=7GiB', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1'],
+                       [None, 'GOMEMLIMIT=7GiB', 'GOMAXPROCS=1'],
+                       ['GOMEMLIMIT=off', 'GOMAXPROCS=1', None],
+                       ['GOMEMLIMIT=7GiB', 'GOGC=off', None],
+                       ['GOMEMLIMIT=7GiB', 'GODEBUG=x', None],
+                       ['GOMEMLIMIT=7GiB', 'GOFLAGS=-tags=exclude', None],
+                       ['GOMEMLIMIT=7GiB', 'PATH=/unreviewed', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', 'GOGC=off', None],
+                       ['GOMEMLIMIT=7GiB', None, None],
+                       ['GOMEMLIMIT=7GiB', {'GOMAXPROCS': '1'}, None],
+                       ['GOMEMLIMIT=7GiB', ' GOMAXPROCS=1', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1 ', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1=2', None]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_interim_contract_rejects_any_concurrency_override(self):
+        reviewed = {'GOMEMLIMIT': '7GiB'}
+        BUILD.validate_runtime_environment(['GOMEMLIMIT=7GiB', None], reviewed)
+        for value in ('1', '2', '8'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(['GOMEMLIMIT=7GiB', 'GOMAXPROCS=' + value, None], reviewed)
+
+
 class TrivyTerminationTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -158,7 +203,7 @@ class TrivyTerminationTest(unittest.TestCase):
             return json.dumps({'id': self.identifier, 'name': '/' + self.name, 'head':
                 'd' * 40 if self.wrong_container else self.head, 'image': BUILD.BUILDER,
                 'memory': 10 * 1024 ** 3, 'swap': 20 * 1024 ** 3, 'cpus': 2 * 10 ** 9,
-                'pids': 512, 'readonly': True, 'runtime_env': ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None],
+                'pids': 512, 'readonly': True, 'runtime_env': ['GOMEMLIMIT=7GiB', None],
                 'state': {'status': 'exited' if self.completed else 'running', 'exit': self.status,
                           'oom': self.oom, 'pid': 0, 'started': '', 'finished': ''}}).encode()
         if command[0] == 'events':
@@ -207,12 +252,10 @@ class TrivyTerminationTest(unittest.TestCase):
         self.assertFalse(report['container']['state']['oom'])
         self.assertIn(['rm', '--force', self.identifier], self.commands)
 
-    def test_memory_profile_changes_only_source_runtime_memory_and_concurrency(self):
+    def test_interim_memory_profile_preserves_default_source_concurrency(self):
         command = BUILD.source_memory_command(self.analyzer)
-        self.assertEqual(self.analyzer[:-2] + ['-e', 'GOMEMLIMIT=7GiB', '-e', 'GOMAXPROCS=1']
-                         + self.analyzer[-2:], command)
+        self.assertEqual(self.analyzer[:-2] + ['-e', 'GOMEMLIMIT=7GiB'] + self.analyzer[-2:], command)
         self.assertEqual('7GiB', BUILD.SOURCE_GOMEMLIMIT)
-        self.assertEqual('1', BUILD.SOURCE_GOMAXPROCS)
 
     def test_runtime_overrides_and_changed_hard_limits_are_rejected(self):
         for extra in (['-e', 'GOMEMLIMIT=off'], ['--env', 'GOGC=off'], ['-e', 'GOMAXPROCS=8'],
@@ -294,6 +337,8 @@ class TrivyTerminationTest(unittest.TestCase):
                        lambda r: r['samples'][0].update(cache={}),
                        lambda r: r['container'].update(memory=20 * 1024 ** 3),
                        lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=off', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=7GiB', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None]),
                        lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=2', None]),
                        lambda r: r['container']['state'].update(exit=137),
                        lambda r: r.update(stdout_sha256='0' * 64)):

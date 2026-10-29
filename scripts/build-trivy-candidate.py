@@ -39,7 +39,6 @@ SDK_TOOLS = {
     'pkg/tool/linux_amd64/link': 'c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
 SOURCE_GOMEMLIMIT = '7GiB'
-SOURCE_GOMAXPROCS = '1'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
 RYUK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RYUK)
@@ -199,8 +198,20 @@ def source_memory_command(analyzer):
         if option in ('-e', '--env'):
             require(options[index + 1].partition('=')[0] not in protected,
                     'Source analyzer runtime override')
-    return options + ['-e', 'GOMEMLIMIT=' + SOURCE_GOMEMLIMIT,
-                      '-e', 'GOMAXPROCS=' + SOURCE_GOMAXPROCS] + analyzer[-2:]
+    return options + ['-e', 'GOMEMLIMIT=' + SOURCE_GOMEMLIMIT] + analyzer[-2:]
+
+
+def validate_runtime_environment(values, expected):
+    require(type(values) is list and len(values) == len(expected) + 1 and values[-1] is None,
+            'Analyzer runtime environment contract drift')
+    observed = {}
+    for entry in values[:-1]:
+        require(type(entry) is str and entry.count('=') == 1, 'Malformed analyzer runtime setting')
+        name, value = entry.split('=', 1)
+        require(name in expected and name not in observed and value == expected[name],
+                'Unexpected or duplicate analyzer runtime setting')
+        observed[name] = value
+    require(observed == expected, 'Missing analyzer runtime setting')
 
 
 def source_analysis(analyzer, args, directory, head):
@@ -363,10 +374,9 @@ def validate_source_diagnostics(directory, receipt, head, now=None):
     require(report['analyzer_sha256'] == receipt['tool_sha256']
             and report['args'] == ['-db=https://vuln.go.dev', '-mode=source', '-json', './cmd/trivy']
             and actual['memory'] == 10 * 1024 ** 3 and actual['cpus'] == 2 * 10 ** 9
-            and actual['pids'] == 512 and actual['readonly'] is True
-            and actual['runtime_env'] == ['GOMEMLIMIT=' + SOURCE_GOMEMLIMIT,
-                                          'GOMAXPROCS=' + SOURCE_GOMAXPROCS, None],
+            and actual['pids'] == 512 and actual['readonly'] is True,
             'Analyzer diagnostic contract drift')
+    validate_runtime_environment(actual['runtime_env'], {'GOMEMLIMIT': SOURCE_GOMEMLIMIT})
     require(report['cleanup'] is True and not report['errors'] and 0 < len(report['samples']) <= 400
             and actual['state']['status'] == 'exited' and type(actual['state']['oom']) is bool
             and type(actual['state']['exit']) is int and actual['state']['exit'] == evidence['status']

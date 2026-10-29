@@ -326,23 +326,50 @@ source analysis. Exit 137 and incomplete acquisition remain failures even when t
 termination diagnostics are complete. Diagnose the cause from retained state/events
 and resource counters; exit 137 alone does not establish OOM.
 
-The source analyzer explicitly receives `GOMEMLIMIT=7GiB` and `GOMAXPROCS=1`
-inside the existing 10 GiB cgroup. The runtime target aims to reserve memory
-outside Go's managed accounting; it is soft and may be exceeded by live data.
-Limiting Go execution to one processor reduces simultaneous SSA construction without changing
-the analyzer's source, symbol level, package set or entry points. Actual cgroup
-and host headroom must be measured, including swap use, rather than inferred
-from the difference between the target and hard limit. Source arguments, full
+The source analyzer explicitly receives `GOMEMLIMIT=7GiB` inside the existing
+10 GiB cgroup, retaining default Go concurrency. This is an interim setting,
+not an accepted headroom guarantee. It completed both memory-only hosted analyses;
+forcing `GOMAXPROCS=1` also completed twice but was slower, reached the same RAM
+ceiling and used approximately 1.5 GiB of owned cgroup swap. No demonstrated safety
+improvement justified retaining that override. The runtime target is soft and may
+be exceeded by live data. Actual cgroup and host headroom must be measured,
+including swap use, rather than inferred from the difference between the target
+and hard limit. Source arguments, full
 compiled graph, verified analyzer and SDK, two-CPU/512-PID limits, timeout and
 fresh advisory acquisition are unchanged.
 Binary analysis and scanner build settings are unaffected. Resource environment
-overrides and changed hard limits are rejected; the selected runtime settings
-are read back from the owned container and bound into its diagnostic evidence.
+overrides and changed hard limits are rejected. Filtered runtime settings are
+read back from the owned container and bound into its diagnostic evidence.
+Validation compares the exact reviewed key/value mapping without relying on
+Docker's entry order. Identical or conflicting duplicate keys, missing/extra
+settings, malformed entries and wrong values are rejected before constructing
+an accepted mapping; the trailing JSON sentinel is required exactly once.
 The report also records host CPU/affinity and disk/inode capacity, plus selected
 owned-cgroup anonymous/file/kernel and available swap counters to assess actual headroom.
 Accept this resource profile only with full valid source output, status zero,
 fresh authoritative acquisition, complete compiled-module evidence and no OOM;
 lower RSS alone does not establish completion or vulnerability acceptance.
+
+Resource acceptance remains unresolved. For this reviewed graph, the next
+assessment must demonstrate at least 1 GiB of resident reserve below the 10 GiB
+cap (total `memory.peak` at most 9 GiB), zero hard-limit reclaim events, and zero
+owned cgroup swap peak. The reserve is a conservative review budget of roughly
+four times the observed approximately 0.25 GiB kernel-accounted peak; file and
+anonymous memory remain included in the total peak. Sampled host availability
+must retain at least 3 GiB RAM and 2 GiB free swap, without treating nominal
+Docker swap limits as provisioned host capacity. Missing counters cannot prove
+these criteria. These budgets do not assert a universal memory requirement or
+change the automated advisory acceptance policy.
+
+Require at least two independently evidenced complete analyses of the same
+reviewed source/SDK/analyzer and full compiled graph, each below 900 seconds
+(half the unchanged 1,800-second timeout), without retries, timeout, OOM or
+incomplete output. Compare module coverage and findings as well as resource
+peaks; graph or dependency changes require reassessment. Existing measurements
+already show that neither tested profile meets the resident-reserve criterion.
+Do not repeat cold builds merely to reconfirm that limitation or make a blind
+memory-limit increase. A different resource strategy requires a separate measured
+decision, while complete source and binary advisory checks remain mandatory.
 
 ### Update authority and infrastructure boundaries
 
