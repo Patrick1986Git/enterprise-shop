@@ -171,8 +171,8 @@ class DockerImageIdentityTest(unittest.TestCase):
             self.verify(files=files)
 
     def test_inspection_binds_export_to_native_id_and_reviewed_config(self):
-        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64'}]
-        def save(command, check):
+        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64', 'Size': 65536}]
+        def save(command, check, **kwargs):
             self.assertEqual(MANIFEST_ID, command[-1])
             Path(command[4]).write_bytes(gzip.decompress(FIXTURE.read_bytes()))
         with patch.object(IDENTITY.subprocess, 'check_output', return_value=encoded(observed)), \
@@ -197,8 +197,8 @@ class DockerImageIdentityTest(unittest.TestCase):
                 IDENTITY.configuration_evidence(proof, MANIFEST_ID)
 
     def test_collection_retains_metadata_only_after_full_layer_verification(self):
-        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64'}]
-        def save(command, check):
+        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64', 'Size': 65536}]
+        def save(command, check, **kwargs):
             Path(command[4]).write_bytes(gzip.decompress(FIXTURE.read_bytes()))
         with tempfile.TemporaryDirectory() as temporary, \
                 patch.object(IDENTITY.subprocess, 'check_output', return_value=encoded(observed)), \
@@ -209,6 +209,84 @@ class DockerImageIdentityTest(unittest.TestCase):
             with tarfile.open(proof) as archive:
                 layer = 'blobs/sha256/' + self.manifest['layers'][0]['digest'].split(':')[1]
                 self.assertNotIn(layer, archive.getnames())
+
+    def test_nonfinite_json_and_noninteger_oci_schema_are_rejected(self):
+        for value in ('NaN', 'Infinity', '-Infinity', '1e9999', '-1e9999'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                IDENTITY.image_json(('{"value":' + value + '}').encode())
+        manifest = copy.deepcopy(self.manifest)
+        manifest['schemaVersion'] = 2.0
+        with self.assertRaises(ValueError):
+            self.verify(self.replace_manifest(manifest))
+
+    def test_metadata_only_evidence_rejects_invalid_layer_descriptors(self):
+        for field, value in (('size', -1), ('size', True), ('digest', 'unbound'),
+                             ('mediaType', 'application/unknown')):
+            with self.subTest(field=field, value=value):
+                manifest = copy.deepcopy(self.manifest)
+                manifest['layers'][0][field] = value
+                native = self.replace_manifest(manifest)
+                with tarfile.open(fileobj=io.BytesIO(packed(self.files))) as archive:
+                    with self.assertRaises(ValueError):
+                        IDENTITY.configuration_metadata(archive, native)
+
+    def test_metadata_read_has_a_size_bound(self):
+        with patch.object(IDENTITY, 'MAX_METADATA_BYTES', 32, create=True):
+            with self.assertRaises(ValueError):
+                self.verify()
+
+    def test_layer_reads_are_bounded_without_changing_identity(self):
+        layer_name = 'blobs/sha256/' + self.manifest['layers'][0]['digest'].split(':')[1]
+        class BoundedLayer(io.BytesIO):
+            def read(self, size=-1):
+                if size < 0 or size > 1024 * 1024:
+                    raise AssertionError('Layer read must have a bounded buffer')
+                return super().read(size)
+        with tarfile.open(fileobj=io.BytesIO(packed(self.files))) as archive:
+            original = archive.extractfile
+            def extract(member):
+                name = member.name if isinstance(member, tarfile.TarInfo) else member
+                return BoundedLayer(self.files[name]) if name == layer_name else original(member)
+            with patch.object(archive, 'extractfile', side_effect=extract):
+                self.assertEqual(self.config, IDENTITY.saved_configuration(archive, MANIFEST_ID))
+
+    def test_failed_expected_identity_cannot_leave_retained_proof(self):
+        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64', 'Size': 65536}]
+        def save(command, check, **kwargs):
+            Path(command[4]).write_bytes(gzip.decompress(FIXTURE.read_bytes()))
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.object(IDENTITY.subprocess, 'check_output', return_value=encoded(observed)), \
+                patch.object(IDENTITY.subprocess, 'run', side_effect=save):
+            proof = Path(temporary) / 'identity.tar'
+            proof.write_bytes(b'stale proof')
+            with self.assertRaises(ValueError):
+                IDENTITY.inspect_configuration('fixture:tag', 'sha256:' + '0' * 64, proof)
+            self.assertFalse(proof.exists())
+
+    def test_compressed_layer_expansion_has_a_size_bound(self):
+        data = b'expanded layer' * 1024
+        compressed = gzip.compress(data, mtime=0)
+        config = encoded({'os': 'linux', 'architecture': 'amd64',
+                          'rootfs': {'type': 'layers', 'diff_ids': [digest(data)]}})
+        files = {'config.json': config, 'layer.tar.gz': compressed,
+                 'manifest.json': encoded([{'Config': 'config.json', 'Layers': ['layer.tar.gz']}])}
+        with patch.object(IDENTITY, 'MAX_LAYER_BYTES', 1024):
+            with self.assertRaisesRegex(ValueError, 'Oversized image layer'):
+                self.verify(digest(config), files)
+
+    def test_insufficient_storage_cannot_start_export_or_reuse_proof(self):
+        from types import SimpleNamespace
+        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64', 'Size': 65536}]
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.object(IDENTITY.subprocess, 'check_output', return_value=encoded(observed)), \
+                patch.object(IDENTITY.subprocess, 'run') as save, \
+                patch.object(IDENTITY.shutil, 'disk_usage', return_value=SimpleNamespace(free=0)):
+            proof = Path(temporary) / 'identity.tar'
+            proof.write_bytes(b'stale proof')
+            with self.assertRaisesRegex(ValueError, 'temporary image storage'):
+                IDENTITY.inspect_configuration('fixture:tag', CONFIG_ID, proof)
+            save.assert_not_called()
+            self.assertFalse(proof.exists())
 
 
 if __name__ == '__main__':

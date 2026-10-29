@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import urllib.request
 from pathlib import Path
@@ -41,6 +42,15 @@ def require(condition, message):
 
 def write(path, value):
     path.write_text(json.dumps(value, indent=2) + '\n')
+
+
+def interpreter_identity(image_id):
+    executable = Path(sys.executable)
+    require(executable.is_absolute(), 'Preparation requires an absolute Python interpreter')
+    executable = executable.resolve(strict=True)
+    require(executable.is_file() and os.access(executable, os.X_OK), 'Preparation interpreter is not executable')
+    return {'executable': str(executable), 'sha256': sha(executable.read_bytes()),
+            'image_config': image_id, 'verifier_source_sha256': sha(Path(__file__).read_bytes())}
 
 
 def canonical(value):
@@ -210,6 +220,10 @@ if __name__ == '__main__':
             _, config_id = BINARY.inspect_configuration(args.verify_image, candidate['image_id'])
             print(config_id)
         else:
-            (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
+            identity = ROOT / '.tmp/ryuk-python-identity.json'
+            identity.unlink(missing_ok=True)
+            receipt = (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
+            identity.parent.mkdir(parents=True, exist_ok=True)
+            write(identity, interpreter_identity(receipt['image_id']))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, 'Ryuk preparation failed: ' + str(error) + '\n')

@@ -3,16 +3,26 @@ import hashlib
 import gzip
 import io
 import json
+import math
 import os
 import re
+import shutil
 import struct
 import subprocess
 import tarfile
 import tempfile
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 PROVENANCE_POLICY = Path(__file__).resolve().parent.parent / '.github/security/auxiliary-container-scope.json'
+MAX_METADATA_BYTES = 16 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 16384
+MAX_LAYER_BYTES = 8 * 1024 ** 3
+MAX_IMAGE_BYTES = 16 * 1024 ** 3
+LAYER_ENCODINGS = {'application/vnd.oci.image.layer.v1.tar': False,
+                   'application/vnd.oci.image.layer.v1.tar+gzip': True,
+                   'application/vnd.docker.image.rootfs.diff.tar': False,
+                   'application/vnd.docker.image.rootfs.diff.tar.gzip': True}
 
 
 def require(condition, message):
@@ -24,12 +34,25 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def archive_bytes(archive, name):
-    path = Path(name)
+def archive_member(archive, name):
+    require(isinstance(name, str), 'Invalid image evidence path')
+    path = PurePosixPath(name)
     require(not path.is_absolute() and '..' not in path.parts, 'Unsafe image evidence path')
+    for _ in archive:
+        require(len(archive.members) <= MAX_ARCHIVE_MEMBERS, 'Too many image archive members')
     matches = [member for member in archive.getmembers() if member.name == name]
-    require(len(matches) == 1 and matches[0].isfile(), 'Missing or ambiguous image evidence: ' + name)
-    return archive.extractfile(matches[0]).read()
+    require(len(matches) == 1 and matches[0].type in (tarfile.REGTYPE, tarfile.AREGTYPE),
+            'Missing or ambiguous image evidence: ' + name)
+    return matches[0]
+
+
+def archive_bytes(archive, name):
+    member = archive_member(archive, name)
+    require(0 <= member.size <= MAX_METADATA_BYTES, 'Oversized image metadata')
+    with archive.extractfile(member) as stream:
+        data = stream.read(MAX_METADATA_BYTES + 1)
+    require(len(data) == member.size, 'Incomplete image metadata')
+    return data
 
 
 def image_json(data):
@@ -39,10 +62,24 @@ def image_json(data):
             require(key not in result, 'Duplicate image evidence field')
             result[key] = value
         return result
-    return json.loads(data, object_pairs_hook=unique)
+    def nonfinite(value):
+        raise ValueError('Non-finite image JSON value: ' + value)
+    def finite_float(value):
+        number = float(value)
+        require(math.isfinite(number), 'Non-finite image JSON number')
+        return number
+    return json.loads(data, object_pairs_hook=unique, parse_constant=nonfinite, parse_float=finite_float)
+
+
+def descriptor_fields(descriptor):
+    require(isinstance(descriptor, dict) and isinstance(descriptor.get('digest'), str)
+            and re.fullmatch(r'sha256:[0-9a-f]{64}', descriptor['digest'])
+            and type(descriptor.get('size')) is int and descriptor['size'] >= 0,
+            'Invalid OCI descriptor digest/size')
 
 
 def descriptor_bytes(archive, descriptor):
+    descriptor_fields(descriptor)
     digest = descriptor['digest']
     require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest),
             'Invalid OCI descriptor digest')
@@ -75,7 +112,9 @@ def configuration_metadata(archive, image_id):
             and parsed.get('variant', '') in ('', 'v1'), 'Unsupported image platform')
     layers, diffs = entry['Layers'], parsed['rootfs']['diff_ids']
     require(parsed['rootfs']['type'] == 'layers' and isinstance(layers, list)
-            and isinstance(diffs, list) and len(layers) == len(diffs), 'Missing image layer evidence')
+            and isinstance(diffs, list) and len(layers) == len(diffs)
+            and all(isinstance(d, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', d) for d in diffs),
+            'Missing or invalid image layer evidence')
 
     if image_id == config_id:
         return entry, config, None, metadata
@@ -93,12 +132,12 @@ def configuration_metadata(archive, image_id):
     require(image_json(read('oci-layout')) == {'imageLayoutVersion': '1.0.0'},
             'Missing OCI image layout')
     index = image_json(read('index.json'))
-    require(index['schemaVersion'] == 2, 'Invalid exported OCI index')
+    require(type(index['schemaVersion']) is int and index['schemaVersion'] == 2, 'Invalid exported OCI index')
     roots = [d for d in index['manifests'] if d['digest'] == image_id]
     require(len(roots) == 1, 'Export does not contain the inspected immutable image')
     descriptor = roots[0]
     document = image_json(blob(descriptor))
-    require(document['schemaVersion'] == 2, 'Invalid OCI schema')
+    require(type(document['schemaVersion']) is int and document['schemaVersion'] == 2, 'Invalid OCI schema')
     if descriptor['mediaType'] in indexes:
         require(document.get('mediaType') == descriptor['mediaType'], 'OCI index media type mismatch')
         platforms = [d for d in document['manifests'] if d.get('platform', {}).get('os') == 'linux'
@@ -107,33 +146,66 @@ def configuration_metadata(archive, image_id):
         require(len(platforms) == 1, 'Missing or ambiguous linux/amd64 OCI manifest')
         descriptor = platforms[0]
         document = image_json(blob(descriptor))
-    require(descriptor['mediaType'] in manifests and document['schemaVersion'] == 2
+    require(descriptor['mediaType'] in manifests and type(document['schemaVersion']) is int
+            and document['schemaVersion'] == 2
             and document.get('mediaType') == descriptor['mediaType'], 'Invalid OCI image manifest')
     require(document['config']['mediaType'] in {'application/vnd.oci.image.config.v1+json',
                 'application/vnd.docker.container.image.v1+json'}
             and document['config']['digest'] == config_id and blob(document['config']) == config,
             'OCI manifest/configuration mismatch')
     require(len(document['layers']) == len(diffs), 'OCI layer census mismatch')
+    for descriptor in document['layers']:
+        descriptor_fields(descriptor)
+        require(descriptor.get('mediaType') in LAYER_ENCODINGS, 'Unsupported OCI layer encoding')
     return entry, config, document, metadata
+
+
+def stream_digest(stream):
+    digest, size = hashlib.sha256(), 0
+    while data := stream.read(1024 * 1024):
+        size += len(data)
+        require(size <= MAX_LAYER_BYTES, 'Oversized image layer')
+        digest.update(data)
+    return 'sha256:' + digest.hexdigest(), size
+
+
+def layer_digests(archive, name):
+    member = archive_member(archive, name)
+    require(0 <= member.size <= MAX_LAYER_BYTES, 'Oversized image layer')
+    with archive.extractfile(member) as stream:
+        compressed = stream.read(2) == b'\x1f\x8b'
+        stream.seek(0)
+        raw, raw_size = stream_digest(stream)
+        require(raw_size == member.size, 'Incomplete image layer')
+        if compressed:
+            stream.seek(0)
+            with gzip.GzipFile(fileobj=stream) as decoded:
+                diff, size = stream_digest(decoded)
+        else:
+            diff, size = raw, raw_size
+    return raw, diff, raw_size, size, compressed
 
 
 def saved_configuration(archive, image_id):
     """Verify both the descriptor/configuration chain and every exported layer."""
     entry, config, manifest, _ = configuration_metadata(archive, image_id)
     diffs = image_json(config)['rootfs']['diff_ids']
-    def layer_diff(data):
-        return 'sha256:' + sha(gzip.decompress(data) if data.startswith(b'\x1f\x8b') else data)
+    checked, total = {}, 0
     for name, digest in zip(entry['Layers'], diffs):
-        require(layer_diff(archive_bytes(archive, name)) == digest, 'Saved image layer digest mismatch')
-    encodings = {'application/vnd.oci.image.layer.v1.tar': False,
-                 'application/vnd.oci.image.layer.v1.tar+gzip': True,
-                 'application/vnd.docker.image.rootfs.diff.tar': False,
-                 'application/vnd.docker.image.rootfs.diff.tar.gzip': True}
+        if name not in checked:
+            checked[name] = layer_digests(archive, name)
+        _, diff, _, size, _ = checked[name]
+        total += size
+        require(total <= MAX_IMAGE_BYTES, 'Oversized image filesystem')
+        require(diff == digest, 'Saved image layer digest mismatch')
     for descriptor, digest in zip(manifest['layers'] if manifest else [], diffs):
-        raw = descriptor_bytes(archive, descriptor)
-        require(descriptor['mediaType'] in encodings
-                and raw.startswith(b'\x1f\x8b') == encodings[descriptor['mediaType']], 'Unsupported OCI layer encoding')
-        require(layer_diff(raw) == digest, 'OCI layer/configuration mismatch')
+        name = 'blobs/sha256/' + descriptor['digest'].split(':')[1]
+        if name not in checked:
+            checked[name] = layer_digests(archive, name)
+        raw, diff, raw_size, _, compressed = checked[name]
+        require(raw == descriptor['digest'] and raw_size == descriptor['size'], 'OCI layer digest/size mismatch')
+        require(compressed == LAYER_ENCODINGS[descriptor['mediaType']], 'Unsupported OCI layer encoding')
+        require(diff == digest, 'OCI layer/configuration mismatch')
     return config
 
 
@@ -147,25 +219,38 @@ def configuration_evidence(path, image_id):
 
 
 def inspect_configuration(reference, expected=None, proof=None):
-    observed = image_json(subprocess.check_output(['docker', 'image', 'inspect', reference]))
+    if proof is not None:
+        proof.unlink(missing_ok=True)
+    observed = image_json(subprocess.check_output(['docker', 'image', 'inspect', reference], timeout=15))
     require(isinstance(observed, list) and len(observed) == 1, 'Ambiguous Docker image inspection')
     observed = observed[0]
     require(isinstance(observed['Id'], str) and re.fullmatch(r'sha256:[0-9a-f]{64}', observed['Id']),
             'Missing immutable Docker image identity')
     require(observed['Os'] == 'linux' and observed['Architecture'] == 'amd64', 'Unsupported Docker image platform')
+    require(type(observed.get('Size')) is int and 0 <= observed['Size'] <= MAX_IMAGE_BYTES,
+            'Invalid or oversized Docker image size')
     with tempfile.TemporaryDirectory(prefix='enterprise-shop-image-identity-') as temporary:
+        require(shutil.disk_usage(temporary).free >= observed['Size'] + 64 * 1024 * 1024,
+                'Insufficient temporary image storage')
         path = Path(temporary) / 'image.tar'
-        subprocess.run(['docker', 'image', 'save', '-o', str(path), observed['Id']], check=True)
+        subprocess.run(['docker', 'image', 'save', '-o', str(path), observed['Id']], check=True, timeout=90)
+        require(path.stat().st_size <= MAX_IMAGE_BYTES, 'Oversized Docker image export')
         with tarfile.open(path) as archive:
             config_id = 'sha256:' + sha(saved_configuration(archive, observed['Id']))
+            require(expected is None or config_id == expected, 'Loaded image configuration differs')
             if proof is not None:
                 _, _, _, metadata = configuration_metadata(archive, observed['Id'])
-                with tarfile.open(proof, mode='w', format=tarfile.USTAR_FORMAT) as retained:
-                    for name, raw in sorted(metadata.items()):
-                        member = tarfile.TarInfo(name)
-                        member.size, member.mode = len(raw), 0o644
-                        retained.addfile(member, io.BytesIO(raw))
-    require(expected is None or config_id == expected, 'Loaded image configuration differs')
+                with tempfile.NamedTemporaryFile(dir=proof.parent, prefix='.identity-', delete=False) as staged:
+                    staged_path = Path(staged.name)
+                try:
+                    with tarfile.open(staged_path, mode='w', format=tarfile.USTAR_FORMAT) as retained:
+                        for name, raw in sorted(metadata.items()):
+                            member = tarfile.TarInfo(name)
+                            member.size, member.mode = len(raw), 0o644
+                            retained.addfile(member, io.BytesIO(raw))
+                    staged_path.replace(proof)
+                finally:
+                    staged_path.unlink(missing_ok=True)
     return observed, config_id
 
 

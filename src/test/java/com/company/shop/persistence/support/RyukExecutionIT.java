@@ -34,11 +34,18 @@ class RyukExecutionIT extends PostgresContainerSupport {
         assertThat(actual.getConfig().getImage()).isEqualTo(expected);
         assertThat(actual.getState().getRunning()).isTrue();
         assertThat(actual.getImageId()).isEqualTo(docker.inspectImageCmd(expected).exec().getId());
-        var verification = new ProcessBuilder("python3", "scripts/build-ryuk-candidate.py",
+        Path verifier = Path.of("scripts/build-ryuk-candidate.py").toRealPath();
+        Path python = VerifiedPythonInterpreter.resolve(Path.of(".tmp/ryuk-python-identity.json"), verifier, expectedImageId);
+        var verification = new ProcessBuilder(python.toString(), "-I", verifier.toString(),
                 "--verify-image", actual.getImageId()).redirectError(ProcessBuilder.Redirect.INHERIT).start();
-        assertThat(verification.waitFor(120, TimeUnit.SECONDS)).isTrue();
-        assertThat(verification.exitValue()).isZero();
-        String configurationId = new String(verification.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        String configurationId;
+        try {
+            assertThat(verification.waitFor(120, TimeUnit.SECONDS)).isTrue();
+            assertThat(verification.exitValue()).isZero();
+            configurationId = new String(verification.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        } finally {
+            if (verification.isAlive()) verification.destroyForcibly();
+        }
         assertThat(configurationId).isEqualTo(expectedImageId);
         assertThat(actual.getMounts()).anySatisfy(mount -> {
             assertThat(mount.getSource()).isEqualTo("/var/run/docker.sock");

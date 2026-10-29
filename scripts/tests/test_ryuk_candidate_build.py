@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import hashlib
 import tarfile
 import unittest
 from types import SimpleNamespace
@@ -13,6 +14,20 @@ SPEC.loader.exec_module(CANDIDATE)
 
 
 class CandidatePackagingTest(unittest.TestCase):
+    def test_prepared_interpreter_identity_uses_the_running_absolute_executable(self):
+        import sys
+        result = CANDIDATE.interpreter_identity('sha256:' + 'a' * 64)
+        expected = Path(sys.executable).resolve(strict=True)
+        self.assertEqual(str(expected), result['executable'])
+        self.assertEqual(hashlib.sha256(expected.read_bytes()).hexdigest(), result['sha256'])
+        self.assertEqual(hashlib.sha256(Path(CANDIDATE.__file__).read_bytes()).hexdigest(),
+                         result['verifier_source_sha256'])
+
+    def test_relative_preparation_interpreter_is_rejected(self):
+        with patch.object(CANDIDATE.sys, 'executable', 'python3'):
+            with self.assertRaisesRegex(ValueError, 'absolute Python'):
+                CANDIDATE.interpreter_identity('sha256:' + 'a' * 64)
+
     def test_repeated_packaging_has_identical_archive_and_content_address(self):
         first = CANDIDATE.image_archive(b'reviewed binary', b'reviewed roots')
         self.assertEqual(first, CANDIDATE.image_archive(b'reviewed binary', b'reviewed roots'))

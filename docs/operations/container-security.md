@@ -291,6 +291,24 @@ Exports need temporary disk space; concurrent changes and a compromised Docker
 daemon/runner remain outside this verification boundary. No runner downgrade,
 digest exception, tag-based authority or configuration normalization is used.
 
+Identity metadata rejects duplicate fields, non-finite JSON values, noninteger
+OCI schema versions and malformed layer descriptors even in metadata-only proofs.
+Layer hashing uses bounded buffers. This reviewed image profile permits at most
+16 MiB per metadata member, 16,384 archive members, 8 GiB per decoded layer and
+16 GiB per image/export. Inspection preflights temporary free space and limits
+inspect/save commands to 15/90 seconds. Failure removes stale proofs; successful
+proof publication is atomic and follows full layer and expected-config validation.
+
+Reviewed Ryuk preparation records its running Python interpreter's absolute real
+path and SHA-256, bound to the reviewed image config and verifier source bytes.
+The integration test verifies that fixed preparation receipt and launches the
+absolute interpreter with `-I`; it accepts no interpreter environment override
+and performs no PATH search. Trusted preparation, runtime libraries and the
+workspace remain boundaries; these fingerprints do not attest a compromised
+runner or prevent concurrent modification by the same privileged actor.
+Java SARIF is retained using the existing pinned artifact action so the actual
+relative-command query result can be reviewed without changing queries or permissions.
+
 ### Update authority and infrastructure boundaries
 
 Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.
