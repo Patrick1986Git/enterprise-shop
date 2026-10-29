@@ -210,6 +210,7 @@ def validate_build(candidate, directory, head, analysis=True):
             and archive == (directory / 'image.tar').read_bytes(), 'Unexpected scratch image configuration/filesystem')
     summaries = advisory_analysis(candidate, receipt, directory, metadata, source_packages) if analysis else {}
     if analysis:
+        BUILD.validate_source_diagnostics(directory, receipt, head)
         require(sha((directory / 'govulncheck').read_bytes()) == receipt['tool_sha256'] == candidate['tool_sha256'],
                 'Independent analyzer executable changed')
         tool = buildinfo((directory / 'govulncheck-buildinfo.txt').read_text())

@@ -309,6 +309,23 @@ runner or prevent concurrent modification by the same privileged actor.
 Java SARIF is retained using the existing pinned artifact action so the actual
 relative-command query result can be reviewed without changing queries or permissions.
 
+Trivy source analysis retains bounded `source-termination.json` evidence beside
+the unchanged fresh Go advisory acquisition. The uniquely named container is
+bound to the repository HEAD and observed image; selected final state, effective
+limits and OOM/kill/die/stop events distinguish termination from analyzer output.
+Five-second samples retain private-cache free bytes/inodes, host memory availability,
+and the owned cgroup's memory/PID counters and peak where the namespace permits
+readback. A memory-event watcher capped at 20 reads/second retains counters before task cgroup removal;
+unavailable counters are explicit. No environment or unrelated container/kernel logs
+are collected. Sampling is capped at 400 records, the report at 1 MiB, and Docker
+probes at five seconds. The original analyzer still has a 1,800-second timeout,
+10 GiB memory, two CPUs and 512 PIDs. Final inspection precedes removal of the exact
+owned container; its analysis cache is removed after both original analyses.
+Diagnostic failures or missing/stale/unrelated evidence cannot authorize a successful
+source analysis. Exit 137 and incomplete acquisition remain failures even when their
+termination diagnostics are complete. Diagnose the cause from retained state/events
+and resource counters; exit 137 alone does not establish OOM.
+
 ### Update authority and infrastructure boundaries
 
 Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.
