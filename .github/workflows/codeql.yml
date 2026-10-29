@@ -59,6 +59,16 @@ jobs:
 
       - name: Analyze with CodeQL
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          output: ${{ runner.temp }}/java-codeql-sarif
+
+      - name: Retain Java CodeQL review evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: java-codeql-evidence
+          path: ${{ runner.temp }}/java-codeql-sarif/java.sarif
+          if-no-files-found: error
+          retention-days: 14
 
   analyze-python:
     name: Analyze Python

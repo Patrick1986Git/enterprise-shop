@@ -258,6 +258,119 @@ Hosted artifacts can instead be downloaded into `.tmp/trivy-downloads/<artifact-
 
 Runner/gh/compiler publication compromise, defects in parsers/scanners and omitted upstream advisories remain trust limits. Reproducibility is linux/amd64 with two separate caches on the same hosted runner and pinned compiler, not diverse-compiler reproducibility. Scratch OS absence is explicit; Haskell/JDK/downloaded-tool coverage limits elsewhere in this document remain unchanged.
 
+### Docker configuration and descriptor identities
+
+Docker's classic image store reports the configuration digest as `image inspect`
+`Id`. The Docker 29 containerd store reports the target index or manifest digest.
+These are different objects. The Ubuntu 24.04 to 26.04 hosted-runner transition
+exposed this distinction on unchanged protected master; configuration bytes in
+the reproduced deterministic archive survived load/save unchanged.
+
+`auxiliary_binary_evidence.saved_configuration` verifies the full unfiltered
+Docker export against the inspected immutable ID. A descriptor ID must resolve
+through original, hash- and size-checked OCI blobs to exactly one linux/amd64
+manifest, the exact configuration bytes, and every layer's compressed digest and
+uncompressed diff ID. A configuration ID must hash the exact configuration and
+bind every exported layer. Missing, ambiguous, linked, malformed, changed or
+unsupported evidence fails closed. Platform-filtered exports can rewrite the
+index and must not substitute for the inspected original index.
+
+Reviewed configuration digests, deterministic archives, source/SDK/executable
+hashes and vulnerability/provenance policy remain unchanged. Native Docker IDs
+are retained separately in collection and running-Ryuk evidence; they do not
+replace the reviewed configuration identity. The real Ryuk integration test
+verifies its running immutable Docker ID through the same archive verifier,
+then retains the existing socket and post-JVM cleanup checks. PostgreSQL
+inspection remains read-only and still checks the effective gosu bytes and mode.
+Builder/runtime collection additionally retains the original descriptor and
+configuration bytes in small metadata archives after validating the full export.
+Offline JDK provenance checks bind those bytes to the recorded native Docker ID,
+BuildKit configuration digest, raw scanner report and SBOM. Layer/package and
+vulnerability evidence remains separately required; metadata alone cannot pass it.
+Exports need temporary disk space; concurrent changes and a compromised Docker
+daemon/runner remain outside this verification boundary. No runner downgrade,
+digest exception, tag-based authority or configuration normalization is used.
+
+Identity metadata rejects duplicate fields, non-finite JSON values, noninteger
+OCI schema versions and malformed layer descriptors even in metadata-only proofs.
+Layer hashing uses bounded buffers. This reviewed image profile permits at most
+16 MiB per metadata member, 16,384 archive members, 8 GiB per decoded layer and
+16 GiB per image/export. Inspection preflights temporary free space and limits
+inspect/save commands to 15/90 seconds. Failure removes stale proofs; successful
+proof publication is atomic and follows full layer and expected-config validation.
+
+Reviewed Ryuk preparation records its running Python interpreter's absolute real
+path and SHA-256, bound to the reviewed image config and verifier source bytes.
+The integration test verifies that fixed preparation receipt and launches the
+absolute interpreter with `-I`; it accepts no interpreter environment override
+and performs no PATH search. Trusted preparation, runtime libraries and the
+workspace remain boundaries; these fingerprints do not attest a compromised
+runner or prevent concurrent modification by the same privileged actor.
+Java SARIF is retained using the existing pinned artifact action so the actual
+relative-command query result can be reviewed without changing queries or permissions.
+
+Trivy source analysis retains bounded `source-termination.json` evidence beside
+the unchanged fresh Go advisory acquisition. The uniquely named container is
+bound to the repository HEAD and observed image; selected final state, effective
+limits and OOM/kill/die/stop events distinguish termination from analyzer output.
+Five-second samples retain private-cache free bytes/inodes, host memory availability,
+and the owned cgroup's memory/PID counters and peak where the namespace permits
+readback. A memory-event watcher capped at 20 reads/second retains counters before task cgroup removal;
+unavailable counters are explicit. No environment or unrelated container/kernel logs
+are collected. Sampling is capped at 400 records, the report at 1 MiB, and Docker
+probes at five seconds. The original analyzer still has a 1,800-second timeout,
+10 GiB memory, two CPUs and 512 PIDs. Final inspection precedes removal of the exact
+owned container; its analysis cache is removed after both original analyses.
+Diagnostic failures or missing/stale/unrelated evidence cannot authorize a successful
+source analysis. Exit 137 and incomplete acquisition remain failures even when their
+termination diagnostics are complete. Diagnose the cause from retained state/events
+and resource counters; exit 137 alone does not establish OOM.
+
+The source analyzer explicitly receives `GOMEMLIMIT=7GiB` inside the existing
+10 GiB cgroup, retaining default Go concurrency. This is an interim setting,
+not an accepted headroom guarantee. It completed both memory-only hosted analyses;
+forcing `GOMAXPROCS=1` also completed twice but was slower, reached the same RAM
+ceiling and used approximately 1.5 GiB of owned cgroup swap. No demonstrated safety
+improvement justified retaining that override. The runtime target is soft and may
+be exceeded by live data. Actual cgroup and host headroom must be measured,
+including swap use, rather than inferred from the difference between the target
+and hard limit. Source arguments, full
+compiled graph, verified analyzer and SDK, two-CPU/512-PID limits, timeout and
+fresh advisory acquisition are unchanged.
+Binary analysis and scanner build settings are unaffected. Resource environment
+overrides and changed hard limits are rejected. Filtered runtime settings are
+read back from the owned container and bound into its diagnostic evidence.
+Validation compares the exact reviewed key/value mapping without relying on
+Docker's entry order. Identical or conflicting duplicate keys, missing/extra
+settings, malformed entries and wrong values are rejected before constructing
+an accepted mapping; the trailing JSON sentinel is required exactly once.
+The report also records host CPU/affinity and disk/inode capacity, plus selected
+owned-cgroup anonymous/file/kernel and available swap counters to assess actual headroom.
+Accept this resource profile only with full valid source output, status zero,
+fresh authoritative acquisition, complete compiled-module evidence and no OOM;
+lower RSS alone does not establish completion or vulnerability acceptance.
+
+Resource acceptance remains unresolved. For this reviewed graph, the next
+assessment must demonstrate at least 1 GiB of resident reserve below the 10 GiB
+cap (total `memory.peak` at most 9 GiB), zero hard-limit reclaim events, and zero
+owned cgroup swap peak. The reserve is a conservative review budget of roughly
+four times the observed approximately 0.25 GiB kernel-accounted peak; file and
+anonymous memory remain included in the total peak. Sampled host availability
+must retain at least 3 GiB RAM and 2 GiB free swap, without treating nominal
+Docker swap limits as provisioned host capacity. Missing counters cannot prove
+these criteria. These budgets do not assert a universal memory requirement or
+change the automated advisory acceptance policy.
+
+Require at least two independently evidenced complete analyses of the same
+reviewed source/SDK/analyzer and full compiled graph, each below 900 seconds
+(half the unchanged 1,800-second timeout), without retries, timeout, OOM or
+incomplete output. Compare module coverage and findings as well as resource
+peaks; graph or dependency changes require reassessment. Existing measurements
+already show that neither tested profile meets the resident-reserve criterion.
+Do not repeat cold builds merely to reconfirm that limitation or make a blind
+memory-limit increase. A different resource strategy requires a separate measured
+decision, while complete source and binary advisory checks remain mandatory.
+
 ### Update authority and infrastructure boundaries
 
 Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.

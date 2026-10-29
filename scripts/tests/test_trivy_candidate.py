@@ -6,9 +6,11 @@ import os
 import subprocess
 import tarfile
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from test_go_advisory_acquisition import NOW, MODIFIED, fixture
 from unittest.mock import patch
 
@@ -123,6 +125,228 @@ class TrivyBuildTest(unittest.TestCase):
         self.assertEqual(BUILD.BUILDER_BINARY, builder['identity']['sha256'])
         self.assertTrue(builder['governed'])
         self.assertEqual(['HIGH', 'CRITICAL'], builder['threshold'])
+
+
+class TrivyRuntimeEnvironmentTest(unittest.TestCase):
+    def test_reviewed_docker29_settings_are_accepted_in_either_order(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None],
+                       ['GOMAXPROCS=1', 'GOMEMLIMIT=7GiB', None]):
+            with self.subTest(values=values):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_duplicate_keys_are_rejected_even_when_values_agree(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=7GiB', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=off', None],
+                       ['GOMAXPROCS=1', 'GOMAXPROCS=1', None],
+                       ['GOMAXPROCS=1', 'GOMAXPROCS=2', None]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_missing_wrong_extra_and_malformed_settings_are_rejected(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (None, {}, (), [], [None], ['GOMEMLIMIT=7GiB', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1'],
+                       [None, 'GOMEMLIMIT=7GiB', 'GOMAXPROCS=1'],
+                       ['GOMEMLIMIT=off', 'GOMAXPROCS=1', None],
+                       ['GOMEMLIMIT=7GiB', 'GOGC=off', None],
+                       ['GOMEMLIMIT=7GiB', 'GODEBUG=x', None],
+                       ['GOMEMLIMIT=7GiB', 'GOFLAGS=-tags=exclude', None],
+                       ['GOMEMLIMIT=7GiB', 'PATH=/unreviewed', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', 'GOGC=off', None],
+                       ['GOMEMLIMIT=7GiB', None, None],
+                       ['GOMEMLIMIT=7GiB', {'GOMAXPROCS': '1'}, None],
+                       ['GOMEMLIMIT=7GiB', ' GOMAXPROCS=1', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1 ', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1=2', None]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_interim_contract_rejects_any_concurrency_override(self):
+        reviewed = {'GOMEMLIMIT': '7GiB'}
+        BUILD.validate_runtime_environment(['GOMEMLIMIT=7GiB', None], reviewed)
+        for value in ('1', '2', '8'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(['GOMEMLIMIT=7GiB', 'GOMAXPROCS=' + value, None], reviewed)
+
+
+class TrivyTerminationTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        (self.directory / 'cache-analysis').mkdir()
+        (self.directory / 'govulncheck').write_bytes(b'analyzer fixture')
+        self.head, self.identifier = 'a' * 40, 'b' * 64
+        self.name = 'enterprise-shop-trivy-analysis-' + 'c' * 32
+        self.status, self.oom, self.completed = 0, False, False
+        self.commands, self.observed = [], threading.Event()
+        self.fail_collect, self.fail_cleanup, self.wrong_container = False, False, False
+        self.analyzer = ['docker', 'run', '--rm', '--memory', '10g', '--cpus', '2', '--pids-limit', '512',
+                         '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+                         BUILD.BUILDER, '/evidence/govulncheck']
+        for target, side in [(patch.object(BUILD, 'diagnostic_command'), self.probe),
+                             (patch.object(BUILD.RYUK.ADVISORY, 'collect'), self.collect)]:
+            mocked = target.start()
+            self.addCleanup(target.stop)
+            mocked.side_effect = side
+        fixed = patch.object(BUILD.uuid, 'uuid4', return_value=SimpleNamespace(hex='c' * 32))
+        fixed.start()
+        self.addCleanup(fixed.stop)
+
+    def probe(self, command):
+        self.commands.append(command)
+        if command[0] == 'inspect':
+            self.observed.set()
+            return json.dumps({'id': self.identifier, 'name': '/' + self.name, 'head':
+                'd' * 40 if self.wrong_container else self.head, 'image': BUILD.BUILDER,
+                'memory': 10 * 1024 ** 3, 'swap': 20 * 1024 ** 3, 'cpus': 2 * 10 ** 9,
+                'pids': 512, 'readonly': True, 'runtime_env': ['GOMEMLIMIT=7GiB', None],
+                'state': {'status': 'exited' if self.completed else 'running', 'exit': self.status,
+                          'oom': self.oom, 'pid': 0, 'started': '', 'finished': ''}}).encode()
+        if command[0] == 'events':
+            return (json.dumps({'id': self.identifier, 'action': 'oom' if self.oom else 'die',
+                               'time': 1, 'signal': '', 'exit': str(self.status)}) + '\n').encode()
+        if self.fail_cleanup:
+            raise subprocess.CalledProcessError(1, ['docker', 'rm'])
+        self.assertEqual(['rm', '--force', self.identifier], command)
+        return b''
+
+    def collect(self, command, args, directory, mode, timeout):
+        Path(command[7]).write_text(self.identifier)
+        self.assertTrue(self.observed.wait(2))
+        self.assertNotIn('--rm', command)
+        self.assertEqual(BUILD.source_memory_command(self.analyzer)[3:], command[8:])
+        self.assertEqual(['-mode=source', '-json', './cmd/trivy'], args)
+        self.assertEqual(('source', 1800), (mode, timeout))
+        self.completed = True
+        if self.fail_collect:
+            raise subprocess.TimeoutExpired('fixture', 1800)
+        (directory / 'source-govulncheck.json').write_bytes(b'analysis fixture')
+        (directory / 'source-govulncheck.log').write_bytes(b'')
+        raw = json.dumps({'started_at': BUILD.RYUK.ADVISORY.utc_now(),
+                          'completed_at': BUILD.RYUK.ADVISORY.utc_now()}).encode()
+        (directory / 'source-go-acquisition.json').write_bytes(raw)
+        return {'status': self.status, 'sha256': BUILD.sha(b'analysis fixture'), 'acquisition_sha256': BUILD.sha(raw)}
+
+    def run_analysis(self):
+        value = BUILD.source_analysis(self.analyzer, ['-mode=source', '-json', './cmd/trivy'],
+                                      self.directory, self.head)
+        self.receipt = {'analysis': {'source': value}, 'tool_sha256': BUILD.sha(b'analyzer fixture')}
+        return value
+
+    def validate(self):
+        return BUILD.validate_source_diagnostics(self.directory, self.receipt, self.head)
+
+    def save(self, report):
+        raw = json.dumps(report).encode()
+        (self.directory / 'source-termination.json').write_bytes(raw)
+        self.receipt['analysis']['source']['diagnostics_sha256'] = BUILD.sha(raw)
+
+    def test_success_preserves_analyzer_command_and_cleans_exact_owned_container(self):
+        self.assertEqual(0, self.run_analysis()['status'])
+        report = self.validate()
+        self.assertTrue(report['cleanup'])
+        self.assertFalse(report['container']['state']['oom'])
+        self.assertIn(['rm', '--force', self.identifier], self.commands)
+
+    def test_interim_memory_profile_preserves_default_source_concurrency(self):
+        command = BUILD.source_memory_command(self.analyzer)
+        self.assertEqual(self.analyzer[:-2] + ['-e', 'GOMEMLIMIT=7GiB'] + self.analyzer[-2:], command)
+        self.assertEqual('7GiB', BUILD.SOURCE_GOMEMLIMIT)
+
+    def test_runtime_overrides_and_changed_hard_limits_are_rejected(self):
+        for extra in (['-e', 'GOMEMLIMIT=off'], ['--env', 'GOGC=off'], ['-e', 'GOMAXPROCS=8'],
+                      ['-e', 'GODEBUG=x'], ['-e', 'GOFLAGS=-tags=exclude'],
+                      ['--env=GOMEMLIMIT=off'], ['-eGOMEMLIMIT=off'], ['--env-file', '/tmp/env']):
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'runtime override|environment option'):
+                BUILD.source_memory_command(self.analyzer[:-2] + extra + self.analyzer[-2:])
+        for flag, value in [('--memory', '20g'), ('--cpus', '4'), ('--pids-limit', '1024')]:
+            command = self.analyzer.copy()
+            command[command.index(flag) + 1] = value
+            with self.assertRaisesRegex(ValueError, 'resource contract'):
+                BUILD.source_memory_command(command)
+        for extra in (['--memory=20g'], ['-m', '20g'], ['-m20g'], ['--cpus=4'], ['--pids-limit=1024']):
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'resource contract'):
+                BUILD.source_memory_command(self.analyzer[:-2] + extra + self.analyzer[-2:])
+
+    def test_137_diagnostics_distinguish_oom_from_non_oom_without_changing_status(self):
+        self.status = 137
+        for oom in (True, False):
+            with self.subTest(oom=oom):
+                self.oom = oom
+                self.assertEqual(137, self.run_analysis()['status'])
+                report = self.validate()
+                self.assertIs(report['container']['state']['oom'], oom)
+                self.assertEqual('oom' if oom else 'die', report['events'][0]['action'])
+
+    def test_timeout_removes_old_success_and_retains_cleanup_evidence(self):
+        self.run_analysis()
+        self.fail_collect = True
+        with self.assertRaises(subprocess.TimeoutExpired):
+            self.run_analysis()
+        self.assertFalse((self.directory / 'source-go-acquisition.json').exists())
+        report = json.loads((self.directory / 'source-termination.json').read_text())
+        self.assertIsNone(report['analysis'])
+        self.assertTrue(report['cleanup'])
+        with self.assertRaises((ValueError, KeyError)):
+            self.validate()
+
+    def test_cleanup_failure_cannot_be_successful_diagnostic_evidence(self):
+        self.fail_cleanup = True
+        self.run_analysis()
+        with self.assertRaisesRegex(ValueError, 'Incomplete'):
+            self.validate()
+
+    def test_oom_evidence_cannot_authorize_an_apparent_zero_exit(self):
+        self.oom = True
+        self.run_analysis()
+        with self.assertRaisesRegex(ValueError, 'Incomplete'):
+            self.validate()
+
+    def test_unrelated_container_is_rejected_and_never_removed(self):
+        self.wrong_container = True
+        self.run_analysis()
+        self.assertFalse(any(c[0] == 'rm' for c in self.commands))
+        with self.assertRaises(KeyError):
+            self.validate()
+
+    def test_missing_malformed_oversized_and_tampered_evidence_is_rejected(self):
+        self.run_analysis()
+        path = self.directory / 'source-termination.json'
+        original = path.read_bytes()
+        for payload in (None, b'{', original + b' ', b' ' * (1024 * 1024 + 1)):
+            with self.subTest(payload_size=None if payload is None else len(payload)):
+                if payload is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(payload)
+                with self.assertRaises((OSError, ValueError)):
+                    self.validate()
+        path.write_bytes(original)
+
+    def test_rebound_stale_unrelated_or_incomplete_diagnostics_are_rejected(self):
+        self.run_analysis()
+        original = json.loads((self.directory / 'source-termination.json').read_text())
+        for mutate in (lambda r: r.update(repository_head='d' * 40),
+                       lambda r: r.update(completed_at='2026-01-01T00:00:00Z'),
+                       lambda r: r['events'][0].update(id='d' * 64),
+                       lambda r: r.update(samples=[]),
+                       lambda r: r['samples'][0].update(cache={}),
+                       lambda r: r['container'].update(memory=20 * 1024 ** 3),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=off', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=7GiB', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=2', None]),
+                       lambda r: r['container']['state'].update(exit=137),
+                       lambda r: r.update(stdout_sha256='0' * 64)):
+            report = copy.deepcopy(original)
+            mutate(report)
+            self.save(report)
+            with self.assertRaises((ValueError, KeyError)):
+                self.validate()
 
 
 class TrivyCompatibilityStorageTest(unittest.TestCase):
@@ -443,9 +667,10 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
         self.assertEqual(0, result['binary']['callable_findings'])
 
     def test_advisory_service_error_cannot_be_zero_findings(self):
-        self.receipt['analysis']['source'] = {'status': 2}
-        with self.assertRaisesRegex(ValueError, 'failed independent'):
-            self.validate()
+        for status in (2, 137):
+            self.receipt['analysis']['source'] = {'status': status, 'diagnostics_sha256': '0' * 64}
+            with self.assertRaisesRegex(ValueError, 'failed independent'):
+                self.validate()
 
     def test_self_scan_cannot_substitute_for_independent_authority(self):
         self.streams['binary'][0]['config']['scanner_name'] = 'trivy'
