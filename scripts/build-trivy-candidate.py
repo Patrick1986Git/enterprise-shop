@@ -39,6 +39,7 @@ SDK_TOOLS = {
     'pkg/tool/linux_amd64/link': 'c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
 SOURCE_GOMEMLIMIT = '7GiB'
+SOURCE_GOMAXPROCS = '1'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
 RYUK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RYUK)
@@ -189,6 +190,8 @@ def source_memory_command(analyzer):
     for flag, value in [('--memory', '10g'), ('--cpus', '2'), ('--pids-limit', '512')]:
         require(options.count(flag) == 1 and options[options.index(flag) + 1] == value,
                 'Source analyzer resource contract drift')
+    require(not any(option.startswith(('--memory=', '--cpus=', '--pids-limit=', '-m'))
+                    for option in options), 'Source analyzer resource contract override')
     protected = {'GOMEMLIMIT', 'GOGC', 'GOMAXPROCS', 'GODEBUG', 'GOFLAGS'}
     for index, option in enumerate(options):
         require(option != '--env-file' and not option.startswith(('--env-file=', '--env='))
@@ -196,7 +199,8 @@ def source_memory_command(analyzer):
         if option in ('-e', '--env'):
             require(options[index + 1].partition('=')[0] not in protected,
                     'Source analyzer runtime override')
-    return options + ['-e', 'GOMEMLIMIT=' + SOURCE_GOMEMLIMIT] + analyzer[-2:]
+    return options + ['-e', 'GOMEMLIMIT=' + SOURCE_GOMEMLIMIT,
+                      '-e', 'GOMAXPROCS=' + SOURCE_GOMAXPROCS] + analyzer[-2:]
 
 
 def source_analysis(analyzer, args, directory, head):
@@ -252,6 +256,8 @@ def source_analysis(analyzer, args, directory, head):
                     ('anon', 'file', 'kernel', 'kernel_stack', 'pagetables', 'sock', 'slab')}
                 record['cgroup'] = {f: (group / f).read_text()[:128].strip() for f in
                                    ('memory.current', 'memory.peak', 'memory.max', 'pids.current', 'pids.max')}
+                record['cgroup'].update({f: (group / f).read_text()[:128].strip() for f in
+                    ('memory.swap.current', 'memory.swap.peak', 'memory.swap.max') if (group / f).exists()})
             except OSError:
                 record['cgroup_unavailable'] = True  # The kernel removes stopped task cgroups.
         report['samples'].append(record)
@@ -358,7 +364,8 @@ def validate_source_diagnostics(directory, receipt, head, now=None):
             and report['args'] == ['-db=https://vuln.go.dev', '-mode=source', '-json', './cmd/trivy']
             and actual['memory'] == 10 * 1024 ** 3 and actual['cpus'] == 2 * 10 ** 9
             and actual['pids'] == 512 and actual['readonly'] is True
-            and actual['runtime_env'] == ['GOMEMLIMIT=' + SOURCE_GOMEMLIMIT, None],
+            and actual['runtime_env'] == ['GOMEMLIMIT=' + SOURCE_GOMEMLIMIT,
+                                          'GOMAXPROCS=' + SOURCE_GOMAXPROCS, None],
             'Analyzer diagnostic contract drift')
     require(report['cleanup'] is True and not report['errors'] and 0 < len(report['samples']) <= 400
             and actual['state']['status'] == 'exited' and type(actual['state']['oom']) is bool

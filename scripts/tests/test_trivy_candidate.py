@@ -158,7 +158,7 @@ class TrivyTerminationTest(unittest.TestCase):
             return json.dumps({'id': self.identifier, 'name': '/' + self.name, 'head':
                 'd' * 40 if self.wrong_container else self.head, 'image': BUILD.BUILDER,
                 'memory': 10 * 1024 ** 3, 'swap': 20 * 1024 ** 3, 'cpus': 2 * 10 ** 9,
-                'pids': 512, 'readonly': True, 'runtime_env': ['GOMEMLIMIT=7GiB', None],
+                'pids': 512, 'readonly': True, 'runtime_env': ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None],
                 'state': {'status': 'exited' if self.completed else 'running', 'exit': self.status,
                           'oom': self.oom, 'pid': 0, 'started': '', 'finished': ''}}).encode()
         if command[0] == 'events':
@@ -207,10 +207,12 @@ class TrivyTerminationTest(unittest.TestCase):
         self.assertFalse(report['container']['state']['oom'])
         self.assertIn(['rm', '--force', self.identifier], self.commands)
 
-    def test_memory_profile_changes_only_the_source_gc_target(self):
+    def test_memory_profile_changes_only_source_runtime_memory_and_concurrency(self):
         command = BUILD.source_memory_command(self.analyzer)
-        self.assertEqual(self.analyzer[:-2] + ['-e', 'GOMEMLIMIT=7GiB'] + self.analyzer[-2:], command)
+        self.assertEqual(self.analyzer[:-2] + ['-e', 'GOMEMLIMIT=7GiB', '-e', 'GOMAXPROCS=1']
+                         + self.analyzer[-2:], command)
         self.assertEqual('7GiB', BUILD.SOURCE_GOMEMLIMIT)
+        self.assertEqual('1', BUILD.SOURCE_GOMAXPROCS)
 
     def test_runtime_overrides_and_changed_hard_limits_are_rejected(self):
         for extra in (['-e', 'GOMEMLIMIT=off'], ['--env', 'GOGC=off'], ['-e', 'GOMAXPROCS=8'],
@@ -223,6 +225,9 @@ class TrivyTerminationTest(unittest.TestCase):
             command[command.index(flag) + 1] = value
             with self.assertRaisesRegex(ValueError, 'resource contract'):
                 BUILD.source_memory_command(command)
+        for extra in (['--memory=20g'], ['-m', '20g'], ['-m20g'], ['--cpus=4'], ['--pids-limit=1024']):
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'resource contract'):
+                BUILD.source_memory_command(self.analyzer[:-2] + extra + self.analyzer[-2:])
 
     def test_137_diagnostics_distinguish_oom_from_non_oom_without_changing_status(self):
         self.status = 137
@@ -289,6 +294,7 @@ class TrivyTerminationTest(unittest.TestCase):
                        lambda r: r['samples'][0].update(cache={}),
                        lambda r: r['container'].update(memory=20 * 1024 ** 3),
                        lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=off', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=2', None]),
                        lambda r: r['container']['state'].update(exit=137),
                        lambda r: r.update(stdout_sha256='0' * 64)):
             report = copy.deepcopy(original)

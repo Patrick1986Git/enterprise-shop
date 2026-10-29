@@ -326,16 +326,20 @@ source analysis. Exit 137 and incomplete acquisition remain failures even when t
 termination diagnostics are complete. Diagnose the cause from retained state/events
 and resource counters; exit 137 alone does not establish OOM.
 
-The source analyzer explicitly receives `GOMEMLIMIT=7GiB` inside the existing
-10 GiB cgroup, leaving a 3 GiB target margin for memory outside Go's managed
-runtime accounting. This is a soft GC target, not a hard memory bound or an
-acceptance exception. Source arguments, full compiled graph, verified analyzer
-and SDK, two-CPU/512-PID limits, timeout and fresh advisory acquisition are unchanged.
+The source analyzer explicitly receives `GOMEMLIMIT=7GiB` and `GOMAXPROCS=1`
+inside the existing 10 GiB cgroup. The runtime target aims to reserve memory
+outside Go's managed accounting; it is soft and may be exceeded by live data.
+Limiting Go execution to one processor reduces simultaneous SSA construction without changing
+the analyzer's source, symbol level, package set or entry points. Actual cgroup
+and host headroom must be measured, including swap use, rather than inferred
+from the difference between the target and hard limit. Source arguments, full
+compiled graph, verified analyzer and SDK, two-CPU/512-PID limits, timeout and
+fresh advisory acquisition are unchanged.
 Binary analysis and scanner build settings are unaffected. Resource environment
 overrides and changed hard limits are rejected; the selected runtime settings
 are read back from the owned container and bound into its diagnostic evidence.
 The report also records host CPU/affinity and disk/inode capacity, plus selected
-owned-cgroup anonymous/file/kernel memory counters to assess actual headroom.
+owned-cgroup anonymous/file/kernel and available swap counters to assess actual headroom.
 Accept this resource profile only with full valid source output, status zero,
 fresh authoritative acquisition, complete compiled-module evidence and no OOM;
 lower RSS alone does not establish completion or vulnerability acceptance.
