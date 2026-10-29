@@ -305,7 +305,7 @@
     "scripts/auxiliary_binary_evidence.py": "670008fa633f4e79d3ebefa37ea746897baeccf7496621f6544b2300dfb98e89",
     "scripts/build-ryuk-candidate.py": "bc6dbda7ea9a7846b56995621baa929b0c9996cef69b45252cbdcd70b588a4bf",
     "scripts/build-tool-inventory.py": "550e26a475adc5d6450f43db461be4930ff3c33d067f0f7814d005f8b3ab7e61",
-    "scripts/build-trivy-candidate.py": "cd87e299757e5498127dbc54ea10c91c9fefff6cbf525e3c8341a8082b3127e1",
+    "scripts/build-trivy-candidate.py": "4785bb0bdc6de515cda62fa9a5154558653c5ee2f238b335d6a9d19d05a6b483",
     "scripts/check-local-postgres-gosu.py": "c8d313cf2c6c0fc1b2e6d989542d9d3b892b41f3397aedcf2a883771f79f0567",
     "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
     "scripts/go_advisory_acquisition.py": "b7895168d042cda003dd551ac2fada2ff5bc8af688d7fe2642a00a38f0f1fe2c",

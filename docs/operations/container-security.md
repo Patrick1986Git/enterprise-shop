@@ -326,6 +326,20 @@ source analysis. Exit 137 and incomplete acquisition remain failures even when t
 termination diagnostics are complete. Diagnose the cause from retained state/events
 and resource counters; exit 137 alone does not establish OOM.
 
+The source analyzer explicitly receives `GOMEMLIMIT=7GiB` inside the existing
+10 GiB cgroup, leaving a 3 GiB target margin for memory outside Go's managed
+runtime accounting. This is a soft GC target, not a hard memory bound or an
+acceptance exception. Source arguments, full compiled graph, verified analyzer
+and SDK, two-CPU/512-PID limits, timeout and fresh advisory acquisition are unchanged.
+Binary analysis and scanner build settings are unaffected. Resource environment
+overrides and changed hard limits are rejected; the selected runtime settings
+are read back from the owned container and bound into its diagnostic evidence.
+The report also records host CPU/affinity and disk/inode capacity, plus selected
+owned-cgroup anonymous/file/kernel memory counters to assess actual headroom.
+Accept this resource profile only with full valid source output, status zero,
+fresh authoritative acquisition, complete compiled-module evidence and no OOM;
+lower RSS alone does not establish completion or vulnerability acceptance.
+
 ### Update authority and infrastructure boundaries
 
 Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.

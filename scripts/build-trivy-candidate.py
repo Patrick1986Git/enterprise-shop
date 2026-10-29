@@ -38,6 +38,7 @@ SDK_TOOLS = {
     'pkg/tool/linux_amd64/compile': 'c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283',
     'pkg/tool/linux_amd64/link': 'c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
+SOURCE_GOMEMLIMIT = '7GiB'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
 RYUK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RYUK)
@@ -146,6 +147,10 @@ INSPECT_ANALYZER = ('{"id":{{json .Id}},"name":{{json .Name}},'
     '"image":{{json .Config.Image}},"memory":{{.HostConfig.Memory}},'
     '"swap":{{.HostConfig.MemorySwap}},"cpus":{{.HostConfig.NanoCpus}},'
     '"pids":{{.HostConfig.PidsLimit}},"readonly":{{.HostConfig.ReadonlyRootfs}},'
+    '"runtime_env":[{{range .Config.Env}}{{$p := split . "="}}'
+    '{{if or (eq (index $p 0) "GOMEMLIMIT") (eq (index $p 0) "GOGC") '
+    '(eq (index $p 0) "GOMAXPROCS") (eq (index $p 0) "GODEBUG") (eq (index $p 0) "GOFLAGS")}}'
+    '{{json .}},{{end}}{{end}}null],'
     '"state":{"status":{{json .State.Status}},"exit":{{.State.ExitCode}},'
     '"oom":{{.State.OOMKilled}},"pid":{{.State.Pid}},'
     '"started":{{json .State.StartedAt}},"finished":{{json .State.FinishedAt}}}}')
@@ -177,10 +182,28 @@ def read_counters(path):
     return {key: int(value) for key, value in (line.split() for line in raw.splitlines())}
 
 
+def source_memory_command(analyzer):
+    require(analyzer[:3] == ['docker', 'run', '--rm']
+            and analyzer[-2:] == [BUILDER, '/evidence/govulncheck'], 'Unexpected source analyzer invocation')
+    options = analyzer[:-2]
+    for flag, value in [('--memory', '10g'), ('--cpus', '2'), ('--pids-limit', '512')]:
+        require(options.count(flag) == 1 and options[options.index(flag) + 1] == value,
+                'Source analyzer resource contract drift')
+    protected = {'GOMEMLIMIT', 'GOGC', 'GOMAXPROCS', 'GODEBUG', 'GOFLAGS'}
+    for index, option in enumerate(options):
+        require(option != '--env-file' and not option.startswith(('--env-file=', '--env='))
+                and not (option.startswith('-e') and option != '-e'), 'Unreviewed analyzer environment option')
+        if option in ('-e', '--env'):
+            require(options[index + 1].partition('=')[0] not in protected,
+                    'Source analyzer runtime override')
+    return options + ['-e', 'GOMEMLIMIT=' + SOURCE_GOMEMLIMIT] + analyzer[-2:]
+
+
 def source_analysis(analyzer, args, directory, head):
     """Observe only this owned source container; analysis authority stays in collect."""
     require(analyzer[:3] == ['docker', 'run', '--rm'] and re.fullmatch('[0-9a-f]{40}', head),
             'Unexpected source analyzer invocation')
+    analyzer = source_memory_command(analyzer)
     output = directory / 'source-termination.json'
     output.unlink(missing_ok=True)
     (directory / 'source-go-acquisition.json').unlink(missing_ok=True)
@@ -209,6 +232,9 @@ def source_analysis(analyzer, args, directory, head):
         usage = shutil.disk_usage(directory / 'cache-analysis')
         disk = os.statvfs(directory / 'cache-analysis')
         record['cache'] = {'free_bytes': usage.free, 'free_inodes': disk.f_favail}
+        report.setdefault('host_resources', {'logical_cpus': os.cpu_count(),
+            'affinity_cpus': len(os.sched_getaffinity(0)), 'disk_total_bytes': usage.total,
+            'inode_total': disk.f_files})
         memory = dict(line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())
         record['host_memory_kib'] = {k: int(memory[k].split()[0]) for k in ('MemTotal', 'MemAvailable', 'SwapTotal', 'SwapFree')}
         if group is None and value['state']['pid'] > 0:
@@ -221,6 +247,9 @@ def source_analysis(analyzer, args, directory, head):
             try:
                 record['memory_events'] = read_counters(group / 'memory.events')
                 record['pids_events'] = read_counters(group / 'pids.events')
+                memory_stat = read_counters(group / 'memory.stat')
+                record['memory_stat'] = {k: memory_stat[k] for k in
+                    ('anon', 'file', 'kernel', 'kernel_stack', 'pagetables', 'sock', 'slab')}
                 record['cgroup'] = {f: (group / f).read_text()[:128].strip() for f in
                                    ('memory.current', 'memory.peak', 'memory.max', 'pids.current', 'pids.max')}
             except OSError:
@@ -328,7 +357,9 @@ def validate_source_diagnostics(directory, receipt, head, now=None):
     require(report['analyzer_sha256'] == receipt['tool_sha256']
             and report['args'] == ['-db=https://vuln.go.dev', '-mode=source', '-json', './cmd/trivy']
             and actual['memory'] == 10 * 1024 ** 3 and actual['cpus'] == 2 * 10 ** 9
-            and actual['pids'] == 512 and actual['readonly'] is True, 'Analyzer diagnostic contract drift')
+            and actual['pids'] == 512 and actual['readonly'] is True
+            and actual['runtime_env'] == ['GOMEMLIMIT=' + SOURCE_GOMEMLIMIT, None],
+            'Analyzer diagnostic contract drift')
     require(report['cleanup'] is True and not report['errors'] and 0 < len(report['samples']) <= 400
             and actual['state']['status'] == 'exited' and type(actual['state']['oom']) is bool
             and type(actual['state']['exit']) is int and actual['state']['exit'] == evidence['status']
