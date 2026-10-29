@@ -282,6 +282,11 @@ replace the reviewed configuration identity. The real Ryuk integration test
 verifies its running immutable Docker ID through the same archive verifier,
 then retains the existing socket and post-JVM cleanup checks. PostgreSQL
 inspection remains read-only and still checks the effective gosu bytes and mode.
+Builder/runtime collection additionally retains the original descriptor and
+configuration bytes in small metadata archives after validating the full export.
+Offline JDK provenance checks bind those bytes to the recorded native Docker ID,
+BuildKit configuration digest, raw scanner report and SBOM. Layer/package and
+vulnerability evidence remains separately required; metadata alone cannot pass it.
 Exports need temporary disk space; concurrent changes and a compromised Docker
 daemon/runner remain outside this verification boundary. No runner downgrade,
 digest exception, tag-based authority or configuration normalization is used.

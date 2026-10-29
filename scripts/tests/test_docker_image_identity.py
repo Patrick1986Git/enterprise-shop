@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import tarfile
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -179,6 +180,35 @@ class DockerImageIdentityTest(unittest.TestCase):
             self.assertEqual((observed[0], CONFIG_ID), IDENTITY.inspect_configuration('fixture:tag', CONFIG_ID))
             with self.assertRaisesRegex(ValueError, 'configuration differs'):
                 IDENTITY.inspect_configuration('fixture:tag', 'sha256:' + '0' * 64)
+
+    def test_retained_original_metadata_supports_offline_configuration_binding(self):
+        with tarfile.open(fileobj=io.BytesIO(packed(self.files))) as archive:
+            _, config, _, metadata = IDENTITY.configuration_metadata(archive, MANIFEST_ID)
+        self.assertEqual(self.config, config)
+        with tempfile.TemporaryDirectory() as temporary:
+            proof = Path(temporary) / 'identity.tar'
+            proof.write_bytes(packed(metadata))
+            self.assertEqual(CONFIG_ID, IDENTITY.configuration_evidence(proof, MANIFEST_ID))
+            with self.assertRaises(ValueError):
+                IDENTITY.configuration_evidence(proof, 'sha256:' + '0' * 64)
+            metadata['blobs/sha256/' + CONFIG_ID.split(':')[1]] += b'\n'
+            proof.write_bytes(packed(metadata))
+            with self.assertRaises(ValueError):
+                IDENTITY.configuration_evidence(proof, MANIFEST_ID)
+
+    def test_collection_retains_metadata_only_after_full_layer_verification(self):
+        observed = [{'Id': MANIFEST_ID, 'Os': 'linux', 'Architecture': 'amd64'}]
+        def save(command, check):
+            Path(command[4]).write_bytes(gzip.decompress(FIXTURE.read_bytes()))
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.object(IDENTITY.subprocess, 'check_output', return_value=encoded(observed)), \
+                patch.object(IDENTITY.subprocess, 'run', side_effect=save):
+            proof = Path(temporary) / 'identity.tar'
+            IDENTITY.inspect_configuration('fixture:tag', CONFIG_ID, proof)
+            self.assertEqual(CONFIG_ID, IDENTITY.configuration_evidence(proof, MANIFEST_ID))
+            with tarfile.open(proof) as archive:
+                layer = 'blobs/sha256/' + self.manifest['layers'][0]['digest'].split(':')[1]
+                self.assertNotIn(layer, archive.getnames())
 
 
 if __name__ == '__main__':

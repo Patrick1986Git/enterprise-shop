@@ -193,6 +193,36 @@ class BuildProvenanceTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             POLICY.build_provenance(self.document(), 'sha256:other', True)
 
+    def test_native_descriptor_requires_original_metadata_before_config_provenance(self):
+        import io
+        import tarfile
+        import tempfile
+        native_id = 'sha256:22a761becced308c3ef0e30f3a73ca236012b1f02a9109ddb2d2f418dd91a8ff'
+        config_id = 'sha256:5069b87377ce91b47890d84793e8f68efe42e927f0b423fe958b7c428ef30379'
+        with tarfile.open(ROOT / 'scripts/tests/fixtures/docker-identity/docker29-image.tar.gz') as archive:
+            _, _, _, metadata = POLICY.IDENTITY.configuration_metadata(archive, native_id)
+        with tempfile.TemporaryDirectory() as temporary:
+            proof = Path(temporary) / 'identity.tar'
+            with tarfile.open(proof, 'w') as retained:
+                for name, raw in metadata.items():
+                    member = tarfile.TarInfo(name)
+                    member.size = len(raw)
+                    retained.addfile(member, io.BytesIO(raw))
+            document = self.document()
+            document['containerimage.config.digest'] = config_id
+            # The former native-ID/config-ID comparison fails on real Docker 29 bytes.
+            with self.assertRaises(ValueError):
+                POLICY.build_provenance(document, native_id, True)
+            observed = {'Id': native_id, 'Os': 'linux', 'Architecture': 'amd64'}
+            actual, bases = POLICY.image_provenance(document, observed, proof, True)
+            self.assertEqual(config_id, actual)
+            self.assertEqual({'21-jdk-jammy': 'sha256:' + 'a' * 64}, bases)
+            document['containerimage.config.digest'] = 'sha256:' + '0' * 64
+            with self.assertRaises(ValueError):
+                POLICY.image_provenance(document, observed, proof, True)
+            with self.assertRaises(ValueError):
+                POLICY.image_provenance(self.document(), {**observed, 'Id': 'sha256:' + '0' * 64}, proof, True)
+
 
 class TemurinEvidenceFetchTest(unittest.TestCase):
     def test_vendor_checksum_and_asset_authority_are_required(self):

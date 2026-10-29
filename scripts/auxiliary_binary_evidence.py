@@ -1,6 +1,7 @@
 """Verify exported image identities and measured UPX transformations as data."""
 import hashlib
 import gzip
+import io
 import json
 import os
 import re
@@ -41,8 +42,18 @@ def image_json(data):
     return json.loads(data, object_pairs_hook=unique)
 
 
-def saved_configuration(archive, image_id):
-    """Bind exact exported config bytes to a config ID or an OCI descriptor ID.
+def descriptor_bytes(archive, descriptor):
+    digest = descriptor['digest']
+    require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest),
+            'Invalid OCI descriptor digest')
+    raw = archive_bytes(archive, 'blobs/sha256/' + digest.split(':')[1])
+    require('sha256:' + sha(raw) == digest and type(descriptor['size']) is int
+            and descriptor['size'] == len(raw), 'OCI descriptor digest/size mismatch')
+    return raw
+
+
+def configuration_metadata(archive, image_id):
+    """Bind original config bytes to an inspected ID; return its raw metadata.
 
     Docker's containerd store reports the index/manifest digest as Id. Follow
     the original exported descriptor bytes; never reserialize configuration or
@@ -50,10 +61,14 @@ def saved_configuration(archive, image_id):
     """
     require(isinstance(image_id, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', image_id),
             'Missing immutable image identity')
-    entries = image_json(archive_bytes(archive, 'manifest.json'))
+    metadata = {}
+    def read(name):
+        metadata[name] = archive_bytes(archive, name)
+        return metadata[name]
+    entries = image_json(read('manifest.json'))
     require(isinstance(entries, list) and len(entries) == 1, 'Ambiguous saved image')
     entry = entries[0]
-    config = archive_bytes(archive, entry['Config'])
+    config = read(entry['Config'])
     config_id = 'sha256:' + sha(config)
     parsed = image_json(config)
     require(parsed['os'] == 'linux' and parsed['architecture'] == 'amd64'
@@ -62,13 +77,8 @@ def saved_configuration(archive, image_id):
     require(parsed['rootfs']['type'] == 'layers' and isinstance(layers, list)
             and isinstance(diffs, list) and len(layers) == len(diffs), 'Missing image layer evidence')
 
-    def layer_diff(data):
-        return 'sha256:' + sha(gzip.decompress(data) if data.startswith(b'\x1f\x8b') else data)
-
-    for name, digest in zip(layers, diffs):
-        require(layer_diff(archive_bytes(archive, name)) == digest, 'Saved image layer digest mismatch')
     if image_id == config_id:
-        return config
+        return entry, config, None, metadata
 
     indexes = {'application/vnd.oci.image.index.v1+json',
                'application/vnd.docker.distribution.manifest.list.v2+json'}
@@ -76,17 +86,13 @@ def saved_configuration(archive, image_id):
                  'application/vnd.docker.distribution.manifest.v2+json'}
 
     def blob(descriptor):
-        digest = descriptor['digest']
-        require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest),
-                'Invalid OCI descriptor digest')
-        raw = archive_bytes(archive, 'blobs/sha256/' + digest.split(':')[1])
-        require('sha256:' + sha(raw) == digest and type(descriptor['size']) is int
-                and descriptor['size'] == len(raw), 'OCI descriptor digest/size mismatch')
+        raw = descriptor_bytes(archive, descriptor)
+        metadata['blobs/sha256/' + descriptor['digest'].split(':')[1]] = raw
         return raw
 
-    require(image_json(archive_bytes(archive, 'oci-layout')) == {'imageLayoutVersion': '1.0.0'},
+    require(image_json(read('oci-layout')) == {'imageLayoutVersion': '1.0.0'},
             'Missing OCI image layout')
-    index = image_json(archive_bytes(archive, 'index.json'))
+    index = image_json(read('index.json'))
     require(index['schemaVersion'] == 2, 'Invalid exported OCI index')
     roots = [d for d in index['manifests'] if d['digest'] == image_id]
     require(len(roots) == 1, 'Export does not contain the inspected immutable image')
@@ -108,19 +114,39 @@ def saved_configuration(archive, image_id):
             and document['config']['digest'] == config_id and blob(document['config']) == config,
             'OCI manifest/configuration mismatch')
     require(len(document['layers']) == len(diffs), 'OCI layer census mismatch')
+    return entry, config, document, metadata
+
+
+def saved_configuration(archive, image_id):
+    """Verify both the descriptor/configuration chain and every exported layer."""
+    entry, config, manifest, _ = configuration_metadata(archive, image_id)
+    diffs = image_json(config)['rootfs']['diff_ids']
+    def layer_diff(data):
+        return 'sha256:' + sha(gzip.decompress(data) if data.startswith(b'\x1f\x8b') else data)
+    for name, digest in zip(entry['Layers'], diffs):
+        require(layer_diff(archive_bytes(archive, name)) == digest, 'Saved image layer digest mismatch')
     encodings = {'application/vnd.oci.image.layer.v1.tar': False,
                  'application/vnd.oci.image.layer.v1.tar+gzip': True,
                  'application/vnd.docker.image.rootfs.diff.tar': False,
                  'application/vnd.docker.image.rootfs.diff.tar.gzip': True}
-    for descriptor, digest in zip(document['layers'], diffs):
-        raw = blob(descriptor)
+    for descriptor, digest in zip(manifest['layers'] if manifest else [], diffs):
+        raw = descriptor_bytes(archive, descriptor)
         require(descriptor['mediaType'] in encodings
                 and raw.startswith(b'\x1f\x8b') == encodings[descriptor['mediaType']], 'Unsupported OCI layer encoding')
         require(layer_diff(raw) == digest, 'OCI layer/configuration mismatch')
     return config
 
 
-def inspect_configuration(reference, expected=None):
+def configuration_evidence(path, image_id):
+    """Read retained original metadata; layer/package checks have separate evidence."""
+    with tarfile.open(path) as archive:
+        _, config, _, metadata = configuration_metadata(archive, image_id)
+        require({m.name for m in archive.getmembers()} == set(metadata)
+                and len(archive.getmembers()) == len(metadata), 'Ambiguous retained image metadata')
+    return 'sha256:' + sha(config)
+
+
+def inspect_configuration(reference, expected=None, proof=None):
     observed = image_json(subprocess.check_output(['docker', 'image', 'inspect', reference]))
     require(isinstance(observed, list) and len(observed) == 1, 'Ambiguous Docker image inspection')
     observed = observed[0]
@@ -132,6 +158,13 @@ def inspect_configuration(reference, expected=None):
         subprocess.run(['docker', 'image', 'save', '-o', str(path), observed['Id']], check=True)
         with tarfile.open(path) as archive:
             config_id = 'sha256:' + sha(saved_configuration(archive, observed['Id']))
+            if proof is not None:
+                _, _, _, metadata = configuration_metadata(archive, observed['Id'])
+                with tarfile.open(proof, mode='w', format=tarfile.USTAR_FORMAT) as retained:
+                    for name, raw in sorted(metadata.items()):
+                        member = tarfile.TarInfo(name)
+                        member.size, member.mode = len(raw), 0o644
+                        retained.addfile(member, io.BytesIO(raw))
     require(expected is None or config_id == expected, 'Loaded image configuration differs')
     return observed, config_id
 

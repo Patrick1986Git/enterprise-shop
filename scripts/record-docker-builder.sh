@@ -8,6 +8,13 @@ for stage in builder app; do
   image="enterprise-shop/${stage}:ci"
   docker image inspect "${image}" > "${builder_evidence}/${stage}-image.json"
   test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "${image}")" = linux/amd64
+  python3 - "$image" "${builder_evidence}/${stage}-identity.tar" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, 'scripts')
+import auxiliary_binary_evidence as identity
+identity.inspect_configuration(sys.argv[1], proof=Path(sys.argv[2]))
+PY
   docker run --rm --platform linux/amd64 --entrypoint java "${image}" \
     -XshowSettings:properties -version > "${builder_evidence}/${stage}-java.txt" 2>&1
   grep -E '^[[:space:]]*java.specification.version = 21$' "${builder_evidence}/${stage}-java.txt"
