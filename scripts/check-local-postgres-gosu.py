@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("gosu_provenance", ROOT / "scripts/validate-gosu-provenance.py")
 PROVENANCE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PROVENANCE)
+SPEC = importlib.util.spec_from_file_location("image_identity", ROOT / "scripts/auxiliary_binary_evidence.py")
+IDENTITY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(IDENTITY)
 TARGET = "usr/local/bin/gosu"
 PARENTS = ("usr", "usr/local", "usr/local/bin")
 WHITEOUTS = {".wh.usr", "usr/.wh.local", "usr/local/.wh.bin", "usr/local/bin/.wh.gosu"}
@@ -86,9 +89,7 @@ def image_payload(archive_path, image_id):
         manifest = json.loads(regular_member(saved, "manifest.json"))
         require(isinstance(manifest, list) and len(manifest) == 1, "Ambiguous saved PostgreSQL image")
         entry = manifest[0]
-        config_bytes = regular_member(saved, entry["Config"])
-        require("sha256:" + hashlib.sha256(config_bytes).hexdigest() == image_id,
-                "Saved PostgreSQL image identity changed during inspection")
+        config_bytes = IDENTITY.saved_configuration(saved, image_id)
         config = json.loads(config_bytes)
         require(config["os"] + "/" + config["architecture"] == "linux/amd64",
                 "PostgreSQL image architecture is unsupported; the reviewed candidate requires linux/amd64")

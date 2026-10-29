@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -16,6 +17,9 @@ ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('go_advisory_acquisition', ROOT / 'scripts/go_advisory_acquisition.py')
 ADVISORY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ADVISORY)
+SPEC = importlib.util.spec_from_file_location('image_identity', ROOT / 'scripts/auxiliary_binary_evidence.py')
+BINARY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(BINARY)
 TEST_SPEC = importlib.util.spec_from_file_location('ryuk_client_tests', ROOT / 'scripts/ryuk_client_tests.py')
 ryuk_client_tests = importlib.util.module_from_spec(TEST_SPEC)
 TEST_SPEC.loader.exec_module(ryuk_client_tests)
@@ -100,7 +104,8 @@ def build(directory, analyze=True):
     source_hashes = {p.relative_to(source).as_posix(): sha(p.read_bytes())
                      for p in sorted(source.rglob('*')) if p.is_file()}
     subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', BUILDER], check=True)
-    inspect = json.loads(subprocess.check_output(['docker', 'image', 'inspect', BUILDER]))[0]
+    inspect, builder_config_id = BINARY.inspect_configuration(BUILDER)
+    write(directory / 'builder-docker-image.json', inspect)
     require(inspect['Os'] == 'linux' and inspect['Architecture'] == 'amd64'
             and BUILDER.split('@')[1] in [r.split('@')[1] for r in inspect['RepoDigests']], 'Wrong builder')
     command = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--user', f'{os.getuid()}:{os.getgid()}',
@@ -148,7 +153,7 @@ def build(directory, analyze=True):
     write(directory / 'filesystem-census.json', census)
     receipt = {'upstream_source_sha': SOURCE, 'upstream_archive_sha256': ARCHIVE_SHA,
         'patch_sha256': sha(patch.read_bytes()), 'source_files': source_hashes,
-        'builder': BUILDER, 'builder_image_id': inspect['Id'], 'go_version': '1.26.10',
+        'builder': BUILDER, 'builder_image_id': builder_config_id, 'go_version': '1.26.10',
         'flags': flags, 'cgo_enabled': '0', 'upx': False, 'binary_sha256': sha(binary),
         'repeat_sha256': sha((directory / 'ryuk.repeat').read_bytes()),
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),
@@ -159,8 +164,7 @@ def build(directory, analyze=True):
         for name in ['buildinfo.txt', 'source-packages.json', 'source-modules.json']}
     write(directory / 'build-receipt.json', receipt)
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
-    require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
-            'Loaded candidate configuration differs')
+    BINARY.inspect_configuration(reference, image_id)
     if analyze:
         analyzer = ADVISORY.isolated_analyzer(command, 'ryuk-candidate-build:/tmp')
         subprocess.run(analyzer + [f'go install golang.org/x/vuln/cmd/govulncheck@{TOOL}; '
@@ -187,8 +191,7 @@ def reuse(directory, analyze=True):
     candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     _, receipt = ryuk_candidate_evidence.validate_build(candidate, directory, head, analyze)
-    observed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', candidate['image_reference']]))[0]
-    require(observed['Id'] == candidate['image_id'], 'Local candidate configuration drift; rebuild before Maven')
+    BINARY.inspect_configuration(candidate['image_reference'], candidate['image_id'])
     print('Verified existing local Ryuk source, repeat binaries, tests, archive and loaded image: ' + candidate['image_id'])
     return receipt
 
@@ -198,8 +201,15 @@ if __name__ == '__main__':
     parser.add_argument('--directory', type=Path, default=ROOT / '.tmp/ryuk-candidate')
     parser.add_argument('--no-analysis', action='store_true')
     parser.add_argument('--reuse', action='store_true', help='Revalidate existing current-HEAD evidence and loaded image')
+    parser.add_argument('--verify-image', help='Verify an immutable running Ryuk image ID against the reviewed configuration')
     args = parser.parse_args()
     try:
-        (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
+        if args.verify_image:
+            require(re.fullmatch(r'sha256:[0-9a-f]{64}', args.verify_image), 'Missing immutable Ryuk image ID')
+            candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())
+            _, config_id = BINARY.inspect_configuration(args.verify_image, candidate['image_id'])
+            print(config_id)
+        else:
+            (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, 'Ryuk preparation failed: ' + str(error) + '\n')

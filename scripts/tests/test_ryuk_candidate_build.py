@@ -37,16 +37,19 @@ class CandidatePackagingTest(unittest.TestCase):
         validation = Mock(return_value=({}, {'verified': True}))
         evidence = SimpleNamespace(validate_build=validation)
         with patch.dict('sys.modules', {'ryuk_candidate_evidence': evidence}), \
-                patch.object(CANDIDATE.subprocess, 'check_output', side_effect=['current head', json.dumps([{'Id': reviewed['image_id']}])]):
+                patch.object(CANDIDATE.subprocess, 'check_output', return_value='current head'), \
+                patch.object(CANDIDATE.BINARY, 'inspect_configuration') as identity:
             result = CANDIDATE.reuse(Path('/existing-proof'), analyze=False)
+            identity.assert_called_once_with(reviewed['image_reference'], reviewed['image_id'])
         self.assertEqual({'verified': True}, result)
         validation.assert_called_once_with(reviewed, Path('/existing-proof'), 'current head', False)
 
     def test_reuse_rejects_wrong_loaded_candidate_configuration(self):
         evidence = SimpleNamespace(validate_build=Mock(return_value=({}, {})))
         with patch.dict('sys.modules', {'ryuk_candidate_evidence': evidence}), \
-                patch.object(CANDIDATE.subprocess, 'check_output', side_effect=['current head', json.dumps([{'Id': 'sha256:' + '0' * 64}])]):
-            with self.assertRaisesRegex(ValueError, 'configuration drift'):
+                patch.object(CANDIDATE.subprocess, 'check_output', return_value='current head'), \
+                patch.object(CANDIDATE.BINARY, 'inspect_configuration', side_effect=ValueError('Loaded image configuration differs')):
+            with self.assertRaisesRegex(ValueError, 'configuration differs'):
                 CANDIDATE.reuse(Path('/existing-proof'), analyze=False)
 
 

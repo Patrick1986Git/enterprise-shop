@@ -1,11 +1,13 @@
-"""Measured UPX transformation of copied image bytes; never execute the payload."""
+"""Verify exported image identities and measured UPX transformations as data."""
 import hashlib
+import gzip
 import json
 import os
 import re
 import struct
 import subprocess
 import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -19,6 +21,119 @@ def require(condition, message):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def archive_bytes(archive, name):
+    path = Path(name)
+    require(not path.is_absolute() and '..' not in path.parts, 'Unsafe image evidence path')
+    matches = [member for member in archive.getmembers() if member.name == name]
+    require(len(matches) == 1 and matches[0].isfile(), 'Missing or ambiguous image evidence: ' + name)
+    return archive.extractfile(matches[0]).read()
+
+
+def image_json(data):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            require(key not in result, 'Duplicate image evidence field')
+            result[key] = value
+        return result
+    return json.loads(data, object_pairs_hook=unique)
+
+
+def saved_configuration(archive, image_id):
+    """Bind exact exported config bytes to a config ID or an OCI descriptor ID.
+
+    Docker's containerd store reports the index/manifest digest as Id. Follow
+    the original exported descriptor bytes; never reserialize configuration or
+    infer its identity from tags, labels, or the export's rewritten index.
+    """
+    require(isinstance(image_id, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', image_id),
+            'Missing immutable image identity')
+    entries = image_json(archive_bytes(archive, 'manifest.json'))
+    require(isinstance(entries, list) and len(entries) == 1, 'Ambiguous saved image')
+    entry = entries[0]
+    config = archive_bytes(archive, entry['Config'])
+    config_id = 'sha256:' + sha(config)
+    parsed = image_json(config)
+    require(parsed['os'] == 'linux' and parsed['architecture'] == 'amd64'
+            and parsed.get('variant', '') in ('', 'v1'), 'Unsupported image platform')
+    layers, diffs = entry['Layers'], parsed['rootfs']['diff_ids']
+    require(parsed['rootfs']['type'] == 'layers' and isinstance(layers, list)
+            and isinstance(diffs, list) and len(layers) == len(diffs), 'Missing image layer evidence')
+
+    def layer_diff(data):
+        return 'sha256:' + sha(gzip.decompress(data) if data.startswith(b'\x1f\x8b') else data)
+
+    for name, digest in zip(layers, diffs):
+        require(layer_diff(archive_bytes(archive, name)) == digest, 'Saved image layer digest mismatch')
+    if image_id == config_id:
+        return config
+
+    indexes = {'application/vnd.oci.image.index.v1+json',
+               'application/vnd.docker.distribution.manifest.list.v2+json'}
+    manifests = {'application/vnd.oci.image.manifest.v1+json',
+                 'application/vnd.docker.distribution.manifest.v2+json'}
+
+    def blob(descriptor):
+        digest = descriptor['digest']
+        require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest),
+                'Invalid OCI descriptor digest')
+        raw = archive_bytes(archive, 'blobs/sha256/' + digest.split(':')[1])
+        require('sha256:' + sha(raw) == digest and type(descriptor['size']) is int
+                and descriptor['size'] == len(raw), 'OCI descriptor digest/size mismatch')
+        return raw
+
+    require(image_json(archive_bytes(archive, 'oci-layout')) == {'imageLayoutVersion': '1.0.0'},
+            'Missing OCI image layout')
+    index = image_json(archive_bytes(archive, 'index.json'))
+    require(index['schemaVersion'] == 2, 'Invalid exported OCI index')
+    roots = [d for d in index['manifests'] if d['digest'] == image_id]
+    require(len(roots) == 1, 'Export does not contain the inspected immutable image')
+    descriptor = roots[0]
+    document = image_json(blob(descriptor))
+    require(document['schemaVersion'] == 2, 'Invalid OCI schema')
+    if descriptor['mediaType'] in indexes:
+        require(document.get('mediaType') == descriptor['mediaType'], 'OCI index media type mismatch')
+        platforms = [d for d in document['manifests'] if d.get('platform', {}).get('os') == 'linux'
+                     and d['platform'].get('architecture') == 'amd64'
+                     and d['platform'].get('variant', '') in ('', 'v1')]
+        require(len(platforms) == 1, 'Missing or ambiguous linux/amd64 OCI manifest')
+        descriptor = platforms[0]
+        document = image_json(blob(descriptor))
+    require(descriptor['mediaType'] in manifests and document['schemaVersion'] == 2
+            and document.get('mediaType') == descriptor['mediaType'], 'Invalid OCI image manifest')
+    require(document['config']['mediaType'] in {'application/vnd.oci.image.config.v1+json',
+                'application/vnd.docker.container.image.v1+json'}
+            and document['config']['digest'] == config_id and blob(document['config']) == config,
+            'OCI manifest/configuration mismatch')
+    require(len(document['layers']) == len(diffs), 'OCI layer census mismatch')
+    encodings = {'application/vnd.oci.image.layer.v1.tar': False,
+                 'application/vnd.oci.image.layer.v1.tar+gzip': True,
+                 'application/vnd.docker.image.rootfs.diff.tar': False,
+                 'application/vnd.docker.image.rootfs.diff.tar.gzip': True}
+    for descriptor, digest in zip(document['layers'], diffs):
+        raw = blob(descriptor)
+        require(descriptor['mediaType'] in encodings
+                and raw.startswith(b'\x1f\x8b') == encodings[descriptor['mediaType']], 'Unsupported OCI layer encoding')
+        require(layer_diff(raw) == digest, 'OCI layer/configuration mismatch')
+    return config
+
+
+def inspect_configuration(reference, expected=None):
+    observed = image_json(subprocess.check_output(['docker', 'image', 'inspect', reference]))
+    require(isinstance(observed, list) and len(observed) == 1, 'Ambiguous Docker image inspection')
+    observed = observed[0]
+    require(isinstance(observed['Id'], str) and re.fullmatch(r'sha256:[0-9a-f]{64}', observed['Id']),
+            'Missing immutable Docker image identity')
+    require(observed['Os'] == 'linux' and observed['Architecture'] == 'amd64', 'Unsupported Docker image platform')
+    with tempfile.TemporaryDirectory(prefix='enterprise-shop-image-identity-') as temporary:
+        path = Path(temporary) / 'image.tar'
+        subprocess.run(['docker', 'image', 'save', '-o', str(path), observed['Id']], check=True)
+        with tarfile.open(path) as archive:
+            config_id = 'sha256:' + sha(saved_configuration(archive, observed['Id']))
+    require(expected is None or config_id == expected, 'Loaded image configuration differs')
+    return observed, config_id
 
 
 def write(path, value):

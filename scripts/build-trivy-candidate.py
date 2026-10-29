@@ -166,8 +166,9 @@ def build(directory):
     source = directory / 'source'
     hashes = prepare(data, source)
     subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', BUILDER], check=True)
-    observed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', BUILDER]))[0]
-    require(observed['Id'] == BUILDER_ID and observed['Architecture'] == 'amd64' and observed['Os'] == 'linux'
+    observed, _ = RYUK.BINARY.inspect_configuration(BUILDER, BUILDER_ID)
+    write(directory / 'builder-docker-image.json', observed)
+    require(observed['Architecture'] == 'amd64' and observed['Os'] == 'linux'
             and any(r.endswith('@' + BUILDER.split('@')[1]) for r in observed['RepoDigests']), 'Wrong immutable builder')
     for name, digest in [('index', BUILDER.split('@')[1]), ('manifest', BUILDER_MANIFEST)]:
         raw = subprocess.check_output(['docker', 'buildx', 'imagetools', 'inspect', '--raw', BUILDER.split('@')[0] + '@' + digest])
@@ -175,6 +176,10 @@ def build(directory):
         (directory / ('builder-' + name + '.json')).write_bytes(raw)
     require(json.loads((directory / 'builder-manifest.json').read_text())['config']['digest'] == BUILDER_ID,
             'Builder manifest/configuration mismatch')
+    platforms = [d for d in json.loads((directory / 'builder-index.json').read_text())['manifests']
+                 if d.get('platform', {}).get('os') == 'linux' and d['platform'].get('architecture') == 'amd64']
+    require(len(platforms) == 1 and platforms[0]['digest'] == BUILDER_MANIFEST,
+            'Builder index/platform manifest mismatch')
     verify_compiler(directory)
     command = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--user', f'{os.getuid()}:{os.getgid()}',
                '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
@@ -250,8 +255,7 @@ def build(directory):
     evidence.inventory(scope['images']['scanner'], reviewed)
     evidence.validate_build(reviewed, directory, receipt['repository_head'])
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
-    require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
-            'Loaded image configuration mismatch')
+    RYUK.BINARY.inspect_configuration(reference, image_id)
     for name in ('first', 'repeat', 'analysis'):
         remove_cache(directory / ('cache-' + name))
     # Small separately named artifacts permit independent byte readback without

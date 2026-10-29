@@ -258,6 +258,34 @@ Hosted artifacts can instead be downloaded into `.tmp/trivy-downloads/<artifact-
 
 Runner/gh/compiler publication compromise, defects in parsers/scanners and omitted upstream advisories remain trust limits. Reproducibility is linux/amd64 with two separate caches on the same hosted runner and pinned compiler, not diverse-compiler reproducibility. Scratch OS absence is explicit; Haskell/JDK/downloaded-tool coverage limits elsewhere in this document remain unchanged.
 
+### Docker configuration and descriptor identities
+
+Docker's classic image store reports the configuration digest as `image inspect`
+`Id`. The Docker 29 containerd store reports the target index or manifest digest.
+These are different objects. The Ubuntu 24.04 to 26.04 hosted-runner transition
+exposed this distinction on unchanged protected master; configuration bytes in
+the reproduced deterministic archive survived load/save unchanged.
+
+`auxiliary_binary_evidence.saved_configuration` verifies the full unfiltered
+Docker export against the inspected immutable ID. A descriptor ID must resolve
+through original, hash- and size-checked OCI blobs to exactly one linux/amd64
+manifest, the exact configuration bytes, and every layer's compressed digest and
+uncompressed diff ID. A configuration ID must hash the exact configuration and
+bind every exported layer. Missing, ambiguous, linked, malformed, changed or
+unsupported evidence fails closed. Platform-filtered exports can rewrite the
+index and must not substitute for the inspected original index.
+
+Reviewed configuration digests, deterministic archives, source/SDK/executable
+hashes and vulnerability/provenance policy remain unchanged. Native Docker IDs
+are retained separately in collection and running-Ryuk evidence; they do not
+replace the reviewed configuration identity. The real Ryuk integration test
+verifies its running immutable Docker ID through the same archive verifier,
+then retains the existing socket and post-JVM cleanup checks. PostgreSQL
+inspection remains read-only and still checks the effective gosu bytes and mode.
+Exports need temporary disk space; concurrent changes and a compromised Docker
+daemon/runner remain outside this verification boundary. No runner downgrade,
+digest exception, tag-based authority or configuration normalization is used.
+
 ### Update authority and infrastructure boundaries
 
 Dependabot Docker directories are root and docker/postgres. The inspected [GitHub Actions parser](https://github.com/dependabot/dependabot-core/blob/3b68008e805baffb205e066abc61522083cb3f8b/github_actions/lib/dependabot/github_actions/file_parser.rb) reads uses declarations and excludes Docker references. Workflow env image strings and Ryuk's properties entry therefore lack automated update coverage. No repository workflow submits these image packages to GitHub's dependency graph; scanning does not imply Dependency Review coverage.
