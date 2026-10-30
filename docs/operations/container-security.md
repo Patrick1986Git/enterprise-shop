@@ -372,11 +372,25 @@ Require at least two independently evidenced complete analyses of the same
 reviewed source/SDK/analyzer and full compiled graph, each below 900 seconds
 (half the unchanged 1,800-second timeout), without retries, timeout, OOM or
 incomplete output. Compare module coverage and findings as well as resource
-peaks; graph or dependency changes require reassessment. Existing measurements
-already show that neither tested profile meets the resident-reserve criterion.
+peaks; graph or dependency changes require reassessment. Earlier x/net 0.60.0
+measurements show that neither tested profile met the resident-reserve criterion.
 Do not repeat cold builds merely to reconfirm that limitation or make a blind
 memory-limit increase. A different resource strategy requires a separate measured
 decision, while complete source and binary advisory checks remain mandatory.
+
+The independently verified CI #1287 and #1289 collections count as two complete
+analyses of identical repaired scanner source, SDK, analyzer and compiled graph.
+Their source analyses completed in 49.255 and 39.613 seconds, with highest retained
+RAM readings of 7,824,543,744 and 7,620,218,880 bytes respectively. Retained owned
+swap peaks and hard-limit/OOM counters are zero; both report exit zero, no collection
+errors and exact-container cleanup. Both full advisory modes retain only the
+GO-2026-5932 notice, whose affected packages/functions are absent from the compiled
+censuses. Sampled host headroom meets the budgets above. However, the last live
+cgroup reads precede exit by approximately 0.36 and 1.81 seconds; the stopped
+cgroup counters are absent. These readings cannot establish an exact final RAM
+or swap peak, so strict resource-profile acceptance remains unresolved. Preserve
+the immutable collections rather than rerunning builds to rediscover them;
+mandatory final-HEAD admission and advisory checks remain required.
 
 ### Update authority and infrastructure boundaries
 
@@ -462,6 +476,19 @@ trivy sbom --skip-db-update --ignorefile /dev/null --list-all-pkgs \
 The actual invocation runs inside the immutable Trivy image documented above. Exit status zero produces raw evidence; scanner/database errors still fail. `scripts/validate-build-tool-vulnerabilities.py` requires every input PURL and exact name/version in Trivy's readback and partitions HIGH/CRITICAL matches by validated execution ownership. `policy-result.json` preserves both `blocked` and `resolved_only` findings. Only `blocked` determines the advisory gate status. There are no CVE/package exceptions or inherited image/gosu exceptions. Unknown/omitted packages, malformed/truncated evidence, graph changes, missing starts/successes/plans/realms, and stale results fail before policy success. Isolated BeanUtils fixtures prove vulnerable HIGH detection, patched success, malformed input failure, and missing-database failure using the real pinned scanner.
 
 Current Jetty HIGH findings remain visible in the full raw report and `resolved_only` evidence because the current Site realm has no authoritative executed goal. Success means **no blocking HIGH/CRITICAL findings in the authoritative execution set**, rather than no vulnerabilities. An isolated local `dependency:go-offline site:help` probe with the same contract promoted all Site realm members and blocked both Jetty findings; it is not a required repository command or a permanent Site exception.
+
+CI #1289 additionally blocks CVE-2026-102554 in Guava 33.7.1-jre bundled inside
+the pinned Maven 3.10.0 distribution. Apache's distribution POM resolves Maven
+Core and Embedder, which declare Guava directly; their parent manages that version.
+The reviewed bootstrap JAR is `lib/guava-33.7.1-jre.jar`, SHA-256
+`796d8e28ac64e83a47c4c5935a8fecc4682650a04bbdead738ef0f5a3a0e6c46`.
+The affected JAR is absent from the Spring Boot plugin realm; that plugin's
+Jackson overrides and PRs #496/#498 cannot replace Maven's bootstrap copy.
+Guava's official fix is 33.7.2, but selecting it here requires separate Maven
+distribution remediation and authoritative archive/signature/checksum review,
+followed by fresh distribution, plugin-realm and execution inventories. A plugin
+override, bootstrap JAR overlay or ownership reclassification cannot substitute
+for that review. The current HIGH blocker remains enforced.
 
 Local reproduction requires a complete Java 21 JDK and Docker. From the repository root:
 
