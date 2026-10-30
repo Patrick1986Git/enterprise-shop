@@ -235,8 +235,23 @@ def validate_image(report, bom, packages, image_id, scanner_status, sbom_status,
             'sbom_component_count': len(components), 'unzip': packages['unzip'], 'blocked': blocked}
 
 
-def build_provenance(document, image_id, builder_target):
-    require(document['containerimage.config.digest'] == image_id, 'Build metadata belongs to a different image')
+def build_provenance(document, image_id, builder_target, *, proof=None, docker_id=None):
+    descriptor_present = 'containerimage.descriptor' in document
+    if descriptor_present:
+        require(isinstance(document['containerimage.descriptor'], dict), 'Malformed publisher descriptor')
+    if proof is not None:
+        require(IDENTITY.configuration_evidence(proof, docker_id,
+                    document['containerimage.descriptor'] if descriptor_present else None) == image_id,
+                'Publisher metadata belongs to a different original configuration')
+    else:
+        require(not descriptor_present and 'containerimage.digest' not in document,
+                'Publisher descriptor requires original image evidence')
+    require('containerimage.config.digest' in document or (proof is not None and descriptor_present),
+            'Missing publisher configuration/descriptor authority')
+    if 'containerimage.config.digest' in document:
+        require(document['containerimage.config.digest'] == image_id, 'Build metadata belongs to a different image')
+    if 'containerimage.digest' in document:
+        require(document['containerimage.digest'] == docker_id, 'Conflicting publisher image digest')
     provenance = document['buildx.build.provenance']
     require(provenance['buildType'] == 'https://mobyproject.org/buildkit@v1', 'Unreviewed build provenance')
     invocation = provenance['invocation']
@@ -265,7 +280,7 @@ def build_provenance(document, image_id, builder_target):
 def image_provenance(document, observed, proof, builder_target):
     require(observed['Os'] == 'linux' and observed['Architecture'] == 'amd64', 'Wrong Docker image platform')
     config_id = IDENTITY.configuration_evidence(proof, observed['Id'])
-    return config_id, build_provenance(document, config_id, builder_target)
+    return config_id, build_provenance(document, config_id, builder_target, proof=proof, docker_id=observed['Id'])
 
 
 def evaluate(directory):
@@ -287,7 +302,7 @@ def evaluate(directory):
             subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
             'Missing/stale exact source identity')
     packages = dpkg_inventory((directory / 'builder-dpkg.tsv').read_text())
-    result = validate_image(report, bom, packages, builder_config,
+    result = validate_image(report, bom, packages, builder['Id'],
                             int((directory / 'scanner-exit-status.txt').read_text()),
                             int((directory / 'sbom-exit-status.txt').read_text()),
                             int((directory / 'database-exit-status.txt').read_text()))

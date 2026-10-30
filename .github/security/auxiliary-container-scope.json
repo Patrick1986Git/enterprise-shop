@@ -302,7 +302,7 @@
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
     "docker/postgres/Dockerfile": "c56dd7e086bb3bb3c50aa6c03a5a90fab957ae443153abbefd54a88426821684",
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
-    "scripts/auxiliary_binary_evidence.py": "670008fa633f4e79d3ebefa37ea746897baeccf7496621f6544b2300dfb98e89",
+    "scripts/auxiliary_binary_evidence.py": "cdb3f5e3c33284012206208ce47eb7951511c96bbab41e643d96e08712a5ce68",
     "scripts/build-ryuk-candidate.py": "bc6dbda7ea9a7846b56995621baa929b0c9996cef69b45252cbdcd70b588a4bf",
     "scripts/build-tool-inventory.py": "550e26a475adc5d6450f43db461be4930ff3c33d067f0f7814d005f8b3ab7e61",
     "scripts/build-trivy-candidate.py": "922c1a599243c0f533e639cd1fde0e34b4bdb9aee2a815d76d5f0c3a0579bb98",

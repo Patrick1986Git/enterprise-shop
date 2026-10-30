@@ -1,6 +1,13 @@
 import importlib.util
+import copy
+import hashlib
+import io
+import json
+import tarfile
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -222,6 +229,255 @@ class BuildProvenanceTest(unittest.TestCase):
                 POLICY.image_provenance(document, observed, proof, True)
             with self.assertRaises(ValueError):
                 POLICY.image_provenance(self.document(), {**observed, 'Id': 'sha256:' + '0' * 64}, proof, True)
+
+
+class BuilderPublisherIdentityTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        fixture = ROOT / 'scripts/tests/fixtures/buildkit-metadata/ci1290.tar.gz'
+        self.assertEqual('f0a696cf28c94dc1638d6b518d805c50625e1eb64b8a713b5dc51e68054ab210',
+                         hashlib.sha256(fixture.read_bytes()).hexdigest())
+        with tarfile.open(fixture) as saved:
+            expected = {f'{name}-{suffix}' for name in ('builder', 'app')
+                        for suffix in ('build.json', 'image.json', 'identity.tar')}
+            self.assertEqual(expected, {m.name for m in saved})
+            for member in saved.getmembers():
+                self.assertTrue(member.isfile())
+                (self.root / member.name).write_bytes(saved.extractfile(member).read())
+
+    def inputs(self, name='builder'):
+        return (POLICY.read_json(self.root / f'{name}-build.json'),
+                POLICY.read_json(self.root / f'{name}-image.json')[0],
+                self.root / f'{name}-identity.tar')
+
+    def validate(self, name='builder'):
+        return POLICY.image_provenance(*self.inputs(name), name == 'builder')
+
+    def write_proof(self, files):
+        path = self.root / 'changed.tar'
+        with tarfile.open(path, 'w') as saved:
+            for name, data in files.items():
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                saved.addfile(member, io.BytesIO(data))
+        return path
+
+    def proof_files(self, path):
+        with tarfile.open(path) as saved:
+            return {m.name: saved.extractfile(m).read() for m in saved if m.isfile()}
+
+    def test_actual_ci1290_builder_and_runtime_descriptor_only_publication(self):
+        expected = {'builder': 'sha256:df149d15bf89d247d666287f385251902156ddd8527cb10c780dc32fcd80139c',
+                    'app': 'sha256:dee40abb5301270b2282c34658db668a88d6cff1f78c575f325dbfab16b8fe1d'}
+        for name, config in expected.items():
+            with self.subTest(name=name):
+                document, observed, proof = self.inputs(name)
+                self.assertNotIn('containerimage.config.digest', document)
+                self.assertNotEqual(config, observed['Id'])
+                actual, bases = self.validate(name)
+                self.assertEqual(config, actual)
+                self.assertIn('21-jdk-jammy', bases)
+
+    def test_existing_configuration_only_and_agreeing_dual_publication(self):
+        for name in ('builder', 'app'):
+            document, observed, proof = self.inputs(name)
+            config = POLICY.IDENTITY.configuration_evidence(proof, observed['Id'])
+            document['containerimage.config.digest'] = config
+            with self.subTest(name=name, form='dual'):
+                self.assertEqual(config, POLICY.image_provenance(document, observed, proof, name == 'builder')[0])
+            document.pop('containerimage.descriptor')
+            document.pop('containerimage.digest')
+            with self.subTest(name=name, form='configuration'):
+                self.assertEqual(config, POLICY.image_provenance(document, observed, proof, name == 'builder')[0])
+
+    def test_classic_configuration_publication_still_requires_original_bytes(self):
+        config = 'sha256:5069b87377ce91b47890d84793e8f68efe42e927f0b423fe958b7c428ef30379'
+        fixture = ROOT / 'scripts/tests/fixtures/docker-identity/docker29-image.tar.gz'
+        with tarfile.open(fixture) as saved:
+            _, _, _, metadata = POLICY.IDENTITY.configuration_metadata(saved, config)
+        proof = self.write_proof(metadata)
+        document = BuildProvenanceTest().document()
+        document['containerimage.config.digest'] = config
+        document['containerimage.digest'] = config
+        observed = {'Id': config, 'Os': 'linux', 'Architecture': 'amd64'}
+        self.assertEqual(config, POLICY.image_provenance(document, observed, proof, True)[0])
+        document['containerimage.digest'] = 'sha256:' + '0' * 64
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, proof, True)
+
+    def test_conflicting_configuration_cannot_fall_back_to_a_correct_descriptor(self):
+        for name in ('builder', 'app'):
+            for wrong in (None, '', 'sha256:' + '0' * 64):
+                document, observed, proof = self.inputs(name)
+                document['containerimage.config.digest'] = wrong
+                with self.subTest(name=name, value=wrong), self.assertRaises(ValueError):
+                    POLICY.image_provenance(document, observed, proof, name == 'builder')
+
+    def test_missing_or_malformed_publisher_authority_fails_closed(self):
+        document, observed, proof = self.inputs()
+        for change in ('descriptor', 'all', None, {}, []):
+            changed = copy.deepcopy(document)
+            if change in ('descriptor', 'all'):
+                changed.pop('containerimage.descriptor')
+                if change == 'all':
+                    changed.pop('containerimage.digest')
+            else:
+                changed['containerimage.descriptor'] = change
+                changed['containerimage.config.digest'] = POLICY.IDENTITY.configuration_evidence(proof, observed['Id'])
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                POLICY.image_provenance(changed, observed, proof, True)
+
+    def test_descriptor_digest_media_type_size_and_conflicting_digest_are_checked(self):
+        document, observed, proof = self.inputs()
+        changes = [('digest', 'sha256:' + '0' * 64), ('mediaType', 'application/vnd.oci.image.config.v1+json'),
+                   ('size', 1), ('size', True), ('size', 856.0), ('size', -1)]
+        for key, value in changes:
+            for dual in (False, True):
+                changed = copy.deepcopy(document)
+                changed['containerimage.descriptor'][key] = value
+                if dual:
+                    changed['containerimage.config.digest'] = POLICY.IDENTITY.configuration_evidence(proof, observed['Id'])
+                with self.subTest(key=key, value=value, dual=dual), self.assertRaises(ValueError):
+                    POLICY.image_provenance(changed, observed, proof, True)
+        document['containerimage.digest'] = 'sha256:' + '0' * 64
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, proof, True)
+
+    def test_optional_publisher_size_uses_the_original_descriptor_bytes(self):
+        document, observed, proof = self.inputs()
+        document['containerimage.descriptor'].pop('size')
+        self.assertEqual('sha256:df149d15bf89d247d666287f385251902156ddd8527cb10c780dc32fcd80139c',
+                         POLICY.image_provenance(document, observed, proof, True)[0])
+
+    def test_verified_descriptor_authority_does_not_require_redundant_digest(self):
+        document, observed, proof = self.inputs()
+        document.pop('containerimage.digest')
+        self.assertEqual('sha256:df149d15bf89d247d666287f385251902156ddd8527cb10c780dc32fcd80139c',
+                         POLICY.image_provenance(document, observed, proof, True)[0])
+
+    def test_unreviewed_descriptor_fields_fail_closed(self):
+        document, observed, proof = self.inputs()
+        document['containerimage.descriptor']['platform'] = {'os': 'windows', 'architecture': 'amd64'}
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, proof, True)
+
+    def test_configuration_digest_is_not_a_descriptor_only_authority(self):
+        document, observed, proof = self.inputs()
+        config = POLICY.IDENTITY.configuration_evidence(proof, observed['Id'])
+        document['containerimage.digest'] = config
+        document['containerimage.descriptor']['digest'] = config
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, proof, True)
+
+    def test_missing_stale_or_wrong_image_original_evidence_fails(self):
+        document, observed, proof = self.inputs()
+        for path in (self.root / 'missing.tar', self.inputs('app')[2], self.write_proof({})):
+            with self.subTest(proof=path), self.assertRaises((ValueError, OSError)):
+                POLICY.image_provenance(document, observed, path, True)
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, {**observed, 'Id': 'sha256:' + '0' * 64}, proof, True)
+
+    def test_original_index_manifest_configuration_and_layer_descriptor_tampering_fails(self):
+        document, observed, proof = self.inputs()
+        files = self.proof_files(proof)
+        with tarfile.open(proof) as saved:
+            _, config, manifest, _ = POLICY.IDENTITY.configuration_metadata(saved, observed['Id'])
+        selected = ['blobs/sha256/' + observed['Id'].split(':')[1],
+                    'blobs/sha256/' + manifest['config']['digest'].split(':')[1],
+                    next(n for n, raw in files.items() if n.startswith('blobs/')
+                         and POLICY.IDENTITY.image_json(raw) == manifest)]
+        for name in selected:
+            changed = dict(files)
+            changed[name] += b' '
+            with self.subTest(member=name), self.assertRaises(ValueError):
+                POLICY.image_provenance(document, observed, self.write_proof(changed), True)
+        changed = dict(files)
+        value = copy.deepcopy(manifest)
+        value['layers'][0]['digest'] = 'sha256:' + '0' * 64
+        changed[selected[-1]] = json.dumps(value).encode()
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, self.write_proof(changed), True)
+
+    def test_self_consistent_but_ambiguous_platform_index_fails(self):
+        document, observed, proof = self.inputs()
+        files = self.proof_files(proof)
+        old_name = 'blobs/sha256/' + observed['Id'].split(':')[1]
+        index = POLICY.IDENTITY.image_json(files.pop(old_name))
+        platform = next(d for d in index['manifests'] if d.get('platform', {}).get('os') == 'linux')
+        index['manifests'].append(copy.deepcopy(platform))
+        raw = json.dumps(index).encode()
+        new_id = 'sha256:' + hashlib.sha256(raw).hexdigest()
+        outer = POLICY.IDENTITY.image_json(files['index.json'])
+        next(d for d in outer['manifests'] if d['digest'] == observed['Id']).update(digest=new_id, size=len(raw))
+        files['index.json'] = json.dumps(outer).encode()
+        files['blobs/sha256/' + new_id.split(':')[1]] = raw
+        document['containerimage.descriptor'].update(digest=new_id, size=len(raw))
+        document['containerimage.digest'] = new_id
+        with self.assertRaisesRegex(ValueError, 'ambiguous linux/amd64'):
+            POLICY.image_provenance(document, {**observed, 'Id': new_id}, self.write_proof(files), True)
+
+    def test_wrong_platform_target_or_base_is_rejected(self):
+        document, observed, proof = self.inputs()
+        for changed in ({**observed, 'Os': 'windows'}, {**observed, 'Architecture': 'arm64'}):
+            with self.subTest(observed=changed), self.assertRaises(ValueError):
+                POLICY.image_provenance(document, changed, proof, True)
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, proof, False)
+        next(m for m in document['buildx.build.provenance']['materials']
+             if '21-jdk-jammy' in m['uri'])['uri'] = 'pkg:docker/unreviewed@base'
+        with self.assertRaises(ValueError):
+            POLICY.image_provenance(document, observed, proof, True)
+
+    def test_individually_valid_but_different_builder_and_runtime_bases_fail(self):
+        document, _, _ = self.inputs('app')
+        provenance = document['buildx.build.provenance']
+        material = next(m for m in provenance['materials'] if '21-jdk-jammy' in m['uri'])
+        old = material['digest']['sha256']
+        material['digest']['sha256'] = '0' * 64
+        for entry in provenance['buildConfig']['llbDefinition']:
+            source = entry.get('op', {}).get('Op', {}).get('source')
+            if source and '21-jdk-jammy@sha256:' + old in source.get('identifier', ''):
+                source['identifier'] = source['identifier'].replace(old, '0' * 64)
+        (self.root / 'app-build.json').write_text(json.dumps(document))
+        for name in ('trivy-raw.json', 'builder.cdx.json'):
+            (self.root / name).write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'Builder base changed'):
+            POLICY.evaluate(self.root)
+
+    def test_full_layer_bytes_remain_checked_by_the_original_export_verifier(self):
+        fixture = ROOT / 'scripts/tests/fixtures/docker-identity/docker29-image.tar.gz'
+        files = self.proof_files(fixture)
+        layer = json.loads(files['manifest.json'])[0]['Layers'][0]
+        files[layer] += b'changed'
+        with tarfile.open(self.write_proof(files)) as changed, self.assertRaises(ValueError):
+            POLICY.IDENTITY.saved_configuration(changed,
+                'sha256:22a761becced308c3ef0e30f3a73ca236012b1f02a9109ddb2d2f418dd91a8ff')
+
+    def test_stale_original_source_head_fails_before_package_acceptance(self):
+        (self.root / 'trivy-raw.json').write_text('{}')
+        (self.root / 'builder.cdx.json').write_text('{}')
+        (self.root / 'source-sha.txt').write_text('a' * 40)
+        with patch.object(POLICY.subprocess, 'check_output', return_value='b' * 40), \
+                self.assertRaisesRegex(ValueError, 'stale exact source'):
+            POLICY.evaluate(self.root)
+
+    def test_package_reports_use_the_original_verified_native_image_id(self):
+        for name in ('trivy-raw.json', 'builder.cdx.json'):
+            (self.root / name).write_text('{}')
+        (self.root / 'builder-dpkg.tsv').write_text('unused')
+        for name in ('scanner-exit-status.txt', 'sbom-exit-status.txt', 'database-exit-status.txt'):
+            (self.root / name).write_text('0')
+        (self.root / 'source-sha.txt').write_text('a' * 40)
+        with patch.object(POLICY.subprocess, 'check_output', return_value='a' * 40), \
+                patch.object(POLICY, 'dpkg_inventory', return_value={}), \
+                patch.object(POLICY, 'validate_image', side_effect=RuntimeError('package boundary')) as validate, \
+                self.assertRaisesRegex(RuntimeError, 'package boundary'):
+            POLICY.evaluate(self.root)
+        self.assertEqual(self.inputs()[1]['Id'], validate.call_args.args[3])
+        self.assertNotEqual('sha256:df149d15bf89d247d666287f385251902156ddd8527cb10c780dc32fcd80139c',
+                            validate.call_args.args[3])
 
 
 class TemurinEvidenceFetchTest(unittest.TestCase):

@@ -292,11 +292,24 @@ inspection remains read-only and still checks the effective gosu bytes and mode.
 Builder/runtime collection additionally retains the original descriptor and
 configuration bytes in small metadata archives after validating the full export.
 Offline JDK provenance checks bind those bytes to the recorded native Docker ID,
-BuildKit configuration digest, raw scanner report and SBOM. Layer/package and
+BuildKit publisher identity, raw scanner report and SBOM. Layer/package and
 vulnerability evidence remains separately required; metadata alone cannot pass it.
 Exports need temporary disk space; concurrent changes and a compromised Docker
 daemon/runner remain outside this verification boundary. No runner downgrade,
 digest exception, tag-based authority or configuration normalization is used.
+
+BuildKit's Docker 29 metadata can publish `containerimage.descriptor` and
+`containerimage.digest` without `containerimage.config.digest`. The original OCI
+proof must bind that exact descriptor digest and media type, plus its size when
+published, through the unique linux/amd64 manifest to the actual configuration.
+The reviewed descriptor profile contains only digest, media type and optional
+size. An explicit configuration field remains mandatory to verify when present;
+dual evidence must agree. `containerimage.digest` is a consistency check against
+the verified native ID and cannot authorize an absent configuration/descriptor
+publication on its own. Missing, conflicting or unprovable publisher evidence
+fails closed. Docker-mode raw reports and SBOMs identify that verified native ID;
+the configuration identity is retained separately. Original #1290 publisher and
+OCI bytes are retained in the regression fixture without normalization.
 
 Identity metadata rejects duplicate fields, non-finite JSON values, noninteger
 OCI schema versions and malformed layer descriptors even in metadata-only proofs.
@@ -526,7 +539,7 @@ docker buildx build --pull --platform linux/amd64 --target builder --load \
   --metadata-file .tmp/container-security/builder/builder-build.json .
 ```
 
-It then exports the normal runtime image using the same BuildKit builder and local cache. This requires an additional target export and image load, not a deliberately separate full Maven build: unchanged builder instructions and the Maven cache are reused for the runtime export. Both exports resolve bases with `--pull`. Maximum BuildKit metadata preserves the actual base material digests, platform, target, and image configuration digest; the policy checks the recorded base `image.resolvemode` is `pull` and that both exports used the same JDK base. Separate tags and artifacts keep the builder out of production output. Additional root Dockerfile stages or changed stage identities fail pending an explicit policy decision, including new artifact-producing stages.
+It then exports the normal runtime image using the same BuildKit builder and local cache. This requires an additional target export and image load, not a deliberately separate full Maven build: unchanged builder instructions and the Maven cache are reused for the runtime export. Both exports resolve bases with `--pull`. Maximum BuildKit metadata preserves the actual base material digests, platform, target, and published configuration or original OCI descriptor identity; the policy binds the publisher to the original image bytes, checks the recorded base `image.resolvemode` is `pull` and that both exports used the same JDK base. Separate tags and artifacts keep the builder out of production output. Additional root Dockerfile stages or changed stage identities fail pending an explicit policy decision, including new artifact-producing stages.
 
 PR checkout uses the exact event head SHA; scheduled checkout uses protected `master`; manual dispatch uses its selected ref. A recorded source SHA must match checkout and the event SHA. The same Monday `04:23 UTC` schedule rebuilds and rescans the builder alongside existing final-image checks. Before this change reaches protected master, the schedule is established by workflow/ref/provenance regression tests, not a claim that a scheduled builder run has already executed. Permissions remain read-only, checkout credentials are not persisted, and no secrets or privileged pull-request event are used.
 

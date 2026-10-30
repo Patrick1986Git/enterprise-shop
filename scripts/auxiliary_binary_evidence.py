@@ -209,12 +209,24 @@ def saved_configuration(archive, image_id):
     return config
 
 
-def configuration_evidence(path, image_id):
+def configuration_evidence(path, image_id, publisher_descriptor=None):
     """Read retained original metadata; layer/package checks have separate evidence."""
     with tarfile.open(path) as archive:
-        _, config, _, metadata = configuration_metadata(archive, image_id)
+        _, config, manifest, metadata = configuration_metadata(archive, image_id)
         require({m.name for m in archive.getmembers()} == set(metadata)
                 and len(archive.getmembers()) == len(metadata), 'Ambiguous retained image metadata')
+        if publisher_descriptor is not None:
+            require(manifest is not None and isinstance(publisher_descriptor, dict)
+                    and set(publisher_descriptor) <= {'digest', 'mediaType', 'size'}
+                    and publisher_descriptor.get('digest') == image_id,
+                    'Publisher descriptor does not identify the original OCI image')
+            original = metadata['blobs/sha256/' + image_id.split(':')[1]]
+            require(publisher_descriptor.get('mediaType') == image_json(original)['mediaType'],
+                    'Publisher descriptor media type differs from original bytes')
+            if 'size' in publisher_descriptor:
+                require(type(publisher_descriptor['size']) is int
+                        and publisher_descriptor['size'] == len(original),
+                        'Publisher descriptor size differs from original bytes')
     return 'sha256:' + sha(config)
 
 
