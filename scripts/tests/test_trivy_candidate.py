@@ -527,8 +527,10 @@ class TrivyTrustContractTest(unittest.TestCase):
             'flags': BUILD.FLAGS, 'upx': False, 'independent_cold_caches': True,
             'buildinfo': {'go_version': '1.27.3', 'path': 'github.com/aquasecurity/trivy/cmd/trivy',
                 'main_module': 'github.com/aquasecurity/trivy', 'main_version': '(devel)',
-                'dependencies': {'golang.org/x/net': {'version': 'v0.60.0',
-                    'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='}},
+                'dependencies': {'golang.org/x/net': {'version': 'v0.62.0',
+                    'sum': 'h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY='},
+                    'github.com/go-jose/go-jose/v4': {'version': 'v4.1.6',
+                    'sum': 'h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4='}},
                 'build': {'CGO_ENABLED': '0', 'GOARCH': 'amd64', 'GOOS': 'linux', 'GOAMD64': 'v1',
                           '-buildmode': 'exe', '-trimpath': 'true'}}}
         self.image = {'reference': self.candidate['image_reference'], 'go_version': '1.27.3',
@@ -549,10 +551,22 @@ class TrivyTrustContractTest(unittest.TestCase):
     def test_vulnerable_compiler_or_net_module_is_rejected(self):
         for mutate in (lambda v: v['buildinfo'].update(go_version='1.27.1'),
                        lambda v: v['buildinfo'].update(go_version='1.27.2'),
-                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.59.0')):
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.59.0'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.60.0'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.61.0'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(
+                           sum='h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=')):
             old = copy.deepcopy(self.candidate)
             mutate(self.candidate)
             with self.assertRaisesRegex(ValueError, 'vulnerable'):
+                self.validate()
+            self.candidate = old
+
+    def test_vulnerable_go_jose_or_unverified_module_sum_is_rejected(self):
+        for values in ({'version': 'v4.1.5'}, {'sum': 'h1:unverified'}):
+            old = copy.deepcopy(self.candidate)
+            self.candidate['buildinfo']['dependencies']['github.com/go-jose/go-jose/v4'].update(values)
+            with self.subTest(values=values), self.assertRaisesRegex(ValueError, 'vulnerable'):
                 self.validate()
             self.candidate = old
 
@@ -560,7 +574,8 @@ class TrivyTrustContractTest(unittest.TestCase):
         metadata = self.candidate['buildinfo']
         report = {'Results': [{'Target': 'usr/local/bin/trivy', 'Type': 'gobinary',
             'Packages': [{'Name': name, 'Version': version} for name, version in
-                [(metadata['main_module'], ''), ('stdlib', 'v1.27.3'), ('golang.org/x/net', 'v0.60.0')]]}]}
+                [(metadata['main_module'], ''), ('stdlib', 'v1.27.3'), ('golang.org/x/net', 'v0.62.0'),
+                 ('github.com/go-jose/go-jose/v4', 'v4.1.6')]]}]}
         proof = {'image_id': self.candidate['image_id'], 'resolved_digest': self.candidate['image_id'],
                  'identity_authority': 'local-configuration-and-archive'}
         with tempfile.TemporaryDirectory() as temporary:

@@ -19,6 +19,7 @@ SPEC.loader.exec_module(EVIDENCE)
 REFERENCE = 'ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa'
 REFERENCE_BINARY = '93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e'
 EXPECTED = {('CVE-2026-111943', 'stdlib', 'v1.27.1', 'HIGH'),
+            ('CVE-2026-116587', 'github.com/go-jose/go-jose/v4', 'v4.1.5', 'HIGH'),
             ('CVE-2026-78669', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
             ('CVE-2026-78667', 'stdlib', 'v1.27.1', 'HIGH'),
             ('CVE-2026-78669', 'stdlib', 'v1.27.1', 'HIGH'),

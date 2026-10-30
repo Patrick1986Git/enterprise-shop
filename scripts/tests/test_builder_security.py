@@ -314,7 +314,7 @@ class BuilderCiPolicyTest(unittest.TestCase):
         self.assertIn('--format cyclonedx --output /evidence/builder.cdx.json', self.scanner)
 
     def test_pinned_trivy_same_database_and_unfiltered_separate_builder_policy(self):
-        self.assertIn('TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7', self.job)
+        self.assertIn('TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7', self.job)
         self.assertIn('--list-all-pkgs --exit-code 0', self.scanner)
         self.assertIn('--ignorefile /dev/null', self.scanner)
         self.assertIn('image --download-db-only', self.scanner)

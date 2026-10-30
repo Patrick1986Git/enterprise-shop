@@ -81,7 +81,9 @@ def inventory(image, candidate):
     require(metadata['go_version'] == '1.27.3' and metadata['path'] == 'github.com/aquasecurity/trivy/cmd/trivy'
             and metadata['main_module'] == 'github.com/aquasecurity/trivy' and metadata['main_version'] == '(devel)'
             and metadata['dependencies']['golang.org/x/net'] == {
-                'version': 'v0.60.0', 'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='},
+                'version': 'v0.62.0', 'sum': 'h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY='}
+            and metadata['dependencies']['github.com/go-jose/go-jose/v4'] == {
+                'version': 'v4.1.6', 'sum': 'h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4='},
             'Known vulnerable or wrong scanner module/compiler identity')
     require(not any(name == 'github.com/docker/docker' or name.startswith('github.com/docker/docker/')
                     for name in metadata['dependencies']), 'Legacy Docker module embedded in scanner')
