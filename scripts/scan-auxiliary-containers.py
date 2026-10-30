@@ -72,7 +72,7 @@ def scan():
             (item / target).unlink(missing_ok=True)
         try:
             ref = image['reference']
-            inspect = json.loads(docker('image', 'inspect', ref))[0]
+            inspect, config_id = POLICY.BINARY.inspect_configuration(ref)
             POLICY.require(inspect['Os'] + '/' + inspect['Architecture'] == 'linux/amd64', 'Wrong resolved platform')
             if image.get('candidate_build'):
                 scanner_candidate = name == 'scanner'
@@ -80,7 +80,7 @@ def scan():
                 build = POLICY.SCANNER.runtime_directory() if scanner_candidate else ROOT / '.tmp/ryuk-candidate'
                 reviewed = POLICY.read(authority.CONTRACT)
                 authority.validate_build(reviewed, build, source)
-                POLICY.require(inspect['Id'] == reviewed['image_id'], 'Wrong loaded candidate')
+                POLICY.require(config_id == reviewed['image_id'], 'Wrong loaded candidate configuration')
                 copy_candidate_evidence(build, item)
                 resolved = reviewed['image_id']
             else:
@@ -105,13 +105,13 @@ def scan():
                     manifest = index
                     manifest_bytes = index_bytes
                 (item / 'registry-manifest.raw.json').write_bytes(manifest_bytes)
-                POLICY.require(manifest['config']['digest'] == inspect['Id'], 'Resolved manifest/image configuration mismatch')
+                POLICY.require(manifest['config']['digest'] == config_id, 'Resolved manifest/image configuration mismatch')
                 POLICY.write(item / 'registry-manifest.json', manifest)
                 POLICY.write(item / 'registry-index.json', index)
             POLICY.write(item / 'docker-image.json', inspect)
             archive = item / 'image.tar'
             if not image.get('candidate_build'):
-                subprocess.run(['docker', 'save', '-o', str(archive), ref], check=True)
+                subprocess.run(['docker', 'save', '-o', str(archive), inspect['Id']], check=True)
             packages, binary_hash = archive_contents(archive, image['identity']['binary'])
             POLICY.require(binary_hash == image['identity']['sha256'], 'Reviewed executable byte identity changed')
             if image['identity'].get('command'):
@@ -176,7 +176,8 @@ def scan():
                                 'govulncheck_sha256': POLICY.BINARY.sha((item / 'govulncheck.json').read_bytes())})
                 POLICY.write(item / 'transformation.json', receipt)
             POLICY.write(item / 'identity.json', {'reference': ref, 'platform': 'linux/amd64',
-                         'resolved_digest': resolved, 'image_id': inspect['Id'], 'identity': image['identity'],
+                         'resolved_digest': resolved, 'image_id': config_id, 'docker_image_id': inspect['Id'],
+                         'identity': image['identity'],
                          'installed_os_packages': packages, 'scanner_status': scanner_status,
                          'sbom_status': sbom_status, 'database_status': database_status, 'database': database,
                          'artifact_name': artifact, 'timestamp': datetime.now(timezone.utc).isoformat(),

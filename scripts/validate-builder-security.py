@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import re
@@ -13,6 +14,9 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location('image_identity', ROOT / 'scripts/auxiliary_binary_evidence.py')
+IDENTITY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(IDENTITY)
 REVIEWED_STAGES = [
     ('eclipse-temurin:21-jdk-jammy', 'builder'),
     ('eclipse-temurin:21-jre-jammy', 'runtime'),
@@ -231,8 +235,23 @@ def validate_image(report, bom, packages, image_id, scanner_status, sbom_status,
             'sbom_component_count': len(components), 'unzip': packages['unzip'], 'blocked': blocked}
 
 
-def build_provenance(document, image_id, builder_target):
-    require(document['containerimage.config.digest'] == image_id, 'Build metadata belongs to a different image')
+def build_provenance(document, image_id, builder_target, *, proof=None, docker_id=None):
+    descriptor_present = 'containerimage.descriptor' in document
+    if descriptor_present:
+        require(isinstance(document['containerimage.descriptor'], dict), 'Malformed publisher descriptor')
+    if proof is not None:
+        require(IDENTITY.configuration_evidence(proof, docker_id,
+                    document['containerimage.descriptor'] if descriptor_present else None) == image_id,
+                'Publisher metadata belongs to a different original configuration')
+    else:
+        require(not descriptor_present and 'containerimage.digest' not in document,
+                'Publisher descriptor requires original image evidence')
+    require('containerimage.config.digest' in document or (proof is not None and descriptor_present),
+            'Missing publisher configuration/descriptor authority')
+    if 'containerimage.config.digest' in document:
+        require(document['containerimage.config.digest'] == image_id, 'Build metadata belongs to a different image')
+    if 'containerimage.digest' in document:
+        require(document['containerimage.digest'] == docker_id, 'Conflicting publisher image digest')
     provenance = document['buildx.build.provenance']
     require(provenance['buildType'] == 'https://mobyproject.org/buildkit@v1', 'Unreviewed build provenance')
     invocation = provenance['invocation']
@@ -258,6 +277,12 @@ def build_provenance(document, image_id, builder_target):
     return bases
 
 
+def image_provenance(document, observed, proof, builder_target):
+    require(observed['Os'] == 'linux' and observed['Architecture'] == 'amd64', 'Wrong Docker image platform')
+    config_id = IDENTITY.configuration_evidence(proof, observed['Id'])
+    return config_id, build_provenance(document, config_id, builder_target, proof=proof, docker_id=observed['Id'])
+
+
 def evaluate(directory):
     output = directory / 'policy-result.json'
     output.unlink(missing_ok=True)
@@ -266,9 +291,11 @@ def evaluate(directory):
     bom = read_json(directory / 'builder.cdx.json')
     builder = read_json(directory / 'builder-image.json')[0]
     require(builder['Os'] == 'linux' and builder['Architecture'] == 'amd64', 'Wrong builder platform')
-    bases = build_provenance(read_json(directory / 'builder-build.json'), builder['Id'], True)
+    builder_config, bases = image_provenance(read_json(directory / 'builder-build.json'), builder,
+                                             directory / 'builder-identity.tar', True)
     runtime = read_json(directory / 'app-image.json')[0]
-    runtime_bases = build_provenance(read_json(directory / 'app-build.json'), runtime['Id'], False)
+    _, runtime_bases = image_provenance(read_json(directory / 'app-build.json'), runtime,
+                                      directory / 'app-identity.tar', False)
     require(bases['21-jdk-jammy'] == runtime_bases['21-jdk-jammy'], 'Builder base changed between target exports')
     source = (directory / 'source-sha.txt').read_text().strip()
     require(re.fullmatch(r'[0-9a-f]{40}', source) and source ==
@@ -287,7 +314,8 @@ def evaluate(directory):
     require(provenance['repository'] == VDR_REPOSITORY and provenance['sha256'] ==
             hashlib.sha256((directory / 'temurin-vdr.json').read_bytes()).hexdigest(), 'Stale/tampered JDK evidence')
     result['blocked'] += jdk_findings(vdr, version)
-    result.update({'source_sha': source, 'builder_image_id': builder['Id'], 'jdk_version': version,
+    result.update({'source_sha': source, 'builder_image_id': builder_config,
+                   'builder_docker_image_id': builder['Id'], 'jdk_version': version,
                    'base_identities': runtime_bases,
                    'runtime_java_version': java_version((directory / 'app-jdk-release.txt').read_text()),
                    'jdk_advisory_provenance': provenance, 'threshold': sorted(BLOCKING),

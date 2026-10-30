@@ -121,6 +121,30 @@ class LocalPostgresGosuTest(unittest.TestCase):
         payload, mode = PREFLIGHT.image_payload(path, image_id)
         PREFLIGHT.validate_payload(payload, mode, self.candidate)
 
+    def test_cached_image_descriptor_identity_preserves_exact_gosu_validation(self):
+        path, config_id = self.image_archive([[regular('usr/local/bin/gosu', self.payload)]])
+        with tarfile.open(path) as saved:
+            files = {m.name: saved.extractfile(m).read() for m in saved if m.isfile()}
+        entry = json.loads(files['manifest.json'])[0]
+        config = files[entry['Config']]
+        layer = files[entry['Layers'][0]]
+        def descriptor(data, media_type):
+            digest = 'sha256:' + hashlib.sha256(data).hexdigest()
+            files['blobs/sha256/' + digest.split(':')[1]] = data
+            return {'digest': digest, 'size': len(data), 'mediaType': media_type}
+        manifest = json.dumps({'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.manifest.v1+json',
+            'config': descriptor(config, 'application/vnd.oci.image.config.v1+json'),
+            'layers': [descriptor(layer, 'application/vnd.oci.image.layer.v1.tar')]}).encode()
+        root = descriptor(manifest, 'application/vnd.oci.image.manifest.v1+json')
+        files['index.json'] = json.dumps({'schemaVersion': 2, 'manifests': [root]}).encode()
+        files['oci-layout'] = b'{"imageLayoutVersion":"1.0.0"}'
+        path.write_bytes(archive([regular(name, value) for name, value in files.items()]))
+        self.assertNotEqual(config_id, root['digest'])
+        payload, mode = PREFLIGHT.image_payload(path, root['digest'])
+        PREFLIGHT.validate_payload(payload, mode, self.candidate)
+        with self.assertRaisesRegex(ValueError, 'reviewed patched executable'):
+            PREFLIGHT.validate_payload(payload + b'changed', mode, self.candidate)
+
     def test_cached_image_stale_final_layer_fails_reviewed_identity(self):
         path, image_id = self.image_archive([
             [regular('usr/local/bin/gosu', self.payload)],

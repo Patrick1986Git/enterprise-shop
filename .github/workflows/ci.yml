@@ -623,8 +623,8 @@ jobs:
     env:
       # Same reviewed Hadolint executable in the upstream scratch variant; removes vulnerable Alpine packages.
       HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
-      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.3 and x/net v0.60.0; immutable local configuration digest.
-      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7
+      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.3, x/net v0.62.0 and go-jose v4.1.6; immutable local configuration digest.
+      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7
       # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
       GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.

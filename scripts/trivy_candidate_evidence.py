@@ -81,7 +81,9 @@ def inventory(image, candidate):
     require(metadata['go_version'] == '1.27.3' and metadata['path'] == 'github.com/aquasecurity/trivy/cmd/trivy'
             and metadata['main_module'] == 'github.com/aquasecurity/trivy' and metadata['main_version'] == '(devel)'
             and metadata['dependencies']['golang.org/x/net'] == {
-                'version': 'v0.60.0', 'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='},
+                'version': 'v0.62.0', 'sum': 'h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY='}
+            and metadata['dependencies']['github.com/go-jose/go-jose/v4'] == {
+                'version': 'v4.1.6', 'sum': 'h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4='},
             'Known vulnerable or wrong scanner module/compiler identity')
     require(not any(name == 'github.com/docker/docker' or name.startswith('github.com/docker/docker/')
                     for name in metadata['dependencies']), 'Legacy Docker module embedded in scanner')
@@ -210,6 +212,7 @@ def validate_build(candidate, directory, head, analysis=True):
             and archive == (directory / 'image.tar').read_bytes(), 'Unexpected scratch image configuration/filesystem')
     summaries = advisory_analysis(candidate, receipt, directory, metadata, source_packages) if analysis else {}
     if analysis:
+        BUILD.validate_source_diagnostics(directory, receipt, head)
         require(sha((directory / 'govulncheck').read_bytes()) == receipt['tool_sha256'] == candidate['tool_sha256'],
                 'Independent analyzer executable changed')
         tool = buildinfo((directory / 'govulncheck-buildinfo.txt').read_text())
@@ -271,6 +274,15 @@ def validate_compatibility(directory, candidate, head, actual_images=False):
     required = {'vulnerable', 'patched', 'reference-rootfs', 'candidate-rootfs', 'candidate-image'}
     if actual_images:
         require(len(result['actual_images']) == 3, 'Missing application/PostgreSQL/builder compatibility')
+    identities = result.get('actual_image_identities', {})
+    require(set(identities) == set(result['actual_images']), 'Missing actual image identity proofs')
+    for name, config_id in result['actual_images'].items():
+        identity = identities[name]
+        proof = identity['proof']
+        require(Path(proof).name == proof and proof in result['evidence_hashes']
+                and name in result['byte_inputs'], 'Missing actual image archive/metadata receipt')
+        require(BINARY.configuration_evidence(directory / proof, identity['docker_id']) == config_id,
+                'Actual image descriptor/configuration proof drift')
     require(result['outputs']['candidate'] == result['outputs']['reference'], 'Scanner command behavior disagreement')
     for scanner in ('reference', 'candidate'):
         outputs = result['outputs'][scanner]

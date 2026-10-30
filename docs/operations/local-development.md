@@ -119,6 +119,12 @@ Preparation verifies the pinned upstream archive and patch, immutable Go 1.26.10
 
 The Go 1.26.10 compiler repair responds to [GO-2026-6809 / CVE-2026-111943](https://pkg.go.dev/vuln/GO-2026-6809), published after the previous Go 1.26.9 verification. It retains the reviewed Ryuk program source and dependencies while changing executable and image identities. Historical clean reports do not authorize reuse of that older image. Choose a new preparation directory after updating this security change; the current candidate still requires fresh hosted analysis and runtime verification. The coordinated gosu and Trivy compiler changes and their trust boundaries are described in [container security](container-security.md#reviewed-unpublished-ryuk-rebuild).
 
+Preparation also writes `.tmp/ryuk-python-identity.json` after successful validation,
+including when a custom evidence directory is used. The real Ryuk integration
+test verifies this interpreter fingerprint and verifier source identity, then
+uses an absolute interpreter path with isolated Python mode. Missing or changed
+identity evidence requires preparation again; an environment override is not accepted.
+
 To reuse an existing preparation for the same HEAD, revalidate its complete build evidence and loaded image before running Maven:
 
 ```bash
