@@ -274,6 +274,15 @@ def validate_compatibility(directory, candidate, head, actual_images=False):
     required = {'vulnerable', 'patched', 'reference-rootfs', 'candidate-rootfs', 'candidate-image'}
     if actual_images:
         require(len(result['actual_images']) == 3, 'Missing application/PostgreSQL/builder compatibility')
+    identities = result.get('actual_image_identities', {})
+    require(set(identities) == set(result['actual_images']), 'Missing actual image identity proofs')
+    for name, config_id in result['actual_images'].items():
+        identity = identities[name]
+        proof = identity['proof']
+        require(Path(proof).name == proof and proof in result['evidence_hashes']
+                and name in result['byte_inputs'], 'Missing actual image archive/metadata receipt')
+        require(BINARY.configuration_evidence(directory / proof, identity['docker_id']) == config_id,
+                'Actual image descriptor/configuration proof drift')
     require(result['outputs']['candidate'] == result['outputs']['reference'], 'Scanner command behavior disagreement')
     for scanner in ('reference', 'candidate'):
         outputs = result['outputs'][scanner]

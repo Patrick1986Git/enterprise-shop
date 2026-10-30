@@ -349,6 +349,78 @@ class TrivyTerminationTest(unittest.TestCase):
                 self.validate()
 
 
+class TrivyActualImageIdentityTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.target = self.root / 'actual.tar'
+        self.proof = self.root / 'identity.tar'
+        self.fixture = ROOT / 'scripts/tests/fixtures/docker-identity/docker29-image.tar.gz'
+        self.config_id = 'sha256:5069b87377ce91b47890d84793e8f68efe42e927f0b423fe958b7c428ef30379'
+        self.descriptor_id = 'sha256:22a761becced308c3ef0e30f3a73ca236012b1f02a9109ddb2d2f418dd91a8ff'
+        self.observed = {'Id': self.descriptor_id, 'Os': 'linux', 'Architecture': 'amd64', 'Size': 65536}
+        self.corrupt = None
+        self.commands = []
+
+    def export(self, command, **kwargs):
+        self.commands.append(command)
+        output = Path(command[command.index('-o') + 1])
+        if command[1] != 'save' or self.corrupt is None:
+            output.write_bytes(self.fixture.read_bytes())
+            return subprocess.CompletedProcess(command, 0)
+        with tarfile.open(self.fixture) as source:
+            files = {m.name: source.extractfile(m).read() for m in source if m.isfile()}
+        name = ('blobs/sha256/' + self.config_id.split(':')[1] if self.corrupt == 'config'
+                else json.loads(files['manifest.json'])[0]['Layers'][0])
+        files[name] += b'changed'
+        with tarfile.open(output, 'w') as saved:
+            for path, data in files.items():
+                member = tarfile.TarInfo(path)
+                member.size = len(data)
+                saved.addfile(member, io.BytesIO(data))
+        return subprocess.CompletedProcess(command, 0)
+
+    def collect(self):
+        with patch.object(COMPAT.subprocess, 'check_output', return_value=json.dumps([self.observed]).encode()), \
+                patch.object(COMPAT.subprocess, 'run', side_effect=self.export):
+            return COMPAT.export_actual_image('mutable:tag', self.target, self.proof)
+
+    def test_docker29_descriptor_is_bound_to_original_configuration_and_scan_archive(self):
+        config, identity = self.collect()
+        self.assertEqual(self.config_id, config)
+        self.assertNotEqual(self.descriptor_id, config)
+        self.assertEqual({'docker_id': self.descriptor_id, 'proof': 'identity.tar'}, identity)
+        self.assertEqual(config, EVIDENCE.BINARY.configuration_evidence(self.proof, self.descriptor_id))
+        exports = [c for c in self.commands if c[1] == 'save']
+        self.assertEqual(1, len(exports))
+        self.assertEqual(self.descriptor_id, exports[0][-1])
+        self.assertNotIn('mutable:tag', exports[0])
+
+    def test_classic_configuration_identity_remains_accepted(self):
+        self.observed['Id'] = self.config_id
+        config, identity = self.collect()
+        self.assertEqual(self.config_id, config)
+        self.assertEqual(self.config_id, identity['docker_id'])
+
+    def test_unrelated_descriptor_cannot_authorize_the_archive(self):
+        self.observed['Id'] = 'sha256:' + '0' * 64
+        with self.assertRaisesRegex(ValueError, 'inspected immutable image'):
+            self.collect()
+        self.assertFalse(self.target.exists())
+
+    def test_changed_configuration_or_layer_in_actual_scan_export_is_rejected(self):
+        for corruption in ('config', 'layer'):
+            self.corrupt = corruption
+            with self.subTest(corruption=corruption), self.assertRaises((ValueError, OSError)):
+                self.collect()
+
+    def test_retained_metadata_cannot_authorize_a_different_descriptor(self):
+        self.collect()
+        with self.assertRaisesRegex(ValueError, 'inspected immutable image'):
+            EVIDENCE.BINARY.configuration_evidence(self.proof, 'sha256:' + '0' * 64)
+
+
 class TrivyCompatibilityStorageTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -364,6 +436,7 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
         source = self.root / 'source'
         source.mkdir()
         archive = BUILD.image_archive(self.candidate, b'CA', source)[4]
+        self.actual_image = BUILD.image_archive(b'actual fixture', b'CA', source)
         (self.build / 'image.tar').write_bytes(archive)
         COMPAT.write(self.build / 'build-receipt.json', {'image_reference': 'local/candidate:fixture',
             'binary_sha256': COMPAT.sha(self.candidate), 'repeat_sha256': COMPAT.sha(self.candidate),
@@ -384,14 +457,15 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
             return 'fixture-head'
         if command[1] == 'create':
             return 'fixture-container'
-        return json.dumps([{'Id': 'sha256:actual-fixture'}]).encode()
+        return json.dumps([{'Id': self.actual_image[1], 'Os': 'linux', 'Architecture': 'amd64',
+                            'Size': len(self.actual_image[3])}]).encode()
 
     def run_command(self, command, **kwargs):
         self.commands.append(command)
         if command[1] == 'cp':
             Path(command[-1]).write_bytes(self.reference)
-        elif command[1] == 'save':
-            Path(command[command.index('-o') + 1]).write_bytes(b'actual image archive')
+        elif command[1] == 'save' or command[1:3] == ['image', 'save']:
+            Path(command[command.index('-o') + 1]).write_bytes(self.actual_image[4])
         elif command[1] == 'run':
             self.runs.append(command)
             mounts = {value.split(':')[1]: Path(value.split(':')[0])
@@ -425,7 +499,7 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
                         {('CVE-2025-48734', 'commons-beanutils:commons-beanutils', '1.9.4', 'HIGH')}
                         if name == 'vulnerable' else set())
                     COMPAT.write(output, {'SchemaVersion': 2, 'Trivy': {'Version': '0.75.0'},
-                        'Metadata': {'ImageID': 'sha256:actual-fixture'}, 'Results': [{
+                        'Metadata': {'ImageID': self.actual_image[1]}, 'Results': [{
                             'Packages': [{'Identifier': {'PURL': 'pkg:generic/fixture@1'}}],
                             'Vulnerabilities': [dict(zip(('VulnerabilityID', 'PkgName', 'InstalledVersion', 'Severity'), v))
                                                 for v in findings]}]})

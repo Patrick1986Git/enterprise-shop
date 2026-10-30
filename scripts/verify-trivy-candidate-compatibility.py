@@ -91,6 +91,20 @@ def download_database(command, directory, name):
                              f'available bytes: {shutil.disk_usage(directory).free}') from None
 
 
+def export_actual_image(image, target, proof):
+    observed, config_id = EVIDENCE.BINARY.inspect_configuration(image, proof=proof)
+    require(shutil.disk_usage(target.parent).free >= observed['Size'] + 64 * 1024 * 1024,
+            'Insufficient actual image export storage')
+    # Export the inspected immutable descriptor, then bind these exact scan bytes
+    # to the independently verified original configuration and layer chain.
+    subprocess.run(['docker', 'save', '-o', str(target), observed['Id']], check=True, timeout=90)
+    require(target.stat().st_size <= EVIDENCE.BINARY.MAX_IMAGE_BYTES, 'Oversized actual image export')
+    with tarfile.open(target) as saved:
+        require('sha256:' + sha(EVIDENCE.BINARY.saved_configuration(saved, observed['Id'])) == config_id,
+                'Actual image export configuration drift')
+    return config_id, {'docker_id': observed['Id'], 'proof': proof.name}
+
+
 def collect_isolated(build, directory, actual_images):
     receipt = read(build / 'build-receipt.json')
     ref = receipt['image_reference']
@@ -119,11 +133,7 @@ def collect_isolated(build, directory, actual_images):
         subprocess.run(['docker', 'rm', cid], check=True)
     require(sha((inputs / 'reference-rootfs/trivy').read_bytes()) == REFERENCE_BINARY,
             'Wrong positive vulnerability fixture executable')
-    actual = {}
-    for index, image in enumerate(actual_images):
-        target = inputs / f'actual-{index}.tar'
-        subprocess.run(['docker', 'save', '-o', str(target), image], check=True)
-        actual[target.name] = json.loads(subprocess.check_output(['docker', 'image', 'inspect', image]))[0]['Id']
+    actual, actual_identities = {}, {}
     cache = directory / 'cache'
     cache.mkdir(mode=0o700)
     temporary = directory / 'temporary'
@@ -137,6 +147,12 @@ def collect_isolated(build, directory, actual_images):
         'uid': os.getuid(), 'gid': os.getgid(), 'mode': oct(temporary.stat().st_mode & 0o777)})
     require(free >= minimum_free, f'Insufficient Trivy compatibility disk space: need {minimum_free} available bytes, '
             f'found {free}; free runner disk space before retrying')
+    for index, image in enumerate(actual_images):
+        target = inputs / f'actual-{index}.tar'
+        proof = directory / f'actual-{index}-identity.tar'
+        actual[target.name], actual_identities[target.name] = export_actual_image(image, target, proof)
+    require(shutil.disk_usage(temporary).free >= minimum_free,
+            'Insufficient Trivy compatibility disk space after actual image exports; free runner disk space before retrying')
     scratch = ['-v', f'{temporary.resolve()}:/tmp']
     base = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--read-only', '--cap-drop', 'ALL',
             '--security-opt', 'no-new-privileges', '--pids-limit', '128', '--memory', '4g', '--cpus', '2',
@@ -217,7 +233,8 @@ def collect_isolated(build, directory, actual_images):
             'Scanner changed database bytes or metadata during offline compatibility checks')
     result = {'repository_head': receipt['repository_head'], 'candidate': ref, 'reference_fixture': REFERENCE,
         'reference_fixture_execution_authority': False, 'database': metadata, 'database_sha256': initial_db,
-        'actual_images': actual, 'outputs': outputs, 'byte_inputs': {p.relative_to(inputs).as_posix(): sha(p.read_bytes())
+        'actual_images': actual, 'actual_image_identities': actual_identities,
+        'outputs': outputs, 'byte_inputs': {p.relative_to(inputs).as_posix(): sha(p.read_bytes())
             for p in inputs.rglob('*') if p.is_file()}, 'verified': True,
         'evidence_hashes': {p.relative_to(directory).as_posix(): sha(p.read_bytes()) for p in directory.rglob('*')
             if p.is_file() and not {'inputs', 'cache', 'temporary'}.intersection(p.relative_to(directory).parts)}}

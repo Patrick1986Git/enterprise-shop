@@ -260,6 +260,13 @@ Runner/gh/compiler publication compromise, defects in parsers/scanners and omitt
 
 ### Docker configuration and descriptor identities
 
+Actual-image scanner comparisons retain the original inspected descriptor and a
+metadata proof for each exported application, PostgreSQL and builder image. The
+existing verifier checks the descriptor/configuration/layer chain; both exports
+use the inspected immutable ID. Trivy's reported configuration digest must match
+the independently verified configuration, including on Docker 29. The proof is
+retained with the archive-byte receipt and revalidated before accepting results.
+
 Docker's classic image store reports the configuration digest as `image inspect`
 `Id`. The Docker 29 containerd store reports the target index or manifest digest.
 These are different objects. The Ubuntu 24.04 to 26.04 hosted-runner transition
