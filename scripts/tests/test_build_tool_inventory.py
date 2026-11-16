@@ -250,7 +250,7 @@ class BuildToolInventoryTest(unittest.TestCase):
         items = [x for x in document['components'] if x['name'] == 'apache-maven']
         self.assertEqual(1, len(items))
         self.assertEqual('application', items[0]['type'])
-        self.assertEqual('pkg:maven/org.apache.maven/apache-maven@3.10.0?type=pom', items[0]['purl'])
+        self.assertEqual('pkg:maven/org.apache.maven/apache-maven@3.10.1?type=pom', items[0]['purl'])
         with self.assertRaises(ValueError):
             INVENTORY.purl('example:unreviewed:pom::1')
 
@@ -275,6 +275,29 @@ class BuildToolInventoryTest(unittest.TestCase):
                 (lib / 'extra.jar').write_bytes(b'extra')
             with self.subTest(change=change), self.assertRaises(ValueError):
                 INVENTORY.bootstrap(self.directory, candidate)
+
+    def test_reviewed_distribution_covers_guava_classifier_and_replaced_libraries(self):
+        distribution = self.contract['distribution']
+        self.assertEqual(51, len(distribution))
+        coordinates = {item['coordinate'] for item in distribution.values()}
+        self.assertIn('com.google.guava:guava:jar::33.8.0-jre', coordinates)
+        self.assertNotIn('com.google.guava:guava:jar::33.7.1-jre', coordinates)
+        self.assertIn('com.google.inject:guice:jar:classes:5.1.0', coordinates)
+        self.assertIn('jakarta.annotation:jakarta.annotation-api:jar::1.3.5', coordinates)
+        self.assertFalse(any(value.startswith(('org.jline:', 'javax.annotation:'))
+                             for value in coordinates))
+        self.assertEqual(9, sum(value.startswith('org.apache.maven.resolver:')
+                                and value.endswith(':2.0.25') for value in coordinates))
+
+    def test_prepare_rejects_obsolete_and_unreviewed_maven_versions(self):
+        for version in ('3.10.0', '3.10.2'):
+            (self.directory / 'maven-version.txt').write_text(
+                f'Apache Maven {version} (fixture)\n'
+                f'Maven home: {self.directory}\nJava version: 21.0.12.1\n')
+            with self.subTest(version=version), patch.object(INVENTORY.subprocess, 'run') as run, \
+                    self.assertRaisesRegex(ValueError, 'Unreviewed Maven version'):
+                INVENTORY.prepare(self.directory)
+            run.assert_not_called()
 
     def test_missing_dynamic_provider_and_processor_execution_logs_fail(self):
         path = self.directory / 'verify.log'

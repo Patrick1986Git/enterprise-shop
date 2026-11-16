@@ -28,8 +28,8 @@ class MavenWrapperPolicyTest(unittest.TestCase):
             "wrapperVersion=3.3.4\n"
             "distributionType=only-script\n"
             "distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/"
-            "apache-maven/3.10.0/apache-maven-3.10.0-bin.zip\n"
-            f"distributionSha256Sum={VALIDATOR.EXPECTED_SHA256}\n"
+            "apache-maven/3.10.1/apache-maven-3.10.1-bin.zip\n"
+            "distributionSha256Sum=9c1ef9174ef250a5009ed0dec97cbe8699acf7479add4e62bf7b0ea791c0adb5\n"
         )
 
     def test_accepts_reviewed_distribution_and_checksum(self):
@@ -57,9 +57,25 @@ class MavenWrapperPolicyTest(unittest.TestCase):
         self.assertIn("must use HTTPS", " ".join(self.validate(properties)))
 
     def test_rejects_unreviewed_distribution_archive(self):
-        properties = self.valid_properties().replace("3.10.0", "3.10.1")
+        properties = self.valid_properties().replace("3.10.1", "3.11.0")
 
         self.assertIn("reviewed archive", " ".join(self.validate(properties)))
+
+    def test_rejects_obsolete_archive_and_its_previously_reviewed_digest(self):
+        properties = self.valid_properties().replace("3.10.1", "3.10.0").replace(
+            VALIDATOR.EXPECTED_SHA256,
+            "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff",
+        )
+        violations = " ".join(self.validate(properties))
+        self.assertIn("reviewed archive", violations)
+        self.assertIn("reviewed digest", violations)
+
+    def test_rejects_approved_archive_with_obsolete_distribution_digest(self):
+        properties = self.valid_properties().replace(
+            VALIDATOR.EXPECTED_SHA256,
+            "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff",
+        )
+        self.assertIn("reviewed digest", " ".join(self.validate(properties)))
 
     def test_accepts_builder_unzip_install_before_wrapper_invocation(self):
         dockerfile = (
