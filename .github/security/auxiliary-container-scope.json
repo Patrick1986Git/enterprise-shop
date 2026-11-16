@@ -304,7 +304,7 @@
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
     "scripts/auxiliary_binary_evidence.py": "ee7a865868bdbed4bb8385b651dcbb581bdeca028ca2423938079429d85a8bec",
     "scripts/build-ryuk-candidate.py": "a9e3444ee8ca3f7246ba45bb223deedb9dbad3f438a428495461bb33f420e316",
-    "scripts/build-tool-inventory.py": "550e26a475adc5d6450f43db461be4930ff3c33d067f0f7814d005f8b3ab7e61",
+    "scripts/build-tool-inventory.py": "d2dd7e745546f7c649d3e6b50906fc8a8111d45753123b5ee835d5d1173cd0ca",
     "scripts/build-trivy-candidate.py": "e8da5d719bfca0ce437d2e93aebcb67844e20eb1bdd28f1ff0db87b2c03e2a14",
     "scripts/check-local-postgres-gosu.py": "099fb628413d395266ac43ad9f93e94ca50bd7ca24aa4e3de79049fa88317137",
     "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
