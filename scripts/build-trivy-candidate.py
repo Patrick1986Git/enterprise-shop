@@ -7,11 +7,16 @@ import importlib.util
 import io
 import json
 import os
+import re
+import select
 import shutil
 import subprocess
 import tarfile
 import tempfile
+import threading
+import time
 import urllib.request
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -21,9 +26,9 @@ BUILDER = 'docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c
 BUILDER_ID = 'sha256:2101eb697fc5b5b7f64252fe6bf7a21c4a06a51852c71c3424d44e3f824cbb52'
 BUILDER_MANIFEST = 'sha256:cd410a5c6686417875bc4815688e96ae9769f8562debc545d29fe58e73d174f0'
 BUILDER_BINARY = '5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b'
-PATCH_SHA = '9fd37166f858e711be6df21fed4d716a7a98951c9a18cde3789cb743770f13c3'
-GO_MOD_SHA = '54eb7f4afb4f86650b63d72deb206c73f24f5fbf1f20e93e93e380eba1ab11c5'
-GO_SUM_SHA = 'f0792bca7d673d64f10e76910532f3a1252301ac8e7a0c68aebd31fd5cd4c3b1'
+PATCH_SHA = '6ce5f40dce24471fb5525afd9562c356db5eb8106081a12df28e3f7c432bf79f'
+GO_MOD_SHA = '86340f7b248b405423130c2267f65c4e24c26738d56b26238da6bda102d45aae'
+GO_SUM_SHA = 'af01ecb05cf0a88e792cc65c41051c92df96c1ae12299e747654d50606b4d64f'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
 SDK_SHA = '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40'
@@ -33,6 +38,7 @@ SDK_TOOLS = {
     'pkg/tool/linux_amd64/compile': 'c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283',
     'pkg/tool/linux_amd64/link': 'c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
+SOURCE_GOMEMLIMIT = '7GiB'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
 RYUK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RYUK)
@@ -136,6 +142,271 @@ def run(command, script, directory, name, timeout=1800):
     require(result.returncode == 0, name + ' failed; retained log: ' + str(directory / (name + '.log')))
 
 
+INSPECT_ANALYZER = ('{"id":{{json .Id}},"name":{{json .Name}},'
+    '"head":{{json (index .Config.Labels "enterprise-shop.trivy-analysis-head")}},'
+    '"image":{{json .Config.Image}},"memory":{{.HostConfig.Memory}},'
+    '"swap":{{.HostConfig.MemorySwap}},"cpus":{{.HostConfig.NanoCpus}},'
+    '"pids":{{.HostConfig.PidsLimit}},"readonly":{{.HostConfig.ReadonlyRootfs}},'
+    '"runtime_env":[{{range .Config.Env}}{{$p := split . "="}}'
+    '{{if or (eq (index $p 0) "GOMEMLIMIT") (eq (index $p 0) "GOGC") '
+    '(eq (index $p 0) "GOMAXPROCS") (eq (index $p 0) "GODEBUG") (eq (index $p 0) "GOFLAGS")}}'
+    '{{json .}},{{end}}{{end}}null],'
+    '"state":{"status":{{json .State.Status}},"exit":{{.State.ExitCode}},'
+    '"oom":{{.State.OOMKilled}},"pid":{{.State.Pid}},'
+    '"started":{{json .State.StartedAt}},"finished":{{json .State.FinishedAt}}}}')
+EVENT_ANALYZER = ('{"id":{{json .Actor.ID}},"action":{{json .Action}},"time":{{.TimeNano}},'
+    '"signal":{{json (index .Actor.Attributes "signal")}},'
+    '"exit":{{json (index .Actor.Attributes "exitCode")}}}')
+
+
+def diagnostic_command(args):
+    result = subprocess.run(['docker'] + args, capture_output=True, timeout=5, check=True)
+    require(len(result.stdout) <= 65536, 'Oversized analyzer diagnostic response')
+    return result.stdout
+
+
+def cgroup_directory(pid):
+    data = Path(f'/proc/{pid}/cgroup').read_text()[:16384]
+    unified = [line[3:] for line in data.splitlines() if line.startswith('0::')]
+    require(len(unified) == 1, 'Analyzer cgroup v2 path unavailable')
+    root = Path('/sys/fs/cgroup').resolve()
+    path = (root / unified[0].lstrip('/')).resolve()
+    require(path.is_relative_to(root), 'Analyzer cgroup outside visible namespace')
+    return path
+
+
+def read_counters(path):
+    with path.open() as stream:
+        raw = stream.read(4097)
+    require(len(raw) <= 4096, 'Oversized analyzer cgroup counters')
+    return {key: int(value) for key, value in (line.split() for line in raw.splitlines())}
+
+
+def source_memory_command(analyzer):
+    require(analyzer[:3] == ['docker', 'run', '--rm']
+            and analyzer[-2:] == [BUILDER, '/evidence/govulncheck'], 'Unexpected source analyzer invocation')
+    options = analyzer[:-2]
+    for flag, value in [('--memory', '10g'), ('--cpus', '2'), ('--pids-limit', '512')]:
+        require(options.count(flag) == 1 and options[options.index(flag) + 1] == value,
+                'Source analyzer resource contract drift')
+    require(not any(option.startswith(('--memory=', '--cpus=', '--pids-limit=', '-m'))
+                    for option in options), 'Source analyzer resource contract override')
+    protected = {'GOMEMLIMIT', 'GOGC', 'GOMAXPROCS', 'GODEBUG', 'GOFLAGS'}
+    for index, option in enumerate(options):
+        require(option != '--env-file' and not option.startswith(('--env-file=', '--env='))
+                and not (option.startswith('-e') and option != '-e'), 'Unreviewed analyzer environment option')
+        if option in ('-e', '--env'):
+            require(options[index + 1].partition('=')[0] not in protected,
+                    'Source analyzer runtime override')
+    return options + ['-e', 'GOMEMLIMIT=' + SOURCE_GOMEMLIMIT] + analyzer[-2:]
+
+
+def validate_runtime_environment(values, expected):
+    require(type(values) is list and len(values) == len(expected) + 1 and values[-1] is None,
+            'Analyzer runtime environment contract drift')
+    observed = {}
+    for entry in values[:-1]:
+        require(type(entry) is str and entry.count('=') == 1, 'Malformed analyzer runtime setting')
+        name, value = entry.split('=', 1)
+        require(name in expected and name not in observed and value == expected[name],
+                'Unexpected or duplicate analyzer runtime setting')
+        observed[name] = value
+    require(observed == expected, 'Missing analyzer runtime setting')
+
+
+def source_analysis(analyzer, args, directory, head):
+    """Observe only this owned source container; analysis authority stays in collect."""
+    require(analyzer[:3] == ['docker', 'run', '--rm'] and re.fullmatch('[0-9a-f]{40}', head),
+            'Unexpected source analyzer invocation')
+    analyzer = source_memory_command(analyzer)
+    output = directory / 'source-termination.json'
+    output.unlink(missing_ok=True)
+    (directory / 'source-go-acquisition.json').unlink(missing_ok=True)
+    name = 'enterprise-shop-trivy-analysis-' + uuid.uuid4().hex
+    report = {'schema_version': 1, 'repository_head': head, 'name': name, 'image': BUILDER,
+              'analyzer_sha256': sha((directory / 'govulncheck').read_bytes()),
+              'started_at': RYUK.ADVISORY.utc_now(), 'args': ['-db=' + RYUK.ADVISORY.DATABASE] + args,
+              'samples': [], 'errors': [], 'cgroup_events_max': {}, 'cleanup': False}
+    stop = threading.Event()
+    identity, group = None, None
+
+    def inspect():
+        nonlocal identity
+        target = identity['id'] if identity else name
+        value = json.loads(diagnostic_command(['inspect', '--format', INSPECT_ANALYZER, target]))
+        require(re.fullmatch('[0-9a-f]{64}', value['id']) and value['name'] == '/' + name
+                and value['head'] == head and value['image'] == BUILDER, 'Unrelated analyzer container')
+        require(cidfile.is_file() and cidfile.read_text().strip() == value['id'], 'Analyzer container ID drift')
+        identity = value
+        return value
+
+    def sample():
+        nonlocal group
+        value = inspect()
+        record = {'at': RYUK.ADVISORY.utc_now(), 'state': value['state']}
+        usage = shutil.disk_usage(directory / 'cache-analysis')
+        disk = os.statvfs(directory / 'cache-analysis')
+        record['cache'] = {'free_bytes': usage.free, 'free_inodes': disk.f_favail}
+        report.setdefault('host_resources', {'logical_cpus': os.cpu_count(),
+            'affinity_cpus': len(os.sched_getaffinity(0)), 'disk_total_bytes': usage.total,
+            'inode_total': disk.f_files})
+        memory = dict(line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())
+        record['host_memory_kib'] = {k: int(memory[k].split()[0]) for k in ('MemTotal', 'MemAvailable', 'SwapTotal', 'SwapFree')}
+        if group is None and value['state']['pid'] > 0:
+            try:
+                group = cgroup_directory(value['state']['pid'])
+                report['cgroup'] = str(group)
+            except (OSError, ValueError):
+                report['cgroup_unavailable'] = True
+        if group is not None and group.exists():
+            try:
+                record['memory_events'] = read_counters(group / 'memory.events')
+                record['pids_events'] = read_counters(group / 'pids.events')
+                memory_stat = read_counters(group / 'memory.stat')
+                record['memory_stat'] = {k: memory_stat[k] for k in
+                    ('anon', 'file', 'kernel', 'kernel_stack', 'pagetables', 'sock', 'slab')}
+                record['cgroup'] = {f: (group / f).read_text()[:128].strip() for f in
+                                   ('memory.current', 'memory.peak', 'memory.max', 'pids.current', 'pids.max')}
+                record['cgroup'].update({f: (group / f).read_text()[:128].strip() for f in
+                    ('memory.swap.current', 'memory.swap.peak', 'memory.swap.max') if (group / f).exists()})
+            except OSError:
+                record['cgroup_unavailable'] = True  # The kernel removes stopped task cgroups.
+        report['samples'].append(record)
+
+    def monitor():
+        watched, poller, ticks = None, None, 0
+        try:
+            while not stop.is_set() and ticks < 400:
+                try:
+                    sample()
+                    if group is not None and watched is None and (group / 'memory.events').exists():
+                        try:
+                            watched = (group / 'memory.events').open()
+                            poller = select.poll()
+                            poller.register(watched, select.POLLPRI | select.POLLERR)
+                        except OSError:
+                            watched, poller = None, None
+                except (OSError, ValueError, subprocess.SubprocessError) as error:
+                    if identity is not None and len(report['errors']) < 8:
+                        report['errors'].append(type(error).__name__)
+                ticks += 1
+                end = time.monotonic() + 5
+                while not stop.is_set() and time.monotonic() < end:
+                    if poller is None:
+                        stop.wait(0.5)
+                    else:
+                        poller.poll(500)
+                        try:
+                            watched.seek(0)
+                            raw = watched.read(4097)
+                            require(len(raw) <= 4096, 'Oversized memory event counters')
+                            counters = {k: int(v) for k, v in (line.split() for line in raw.splitlines())}
+                            for key, value in counters.items():
+                                report['cgroup_events_max'][key] = max(value, report['cgroup_events_max'].get(key, 0))
+                            stop.wait(0.05)
+                        except (OSError, ValueError):
+                            watched.close()
+                            watched, poller = None, None
+                            stop.wait(0.5)
+        except Exception as error:
+            report['errors'].append(type(error).__name__)
+        finally:
+            if watched is not None:
+                watched.close()
+
+    with tempfile.TemporaryDirectory(prefix='enterprise-shop-trivy-monitor-') as temporary:
+        cidfile = Path(temporary) / 'container-id'
+        command = analyzer[:2] + ['--name', name, '--label', 'enterprise-shop.trivy-analysis-head=' + head,
+                                  '--cidfile', str(cidfile)] + analyzer[3:]
+        report['command_sha256'] = sha(json.dumps(command + ['-db=' + RYUK.ADVISORY.DATABASE] + args,
+                                                 separators=(',', ':')).encode())
+        observer = threading.Thread(target=monitor, daemon=True)
+        observer.start()
+        result = None
+        try:
+            result = RYUK.ADVISORY.collect(command, args, directory, 'source', 1800)
+        finally:
+            stop.set()
+            observer.join(7)
+            if observer.is_alive():
+                report['errors'].append('MonitorDeadline')
+            try:
+                report['container'] = inspect()
+                if len(report['samples']) < 400:
+                    sample()
+                report['events'] = [json.loads(line) for line in diagnostic_command([
+                    'events', '--since', report['started_at'], '--until', RYUK.ADVISORY.utc_now(),
+                    '--filter', 'container=' + identity['id'], '--filter', 'event=oom',
+                    '--filter', 'event=kill', '--filter', 'event=die', '--filter', 'event=stop',
+                    '--format', EVENT_ANALYZER]).splitlines()]
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                report['errors'].append(type(error).__name__)
+            finally:
+                if identity is not None:
+                    try:
+                        diagnostic_command(['rm', '--force', identity['id']])
+                        report['cleanup'] = True
+                    except (OSError, ValueError, subprocess.SubprocessError) as error:
+                        report['errors'].append(type(error).__name__)
+            report['completed_at'] = RYUK.ADVISORY.utc_now()
+            report['analysis'] = result
+            report['stdout_sha256'] = sha((directory / 'source-govulncheck.json').read_bytes()) if result else None
+            report['stderr_sha256'] = sha((directory / 'source-govulncheck.log').read_bytes()) if result else None
+            data = (json.dumps(report, indent=2) + '\n').encode()
+            require(len(data) <= 1024 * 1024, 'Oversized analyzer termination evidence')
+            output.write_bytes(data)
+    return dict(result, diagnostics_sha256=sha(output.read_bytes()))
+
+
+def validate_source_diagnostics(directory, receipt, head, now=None):
+    path = directory / 'source-termination.json'
+    require(path.stat().st_size <= 1024 * 1024, 'Oversized analyzer termination evidence')
+    raw = path.read_bytes()
+    evidence = receipt['analysis']['source']
+    require(sha(raw) == evidence['diagnostics_sha256'], 'Analyzer diagnostic integrity drift')
+    report = json.loads(raw, object_pairs_hook=RYUK.ADVISORY.unique_object)
+    actual = report['container']
+    require(type(report['schema_version']) is int and report['schema_version'] == 1 and report['repository_head'] == head
+            and re.fullmatch('enterprise-shop-trivy-analysis-[0-9a-f]{32}', report['name'])
+            and actual['head'] == head and actual['name'] == '/' + report['name']
+            and re.fullmatch('[0-9a-f]{64}', actual['id']) and actual['image'] == report['image'] == BUILDER,
+            'Missing/unrelated source analyzer diagnostics')
+    require(report['analyzer_sha256'] == receipt['tool_sha256']
+            and report['args'] == ['-db=https://vuln.go.dev', '-mode=source', '-json', './cmd/trivy']
+            and actual['memory'] == 10 * 1024 ** 3 and actual['cpus'] == 2 * 10 ** 9
+            and actual['pids'] == 512 and actual['readonly'] is True,
+            'Analyzer diagnostic contract drift')
+    validate_runtime_environment(actual['runtime_env'], {'GOMEMLIMIT': SOURCE_GOMEMLIMIT})
+    require(report['cleanup'] is True and not report['errors'] and 0 < len(report['samples']) <= 400
+            and actual['state']['status'] == 'exited' and type(actual['state']['oom']) is bool
+            and type(actual['state']['exit']) is int and actual['state']['exit'] == evidence['status']
+            and (evidence['status'] != 0 or actual['state']['oom'] is False)
+            and report['analysis'] == {k: v for k, v in evidence.items() if k != 'diagnostics_sha256'}
+            and report['stdout_sha256'] == evidence['sha256'] == sha((directory / 'source-govulncheck.json').read_bytes())
+            and report['stderr_sha256'] == sha((directory / 'source-govulncheck.log').read_bytes()),
+            'Incomplete/mismatched analyzer termination evidence')
+    acquisition = json.loads((directory / 'source-go-acquisition.json').read_text())
+    stamp = RYUK.ADVISORY.timestamp
+    now = now or RYUK.ADVISORY.datetime.now(RYUK.ADVISORY.timezone.utc)
+    require(stamp(report['started_at']) <= stamp(acquisition['started_at']) <= stamp(acquisition['completed_at'])
+            <= stamp(report['completed_at']) <= now and (now - stamp(report['started_at'])).total_seconds()
+            < RYUK.ADVISORY.MAX_AGE and
+            (stamp(report['completed_at']) - stamp(report['started_at'])).total_seconds() <= 1960,
+            'Stale/contradictory analyzer diagnostics')
+    require(isinstance(report['events'], list) and len(report['events']) <= 256
+            and all(event['id'] == actual['id'] and event['action'] in ('oom', 'kill', 'die', 'stop')
+                    for event in report['events']), 'Unrelated analyzer event')
+    for sample in report['samples']:
+        require(stamp(report['started_at']) <= stamp(sample['at']) <= stamp(report['completed_at'])
+                and sample['state']['status'] in ('created', 'running', 'exited')
+                and all(type(sample['cache'][k]) is int and sample['cache'][k] >= 0
+                        for k in ('free_bytes', 'free_inodes'))
+                and all(type(sample['host_memory_kib'][k]) is int and sample['host_memory_kib'][k] >= 0
+                        for k in ('MemTotal', 'MemAvailable', 'SwapTotal', 'SwapFree')),
+                'Malformed analyzer resource sample')
+    return report
+
+
 def verify_compiler(directory):
     url = 'https://go.dev/dl/go1.27.3.linux-amd64.tar.gz'
     with urllib.request.urlopen(url, timeout=120) as response:
@@ -166,8 +437,9 @@ def build(directory):
     source = directory / 'source'
     hashes = prepare(data, source)
     subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', BUILDER], check=True)
-    observed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', BUILDER]))[0]
-    require(observed['Id'] == BUILDER_ID and observed['Architecture'] == 'amd64' and observed['Os'] == 'linux'
+    observed, _ = RYUK.BINARY.inspect_configuration(BUILDER, BUILDER_ID)
+    write(directory / 'builder-docker-image.json', observed)
+    require(observed['Architecture'] == 'amd64' and observed['Os'] == 'linux'
             and any(r.endswith('@' + BUILDER.split('@')[1]) for r in observed['RepoDigests']), 'Wrong immutable builder')
     for name, digest in [('index', BUILDER.split('@')[1]), ('manifest', BUILDER_MANIFEST)]:
         raw = subprocess.check_output(['docker', 'buildx', 'imagetools', 'inspect', '--raw', BUILDER.split('@')[0] + '@' + digest])
@@ -175,6 +447,10 @@ def build(directory):
         (directory / ('builder-' + name + '.json')).write_bytes(raw)
     require(json.loads((directory / 'builder-manifest.json').read_text())['config']['digest'] == BUILDER_ID,
             'Builder manifest/configuration mismatch')
+    platforms = [d for d in json.loads((directory / 'builder-index.json').read_text())['manifests']
+                 if d.get('platform', {}).get('os') == 'linux' and d['platform'].get('architecture') == 'amd64']
+    require(len(platforms) == 1 and platforms[0]['digest'] == BUILDER_MANIFEST,
+            'Builder index/platform manifest mismatch')
     verify_compiler(directory)
     command = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--user', f'{os.getuid()}:{os.getgid()}',
                '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
@@ -234,10 +510,14 @@ def build(directory):
         'cp /cache/go/bin/govulncheck /evidence/govulncheck; '
         'go version -m /evidence/govulncheck > /evidence/govulncheck-buildinfo.txt', directory, 'analyzer-install')
     receipt['tool_sha256'] = sha((directory / 'govulncheck').read_bytes())
-    for mode, args in [('source', ['-mode=source', '-json', './cmd/trivy']),
-                       ('binary', ['-mode=binary', '-json', '/evidence/trivy.first'])]:
-        receipt['analysis'][mode] = RYUK.ADVISORY.collect(
-            analyzer + [BUILDER, '/evidence/govulncheck'], args, directory, mode, 1800)
+    try:
+        for mode, args in [('source', ['-mode=source', '-json', './cmd/trivy']),
+                           ('binary', ['-mode=binary', '-json', '/evidence/trivy.first'])]:
+            invocation = analyzer + [BUILDER, '/evidence/govulncheck']
+            receipt['analysis'][mode] = (source_analysis(invocation, args, directory, receipt['repository_head'])
+                if mode == 'source' else RYUK.ADVISORY.collect(invocation, args, directory, mode, 1800))
+    finally:
+        remove_cache(cache)
     receipt['evidence_hashes'] = {p.name: sha(p.read_bytes()) for p in directory.iterdir()
         if p.is_file() and p.name not in {'build-receipt.json', 'image.tar', 'layer.tar', 'upstream.tar.gz',
                                         'trivy.first', 'trivy.repeat', 'govulncheck'}}
@@ -250,9 +530,8 @@ def build(directory):
     evidence.inventory(scope['images']['scanner'], reviewed)
     evidence.validate_build(reviewed, directory, receipt['repository_head'])
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
-    require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
-            'Loaded image configuration mismatch')
-    for name in ('first', 'repeat', 'analysis'):
+    RYUK.BINARY.inspect_configuration(reference, image_id)
+    for name in ('first', 'repeat'):
         remove_cache(directory / ('cache-' + name))
     # Small separately named artifacts permit independent byte readback without
     # duplicating source files or relying on an artifact service's large-file limit.

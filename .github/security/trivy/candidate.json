@@ -1,9 +1,9 @@
 {
   "upstream_source_sha": "591e9799316a602e703f0b484f6c6d7b234ec8f3",
   "upstream_archive_sha256": "4a5bb1c16ccc55368843eb95ee9a25519a0bfef26609a8b4295f2060af43077e",
-  "patch_sha256": "9fd37166f858e711be6df21fed4d716a7a98951c9a18cde3789cb743770f13c3",
-  "go_mod_sha256": "54eb7f4afb4f86650b63d72deb206c73f24f5fbf1f20e93e93e380eba1ab11c5",
-  "go_sum_sha256": "f0792bca7d673d64f10e76910532f3a1252301ac8e7a0c68aebd31fd5cd4c3b1",
+  "patch_sha256": "6ce5f40dce24471fb5525afd9562c356db5eb8106081a12df28e3f7c432bf79f",
+  "go_mod_sha256": "86340f7b248b405423130c2267f65c4e24c26738d56b26238da6bda102d45aae",
+  "go_sum_sha256": "af01ecb05cf0a88e792cc65c41051c92df96c1ae12299e747654d50606b4d64f",
   "builder": "docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd",
   "builder_image_id": "sha256:2101eb697fc5b5b7f64252fe6bf7a21c4a06a51852c71c3424d44e3f824cbb52",
   "builder_manifest": "sha256:cd410a5c6686417875bc4815688e96ae9769f8562debc545d29fe58e73d174f0",
@@ -21,16 +21,16 @@
   "cgo_enabled": "0",
   "upx": false,
   "independent_cold_caches": true,
-  "binary_sha256": "590bcdfe542ce7c8e40ba925cc0438f8c26204b4780bc694cc9dac40109c2fbb",
-  "repeat_sha256": "590bcdfe542ce7c8e40ba925cc0438f8c26204b4780bc694cc9dac40109c2fbb",
-  "image_reference": "local/enterprise-shop-trivy:sha256-ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7",
-  "image_id": "sha256:ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7",
-  "archive_sha256": "5bf4a3b2ff53dc835b7eba844af7e224991fbb9c6d6fc77226e79170835740d8",
-  "layer_sha256": "d4011b2877251e68b144f66fb5c2774366b1e76d0b89f22b360af35f80ae1104",
+  "binary_sha256": "e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814",
+  "repeat_sha256": "e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814",
+  "image_reference": "local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7",
+  "image_id": "sha256:17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7",
+  "archive_sha256": "f3c4c900e714b12d9c3295aedc645698ac85f1028ecbbb1c9024b814393850f7",
+  "layer_sha256": "6ba0cc00a7e35892fd4da39a212cf766e24d6738136a0106ec4d9cecb6217f11",
   "filesystem": {
     "usr/local/bin/trivy": {
-      "sha256": "590bcdfe542ce7c8e40ba925cc0438f8c26204b4780bc694cc9dac40109c2fbb",
-      "size": 172540064,
+      "sha256": "e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814",
+      "size": 172556448,
       "mode": 493
     },
     "etc/ssl/certs/ca-certificates.crt": {
@@ -576,8 +576,8 @@
         "sum": "h1:ItKF/Vbuj31dmV4jxA1qblpSwkl9g1typ24xoe70IGs="
       },
       "github.com/go-jose/go-jose/v4": {
-        "version": "v4.1.5",
-        "sum": "h1:RjgjO2LOtWOJKUC5wpwY9LR3B3vwVAz6JS2YHfYU6eA="
+        "version": "v4.1.6",
+        "sum": "h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4="
       },
       "github.com/go-logr/logr": {
         "version": "v1.4.4",
@@ -1396,8 +1396,8 @@
         "sum": "h1:3h1fjsh1CTAPjW7q/EMe+C8shx5d8ctzZTrLcs/j8Go="
       },
       "golang.org/x/crypto": {
-        "version": "v0.57.0",
-        "sum": "h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M="
+        "version": "v0.58.0",
+        "sum": "h1:COkYLr4k7nDI4r6QtMML2AfzeIswWHAJthLS6K/M/54="
       },
       "golang.org/x/exp": {
         "version": "v0.0.0-20260603202125-055de637280b",
@@ -1408,28 +1408,28 @@
         "sum": "h1:qJmnOUb4YB+FsEuM3HcWucdZASCPGhsX6uljO6pog0c="
       },
       "golang.org/x/net": {
-        "version": "v0.60.0",
-        "sum": "h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU="
+        "version": "v0.62.0",
+        "sum": "h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY="
       },
       "golang.org/x/oauth2": {
         "version": "v0.36.0",
         "sum": "h1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs="
       },
       "golang.org/x/sync": {
-        "version": "v0.23.0",
-        "sum": "h1:KameEIfc1IkluZyXWLn39Wd4tURc6GbCiISGiZm2bQk="
+        "version": "v0.24.0",
+        "sum": "h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA="
       },
       "golang.org/x/sys": {
-        "version": "v0.48.0",
-        "sum": "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo="
+        "version": "v0.49.0",
+        "sum": "h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA="
       },
       "golang.org/x/term": {
-        "version": "v0.46.0",
-        "sum": "h1:3+OXuTbaKDgwk8jTi3aSLHRlmWqHEUDUtxnbFigO4YE="
+        "version": "v0.47.0",
+        "sum": "h1:cpyOwQkr2Nzxe2p6KnrTG7Ei2wtzjsuSjhpXXepZ/BM="
       },
       "golang.org/x/text": {
-        "version": "v0.42.0",
-        "sum": "h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI="
+        "version": "v0.43.0",
+        "sum": "h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc="
       },
       "golang.org/x/time": {
         "version": "v0.16.0",
@@ -1605,8 +1605,8 @@
     "imports_sha256": "c83a2a14985047af8e4cac1ad12e173ed3919b6ec3ce192dba953424b0a63ff3"
   },
   "binary_functions": {
-    "count": 203499,
-    "names_sha256": "ba13956f729c368fa2dbb1b6246c9135e8540c82346f0e56f165987ec9c5371c"
+    "count": 203507,
+    "names_sha256": "2a2bc67710b80cddabcb3b14c3d73978600bbb2dfca76aff7ab08fcb4b038e03"
   },
   "observed_module_notices": [
     "GO-2026-5932"

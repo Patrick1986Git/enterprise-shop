@@ -47,6 +47,8 @@ def execution_sources(root):
     paths = set(root.glob('.github/workflows/*')) | set(root.glob('.github/actions/**/action.y*ml'))
     paths |= set(root.glob('scripts/*.sh')) | set(root.glob('scripts/*.py'))
     paths |= set(root.glob('src/test/**/*.java'))
+    probe = root / 'scripts/jdk-certificate-evidence/CertificateEvidence.java.source'
+    paths.add(probe)
     paths |= set(root.glob('**/Dockerfile')) - set(root.glob('target/**/Dockerfile'))
     paths |= set(root.glob('*compose*.y*ml'))
     paths |= set(root.glob('.github/security/trivy/*.go'))
@@ -56,7 +58,7 @@ def execution_sources(root):
             ('.github/' in p.relative_to(root).as_posix() or p.name == 'Dockerfile'
              or 'compose' in p.name or p.name in {'ryuk_candidate_evidence.py', 'trivy_candidate_evidence.py',
                                                  'go_advisory_acquisition.py'}
-             or SURFACE.search(p.read_text()))}
+             or p == probe or SURFACE.search(p.read_text()))}
 
 
 def inventory(contract, root=ROOT):
