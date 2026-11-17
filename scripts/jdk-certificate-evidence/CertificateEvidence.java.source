@@ -1,0 +1,284 @@
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.security.KeyStore;
+import java.security.MessageDigest;
+import java.security.Security;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
+
+/** Evidence only. No CVE decision or network activity. */
+public final class CertificateEvidence {
+    private static final int MAX_FILE = 8 * 1024 * 1024;
+    private static final List<String> PROVIDERS = List.of("SUN", "SunRsaSign", "SunEC", "SunJSSE", "SunJCE",
+            "SunJGSS", "SunSASL", "XMLDSig", "SunPCSC", "JdkLDAP", "JdkSASL", "SunPKCS11");
+    private static final List<String> OPTIONS = List.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS",
+            "JAVA_OPTS", "MAVEN_OPTS", "MAVEN_ARGS", "USE_SYSTEM_CA_CERTS");
+    private CertificateEvidence() {}
+
+    private static void require(boolean value) throws IOException {
+        if (!value) throw new IOException("Unsupported or incomplete certificate measurement");
+    }
+
+    private static String hash(byte[] bytes) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
+    private static Map<String, Object> map() { return new LinkedHashMap<>(); }
+
+    private static byte[] bytes(Path path) throws Exception {
+        require(Files.isRegularFile(path) && Files.size(path) > 0 && Files.size(path) <= MAX_FILE);
+        return Files.readAllBytes(path);
+    }
+
+    private static Map<String, Object> file(Path path, byte[] raw) throws Exception {
+        Map<String, Object> item = map();
+        Path canonical = path.toRealPath();
+        List<Object> links = new ArrayList<>();
+        Path component = path.toAbsolutePath().getRoot();
+        for (Path part : path.toAbsolutePath()) {
+            component = component.resolve(part);
+            if (Files.isSymbolicLink(component)) {
+                Map<String, Object> link = map();
+                link.put("path", component.toString());
+                link.put("target", Files.readSymbolicLink(component).toString());
+                links.add(link);
+            }
+        }
+        item.put("path", path.toAbsolutePath().toString());
+        item.put("canonical_path", canonical.toString());
+        item.put("symlinks", links);
+        item.put("mode", Files.getAttribute(canonical, "unix:mode"));
+        item.put("uid", Files.getAttribute(canonical, "unix:uid"));
+        item.put("gid", Files.getAttribute(canonical, "unix:gid"));
+        item.put("size", raw.length);
+        item.put("sha256", hash(raw));
+        item.put("base64", Base64.getEncoder().encodeToString(raw));
+        return item;
+    }
+
+    private static Map<String, Object> certificate(X509Certificate cert, String alias) throws Exception {
+        byte[] der = cert.getEncoded();
+        require(der.length <= 32768);
+        Map<String, Object> item = map();
+        item.put("alias", alias);
+        item.put("der", Base64.getEncoder().encodeToString(der));
+        item.put("sha256", hash(der));
+        item.put("spki_sha256", hash(cert.getPublicKey().getEncoded()));
+        item.put("subject", cert.getSubjectX500Principal().getName());
+        item.put("issuer", cert.getIssuerX500Principal().getName());
+        item.put("serial", cert.getSerialNumber().toString(16));
+        item.put("not_before", cert.getNotBefore().toInstant().toString());
+        item.put("not_after", cert.getNotAfter().toInstant().toString());
+        item.put("extended_key_usage", cert.getExtendedKeyUsage() == null ? List.of() : cert.getExtendedKeyUsage());
+        return item;
+    }
+
+    private static Map<String, Object> store(Path path) throws Exception {
+        Path original = path.toRealPath();
+        BasicFileAttributes before = Files.readAttributes(original, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        byte[] raw = bytes(path);
+        boolean jks = raw.length >= 4 && raw[0] == (byte) 0xfe && raw[1] == (byte) 0xed
+                && raw[2] == (byte) 0xfe && raw[3] == (byte) 0xed;
+        KeyStore store = KeyStore.getInstance(jks ? "JKS" : "PKCS12");
+        store.load(new ByteArrayInputStream(raw), "changeit".toCharArray());
+        require(store.size() > 0 && store.size() <= 1024);
+        List<Object> certificates = new ArrayList<>();
+        for (String alias : new TreeSet<>(Collections.list(store.aliases()))) {
+            require(store.isCertificateEntry(alias) && store.getCertificate(alias) instanceof X509Certificate);
+            certificates.add(certificate((X509Certificate) store.getCertificate(alias), alias));
+        }
+        require(original.equals(path.toRealPath()) && Arrays.equals(raw, bytes(path))
+                && before.fileKey().equals(Files.readAttributes(original, BasicFileAttributes.class).fileKey()));
+        Map<String, Object> item = file(path, raw);
+        item.put("type", store.getType());
+        item.put("certificates", certificates);
+        return item;
+    }
+
+    private static Object json(Object value) {
+        if (value instanceof Map<?, ?> values) {
+            List<String> parts = new ArrayList<>();
+            for (var item : values.entrySet()) parts.add(json(item.getKey()) + ":" + json(item.getValue()));
+            return "{" + String.join(",", parts) + "}";
+        }
+        if (value instanceof Iterable<?> values) {
+            List<String> parts = new ArrayList<>();
+            for (Object item : values) parts.add(json(item).toString());
+            return "[" + String.join(",", parts) + "]";
+        }
+        if (value instanceof Number || value instanceof Boolean) return value.toString();
+        StringBuilder result = new StringBuilder("\"");
+        for (char c : value.toString().toCharArray()) {
+            if (c == '"' || c == '\\') result.append('\\').append(c);
+            else if (c < 32) result.append(String.format("\\u%04x", (int) c));
+            else result.append(c);
+        }
+        return result.append('"').toString();
+    }
+
+    private static Map<String, Object> snapshot(String[] args) throws Exception {
+        if (args.length == 3 && args[0].equals("--fixture-chain")) {
+            var factory = java.security.cert.CertificateFactory.getInstance("X.509");
+            var parsed = factory.generateCertificates(new ByteArrayInputStream(bytes(Path.of(args[1]))));
+            require(parsed.size() >= 2 && parsed.size() <= 8);
+            List<X509Certificate> chain = new ArrayList<>();
+            for (var cert : parsed) {
+                require(cert instanceof X509Certificate);
+                chain.add((X509Certificate) cert);
+            }
+            var root = (X509Certificate) factory.generateCertificate(new ByteArrayInputStream(bytes(Path.of(args[2]))));
+            java.util.Date clock = java.util.Date.from(java.time.Instant.parse("2026-10-22T12:00:00Z"));
+            root.checkValidity(clock);
+            List<String> identities = new ArrayList<>();
+            for (int index = 0; index < chain.size(); index++) {
+                var cert = chain.get(index);
+                cert.checkValidity(clock);
+                cert.verify(index + 1 < chain.size() ? chain.get(index + 1).getPublicKey() : root.getPublicKey());
+                identities.add(hash(cert.getEncoded()));
+            }
+            require(chain.get(0).getExtendedKeyUsage().contains("1.3.6.1.5.5.7.3.1"));
+            Map<String, Object> result = map();
+            result.put("schema_version", 1);
+            result.put("scope", "OFFLINE_CHAIN_SIGNATURE_FIXTURE");
+            result.put("qualification", "UNQUALIFIED");
+            result.put("fixture_clock", "2026-10-22T12:00:00Z");
+            result.put("certificate_sha256", identities);
+            result.put("signatures_verified", true);
+            result.put("tls_behavior", "NOT_TESTED");
+            return result;
+        }
+        boolean fixture = args.length == 2 && args[0].equals("--fixture-store");
+        boolean replay = args.length == 2 && args[0].equals("--replay-store");
+        require(args.length == 0 || fixture || replay);
+        Map<String, Object> output = map();
+        output.put("schema_version", 1);
+        output.put("qualification", "UNQUALIFIED");
+        output.put("scope", replay ? "STORE_REPLAY" : fixture ? "OFFLINE_FIXTURE" : "IMAGE_DEFAULT_JSSE");
+        Path home = Path.of(System.getProperty("java.home"));
+        Path selected = fixture || replay ? Path.of(args[1]) : home.resolve("lib/security/cacerts");
+        if (replay) {
+            output.put("store", store(selected));
+            return output;
+        }
+        require(ManagementFactory.getRuntimeMXBean().getInputArguments().stream().allMatch(v ->
+                v.equals("-XX:MaxRAMPercentage=75.0") || v.equals("-Djava.security.egd=file:/dev/./urandom")
+                || fixture && v.equals("-Xmx256m")));
+        for (String name : OPTIONS) require(System.getenv(name) == null || System.getenv(name).isEmpty());
+        for (String name : List.of("javax.net.ssl.trustStore", "javax.net.ssl.trustStorePassword",
+                "javax.net.ssl.trustStoreType", "javax.net.ssl.trustStoreProvider", "java.security.properties",
+                "java.security.manager", "java.security.policy")) require(System.getProperty(name) == null);
+        require(!Files.exists(home.resolve("lib/security/jssecacerts"), LinkOption.NOFOLLOW_LINKS));
+        List<Object> providers = new ArrayList<>();
+        for (var provider : Security.getProviders()) {
+            Map<String, Object> item = map();
+            item.put("name", provider.getName());
+            item.put("class", provider.getClass().getName());
+            item.put("version", provider.getVersionStr());
+            providers.add(item);
+        }
+        require(Arrays.stream(Security.getProviders()).map(p -> p.getName()).toList().equals(PROVIDERS));
+        for (int index = 0; index < PROVIDERS.size(); index++)
+            require(PROVIDERS.get(index).equals(Security.getProperty("security.provider." + (index + 1))));
+        require(Security.getProperty("security.provider.13") == null
+                && Security.getProperty("ssl.SocketFactory.provider") == null
+                && Security.getProperty("ssl.ServerSocketFactory.provider") == null);
+        output.put("providers", providers);
+        Map<String, Object> properties = map();
+        for (String name : List.of("java.home", "java.version", "java.runtime.version", "java.vendor",
+                "java.vendor.version", "java.specification.version", "os.name", "os.arch"))
+            properties.put(name, System.getProperty(name, ""));
+        output.put("java", properties);
+        if (!fixture) {
+            require(System.getProperty("java.vendor").equals("Eclipse Adoptium")
+                    && System.getProperty("java.vendor.version", "").matches("Temurin-21(?:\\.[0-9]+)*\\+[0-9]+"));
+        }
+        Map<String, Object> security = map();
+        for (String name : List.of("ssl.TrustManagerFactory.algorithm", "ssl.KeyManagerFactory.algorithm",
+                "keystore.type", "keystore.type.compat", "jdk.certpath.disabledAlgorithms",
+                "jdk.tls.disabledAlgorithms", "jdk.security.caDistrustPolicies", "crypto.policy",
+                "security.overridePropertiesFile")) security.put(name, Security.getProperty(name) == null ? "" : Security.getProperty(name));
+        output.put("security", security);
+        byte[] releaseBytes = bytes(home.resolve("release"));
+        Map<String, Object> release = file(home.resolve("release"), releaseBytes);
+        release.remove("base64");
+        java.util.Properties releaseProperties = new java.util.Properties();
+        releaseProperties.load(new ByteArrayInputStream(releaseBytes));
+        Map<String, Object> releaseFields = map();
+        for (String name : List.of("JAVA_VERSION", "JAVA_VERSION_DATE", "IMPLEMENTOR", "IMPLEMENTOR_VERSION")) {
+            String value = releaseProperties.getProperty(name, "\"\"");
+            require(value.length() <= 256 && value.startsWith("\"") && value.endsWith("\""));
+            releaseFields.put(name, value.substring(1, value.length() - 1));
+        }
+        release.put("fields", releaseFields);
+        output.put("release", release);
+        Map<String, Object> securityFile = file(home.resolve("conf/security/java.security"), bytes(home.resolve("conf/security/java.security")));
+        securityFile.remove("base64");
+        output.put("security_file", securityFile);
+        output.put("java_executable", file(home.resolve("bin/java"), bytes(home.resolve("bin/java"))));
+        Path blocked = home.resolve("lib/security/blocked.certs");
+        if (Files.exists(blocked)) {
+            byte[] blockedBytes = bytes(blocked);
+            List<String> lines = new String(blockedBytes, java.nio.charset.StandardCharsets.US_ASCII).lines().toList();
+            require(!lines.isEmpty() && lines.get(0).equals("Algorithm=SHA-256")
+                    && lines.stream().skip(1).allMatch(v -> v.matches("[0-9A-Fa-f]{64}")));
+            output.put("blocked_certs", file(blocked, blockedBytes));
+        } else output.put("blocked_certs", Map.of("present", false));
+        output.put("jssecacerts", Map.of("present", false));
+        if (!fixture) {
+            require(!Files.exists(Path.of("/workspace/.mvn/jvm.config"))
+                    && !Files.exists(Path.of("/workspace/.mvn/maven.config")));
+        } else {
+            // Explicit fixture mode is never accepted as actual-image measurement.
+            System.setProperty("javax.net.ssl.trustStore", selected.toAbsolutePath().toString());
+            System.setProperty("javax.net.ssl.trustStorePassword", "changeit");
+            System.setProperty("javax.net.ssl.trustStoreType", "JKS");
+        }
+        Map<String, Object> measured = store(selected);
+        if (fixture) System.setProperty("javax.net.ssl.trustStoreType", measured.get("type").toString());
+        output.put("store", measured);
+        TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        require(factory.getProvider().getName().equals("SunJSSE"));
+        factory.init((KeyStore) null);
+        TreeSet<String> accepted = new TreeSet<>();
+        int managers = 0;
+        for (var manager : factory.getTrustManagers()) {
+            require(manager instanceof X509TrustManager);
+            managers++;
+            for (var cert : ((X509TrustManager) manager).getAcceptedIssuers()) accepted.add(hash(cert.getEncoded()));
+        }
+        require(managers == 1 && !accepted.isEmpty());
+        output.put("accepted_issuers", accepted);
+        output.put("trust_manager_algorithm", factory.getAlgorithm());
+        output.put("trust_manager_provider", factory.getProvider().getName());
+        output.put("ssl_context_provider", SSLContext.getDefault().getProvider().getName());
+        require(Arrays.equals(Base64.getDecoder().decode(measured.get("base64").toString()), bytes(selected)));
+        return output;
+    }
+
+    public static void main(String[] args) {
+        try {
+            if (Runtime.version().feature() != 21) throw new IOException("Java 21 required");
+            System.out.println(json(snapshot(args)));
+        } catch (Exception error) {
+            // Do not expose paths, JVM option values, provider arguments or passwords.
+            System.err.println("Certificate probe failed: unsupported or incomplete measurement");
+            System.exit(2);
+        }
+    }
+}

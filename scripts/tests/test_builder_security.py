@@ -175,6 +175,103 @@ class TemurinAdvisoryPolicyTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 POLICY.jdk_findings(self.vdr(score=score), '21.0.1')
 
+    def test_variable_length_numeric_versions_preserve_every_component(self):
+        for version in ('21', '21.0.13', '21.0.13.0.2', '21.0.13.0.2.1'):
+            with self.subTest(version=version):
+                self.assertEqual(tuple(map(int, version.split('.'))), POLICY.numeric_version(version))
+        for version in ('21.0.13', '21.0.13.0.2', '21.0.13.0.2.1'):
+            with self.subTest(observed_version=version):
+                release = 'IMPLEMENTOR="Eclipse Adoptium"\nJAVA_VERSION="' + version + '"\n'
+                self.assertEqual(version, POLICY.java_version(release))
+
+    def test_feature_only_bound_does_not_establish_observed_temurin_release_identity(self):
+        self.assertEqual((21,), POLICY.numeric_version('21'))
+        with self.assertRaisesRegex(ValueError, 'Malformed/non-Java-21 Temurin version'):
+            POLICY.java_version('IMPLEMENTOR="Eclipse Adoptium"\nJAVA_VERSION="21"\n')
+
+    def test_build_pre_release_and_malformed_numeric_versions_fail_closed(self):
+        for version in ('', '0', '021.0.13', '21.00.13', '21.0.13.0', '21..13', '21.-1.13',
+                        '21.0.13+9', '21.0.13-ea', '21.0.13+9-LTS', '>=21.0.13',
+                        '21.0.13|27', ' 21.0.13', '21.0.13\n', '٢١.0.13', None, 21, True):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                POLICY.numeric_version(version)
+
+    def test_numeric_version_resource_limits_fail_without_truncation(self):
+        versions = ('1' * (POLICY.MAX_VERSION_LENGTH + 1),
+                    '.'.join(['1'] * (POLICY.MAX_VERSION_COMPONENTS + 1)),
+                    '21.' + '1' * (POLICY.MAX_VERSION_COMPONENT_DIGITS + 1))
+        for version in versions:
+            with self.subTest(length=len(version)), self.assertRaises(ValueError):
+                POLICY.numeric_version(version)
+        maximum = '.'.join(['1'] * POLICY.MAX_VERSION_COMPONENTS)
+        self.assertEqual(POLICY.MAX_VERSION_COMPONENTS, len(POLICY.numeric_version(maximum)))
+
+    def test_variable_length_comparison_orders_absent_positions_numerically(self):
+        cases = (('21.0.13', '21.0.13.0.2', True),
+                 ('21.0.13.0.2', '21.0.13', False),
+                 ('21.0.13.1', '21.0.13.0.2', False),
+                 ('21.0.9', '21.0.10', True),
+                 ('21.0.13', '21.0.13', True),
+                 ('21.0.13.0.2', '21.0.13.0.2.1', True))
+        for current, maximum, expected in cases:
+            with self.subTest(current=current, maximum=maximum):
+                self.assertEqual(expected, POLICY.version_at_most(
+                    POLICY.numeric_version(current), POLICY.numeric_version(maximum)))
+
+    def test_existing_canonical_four_component_comparisons_are_unchanged(self):
+        versions = ('8', '11.0.32.1', '17.0.21', '21.0.1', '21.0.12.1', '21.0.13', '25.0.5', '27')
+        def old(value):
+            parts = tuple(map(int, value.split('.')))
+            return parts + (0,) * (4 - len(parts))
+        for current in versions:
+            for maximum in versions:
+                with self.subTest(current=current, maximum=maximum):
+                    self.assertEqual(old(current) <= old(maximum), POLICY.version_at_most(
+                        POLICY.numeric_version(current), POLICY.numeric_version(maximum)))
+
+    def test_five_component_advisory_still_blocks_high_and_critical(self):
+        for score, severity in ((7.0, 'HIGH'), (9.1, 'CRITICAL')):
+            vdr = self.vdr(bound='21.0.13.0.2', score=score)
+            for version in ('21.0.13', '21.0.13.0.1', '21.0.13.0.2'):
+                with self.subTest(score=score, version=version):
+                    self.assertEqual(severity, POLICY.jdk_findings(vdr, version)[0]['severity'])
+            self.assertEqual([], POLICY.jdk_findings(vdr, '21.0.13.0.3'))
+            self.assertEqual([], POLICY.jdk_findings(vdr, '25.0.1'))
+
+    def test_invalid_bound_in_another_feature_cannot_bypass_validation(self):
+        for bound in ('27.0.1+1', '27.00.1', '27.' + '1' * 257):
+            with self.subTest(bound=bound), self.assertRaises(ValueError):
+                POLICY.jdk_findings(self.vdr(bound=bound), '21.0.13')
+
+    def test_oversized_ranges_and_legacy_bounds_fail_closed(self):
+        for bound in ('8u' + '1' * 257, '8u' + '1' * 10,
+                      '|'.join(['21.0.13'] * (POLICY.MAX_AFFECTED_BOUNDS + 1)),
+                      '1' * POLICY.MAX_AFFECTED_RANGE_LENGTH):
+            with self.subTest(length=len(bound)), self.assertRaises(ValueError):
+                POLICY.jdk_findings(self.vdr(bound=bound), '21.0.13')
+
+    def test_five_component_duplicate_retains_maximum_severity_and_conflicts_fail(self):
+        vdr = self.vdr(bound='21.0.13.0.2', score=3.1)
+        record = vdr['vulnerabilities'][0]
+        record['description'] = 'The same synthetic advisory'
+        duplicate = copy.deepcopy(record)
+        duplicate['affects'][0].pop('versions')
+        duplicate['ratings'][0]['score'] = 9.1
+        vdr['vulnerabilities'].append(duplicate)
+        self.assertEqual('CRITICAL', POLICY.jdk_findings(vdr, '21.0.13')[0]['severity'])
+        duplicate['description'] = 'Different advisory'
+        with self.assertRaisesRegex(ValueError, 'Conflicting incomplete JDK advisory'):
+            POLICY.jdk_findings(vdr, '21.0.13')
+
+    def test_additional_unresolved_findings_cannot_become_a_clean_result(self):
+        vdr = self.vdr(bound='21.0.13.0.2', score=9.1)
+        extra = copy.deepcopy(vdr['vulnerabilities'][0])
+        extra['id'] = 'CVE-2026-23456'
+        extra['ratings'][0]['score'] = 7.5
+        vdr['vulnerabilities'].append(extra)
+        self.assertEqual({'CVE-2026-12345', 'CVE-2026-23456'},
+                         {r['id'] for r in POLICY.jdk_findings(vdr, '21.0.13')})
+
 
 class BuildProvenanceTest(unittest.TestCase):
     def document(self):

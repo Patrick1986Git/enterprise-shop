@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -14,6 +15,20 @@ SPEC.loader.exec_module(POLICY)
 
 
 class AuxiliaryPolicyTest(unittest.TestCase):
+    def test_certificate_probe_source_bytes_require_an_execution_receipt(self):
+        name = 'scripts/jdk-certificate-evidence/CertificateEvidence.java.source'
+        original = (ROOT / name).read_bytes()
+        contract = POLICY.read(POLICY.CONTRACT)
+        self.assertEqual(hashlib.sha256(original).hexdigest(), contract['execution_sources'][name])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / name
+            path.parent.mkdir(parents=True)
+            path.write_bytes(original)
+            self.assertEqual(contract['execution_sources'][name], POLICY.execution_sources(root)[name])
+            path.write_bytes(original + b'\n')
+            self.assertNotEqual(contract['execution_sources'][name], POLICY.execution_sources(root)[name])
+
     def setUp(self):
         self.contract = POLICY.read(POLICY.CONTRACT)
         self.image = copy.deepcopy(self.contract['images']['govulncheck'])

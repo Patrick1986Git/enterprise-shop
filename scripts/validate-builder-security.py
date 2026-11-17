@@ -9,6 +9,7 @@ import math
 import re
 import subprocess
 import sys
+from itertools import zip_longest
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -38,6 +39,11 @@ def validate_stages(contents):
 DIRECTORY = ROOT / '.tmp/container-security/builder'
 VDR_REPOSITORY = 'adoptium/temurin-vdr-generator'
 BLOCKING = {'HIGH', 'CRITICAL'}
+MAX_VERSION_LENGTH = 256
+MAX_VERSION_COMPONENTS = 32
+MAX_VERSION_COMPONENT_DIGITS = 9
+MAX_AFFECTED_RANGE_LENGTH = 4096
+MAX_AFFECTED_BOUNDS = 32
 
 
 def require(condition, message):
@@ -97,14 +103,30 @@ def java_version(release):
     fields = dict(re.findall(r'^([A-Z_]+)="([^"]*)"$', release, re.MULTILINE))
     require(fields.get('IMPLEMENTOR') == 'Eclipse Adoptium', 'Unreviewed JDK vendor')
     version = fields.get('JAVA_VERSION', '')
-    require(re.fullmatch(r'21(?:\.\d+){1,3}', version), 'Malformed/non-Java-21 Temurin version')
+    components = numeric_version(version)
+    require(components[0] == 21 and len(components) > 1, 'Malformed/non-Java-21 Temurin version')
     return version
 
 
 def numeric_version(value):
-    require(re.fullmatch(r'\d+(?:\.\d+){0,3}', value), 'Unsupported OpenJDK affected version')
-    values = tuple(int(x) for x in value.split('.'))
-    return values + (0,) * (4 - len(values))
+    # JEP 322 reserves fifth and later components for downstream consumers.
+    # Build/pre-release identifiers are separate and are not numeric VDR bounds.
+    require(isinstance(value, str) and 0 < len(value) <= MAX_VERSION_LENGTH,
+            'Unsupported OpenJDK affected version')
+    components = value.split('.')
+    require(len(components) <= MAX_VERSION_COMPONENTS
+            and all(0 < len(x) <= MAX_VERSION_COMPONENT_DIGITS
+                    and re.fullmatch(r'0|[1-9][0-9]*', x) for x in components)
+            and components[0] != '0' and components[-1] != '0',
+            'Unsupported OpenJDK affected version')
+    return tuple(int(x) for x in components)
+
+
+def version_at_most(current, maximum):
+    for left, right in zip_longest(current, maximum, fillvalue=0):
+        if left != right:
+            return left < right
+    return True
 
 
 def jdk_findings(vdr, version):
@@ -140,13 +162,18 @@ def jdk_findings(vdr, version):
             for item in ranges:
                 # Adoptium's generator encodes OJVG's "affected versions ... and earlier"
                 # as generic upper bounds, partitioned by feature version, not exact-only matches.
-                require(item.get('status', 'affected') == 'affected'
+                require(isinstance(item, dict) and item.get('status', 'affected') == 'affected'
+                        and isinstance(item.get('range'), str)
+                        and len(item['range']) <= MAX_AFFECTED_RANGE_LENGTH
                         and item['range'].startswith('vers:generic/'), 'Unsupported vendor version semantics')
-                for bound in item['range'].removeprefix('vers:generic/').split('|'):
-                    if re.fullmatch(r'[78]u\d+', bound):
+                bounds = item['range'].removeprefix('vers:generic/').split('|')
+                require(len(bounds) <= MAX_AFFECTED_BOUNDS, 'Too many OpenJDK affected bounds')
+                for bound in bounds:
+                    require(0 < len(bound) <= MAX_VERSION_LENGTH, 'Unsupported OpenJDK affected version')
+                    if re.fullmatch(r'[78]u[0-9]{1,9}', bound):
                         continue
                     maximum = numeric_version(bound)
-                    if maximum[0] == current[0] and current <= maximum:
+                    if maximum[0] == current[0] and version_at_most(current, maximum):
                         applicable = True
         ratings = [rating for x in records for rating in x['ratings']]
         require(isinstance(ratings, list) and ratings, 'Missing JDK advisory severity')
