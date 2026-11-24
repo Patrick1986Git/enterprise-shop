@@ -121,10 +121,20 @@ class TrivyBuildTest(unittest.TestCase):
         self.assertTrue(contract['images']['scanner']['governed'])
         self.assertTrue(contract['images']['scanner']['candidate_build'])
         builder = contract['images']['scanner-builder']
-        self.assertEqual(BUILD.BUILDER, builder['reference'])
-        self.assertEqual(BUILD.BUILDER_BINARY, builder['identity']['sha256'])
+        # Bind the retained runtime profile to its own reviewed manifest;
+        # prospective source inputs do not qualify a replacement runtime.
+        candidate = json.loads(EVIDENCE.CONTRACT.read_text())
+        self.assertEqual(candidate['builder'], builder['reference'])
+        self.assertEqual(candidate['builder_binary_sha256'], builder['identity']['sha256'])
         self.assertTrue(builder['governed'])
         self.assertEqual(['HIGH', 'CRITICAL'], builder['threshold'])
+
+    def test_new_builder_reference_cannot_relabel_historical_compiler_receipts(self):
+        contract = json.loads((ROOT / '.github/security/auxiliary-container-scope.json').read_text())
+        candidate = json.loads(EVIDENCE.CONTRACT.read_text())
+        candidate['builder'] = BUILD.BUILDER
+        with self.assertRaisesRegex(ValueError, 'Unexpected scanner builder/compiler'):
+            EVIDENCE.inventory(contract['images']['scanner'], candidate)
 
 
 class TrivyRuntimeEnvironmentTest(unittest.TestCase):
@@ -838,8 +848,19 @@ class TrivyCiTrustTest(unittest.TestCase):
             self.policy.inventory(self.contract)
 
     def test_scanner_threshold_cannot_be_lowered(self):
-        self.contract['images']['scanner']['threshold'] = ['CRITICAL']
-        with self.assertRaisesRegex(ValueError, 'threshold'):
+        # Isolate only the compiler-admission prerequisite. The real inventory
+        # still checks governance, HIGH/CRITICAL thresholds and every other rule.
+        with patch.object(self.policy.SCANNER, 'inventory') as compiler_admission:
+            self.assertIn('scanner', self.policy.inventory(copy.deepcopy(self.contract)))
+            for threshold in (['CRITICAL'], ['HIGH'], []):
+                contract = copy.deepcopy(self.contract)
+                contract['images']['scanner']['threshold'] = threshold
+                with self.subTest(threshold=threshold), self.assertRaisesRegex(ValueError, '^Wrong threshold$'):
+                    self.policy.inventory(contract)
+            self.assertEqual(4, compiler_admission.call_count)
+
+    def test_stale_builder_is_rejected_by_unmocked_inventory(self):
+        with self.assertRaisesRegex(ValueError, 'Unexpected scanner builder/compiler'):
             self.policy.inventory(self.contract)
 
     def test_missing_reproducible_build_receipt_is_rejected(self):

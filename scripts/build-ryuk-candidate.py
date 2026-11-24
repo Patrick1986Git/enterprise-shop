@@ -26,7 +26,8 @@ ryuk_client_tests = importlib.util.module_from_spec(TEST_SPEC)
 TEST_SPEC.loader.exec_module(ryuk_client_tests)
 SOURCE = 'b3726afd6cc2c36628abcc08e9cabac43f587384'
 ARCHIVE_SHA = '7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d'
-BUILDER = 'docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca'
+# Provisional source input; the retained candidate manifest is not a receipt for this builder.
+BUILDER = 'docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
 
@@ -146,7 +147,7 @@ def build(directory, analyze=True):
     test_files = {p.name: sha(p.read_bytes()) for p in tests.iterdir() if p.is_file()}
     require(test_files == json.loads(ryuk_client_tests.CONTRACT.read_text())['source_files'], 'Unreviewed Ryuk test overlay')
     subprocess.run(test_command + ['go mod download github.com/stretchr/testify github.com/davecgh/go-spew '
-        'github.com/pmezard/go-difflib github.com/stretchr/objx gopkg.in/yaml.v3; go mod verify'], check=True)
+        'github.com/pmezard/go-difflib github.com/stretchr/objx go.yaml.in/yaml/v3; go mod verify'], check=True)
     with (directory / 'client-tests.jsonl').open('w') as out, (directory / 'client-tests.log').open('w') as err:
         status = subprocess.run(test_command[:3] + ['--network', 'none'] + test_command[3:] +
             ['go test -mod=readonly -count=1 -timeout=90s -json .'], stdout=out, stderr=err, timeout=120).returncode
@@ -163,7 +164,7 @@ def build(directory, analyze=True):
     write(directory / 'filesystem-census.json', census)
     receipt = {'upstream_source_sha': SOURCE, 'upstream_archive_sha256': ARCHIVE_SHA,
         'patch_sha256': sha(patch.read_bytes()), 'source_files': source_hashes,
-        'builder': BUILDER, 'builder_image_id': builder_config_id, 'go_version': '1.26.10',
+        'builder': BUILDER, 'builder_image_id': builder_config_id, 'go_version': '1.26.11',
         'flags': flags, 'cgo_enabled': '0', 'upx': False, 'binary_sha256': sha(binary),
         'repeat_sha256': sha((directory / 'ryuk.repeat').read_bytes()),
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),

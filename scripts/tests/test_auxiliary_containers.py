@@ -7,11 +7,26 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).parents[2]
 SPEC = importlib.util.spec_from_file_location('auxiliary_policy', ROOT / 'scripts/validate-auxiliary-containers.py')
 POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
+
+
+def inventory_with_retained_scanner_inputs(policy, contract):
+    """Exercise the outer policy against the still-retained scanner inputs."""
+    scanner = policy.SCANNER
+    retained = policy.read(scanner.CONTRACT)
+    pins = {
+        'BUILDER': 'builder', 'BUILDER_ID': 'builder_image_id',
+        'BUILDER_MANIFEST': 'builder_manifest', 'BUILDER_BINARY': 'builder_binary_sha256',
+        'SDK_SHA': 'sdk_sha256', 'SDK_TOOLS': 'sdk_tools', 'PATCH_SHA': 'patch_sha256',
+        'GO_MOD_SHA': 'go_mod_sha256', 'GO_SUM_SHA': 'go_sum_sha256',
+    }
+    with patch.multiple(scanner.BUILD, **{pin: retained[field] for pin, field in pins.items()}):
+        return policy.inventory(contract)
 
 
 class AuxiliaryPolicyTest(unittest.TestCase):
@@ -75,7 +90,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_complete_executed_image_inventory_includes_library_ryuk(self):
         self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk', 'scanner-builder', 'scanner-reference-fixture'},
-                         set(POLICY.inventory(self.contract)))
+                         set(inventory_with_retained_scanner_inputs(POLICY, self.contract)))
 
     def test_new_workflow_container_cannot_bypass_review(self):
         self.source_change(lambda r: (r / '.github/workflows/new.yml').write_text('jobs:\n  new:\n    container: ubuntu:latest\n'))
@@ -113,7 +128,8 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_opaque_binary_cannot_borrow_empty_hadolint_boundary(self):
         self.contract['images']['ryuk']['package_mode'] = 'static-haskell'
-        with self.assertRaisesRegex(ValueError, 'Hadolint'): POLICY.inventory(self.contract)
+        with self.assertRaisesRegex(ValueError, 'Hadolint'):
+            inventory_with_retained_scanner_inputs(POLICY, self.contract)
 
     def test_digest_required(self):
         self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.10-alpine3.24'
@@ -217,7 +233,8 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_new_classification_must_be_explicit(self):
         self.contract['images']['ryuk']['classification'] = 'CI-only'
-        with self.assertRaisesRegex(ValueError, 'classification'): POLICY.inventory(self.contract)
+        with self.assertRaisesRegex(ValueError, 'classification'):
+            inventory_with_retained_scanner_inputs(POLICY, self.contract)
 
     def test_archive_scanner_has_no_docker_socket_and_no_exception_file(self):
         source = (ROOT / 'scripts/scan-auxiliary-containers.py').read_text()

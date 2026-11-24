@@ -22,21 +22,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = '591e9799316a602e703f0b484f6c6d7b234ec8f3'
 ARCHIVE_SHA = '4a5bb1c16ccc55368843eb95ee9a25519a0bfef26609a8b4295f2060af43077e'
-BUILDER = 'docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd'
-BUILDER_ID = 'sha256:2101eb697fc5b5b7f64252fe6bf7a21c4a06a51852c71c3424d44e3f824cbb52'
-BUILDER_MANIFEST = 'sha256:cd410a5c6686417875bc4815688e96ae9769f8562debc545d29fe58e73d174f0'
-BUILDER_BINARY = '5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b'
-PATCH_SHA = '6ce5f40dce24471fb5525afd9562c356db5eb8106081a12df28e3f7c432bf79f'
-GO_MOD_SHA = '86340f7b248b405423130c2267f65c4e24c26738d56b26238da6bda102d45aae'
-GO_SUM_SHA = 'af01ecb05cf0a88e792cc65c41051c92df96c1ae12299e747654d50606b4d64f'
+# Provisional source inputs; retained candidate manifests still describe the historical builds.
+BUILDER = 'docker.io/library/golang:1.27.4-alpine3.24@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280'
+BUILDER_ID = 'sha256:3f9f7b68d2300deb4acba48650f28dec9098ead84cd167a56c0e2bf361f24592'
+BUILDER_MANIFEST = 'sha256:ea30e25680a5470bac02b08bb0e0a735fb75bd0ab7d431b9b95ee0abef362586'
+BUILDER_BINARY = 'de0ae3e082ce7599eae4fb69fa2ef1e43b8f31ffd3fce62cdf81930aa9005050'
+PATCH_SHA = '9c6065c7f782d59cff53e8c774f098de981777ad1c5667e4724be21a3580f8f2'
+GO_MOD_SHA = 'bbc5c4b9db060144994283b44d34f746e323f7c3a3b481552947b18f100c04f3'
+GO_SUM_SHA = 'bf7aff8a0b6c8f0154d0d74a0d0508747714318ae782329303a48af556d476e6'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
-SDK_SHA = '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40'
+SDK_SHA = '7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840'
 SDK_TOOLS = {
     'bin/go': BUILDER_BINARY,
-    'bin/gofmt': 'fd464d1c9098a6714d06bd3fcd2a1fedcdd291e710241160ebb663bf99adf2f8',
-    'pkg/tool/linux_amd64/compile': 'c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283',
-    'pkg/tool/linux_amd64/link': 'c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe'}
+    'bin/gofmt': '96d48ae3c8754e4a10e8f5ec2472d1344767d276e0ba6e94948c00cf8558e378',
+    'pkg/tool/linux_amd64/compile': '40307e5f5c65a4b4220bbf35dbe014348780589ea2964003f0bf318fa14640e1',
+    'pkg/tool/linux_amd64/link': 'e2248a29fbbf15dac1fe72c9d646776dbcd38c9813b78182fe01a4a47f3299c3'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
 SOURCE_GOMEMLIMIT = '7GiB'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
@@ -408,7 +409,7 @@ def validate_source_diagnostics(directory, receipt, head, now=None):
 
 
 def verify_compiler(directory):
-    url = 'https://go.dev/dl/go1.27.3.linux-amd64.tar.gz'
+    url = 'https://go.dev/dl/go1.27.4.linux-amd64.tar.gz'
     with urllib.request.urlopen(url, timeout=120) as response:
         data = response.read()
     require(sha(data) == SDK_SHA, 'Official Go archive changed')
@@ -493,7 +494,7 @@ def build(directory):
     receipt = {'upstream_source_sha': SOURCE, 'upstream_archive_sha256': ARCHIVE_SHA,
         'patch_sha256': PATCH_SHA, 'source_files': hashes, 'go_mod_sha256': GO_MOD_SHA, 'go_sum_sha256': GO_SUM_SHA,
         'builder': BUILDER, 'builder_image_id': BUILDER_ID, 'builder_manifest': BUILDER_MANIFEST,
-        'builder_binary_sha256': BUILDER_BINARY, 'go_version': '1.27.3', 'flags': FLAGS,
+        'builder_binary_sha256': BUILDER_BINARY, 'go_version': '1.27.4', 'flags': FLAGS,
         'sdk_sha256': SDK_SHA, 'sdk_tools': SDK_TOOLS,
         'symbol_reader_sha256': sha(inspector.read_bytes()),
         'cgo_enabled': '0', 'upx': False, 'independent_cold_caches': True,
