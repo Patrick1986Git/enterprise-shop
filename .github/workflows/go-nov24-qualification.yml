@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 3
           persist-credentials: false
           path: harness
 
@@ -53,6 +53,13 @@ jobs:
         run: >-
           python3 harness/.github/go-nov24-qualification/collect.py
           collect candidate harness "$RUNNER_TEMP/nov24-go-evidence"
+
+      - name: Deactivate and remove only this job's temporary swap
+        if: always()
+        timeout-minutes: 2
+        run: >-
+          python3 harness/.github/go-nov24-qualification/runner_swap.py
+          "$RUNNER_TEMP/nov24-go-evidence"
 
       - name: Bind retained evidence bytes and diagnostics
         if: always()

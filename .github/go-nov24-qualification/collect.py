@@ -15,9 +15,12 @@ import urllib.request
 import uuid
 
 from accounting import ROOT, GIB, REQUIRED_EVENTS, fixture, inspect, now, output, owned_slice, require, run, write
+import runner_swap
 
 
 TREE = 'fd2c5a4c5d8b182dd9ae421c3ec8befc76302d2a'
+CANDIDATE = '04fb23f2b25c607c37c63cffc8bc245e894823f7'
+PREVIOUS_HARNESS = '386823b3a8df9386ceafef6cc6d10dbb67def249'
 BRANCH = 'refs/heads/evidence/go-nov24-docker29-6285a517'
 REPOSITORY = 'Patrick1986Git/enterprise-shop'
 DB_FLOOR = '2026-11-24T15:56:00Z'
@@ -81,8 +84,7 @@ def host_resources(directory):
     config = json.loads(output('docker', 'info', '--format', '{{json .}}'))
     buildx = output('docker', 'buildx', 'version')
     builder = output('docker', 'buildx', 'inspect', 'default')
-    memory = dict(line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())
-    resources = {k: int(memory[k].split()[0]) * 1024 for k in ('MemTotal', 'MemAvailable', 'SwapTotal', 'SwapFree')}
+    resources = runner_swap.memory()
     mount = output('findmnt', '-T', str(ROOT), '-no', 'FSTYPE,OPTIONS')
     process_cgroup = Path('/proc/self/cgroup').read_text().strip()
     limits = {}
@@ -98,15 +100,29 @@ def host_resources(directory):
           'process_cgroup': process_cgroup, 'cgroup_limits': limits, 'affinity': sorted(os.sched_getaffinity(0)),
           'memory_bytes': resources, 'evidence_disk_free_bytes': shutil.disk_usage(directory).free,
           'runner_image': {k: os.environ.get(k) for k in ('ImageOS', 'ImageVersion', 'RUNNER_ARCH', 'RUNNER_OS')}})
+    buildkit_version = re.search(r'^BuildKit( version)?:\s*(v?\d+\.\d+\.\d+)', builder, re.M | re.I)
+    print('Runner capabilities ' + json.dumps({
+          'docker_client': version['Client']['Version'], 'docker_server': version['Server']['Version'],
+          'buildkit': buildkit_version[2] if buildkit_version else None,
+          'buildx': next(iter(re.findall(r'\bv\d+\.\d+\.\d+\b', buildx)), None),
+          'platform': version['Server']['Os'] + '/' + version['Server']['Arch'],
+          'cgroup': str(config['CgroupVersion']) + '/' + config['CgroupDriver'],
+          'cpus': len(os.sched_getaffinity(0)), 'image': os.environ.get('ImageVersion'),
+          'evidence_disk_free_bytes': shutil.disk_usage(directory).free, 'memory_bytes': resources}), flush=True)
     require(all(v['Version'].split('.')[0] == '29' and v['Arch'] == 'amd64' and v['Os'] == 'linux'
                 for v in (version['Server'], version['Client'])), 'Required Docker 29 linux/amd64 unavailable')
-    require(re.search(r'^BuildKit( version)?:\s*v?\d+\.', builder, re.M | re.I), 'BuildKit version unavailable')
+    require(buildkit_version, 'BuildKit version unavailable')
     require(str(config['CgroupVersion']) == '2' and config['CgroupDriver'] == 'systemd'
             and mount.startswith('cgroup2 ') and 'memory_localevents' not in mount,
             'Systemd cgroup v2 hierarchical accounting unavailable')
-    require(resources['MemAvailable'] >= 3 * GIB and resources['SwapFree'] >= 2 * GIB
-            and len(os.sched_getaffinity(0)) >= 2, 'Runner lacks the required source analysis headroom')
+    require(len(os.sched_getaffinity(0)) >= 2, 'Runner requires at least two available CPUs')
+    require(resources['MemAvailable'] >= 3 * GIB, 'Runner requires at least 3 GiB available RAM')
     run(['sudo', '-n', 'true'])
+    if resources['SwapFree'] < runner_swap.MIN_FREE:
+        resources = runner_swap.provision(directory, resources)
+        print('Temporary swap provisioning PASS ' + json.dumps(resources), flush=True)
+    require(resources['MemAvailable'] >= 3 * GIB, 'Runner requires at least 3 GiB available RAM after swap provisioning')
+    require(resources['SwapFree'] >= 2 * GIB, 'Runner requires at least 2 GiB free host swap')
 
 
 def connectivity(directory):
@@ -129,13 +145,20 @@ def connectivity(directory):
         write(directory / 'connectivity.json', values)
 
 
-def preflight(directory, builder):
+def preflight(directory, builder, checks):
+    checks['prerequisite'] = 'runner including available RAM and active host swap'
     host_resources(directory)
+    checks['prerequisite'] = 'official Go database consistency and freshness'
     metadata(directory, builder.RYUK.ADVISORY)
+    checks['prerequisite'] = 'official Go SDK, dependency proxy and checksum connectivity'
     connectivity(directory)
+    checks['prerequisite'] = 'reviewed Docker builder image acquisition'
     run(['docker', 'pull', '--platform', 'linux/amd64', builder.BUILDER], timeout=150)
     for mode in ('late', 'oom'):
+        checks['prerequisite'] = 'terminal cgroup ' + mode + ' fixture'
         fixture(directory, builder.BUILDER, mode)
+        checks['lifecycle'][mode] = 'PASS'
+    checks['prerequisite'] = 'complete'
 
 
 def verify_stream(authority, module, directory, mode, receipt):
@@ -506,14 +529,17 @@ def bind(candidate, harness, directory):
             and os.environ['RUNNER_ENVIRONMENT'] == 'github-hosted' and os.environ['GITHUB_RUN_ATTEMPT'] == '1'
             and os.environ['GITHUB_REPOSITORY'] == REPOSITORY
             and os.environ['GITHUB_SHA'] == harness_head
+            and head == CANDIDATE
             and output('git', '-C', str(candidate), 'rev-parse', 'HEAD^{tree}') == TREE
-            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^') == head,
+            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^') == PREVIOUS_HARNESS
+            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^^') == head,
             'Evidence run is detached from the reviewed source or harness')
     for checkout in (candidate, harness):
         require(not output('git', '-C', str(checkout), 'status', '--porcelain', '--untracked-files=no'),
                 'Tracked source changed after checkout')
     write(directory / 'binding.json', {'kind': 'unqualified evidence', 'candidate_commit': head, 'candidate_tree': TREE,
           'harness_commit': harness_head, 'harness_tree': output('git', '-C', str(harness), 'rev-parse', 'HEAD^{tree}'),
+          'harness_parent': PREVIOUS_HARNESS,
           'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'ref': BRANCH})
 
 
@@ -527,12 +553,18 @@ def main():
     trivy = load(candidate / 'scripts/build-trivy-candidate.py', 'candidate_trivy_builder')
     checks = {}
     if command == 'preflight':
+        checks.update(prerequisite='runner preflight', lifecycle=dict.fromkeys(('late', 'oom'), 'NOT_TESTED'))
         try:
-            preflight(directory, trivy)
+            preflight(directory, trivy, checks)
             checks['runner'] = 'PASS'
         except Exception as error:
             checks.update(runner='BLOCKED', error=str(error))
+            for mode in checks['lifecycle']:
+                if checks['prerequisite'] == 'terminal cgroup ' + mode + ' fixture':
+                    checks['lifecycle'][mode] = 'BLOCKED'
+            print('Blocked prerequisite ' + checks['prerequisite'] + ' - ' + runner_swap.diagnostic(error), flush=True)
         write(directory / 'preflight-status.json', checks)
+        print('Preflight ' + checks['runner'] + ' - terminal lifecycle ' + json.dumps(checks['lifecycle']), flush=True)
         return 0 if checks['runner'] == 'PASS' else 1
     require(command == 'collect' and json.loads((directory / 'preflight-status.json').read_text())['runner'] == 'PASS',
             'Hosted preflight did not pass')

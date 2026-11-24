@@ -8,7 +8,7 @@ import sys
 
 
 TOP = re.compile(r'(?:binding|runner-capabilities|metadata|connectivity|accounting-(?:late|oom)-fixture|'
-                 r'preflight-status|collection-status|source-db-(?:before|after))\.json|db\.json\.gz')
+                 r'preflight-status|collection-status|swap-(?:provisioning|cleanup)|source-db-(?:before|after))\.json|db\.json\.gz')
 PHASES = ('buildkit', 'trivy', 'trivy/first', 'trivy/independent-source', 'ryuk', 'ryuk/first', 'ryuk/repeat')
 RAW = re.compile(r'[a-z0-9._-]+\.(?:json|jsonl|log|txt|crt|tar|tar\.gz)|'
                  r'govulncheck|trivy\.(?:first|repeat)|ryuk(?:\.repeat)?|ryuk-sdk-[a-z0-9_]+')
