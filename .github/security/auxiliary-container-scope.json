@@ -308,7 +308,7 @@
     "scripts/build-trivy-candidate.py": "922c1a599243c0f533e639cd1fde0e34b4bdb9aee2a815d76d5f0c3a0579bb98",
     "scripts/check-local-postgres-gosu.py": "c8d313cf2c6c0fc1b2e6d989542d9d3b892b41f3397aedcf2a883771f79f0567",
     "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
-    "scripts/collect-jdk-certificate-evidence.py": "85e900bf42938f098c77a4b60fbbefaadb94b553b74a6a3972f3b801b81002da",
+    "scripts/collect-jdk-certificate-evidence.py": "41a8fbc9a3bc3b63a4f4c8a57b9c2c85784506cad1c7160e6359d0a54a900865",
     "scripts/go_advisory_acquisition.py": "b7895168d042cda003dd551ac2fada2ff5bc8af688d7fe2642a00a38f0f1fe2c",
     "scripts/historical-forward-restore-rehearsal.sh": "1b6f3241fdaa1bce83cae712f4128e9ebba408ad09e9ea4a5d5c188be3dce507",
     "scripts/jdk-certificate-evidence/CertificateEvidence.java.source": "2fbbe3b4a1dbd235978a20cf12e8a138c8f3ee088de022e88989ae1e241a2022",

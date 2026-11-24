@@ -4,11 +4,12 @@
   "guidance": "https://adoptium.net/news/2026/10/temurin-october-2026-emudhra",
   "ca_update": "https://github.com/adoptium/temurin-build/pull/4587",
   "ca_source_sha256": "3ec2b4d240dc12c747eaf450061db84af757c483bbda302f9e29ceb5d70be510",
-  "vdr_tag": "temurin-vdr-17-11-2026-44079996529",
-  "vdr_sha256": "3787567d614f5dbed896f26c7a1e2d80c00b8b167431ade0c03c95ac5e442852",
+  "vdr_tag": "temurin-vdr-24-11-2026-45390304790",
+  "vdr_sha256": "7029638014454d0362ff5524da94bbf62bd68b540f84c91cc0e5704b582c8b8c",
+  "vdr_provenance_sha256": "8694bd4029552531022a4d3662e2bd6ffe805777dc10f78019742928fff7a972",
   "advisory_records": {
-    "CVE-2026-114820": "0f497021f364c91e6e7081a6ff0f5d867c4ee15f36dabd2a2033277612a32bb1",
-    "CVE-2026-91403": "42398de65007570205ca53a9cc8cae2ff7bc9420265a75c9536699d80d5bec8e"
+    "CVE-2026-114820": "977be1eb41deb4d2c5358d39f6905d7c57f3afe68ce5e473e04a777a8f7a9759",
+    "CVE-2026-91403": "35e53b894c1377f74dd9e68c62a326c767b0a55df0cf75f1677d745b7005894f"
   },
   "files": {
     "comodoaaaca": {

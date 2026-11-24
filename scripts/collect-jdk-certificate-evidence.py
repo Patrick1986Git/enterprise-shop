@@ -21,7 +21,7 @@ POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
 PROBE = ROOT / 'scripts/jdk-certificate-evidence/CertificateEvidence.java.source'
 FIXTURES = ROOT / 'scripts/tests/fixtures/jdk-certificates'
-AUTHORITY_SHA256 = '43224a83fbe39073bf39234aed54abaa4fab078e5bae6c0a477addd2f4801965'
+AUTHORITY_SHA256 = 'af1b90f4675b60669a9b9226d960254825c63051284aaa251e4e92a2d3ab4e15'
 MAX_OUTPUT = 24 * 1024 * 1024
 STAGES = {'builder': 'builder', 'runtime': 'app'}
 OVERRIDES = ('JAVA_TOOL_OPTIONS', 'JDK_JAVA_OPTIONS', '_JAVA_OPTIONS', 'JAVA_OPTS', 'MAVEN_OPTS',
@@ -43,6 +43,10 @@ def require(condition, message):
 
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
+
+
+def canonical_sha(value):
+    return sha(json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
 
 
 def read(path):
@@ -141,6 +145,12 @@ def image_context(directory, source):
     return {'source_sha': source, 'images': images, 'authority_sha256': AUTHORITY_SHA256}
 
 
+def validate_advisory_records(records, expected_digests):
+    for identity, expected_digest in expected_digests.items():
+        actual = [r for r in records if r['id'] == identity]
+        require(len(actual) == 1 and canonical_sha(actual[0]) == expected_digest, 'Altered advisory record')
+
+
 def context(directory, source):
     expected_context = image_context(directory, source)
     manifest = authority()
@@ -148,12 +158,9 @@ def context(directory, source):
     vdr_path = directory / 'temurin-vdr.json'
     require(vdr_path.is_file() and not vdr_path.is_symlink() and vdr_path.stat().st_size <= MAX_OUTPUT
             and provenance['repository'] == POLICY.VDR_REPOSITORY and provenance['tag'] == manifest['vdr_tag']
+            and canonical_sha(provenance) == manifest['vdr_provenance_sha256']
             and provenance['sha256'] == manifest['vdr_sha256'] == sha(vdr_path.read_bytes()), 'Stale advisory authority')
-    records = read(vdr_path)['vulnerabilities']
-    for identity, expected_digest in manifest['advisory_records'].items():
-        actual = [r for r in records if r['id'] == identity]
-        require(len(actual) == 1 and sha(json.dumps(actual[0], sort_keys=True, separators=(',', ':')).encode()) == expected_digest,
-                'Altered advisory record')
+    validate_advisory_records(read(vdr_path)['vulnerabilities'], manifest['advisory_records'])
     return expected_context
 
 

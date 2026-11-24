@@ -7,9 +7,10 @@ The standalone `scripts/collect-jdk-certificate-evidence.py` supplements the
 existing builder recorder. It never edits a VDR, changes severity or exempts a
 CVE. Its process exit code reports collection/replay success only; every output
 retains `qualification: UNQUALIFIED` and incomplete behavioral coverage. It is
-not invoked by the production workflow or vulnerability gate. The prepared
-November 17 parser replay still records CRITICAL CVE-2026-114820 and CRITICAL
-CVE-2026-91403; both remain independently blocking.
+not invoked by the production workflow or vulnerability gate. The historical
+November 17 replay at Temurin 21.0.13 recorded CRITICAL CVE-2026-114820 and
+CRITICAL CVE-2026-91403. The collector now pins the reviewed November 24 report.
+Application-image qualification still requires fresh evidence for both stages.
 
 ## Execution and source boundary
 
@@ -24,8 +25,12 @@ The collector/probe source bytes are included in the execution-source census.
 Both `builder` and `app` input records are mandatory. Existing original-byte OCI
 and BuildKit verification binds native identity, configuration identity,
 Linux/amd64, build target, fresh base resolution and shared JDK base. The exact
-already reviewed VDR/tag and advisory-record hashes must match the authority
-manifest; a newer or altered authority requires separate source review.
+reviewed November 24 VDR bytes, canonical production fetch receipt and two
+certificate advisory-record hashes must match the authority manifest. A newer
+or altered authority requires separate source review. The November 17 inputs
+remain reproducible with the previous reviewed source and are rejected by the
+current collector. Java4Shell fixed-build qualification is outside this
+collector's certificate behavior scope.
 
 Each image is inspected/export-verified again using the existing identity helper,
 then addressed by immutable native ID. The probe runs with the image's user,

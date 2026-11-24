@@ -12,7 +12,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
-from contextlib import contextmanager, redirect_stdout
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +20,8 @@ SPEC = importlib.util.spec_from_file_location('certificate_collector', ROOT / 's
 COLLECTOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COLLECTOR)
 SOURCE = '26d4c6d0a655e63a4355eab19ca3f919b06282c1'
+CONTEXT_FIXTURES = ROOT / 'scripts/tests/fixtures/jdk-certificate-context'
+HISTORICAL_AUTHORITY_SHA256 = '43224a83fbe39073bf39234aed54abaa4fab078e5bae6c0a477addd2f4801965'
 
 
 class CertificateContextTest(unittest.TestCase):
@@ -36,24 +38,10 @@ class CertificateContextTest(unittest.TestCase):
                 self.assertTrue(member.isfile())
                 (self.inputs / member.name).write_bytes(archive.extractfile(member).read())
         (self.inputs / 'source-sha.txt').write_text(SOURCE)
-        fixtures = ROOT / 'scripts/tests/fixtures/jdk-certificate-context'
-        raw = gzip.decompress((fixtures / 'temurin-vdr-20261117.json.gz').read_bytes())
-        self.assertEqual(COLLECTOR.authority()['vdr_sha256'], COLLECTOR.sha(raw))
+        raw = gzip.decompress((CONTEXT_FIXTURES / 'temurin-vdr-20261124.json.gz').read_bytes())
         (self.inputs / 'temurin-vdr.json').write_bytes(raw)
-        shutil.copyfile(fixtures / 'jdk-advisory-provenance.json', self.inputs / 'jdk-advisory-provenance.json')
-
-    @contextmanager
-    def controlled_authority(self, change):
-        # Negative cases keep real authority/file/hash checks active while
-        # varying an explicitly controlled manifest and its matching pin.
-        fixtures = self.root / 'authority'
-        shutil.copytree(COLLECTOR.FIXTURES, fixtures)
-        manifest = COLLECTOR.read(fixtures / 'manifest.json')
-        change(manifest)
-        COLLECTOR.write(fixtures / 'manifest.json', manifest)
-        with patch.object(COLLECTOR, 'FIXTURES', fixtures), patch.object(COLLECTOR, 'AUTHORITY_SHA256',
-                COLLECTOR.sha((fixtures / 'manifest.json').read_bytes())):
-            yield
+        shutil.copyfile(CONTEXT_FIXTURES / 'jdk-advisory-provenance-20261124.json',
+                        self.inputs / 'jdk-advisory-provenance.json')
 
     def test_real_context_returns_source_and_both_original_image_identities(self):
         actual = COLLECTOR.context(self.inputs, SOURCE)
@@ -112,13 +100,19 @@ class CertificateContextTest(unittest.TestCase):
                 self.assertEqual(0, COLLECTOR.main())
             self.assertEqual('UNQUALIFIED', json.loads(stdout.getvalue())['qualification'])
 
+            envelope_path = output / 'envelope.json'
+            envelope = COLLECTOR.read(envelope_path)
+            COLLECTOR.write(envelope_path, dict(envelope, authority_sha256=HISTORICAL_AUTHORITY_SHA256))
+            with patch.object(sys, 'argv', args), redirect_stdout(io.StringIO()):
+                self.assertEqual(2, COLLECTOR.main())
+            COLLECTOR.write(envelope_path, envelope)
+
             # Even a self-consistent artifact census cannot hide stale retained
             # authority from the real context() call inside bundle replay.
             provenance_path = output / 'provenance/jdk-advisory-provenance.json'
             provenance = COLLECTOR.read(provenance_path)
             provenance['tag'] = 'unreviewed-retained-release'
             COLLECTOR.write(provenance_path, provenance)
-            envelope = COLLECTOR.read(output / 'envelope.json')
             envelope['artifacts'] = COLLECTOR.census(output)
             COLLECTOR.write(output / 'envelope.json', envelope)
             with patch.object(sys, 'argv', args), redirect_stdout(io.StringIO()):
@@ -142,39 +136,25 @@ class CertificateContextTest(unittest.TestCase):
             compile_probe.assert_not_called()
         self.assertFalse(output.exists())
 
-    def test_altered_expected_cve_digests_fail_real_record_hashing(self):
-        for identity in ('CVE-2026-114820', 'CVE-2026-91403'):
-            with self.subTest(identity=identity):
-                # Separate temporary authority for each independently checked CVE.
-                authority_path = self.root / 'authority'
-                if authority_path.exists():
-                    shutil.rmtree(authority_path)
-                with self.controlled_authority(lambda m: m['advisory_records'].__setitem__(identity, '0' * 64)):
+    def test_altered_missing_or_duplicate_records_fail_real_record_hashing(self):
+        records = COLLECTOR.read(self.inputs / 'temurin-vdr.json')['vulnerabilities']
+        expected = COLLECTOR.authority()['advisory_records']
+        COLLECTOR.validate_advisory_records(records, expected)
+        for identity in expected:
+            required = next(record for record in records if record['id'] == identity)
+            others = [record for record in records if record['id'] != identity]
+            for case, supplied in (('altered', others + [dict(required, recommendation='changed')]),
+                                   ('missing', others), ('duplicate', records + [required])):
+                with self.subTest(identity=identity, case=case):
                     with self.assertRaisesRegex(ValueError, 'Altered advisory record'):
-                        COLLECTOR.context(self.inputs, SOURCE)
-
-    def test_missing_authorized_record_fails_even_with_matching_whole_vdr_digest(self):
-        original = COLLECTOR.read(self.inputs / 'temurin-vdr.json')
-        for identity in ('CVE-2026-114820', 'CVE-2026-91403'):
-            with self.subTest(identity=identity):
-                document = copy.deepcopy(original)
-                document['vulnerabilities'] = [r for r in document['vulnerabilities'] if r['id'] != identity]
-                COLLECTOR.write(self.inputs / 'temurin-vdr.json', document)
-                digest = COLLECTOR.sha((self.inputs / 'temurin-vdr.json').read_bytes())
-                provenance = COLLECTOR.read(self.inputs / 'jdk-advisory-provenance.json')
-                provenance['sha256'] = digest
-                COLLECTOR.write(self.inputs / 'jdk-advisory-provenance.json', provenance)
-                authority_path = self.root / 'authority'
-                if authority_path.exists():
-                    shutil.rmtree(authority_path)
-                with self.controlled_authority(lambda m: m.__setitem__('vdr_sha256', digest)):
-                    with self.assertRaisesRegex(ValueError, 'Altered advisory record'):
-                        COLLECTOR.context(self.inputs, SOURCE)
+                        COLLECTOR.validate_advisory_records(supplied, expected)
 
     def test_wrong_vdr_identity_or_checksum_fails(self):
         path = self.inputs / 'jdk-advisory-provenance.json'
         original = COLLECTOR.read(path)
-        for field, value in (('repository', 'unreviewed/vendor'), ('tag', 'unreviewed-release'), ('sha256', '0' * 64)):
+        for field, value in (('repository', 'unreviewed/vendor'), ('tag', 'unreviewed-release'), ('sha256', '0' * 64),
+                             ('release_id', 448589257), ('asset_id', 758945784), ('url', 'https://example.invalid'),
+                             ('published_at', '2026-11-17T12:18:42Z'), ('upstream_immutable', 0)):
             modified = copy.deepcopy(original)
             modified[field] = value
             COLLECTOR.write(path, modified)
@@ -186,7 +166,25 @@ class CertificateContextTest(unittest.TestCase):
         document = COLLECTOR.read(path)
         next(r for r in document['vulnerabilities'] if r['id'] == 'CVE-2026-114820')['ratings'][0]['score'] = 0
         COLLECTOR.write(path, document)
+        provenance_path = self.inputs / 'jdk-advisory-provenance.json'
+        provenance = COLLECTOR.read(provenance_path)
+        provenance['sha256'] = COLLECTOR.sha(path.read_bytes())
+        COLLECTOR.write(provenance_path, provenance)
         with self.assertRaisesRegex(ValueError, 'Stale advisory authority'):
+            COLLECTOR.context(self.inputs, SOURCE)
+
+    def test_exact_november_17_authority_is_historical_only(self):
+        raw = gzip.decompress((CONTEXT_FIXTURES / 'temurin-vdr-20261117.json.gz').read_bytes())
+        historical = CONTEXT_FIXTURES / 'jdk-advisory-provenance.json'
+        self.assertEqual(COLLECTOR.read(historical)['sha256'], COLLECTOR.sha(raw))
+        (self.inputs / 'temurin-vdr.json').write_bytes(raw)
+        shutil.copyfile(historical, self.inputs / 'jdk-advisory-provenance.json')
+        with self.assertRaisesRegex(ValueError, 'Stale advisory authority'):
+            COLLECTOR.context(self.inputs, SOURCE)
+
+    def test_swapped_original_oci_proof_fails_real_context(self):
+        shutil.copyfile(self.inputs / 'builder-identity.tar', self.inputs / 'app-identity.tar')
+        with self.assertRaisesRegex(ValueError, 'Export does not contain the inspected immutable image'):
             COLLECTOR.context(self.inputs, SOURCE)
 
     def test_stale_source_and_malformed_image_provenance_fail_real_context(self):
