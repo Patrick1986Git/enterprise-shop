@@ -24,14 +24,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 3
+          fetch-depth: 2
           persist-credentials: false
           path: harness
 
       - name: Checkout exact candidate source tree
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 04fb23f2b25c607c37c63cffc8bc245e894823f7
+          ref: 8663f7dfddaddd58d238727e7198538f8c651ecf
           persist-credentials: false
           path: candidate
 
@@ -48,11 +48,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/verify-trivy-provenance.py --upstream-only
 
-      - name: Collect independent construction and runtime evidence
+      - name: Collect independent Trivy construction and analyzer evidence
         timeout-minutes: 44
         run: >-
           python3 harness/.github/go-nov24-qualification/collect.py
-          collect candidate harness "$RUNNER_TEMP/nov24-go-evidence"
+          collect-trivy candidate harness "$RUNNER_TEMP/nov24-go-evidence"
 
       - name: Deactivate and remove only this job's temporary swap
         if: always()

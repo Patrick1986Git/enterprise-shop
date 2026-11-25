@@ -18,9 +18,9 @@ from accounting import ROOT, GIB, REQUIRED_EVENTS, fixture, inspect, now, output
 import runner_swap
 
 
-TREE = 'fd2c5a4c5d8b182dd9ae421c3ec8befc76302d2a'
-CANDIDATE = '04fb23f2b25c607c37c63cffc8bc245e894823f7'
-PREVIOUS_HARNESS = '386823b3a8df9386ceafef6cc6d10dbb67def249'
+TREE = 'fdb28e42bed4ae3066bd87cb83531c3772a49b53'
+CANDIDATE = '8663f7dfddaddd58d238727e7198538f8c651ecf'
+PREVIOUS_HARNESS = '73f8e10d32a83aab127e0fc352e14cab429e124c'
 BRANCH = 'refs/heads/evidence/go-nov24-docker29-6285a517'
 REPOSITORY = 'Patrick1986Git/enterprise-shop'
 DB_FLOOR = '2026-11-24T15:56:00Z'
@@ -531,8 +531,8 @@ def bind(candidate, harness, directory):
             and os.environ['GITHUB_SHA'] == harness_head
             and head == CANDIDATE
             and output('git', '-C', str(candidate), 'rev-parse', 'HEAD^{tree}') == TREE
-            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^') == PREVIOUS_HARNESS
-            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^^') == head,
+            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^1') == PREVIOUS_HARNESS
+            and output('git', '-C', str(harness), 'rev-parse', 'HEAD^2') == head,
             'Evidence run is detached from the reviewed source or harness')
     for checkout in (candidate, harness):
         require(not output('git', '-C', str(checkout), 'status', '--porcelain', '--untracked-files=no'),
@@ -566,27 +566,29 @@ def main():
         write(directory / 'preflight-status.json', checks)
         print('Preflight ' + checks['runner'] + ' - terminal lifecycle ' + json.dumps(checks['lifecycle']), flush=True)
         return 0 if checks['runner'] == 'PASS' else 1
-    require(command == 'collect' and json.loads((directory / 'preflight-status.json').read_text())['runner'] == 'PASS',
+    require(command in ('collect', 'collect-trivy')
+            and json.loads((directory / 'preflight-status.json').read_text())['runner'] == 'PASS',
             'Hosted preflight did not pass')
     verifier = load(candidate / 'scripts/trivy_candidate_evidence.py', 'candidate_trivy_verify')
     ryuk_verifier = load(candidate / 'scripts/ryuk_candidate_evidence.py', 'candidate_ryuk_verify')
     phases = {'buildkit': lambda path: buildkit_probe(path, trivy.RYUK.BINARY),
               'trivy': lambda path: trivy_phase(trivy, verifier, path),
               'ryuk': lambda path: ryuk_smoke(path, trivy.RYUK, ryuk_phase(trivy.RYUK, ryuk_verifier, path))}
+    active = ('trivy',) if command == 'collect-trivy' else tuple(phases)
     checks = dict.fromkeys(phases, 'NOT_TESTED')
-    for name, function in phases.items():
+    for name in active:
         path = directory / name
         path.mkdir()
         print('Collecting ' + name + ' evidence', flush=True)
         try:
-            function(path)
+            phases[name](path)
             checks[name] = 'PASS'
         except Exception as error:
             checks[name] = 'FAIL' if isinstance(error, MeasuredFailure) else 'BLOCKED'
             print(checks[name] + ' ' + name + ' - ' + str(error), flush=True)
             write(path / 'error.json', {'status': checks[name], 'error': str(error)})
         write(directory / 'collection-status.json', {'evidence': checks, 'admission': 'BLOCKED'})
-    return 0 if all(value == 'PASS' for value in checks.values()) else 1
+    return 0 if all(checks[name] == 'PASS' for name in active) else 1
 
 
 if __name__ == '__main__':

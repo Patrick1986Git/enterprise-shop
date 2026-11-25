@@ -73,17 +73,17 @@ class GoRemediationSourceTest(unittest.TestCase):
         before, after = modules(previous['go.mod']), modules((composed / 'go.mod').read_bytes())
         changed = {b'github.com/containerd/containerd/v2': b'v2.4.2'}
         changed.update({b'go.opentelemetry.io/otel' + suffix: b'v1.47.0' for suffix in
-                        (b'', b'/metric', b'/sdk', b'/sdk/log', b'/sdk/metric', b'/trace')})
+                        (b'', b'/log', b'/metric', b'/sdk', b'/sdk/log', b'/sdk/metric', b'/trace')})
         self.assertEqual(changed, {n: v for n, v in after.items() if before.get(n) != v})
         self.assertEqual(b'v1.20.2', after[b'github.com/klauspost/compress'])
         self.assertEqual(b'v0.58.0', after[b'golang.org/x/crypto'])
         self.assertEqual(b'v1.4.1', after[b'github.com/ProtonMail/go-crypto'])
-        self.assertEqual(set(before) | {b'go.opentelemetry.io/otel/sdk/log'}, set(after))
+        self.assertEqual(set(before) | {b'go.opentelemetry.io/otel/log', b'go.opentelemetry.io/otel/sdk/log'}, set(after))
+        self.assertIn(b'\tgo.opentelemetry.io/otel/log v1.47.0 // indirect\n', (composed / 'go.mod').read_bytes())
         old_sums = set(previous['go.sum'].splitlines())
         new_sums = set((composed / 'go.sum').read_bytes().splitlines())
         self.assertTrue(old_sums <= new_sums)
         selected = dict(changed)
-        selected[b'go.opentelemetry.io/otel/log'] = b'v1.47.0'
         selected[b'go.opentelemetry.io/otel/metric/x'] = b'v0.69.0'
         self.assertEqual({(n, v + suffix) for n, v in selected.items() for suffix in (b'', b'/go.mod')},
                          {tuple(line.split()[:2]) for line in new_sums - old_sums})
