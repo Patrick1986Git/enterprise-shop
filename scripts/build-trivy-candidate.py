@@ -27,8 +27,8 @@ BUILDER = 'docker.io/library/golang:1.27.4-alpine3.24@sha256:70bd7ddea8b6cbe5d69
 BUILDER_ID = 'sha256:3f9f7b68d2300deb4acba48650f28dec9098ead84cd167a56c0e2bf361f24592'
 BUILDER_MANIFEST = 'sha256:ea30e25680a5470bac02b08bb0e0a735fb75bd0ab7d431b9b95ee0abef362586'
 BUILDER_BINARY = 'de0ae3e082ce7599eae4fb69fa2ef1e43b8f31ffd3fce62cdf81930aa9005050'
-PATCH_SHA = '9c6065c7f782d59cff53e8c774f098de981777ad1c5667e4724be21a3580f8f2'
-GO_MOD_SHA = 'bbc5c4b9db060144994283b44d34f746e323f7c3a3b481552947b18f100c04f3'
+PATCH_SHA = '234a3d8328faa736ecdba89edbbc43f5c4d2c618e0bd232d6d3573779d792b79'
+GO_MOD_SHA = 'e3b2c287be402416c0ec42d188b90b7f076e724422c25cdf6d573163d08e60be'
 GO_SUM_SHA = 'bf7aff8a0b6c8f0154d0d74a0d0508747714318ae782329303a48af556d476e6'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
@@ -39,6 +39,7 @@ SDK_TOOLS = {
     'pkg/tool/linux_amd64/compile': '40307e5f5c65a4b4220bbf35dbe014348780589ea2964003f0bf318fa14640e1',
     'pkg/tool/linux_amd64/link': 'e2248a29fbbf15dac1fe72c9d646776dbcd38c9813b78182fe01a4a47f3299c3'}
 FLAGS = '-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags="-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0"'
+READONLY_PACKAGES = 'go list -mod=readonly -buildvcs=false -deps -json ./cmd/trivy'
 SOURCE_GOMEMLIMIT = '7GiB'
 SPEC = importlib.util.spec_from_file_location('ryuk_builder', ROOT / 'scripts/build-ryuk-candidate.py')
 RYUK = importlib.util.module_from_spec(SPEC)
@@ -472,9 +473,9 @@ def build(directory):
             f'test "$(sha256sum /usr/local/go/bin/go | cut -d " " -f1)" = {BUILDER_BINARY}; '
             f'go version > /evidence/{name}-compiler.txt; '
             f'go mod download -json > /evidence/{name}-module-downloads.json; go mod verify; '
+            f'{READONLY_PACKAGES} > /evidence/{name}-source-packages.json; '
             f'go build {FLAGS} -o /evidence/trivy.{name} ./cmd/trivy; '
             f'go version -m /evidence/trivy.{name} > /evidence/{name}-buildinfo.txt; '
-            f'go list -mod=readonly -deps -json ./cmd/trivy > /evidence/{name}-source-packages.json; '
             f'go list -mod=readonly -m -json all > /evidence/{name}-source-modules.json; '
             f'cp /etc/ssl/certs/ca-certificates.crt /evidence/{name}-ca-certificates.crt', directory, name)
     binary = (directory / 'trivy.first').read_bytes()

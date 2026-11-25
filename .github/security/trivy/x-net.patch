@@ -47,7 +47,7 @@
  	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
  	github.com/klauspost/pgzip v1.2.6 // indirect
  	github.com/knqyf263/labeler v0.0.0-20200423181506-7a6e545148c3 // indirect
-@@ -425,14 +425,15 @@
+@@ -425,14 +425,16 @@
  	go.opentelemetry.io/contrib/detectors/gcp v1.44.0 // indirect
  	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.71.0 // indirect
  	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0 // indirect
@@ -60,6 +60,7 @@
 -	go.opentelemetry.io/otel/sdk v1.46.0 // indirect
 -	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
 -	go.opentelemetry.io/otel/trace v1.46.0 // indirect
++	go.opentelemetry.io/otel/log v1.47.0 // indirect
 +	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 +	go.opentelemetry.io/otel/sdk v1.47.0 // indirect
 +	go.opentelemetry.io/otel/sdk/log v1.47.0 // indirect
@@ -68,7 +69,7 @@
  	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
  	go.uber.org/atomic v1.11.0 // indirect
  	go.uber.org/multierr v1.11.0 // indirect
-@@ -442,8 +443,8 @@
+@@ -442,8 +444,8 @@
  	go.yaml.in/yaml/v4 v4.0.0-rc.3 // indirect
  	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
  	golang.org/x/oauth2 v0.36.0 // indirect

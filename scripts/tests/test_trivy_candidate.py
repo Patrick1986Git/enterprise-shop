@@ -3,6 +3,8 @@ import copy
 import io
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -50,6 +52,43 @@ class TrivyBuildTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'upstream source archive'):
                 BUILD.prepare(b'altered archive', source)
             self.assertFalse(source.exists())
+
+    @unittest.skipUnless(shutil.which('go'), 'Go is required for readonly package resolution')
+    def test_readonly_module_graph_can_pass_with_an_incomplete_package_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = {
+                'go.mod': ('module example.test/scanner\n\ngo 1.20\n\nrequire example.test/parent v1.0.0\n\n'
+                           'replace example.test/parent => ./parent\nreplace example.test/child => ./child\n'),
+                'parent/go.mod': 'module example.test/parent\n\ngo 1.20\n\nrequire example.test/child v1.0.0\n',
+                'parent/parent.go': 'package parent\nimport _ "example.test/child"\n',
+                'child/go.mod': 'module example.test/child\n\ngo 1.20\n',
+                'child/child.go': 'package child\n',
+                'cmd/trivy/main.go': 'package main\nimport _ "example.test/parent"\nfunc main() {}\n',
+            }
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            env = dict(os.environ, GOTOOLCHAIN='local', GOENV='off', GOWORK='off', GOFLAGS='', GOPROXY='off',
+                       GOSUMDB='off', GOCACHE=str(root / 'build-cache'), GOMODCACHE=str(root / 'module-cache'))
+            options = dict(cwd=root, env=env, capture_output=True, text=True, timeout=30)
+            graph = ['go', 'list', '-mod=readonly', '-m', 'all']
+            target = shlex.split(BUILD.READONLY_PACKAGES)
+            original = subprocess.run(graph, check=True, **options).stdout
+            self.assertIn('example.test/child v1.0.0', original)
+            failed = subprocess.run(target, **options)
+            self.assertNotEqual(0, failed.returncode)
+            self.assertIn('updates to go.mod needed, disabled by -mod=readonly', failed.stderr)
+            lock = root / 'go.mod'
+            self.assertEqual(files['go.mod'], lock.read_text())
+            repaired = files['go.mod'] + '\nrequire example.test/child v1.0.0 // indirect\n'
+            lock.write_text(repaired)
+            self.assertEqual(original, subprocess.run(graph, check=True, **options).stdout)
+            loaded = subprocess.run(target, check=True, **options).stdout
+            self.assertIn('"ImportPath": "example.test/child"', loaded)
+            self.assertEqual(repaired, lock.read_text())
+            self.assertFalse((root / 'go.sum').exists())
 
     def test_image_is_reproducible_and_contains_only_reviewed_runtime_inputs(self):
         with tempfile.TemporaryDirectory() as directory:

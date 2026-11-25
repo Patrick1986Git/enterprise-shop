@@ -305,7 +305,7 @@
     "scripts/auxiliary_binary_evidence.py": "cdb3f5e3c33284012206208ce47eb7951511c96bbab41e643d96e08712a5ce68",
     "scripts/build-ryuk-candidate.py": "5508434c75e705ea372f644daf5bb6da5fef803f4c32aa67ffd4ee632f82924e",
     "scripts/build-tool-inventory.py": "550e26a475adc5d6450f43db461be4930ff3c33d067f0f7814d005f8b3ab7e61",
-    "scripts/build-trivy-candidate.py": "47e8d42a8a662f3990ae9ab185564a62ab5c82bce3a71fb45f4e03f68f196de3",
+    "scripts/build-trivy-candidate.py": "f654fbc9b6776246170228cc6a73740c49bec7f8b446a935253869330528699e",
     "scripts/check-local-postgres-gosu.py": "c8d313cf2c6c0fc1b2e6d989542d9d3b892b41f3397aedcf2a883771f79f0567",
     "scripts/check-ryuk-cleanup.py": "34c757d7aad8afd030c0839bf553e02f095165491687d773fda3a39e8d6b9d53",
     "scripts/collect-jdk-certificate-evidence.py": "41a8fbc9a3bc3b63a4f4c8a57b9c2c85784506cad1c7160e6359d0a54a900865",
