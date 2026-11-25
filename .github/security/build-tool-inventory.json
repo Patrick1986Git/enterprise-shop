@@ -10,40 +10,40 @@
       "coordinate": "aopalliance:aopalliance:jar::1.0",
       "sha256": "0addec670fedcd3f113c5c8091d783280d23f75e3acb841b61a9cdb079376a08"
     },
-    "lib/asm-9.10.1.jar": {
+    "lib/asm-9.11.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.ow2.asm:asm:jar::9.10.1",
-      "sha256": "ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb"
+      "coordinate": "org.ow2.asm:asm:jar::9.11.1",
+      "sha256": "ae4e6e10d59d0a1500317764b21881ad883f8550e33c66e6142f7032c6fb566c"
     },
     "lib/commons-cli-1.11.0.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
       "coordinate": "commons-cli:commons-cli:jar::1.11.0",
       "sha256": "8f7f8605d68e15bf32db61ec94eac6fdafc51b1bdbe1e0e0802b57d23f387792"
     },
-    "lib/commons-codec-1.22.1.jar": {
+    "lib/commons-codec-1.23.0.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "commons-codec:commons-codec:jar::1.22.1",
-      "sha256": "78a5d732fbd715e2d10bd7150d2f8030bae57267f8aacc5c88f642cb6c2e5d3f"
+      "coordinate": "commons-codec:commons-codec:jar::1.23.0",
+      "sha256": "47504a3ce71d73a1b0af07675546b8d8c5af87f82ef12b6381f9eb3c17dd5a5b"
     },
-    "lib/error_prone_annotations-2.48.0.jar": {
+    "lib/error_prone_annotations-2.50.0.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "com.google.errorprone:error_prone_annotations:jar::2.48.0",
-      "sha256": "b49c5c958316ed67a09c699dda9aa749caf434d51d863dea599ef36a49b9c855"
+      "coordinate": "com.google.errorprone:error_prone_annotations:jar::2.50.0",
+      "sha256": "4667724877f1d37a689202da191e23efa7657c62eef93ccdac406eccfe5cdd0a"
     },
     "lib/failureaccess-1.0.3.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
       "coordinate": "com.google.guava:failureaccess:jar::1.0.3",
       "sha256": "cbfc3906b19b8f55dd7cfd6dfe0aa4532e834250d7f080bd8d211a3e246b59cb"
     },
-    "lib/gson-2.14.0.jar": {
+    "lib/gson-2.15.0.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "com.google.code.gson:gson:jar::2.14.0",
-      "sha256": "2cbd119bf1961c28788310963dc80ba65f58cdeec1dd139c8bdb1240faa2c36f"
+      "coordinate": "com.google.code.gson:gson:jar::2.15.0",
+      "sha256": "96d3dd843dc2911de01cdabcd50064cb9e860353102a0a78c96fd833d396fc7d"
     },
-    "lib/guava-33.7.1-jre.jar": {
+    "lib/guava-33.8.0-jre.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "com.google.guava:guava:jar::33.7.1-jre",
-      "sha256": "796d8e28ac64e83a47c4c5935a8fecc4682650a04bbdead738ef0f5a3a0e6c46"
+      "coordinate": "com.google.guava:guava:jar::33.8.0-jre",
+      "sha256": "97b79ec3f2c0a6313a0c2df51ce1abdf8907e6531803467b81efcaaf99b35161"
     },
     "lib/guice-5.1.0-classes.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
@@ -60,175 +60,150 @@
       "coordinate": "org.apache.httpcomponents:httpcore:jar::4.4.16",
       "sha256": "6c9b3dd142a09dc468e23ad39aad6f75a0f2b85125104469f026e52a474e464f"
     },
-    "lib/jansi-core-3.30.17.jar": {
+    "lib/jakarta.annotation-api-1.3.5.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.jline:jansi-core:jar::3.30.17",
-      "sha256": "55cc2f7ba1dd54571b70de0619752977947af7ba8d7143ecb2b81e0102b8ed9f"
-    },
-    "lib/javax.annotation-api-1.3.2.jar": {
-      "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "javax.annotation:javax.annotation-api:jar::1.3.2",
-      "sha256": "e04ba5195bcd555dc95650f7cc614d151e4bcd52d29a10b8aa2197f3ab89ab9b"
+      "coordinate": "jakarta.annotation:jakarta.annotation-api:jar::1.3.5",
+      "sha256": "85fb03fc054cdf4efca8efd9b6712bbb418e1ab98241c4539c8585bbc23e1b8a"
     },
     "lib/javax.inject-1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
       "coordinate": "javax.inject:javax.inject:jar::1",
       "sha256": "91c77044a50c481636c32d916fd89c9118a72195390452c81065080f957de7ff"
     },
-    "lib/jcl-over-slf4j-2.0.19.jar": {
+    "lib/jcl-over-slf4j-2.0.20.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.slf4j:jcl-over-slf4j:jar::2.0.19",
-      "sha256": "efc3848f79638d9fa74ccbae3fd18c8735dcc0127b393ae53dce638827f8a2f3"
-    },
-    "lib/jline-native-3.30.17.jar": {
-      "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.jline:jline-native:jar::3.30.17",
-      "sha256": "ddfd2cc87e60ffaf9646736d77d81a7a851020d74057069e86b474a066914085"
-    },
-    "lib/jline-terminal-3.30.17.jar": {
-      "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.jline:jline-terminal:jar::3.30.17",
-      "sha256": "382ee369588cb014592e3bef08fbf3fbe47c8f76bdc5c5a7aeb1efb1506983f0"
-    },
-    "lib/jline-terminal-ffm-3.30.17.jar": {
-      "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.jline:jline-terminal-ffm:jar::3.30.17",
-      "sha256": "5172adddb1d36dd20f1837f95c1d27b8246278605f3a10e9a7bf9c3c60d03b27"
-    },
-    "lib/jline-terminal-jni-3.30.17.jar": {
-      "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.jline:jline-terminal-jni:jar::3.30.17",
-      "sha256": "5d9c0ac1b44f5064df4a1bb195283671bc60511c028a0c204ca7bb51b9843144"
+      "coordinate": "org.slf4j:jcl-over-slf4j:jar::2.0.20",
+      "sha256": "32f95628a4baa60ea8a5b052c8cb6e51d07b0fee3e6092414070874f69daf710"
     },
     "lib/jspecify-1.0.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
       "coordinate": "org.jspecify:jspecify:jar::1.0.1",
       "sha256": "070d75f261fe4c5b8202508366715f7f2d4660f88c8ef7e6d3575e48c9683b66"
     },
-    "lib/maven-artifact-3.10.0.jar": {
+    "lib/maven-artifact-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-artifact:jar::3.10.0",
-      "sha256": "5f97d58b507cd49887ce5f50e41832573ea204e9cf6705c9187a51b8ade9b543"
+      "coordinate": "org.apache.maven:maven-artifact:jar::3.10.1",
+      "sha256": "8b0dcbcb61ffb90da62c4509b93a29f94ba03c913800bbef56c7c4fe1d9ef711"
     },
-    "lib/maven-builder-support-3.10.0.jar": {
+    "lib/maven-builder-support-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-builder-support:jar::3.10.0",
-      "sha256": "ff90d659e923d250464213b89fd452bd3591d5e40c86ad33c389f6894b3796a0"
+      "coordinate": "org.apache.maven:maven-builder-support:jar::3.10.1",
+      "sha256": "2a666f89f8eca47e1ccd78f57281d3b56df55da06340145f8cbfda53e8a99259"
     },
-    "lib/maven-compat-3.10.0.jar": {
+    "lib/maven-compat-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-compat:jar::3.10.0",
-      "sha256": "e7bb31c8f3f23e37e4ad9643a79f0f4b51f86938f8f733dbd138b6b465f03e76"
+      "coordinate": "org.apache.maven:maven-compat:jar::3.10.1",
+      "sha256": "f622efa03b8dc1297f0ce565986c82381bea09a0b02f4d1412761b893b21e6f9"
     },
-    "lib/maven-core-3.10.0.jar": {
+    "lib/maven-core-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-core:jar::3.10.0",
-      "sha256": "7b6277e9d1e23a7ca225c777c8809abd8626eabace926658df0fba3b853868eb"
+      "coordinate": "org.apache.maven:maven-core:jar::3.10.1",
+      "sha256": "bc5e36c520a70769e16a8362246787fa412236cb05358e4eaff6222a6f7ee635"
     },
-    "lib/maven-embedder-3.10.0.jar": {
+    "lib/maven-embedder-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-embedder:jar::3.10.0",
-      "sha256": "6a5043796cc6431c063eddce2dfcd0f62fdd0cf2d4f05e92124cf9950f1457b1"
+      "coordinate": "org.apache.maven:maven-embedder:jar::3.10.1",
+      "sha256": "16a193abd4e58ca8a16a310c55166843efd360d4c5a5a60b8f578896085f771d"
     },
-    "lib/maven-jline-3.10.0.jar": {
+    "lib/maven-jline-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-jline:jar::3.10.0",
-      "sha256": "400276bc53902b3f6ed1820c742ce0a45ed40d55c5df947794d08d4d8c24e446"
+      "coordinate": "org.apache.maven:maven-jline:jar::3.10.1",
+      "sha256": "6ec27c109e98d2ab98c0f0a39c485be9d42a74975c21bb8f9eec3c51f3a50f2d"
     },
-    "lib/maven-model-3.10.0.jar": {
+    "lib/maven-model-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-model:jar::3.10.0",
-      "sha256": "a958d15168ffba8fe3a2e936c1bc43604ccfbc46d117dfc0ead58e724badf08f"
+      "coordinate": "org.apache.maven:maven-model:jar::3.10.1",
+      "sha256": "2688b308b4cca768f961fae073408d1692ecc1f57a9d69839f532299a5f60098"
     },
-    "lib/maven-model-builder-3.10.0.jar": {
+    "lib/maven-model-builder-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-model-builder:jar::3.10.0",
-      "sha256": "581a3b95631cfd547a0221ee17a94b3d9a478b24a82c042684a1897c1a7f416e"
+      "coordinate": "org.apache.maven:maven-model-builder:jar::3.10.1",
+      "sha256": "8b440028e6e27216d65ed9758101d9bdb981f798dd58f4e9ac3aa905fa7ad5f9"
     },
-    "lib/maven-plugin-api-3.10.0.jar": {
+    "lib/maven-plugin-api-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-plugin-api:jar::3.10.0",
-      "sha256": "2d99e70688295072ab35e719dce28b82b95b591c115ef6052b1aac08b4701dfa"
+      "coordinate": "org.apache.maven:maven-plugin-api:jar::3.10.1",
+      "sha256": "9c65682633ea69e991ca6d07a0ba4e22e1675fc18e68b2913a454bddfd7ca51a"
     },
-    "lib/maven-repository-metadata-3.10.0.jar": {
+    "lib/maven-repository-metadata-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-repository-metadata:jar::3.10.0",
-      "sha256": "5220a29c803995f5a57d6238184111761ba30d4e5f395ab059c17c708627e4d8"
+      "coordinate": "org.apache.maven:maven-repository-metadata:jar::3.10.1",
+      "sha256": "6cfd3a9e00ea3b050c6b64621b94dd75248171e4bedbf8b29180133b41185162"
     },
-    "lib/maven-resolver-api-2.0.24.jar": {
+    "lib/maven-resolver-api-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-api:jar::2.0.24",
-      "sha256": "1ec0c3370158fd631dc3dcfc8b8f24041e6081f34f329dab1b8fe75c1007ca33"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-api:jar::2.0.25",
+      "sha256": "adc283fcdc44fbcf1cc7b2d5fca955cc580740ccebadb5d78513c4767d83f4ca"
     },
-    "lib/maven-resolver-connector-basic-2.0.24.jar": {
+    "lib/maven-resolver-connector-basic-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-connector-basic:jar::2.0.24",
-      "sha256": "90686efd19999cf9eb6c1dfe06be550d090702c2e47a3ec3a29a876b5b120509"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-connector-basic:jar::2.0.25",
+      "sha256": "a6628e870161519a61a77e1b6641b9f7c657ecb6f51746ae6206019afa4b5a21"
     },
-    "lib/maven-resolver-impl-2.0.24.jar": {
+    "lib/maven-resolver-impl-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-impl:jar::2.0.24",
-      "sha256": "1be79f951f68764ecdd46f651c008287e2e925763cd51fa97a33d7d8b9b97bd0"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-impl:jar::2.0.25",
+      "sha256": "8bab5b0b9f3469f107c675aef6d28fc309262e8854781809787b22f4dd2d7c4e"
     },
-    "lib/maven-resolver-named-locks-2.0.24.jar": {
+    "lib/maven-resolver-named-locks-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-named-locks:jar::2.0.24",
-      "sha256": "227d2bb177b914c0cedca190ba021b48986dcd66634b3774dfd0656e45e9c4d5"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-named-locks:jar::2.0.25",
+      "sha256": "ac7cd5efe558ab7a7b1f2c98077b8e11aa46d2a975a452d81df9fd98d9ce7e33"
     },
-    "lib/maven-resolver-provider-3.10.0.jar": {
+    "lib/maven-resolver-provider-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-resolver-provider:jar::3.10.0",
-      "sha256": "93f8d834d24a8866054a9544f9b088b6300e3dd0ee1966dbd28dd122a3d9d4f9"
+      "coordinate": "org.apache.maven:maven-resolver-provider:jar::3.10.1",
+      "sha256": "f2ceaa8308a816b8e86b2bc9e610021ae41b3da783ea94d0702d5a93e0fef1db"
     },
-    "lib/maven-resolver-spi-2.0.24.jar": {
+    "lib/maven-resolver-spi-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-spi:jar::2.0.24",
-      "sha256": "c2e3e1075b49cfa9fcb14f36398ff3d8808b5aba189f4a5bcda1b0fe1aceb11e"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-spi:jar::2.0.25",
+      "sha256": "909eb1df0a618f6c8f33e34aa5f2c35bba2fdb9b04e34b608f164c562c2273f3"
     },
-    "lib/maven-resolver-transport-apache-2.0.24.jar": {
+    "lib/maven-resolver-transport-apache-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-transport-apache:jar::2.0.24",
-      "sha256": "87d5e2321b424bb6b67afa04ffde5297fd3fffb03f23b636fddacad77a6f17b8"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-transport-apache:jar::2.0.25",
+      "sha256": "6b5645495ecea92c3fd97591ba39b6f67edf7045537adb266f2210f9712f3f63"
     },
-    "lib/maven-resolver-transport-file-2.0.24.jar": {
+    "lib/maven-resolver-transport-file-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-transport-file:jar::2.0.24",
-      "sha256": "91121fd03ae8cbd08599aedf6dc2c58119b2d7cc6f3b6f9cdc78562ab6536de3"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-transport-file:jar::2.0.25",
+      "sha256": "510dde950dbf437f80fccc9c43899b6f0f107b9841e8f1d3b22fc2f59ce1663f"
     },
-    "lib/maven-resolver-transport-wagon-2.0.24.jar": {
+    "lib/maven-resolver-transport-wagon-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-transport-wagon:jar::2.0.24",
-      "sha256": "5bd1b358a7b56eaad9504e661a953583e51b1ab623784a6cd5213a33de4a2f63"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-transport-wagon:jar::2.0.25",
+      "sha256": "de6db5007410f6a735cda7fd651ee7d14f81bef2b8a71ccfb033abbb511ab62a"
     },
-    "lib/maven-resolver-util-2.0.24.jar": {
+    "lib/maven-resolver-util-2.0.25.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven.resolver:maven-resolver-util:jar::2.0.24",
-      "sha256": "3fb490e1799f18aa22a05babdc57a74a3a1020c924890865a4cab7a7a34cd286"
+      "coordinate": "org.apache.maven.resolver:maven-resolver-util:jar::2.0.25",
+      "sha256": "bed733864689ad4834aae2d4697698e596c5be90f6736299cfca79db421663fb"
     },
-    "lib/maven-settings-3.10.0.jar": {
+    "lib/maven-settings-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-settings:jar::3.10.0",
-      "sha256": "3a8a1c8388d0008752220302e898db385eda7a7925ab7f84a173b7feebf758fd"
+      "coordinate": "org.apache.maven:maven-settings:jar::3.10.1",
+      "sha256": "7af8617be6a657a86650c74c5cff749d921351cb3d7510510671f57a1491bd39"
     },
-    "lib/maven-settings-builder-3.10.0.jar": {
+    "lib/maven-settings-builder-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-settings-builder:jar::3.10.0",
-      "sha256": "5d7cd94e41a716cd328f04648c57dfa69470572402deae1845247a542dc30c23"
+      "coordinate": "org.apache.maven:maven-settings-builder:jar::3.10.1",
+      "sha256": "00eed4f65a97b709d84e58a9a17f39469ba6e39a01ccb419408d235a34164063"
     },
-    "lib/maven-slf4j-provider-3.10.0.jar": {
+    "lib/maven-slf4j-provider-3.10.1.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.apache.maven:maven-slf4j-provider:jar::3.10.0",
-      "sha256": "a560eb3ca72795a24f0c63e96fefa90d9f754b2df9894f3705a06a65e6037cb5"
+      "coordinate": "org.apache.maven:maven-slf4j-provider:jar::3.10.1",
+      "sha256": "f0762deda66ff550f0ae203f1dd1cf2690729785d28e731f1a4e2dddf0688455"
     },
-    "lib/org.eclipse.sisu.inject-1.1.0.jar": {
+    "lib/org.eclipse.sisu.inject-1.1.2.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.eclipse.sisu:org.eclipse.sisu.inject:jar::1.1.0",
-      "sha256": "f3edea5119c91be496e3ff55948fa16c89cdbacf9c2e74bdc9fafda1a3faba20"
+      "coordinate": "org.eclipse.sisu:org.eclipse.sisu.inject:jar::1.1.2",
+      "sha256": "6e1b54f45c95627d02808979a3357f6d937088739668feea552c825c6cbbe07f"
     },
-    "lib/org.eclipse.sisu.plexus-1.1.0.jar": {
+    "lib/org.eclipse.sisu.plexus-1.1.2.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.eclipse.sisu:org.eclipse.sisu.plexus:jar::1.1.0",
-      "sha256": "7ebc52738567e0450b6857a404a147639533d35c38a5ba42e4c5ab2910c6df94"
+      "coordinate": "org.eclipse.sisu:org.eclipse.sisu.plexus:jar::1.1.2",
+      "sha256": "fc3753740258c74ef9ee26bb8b0b23215da03dc6d32d0c5f1a2d1fd40017e117"
     },
     "lib/plexus-cipher-2.0.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
@@ -255,10 +230,10 @@
       "coordinate": "org.codehaus.plexus:plexus-utils:jar::3.6.2",
       "sha256": "7c2cdf8b4a02a2ee3f0514b8d74ad5eb6e2365eeb073a5cabd6f2d61d8f871df"
     },
-    "lib/slf4j-api-2.0.19.jar": {
+    "lib/slf4j-api-2.0.20.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
-      "coordinate": "org.slf4j:slf4j-api:jar::2.0.19",
-      "sha256": "e91ff6d720609e7a194ffe758c3ed5c84e798617ae07b0a0f6a4fe229741b4bb"
+      "coordinate": "org.slf4j:slf4j-api:jar::2.0.20",
+      "sha256": "7e1446499b359675d8aabe6af2de86b85e72ae8a2a932c0b40d0e5ba57097439"
     },
     "lib/wagon-file-3.5.3.jar": {
       "authority": "distribution-pom-resolution-and-byte-match",
@@ -282,9 +257,9 @@
     }
   },
   "distribution_package": {
-    "coordinate": "org.apache.maven:apache-maven:pom::3.10.0",
-    "sha256": "4a4f1c29b31031c6d37ab4eea0d93d2321fd1dfd313896bc6c94b7ce45f8e62c",
-    "source": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0.pom"
+    "coordinate": "org.apache.maven:apache-maven:pom::3.10.1",
+    "sha256": "082f1e143269728b02e284a91de7b8686e4c5718a408c71a018449a9fa026300",
+    "source": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.1/apache-maven-3.10.1.pom"
   },
   "inventory": {
     "agents": [
@@ -321,10 +296,10 @@
       "com.github.luben:zstd-jni:jar::1.5.7-6",
       "com.github.luben:zstd-jni:jar::1.5.7-9",
       "com.google.code.findbugs:jsr305:jar::3.0.2",
-      "com.google.code.gson:gson:jar::2.14.0",
-      "com.google.errorprone:error_prone_annotations:jar::2.48.0",
+      "com.google.code.gson:gson:jar::2.15.0",
+      "com.google.errorprone:error_prone_annotations:jar::2.50.0",
       "com.google.guava:failureaccess:jar::1.0.3",
-      "com.google.guava:guava:jar::33.7.1-jre",
+      "com.google.guava:guava:jar::33.8.0-jre",
       "com.google.inject:guice:jar:classes:5.1.0",
       "com.sun.istack:istack-commons-runtime:jar::4.1.2",
       "com.thoughtworks.qdox:qdox:jar::2.2.0",
@@ -356,7 +331,7 @@
       "commons-codec:commons-codec:jar::1.17.1",
       "commons-codec:commons-codec:jar::1.19.0",
       "commons-codec:commons-codec:jar::1.22.0",
-      "commons-codec:commons-codec:jar::1.22.1",
+      "commons-codec:commons-codec:jar::1.23.0",
       "commons-collections:commons-collections:jar::3.2.2",
       "commons-io:commons-io:jar::2.16.1",
       "commons-io:commons-io:jar::2.19.0",
@@ -369,13 +344,13 @@
       "io.micrometer:micrometer-observation:jar::1.16.7",
       "io.smallrye:jandex:jar::3.3.2",
       "jakarta.activation:jakarta.activation-api:jar::2.1.4",
+      "jakarta.annotation:jakarta.annotation-api:jar::1.3.5",
       "jakarta.annotation:jakarta.annotation-api:jar::3.0.0",
       "jakarta.inject:jakarta.inject-api:jar::2.0.1",
       "jakarta.persistence:jakarta.persistence-api:jar::3.2.0",
       "jakarta.transaction:jakarta.transaction-api:jar::2.0.1",
       "jakarta.validation:jakarta.validation-api:jar::3.1.1",
       "jakarta.xml.bind:jakarta.xml.bind-api:jar::4.0.4",
-      "javax.annotation:javax.annotation-api:jar::1.3.2",
       "javax.inject:javax.inject:jar::1",
       "javax.servlet:javax.servlet-api:jar::3.1.0",
       "net.bytebuddy:byte-buddy:jar::1.18.14",
@@ -434,16 +409,16 @@
       "org.apache.maven.reporting:maven-reporting-api:jar::4.0.0",
       "org.apache.maven.reporting:maven-reporting-exec:jar::2.0.1",
       "org.apache.maven.reporting:maven-reporting-impl:jar::4.0.0",
-      "org.apache.maven.resolver:maven-resolver-api:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-connector-basic:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-impl:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-named-locks:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-spi:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-transport-apache:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-transport-file:jar::2.0.24",
+      "org.apache.maven.resolver:maven-resolver-api:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-connector-basic:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-impl:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-named-locks:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-spi:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-transport-apache:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-transport-file:jar::2.0.25",
       "org.apache.maven.resolver:maven-resolver-transport-wagon:jar::1.4.1",
-      "org.apache.maven.resolver:maven-resolver-transport-wagon:jar::2.0.24",
-      "org.apache.maven.resolver:maven-resolver-util:jar::2.0.24",
+      "org.apache.maven.resolver:maven-resolver-transport-wagon:jar::2.0.25",
+      "org.apache.maven.resolver:maven-resolver-util:jar::2.0.25",
       "org.apache.maven.shared:file-management:jar::3.2.0",
       "org.apache.maven.shared:maven-artifact-transfer:jar::0.13.1",
       "org.apache.maven.shared:maven-common-artifact-filters:jar::3.4.0",
@@ -474,23 +449,23 @@
       "org.apache.maven.wagon:wagon-http-shared:jar::3.5.3",
       "org.apache.maven.wagon:wagon-http:jar::3.5.3",
       "org.apache.maven.wagon:wagon-provider-api:jar::3.5.3",
-      "org.apache.maven:apache-maven:pom::3.10.0",
+      "org.apache.maven:apache-maven:pom::3.10.1",
       "org.apache.maven:maven-archiver:jar::3.6.2",
       "org.apache.maven:maven-archiver:jar::3.6.6",
-      "org.apache.maven:maven-artifact:jar::3.10.0",
-      "org.apache.maven:maven-builder-support:jar::3.10.0",
-      "org.apache.maven:maven-compat:jar::3.10.0",
-      "org.apache.maven:maven-core:jar::3.10.0",
-      "org.apache.maven:maven-embedder:jar::3.10.0",
-      "org.apache.maven:maven-jline:jar::3.10.0",
-      "org.apache.maven:maven-model-builder:jar::3.10.0",
-      "org.apache.maven:maven-model:jar::3.10.0",
-      "org.apache.maven:maven-plugin-api:jar::3.10.0",
-      "org.apache.maven:maven-repository-metadata:jar::3.10.0",
-      "org.apache.maven:maven-resolver-provider:jar::3.10.0",
-      "org.apache.maven:maven-settings-builder:jar::3.10.0",
-      "org.apache.maven:maven-settings:jar::3.10.0",
-      "org.apache.maven:maven-slf4j-provider:jar::3.10.0",
+      "org.apache.maven:maven-artifact:jar::3.10.1",
+      "org.apache.maven:maven-builder-support:jar::3.10.1",
+      "org.apache.maven:maven-compat:jar::3.10.1",
+      "org.apache.maven:maven-core:jar::3.10.1",
+      "org.apache.maven:maven-embedder:jar::3.10.1",
+      "org.apache.maven:maven-jline:jar::3.10.1",
+      "org.apache.maven:maven-model-builder:jar::3.10.1",
+      "org.apache.maven:maven-model:jar::3.10.1",
+      "org.apache.maven:maven-plugin-api:jar::3.10.1",
+      "org.apache.maven:maven-repository-metadata:jar::3.10.1",
+      "org.apache.maven:maven-resolver-provider:jar::3.10.1",
+      "org.apache.maven:maven-settings-builder:jar::3.10.1",
+      "org.apache.maven:maven-settings:jar::3.10.1",
+      "org.apache.maven:maven-slf4j-provider:jar::3.10.1",
       "org.apache.velocity.tools:velocity-tools-generic:jar::3.1",
       "org.apache.velocity:velocity-engine-core:jar::2.4.1",
       "org.codehaus.plexus:plexus-archiver:jar::4.11.0",
@@ -529,8 +504,8 @@
       "org.eclipse.jetty:jetty-webapp:jar::9.4.58.v20250814",
       "org.eclipse.jetty:jetty-xml:jar::9.4.58.v20250814",
       "org.eclipse.sisu:org.eclipse.sisu.inject:jar::1.0.0",
-      "org.eclipse.sisu:org.eclipse.sisu.inject:jar::1.1.0",
-      "org.eclipse.sisu:org.eclipse.sisu.plexus:jar::1.1.0",
+      "org.eclipse.sisu:org.eclipse.sisu.inject:jar::1.1.2",
+      "org.eclipse.sisu:org.eclipse.sisu.plexus:jar::1.1.2",
       "org.glassfish.jaxb:jaxb-core:jar::4.0.7",
       "org.glassfish.jaxb:jaxb-runtime:jar::4.0.7",
       "org.glassfish.jaxb:txw2:jar::4.0.7",
@@ -544,11 +519,6 @@
       "org.jboss.logging:jboss-logging:jar::3.6.1.Final",
       "org.jdom:jdom2:jar::2.0.6.1",
       "org.jetbrains:annotations:jar::26.1.0",
-      "org.jline:jansi-core:jar::3.30.17",
-      "org.jline:jline-native:jar::3.30.17",
-      "org.jline:jline-terminal-ffm:jar::3.30.17",
-      "org.jline:jline-terminal-jni:jar::3.30.17",
-      "org.jline:jline-terminal:jar::3.30.17",
       "org.jsoup:jsoup:jar::1.23.2",
       "org.jspecify:jspecify:jar::1.0.0",
       "org.jspecify:jspecify:jar::1.0.1",
@@ -562,10 +532,11 @@
       "org.ow2.asm:asm-tree:jar::9.7",
       "org.ow2.asm:asm:jar::9.10",
       "org.ow2.asm:asm:jar::9.10.1",
+      "org.ow2.asm:asm:jar::9.11.1",
       "org.ow2.asm:asm:jar::9.7",
       "org.ow2.asm:asm:jar::9.9.1",
-      "org.slf4j:jcl-over-slf4j:jar::2.0.19",
-      "org.slf4j:slf4j-api:jar::2.0.19",
+      "org.slf4j:jcl-over-slf4j:jar::2.0.20",
+      "org.slf4j:slf4j-api:jar::2.0.20",
       "org.sonatype.plexus:plexus-build-api:jar::0.0.7",
       "org.springframework.boot:spring-boot-buildpack-platform:jar::4.1.1",
       "org.springframework.boot:spring-boot-loader-tools:jar::4.1.1",
@@ -1243,6 +1214,6 @@
       ]
     }
   },
-  "maven": "3.10.0",
+  "maven": "3.10.1",
   "schema": 2
 }

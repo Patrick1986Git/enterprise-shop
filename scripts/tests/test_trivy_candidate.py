@@ -471,6 +471,18 @@ class TrivyActualImageIdentityTest(unittest.TestCase):
 
 
 class TrivyCompatibilityStorageTest(unittest.TestCase):
+    # Exact blocking findings from the pinned reference executable in CI #1301.
+    REFERENCE_FINDINGS = {
+        ('CVE-2026-111943', 'stdlib', 'v1.27.1', 'HIGH'),
+        ('CVE-2026-116587', 'github.com/go-jose/go-jose/v4', 'v4.1.5', 'HIGH'),
+        ('CVE-2026-78661', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
+        ('CVE-2026-78667', 'stdlib', 'v1.27.1', 'HIGH'),
+        ('CVE-2026-78669', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
+        ('CVE-2026-78669', 'stdlib', 'v1.27.1', 'HIGH'),
+        ('CVE-2026-95839', 'github.com/containerd/containerd/v2', 'v2.4.1', 'HIGH'),
+        ('CVE-2026-97031', 'stdlib', 'v1.27.1', 'HIGH'),
+    }
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -479,6 +491,8 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
         self.build.mkdir()
         self.candidate = b'candidate fixture'
         self.reference = b'reference fixture'
+        self.reference_findings = self.REFERENCE_FINDINGS.copy()
+        self.candidate_findings = {}
         self.failure = None
         self.commands = []
         self.runs = []
@@ -544,9 +558,9 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
                         'components': [{'purl': 'pkg:generic/fixture@1'}]})
                 else:
                     name = output.name.removesuffix('.raw.json')
-                    findings = COMPAT.EXPECTED if name == 'reference-rootfs' else (
+                    findings = self.reference_findings if name == 'reference-rootfs' else (
                         {('CVE-2025-48734', 'commons-beanutils:commons-beanutils', '1.9.4', 'HIGH')}
-                        if name == 'vulnerable' else set())
+                        if name == 'vulnerable' else self.candidate_findings.get(name, set()))
                     COMPAT.write(output, {'SchemaVersion': 2, 'Trivy': {'Version': '0.75.0'},
                         'Metadata': {'ImageID': self.actual_image[1]}, 'Results': [{
                             'Packages': [{'Identifier': {'PURL': 'pkg:generic/fixture@1'}}],
@@ -597,6 +611,28 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
             self.assertFalse((directory / 'result.json').exists())
             self.assertTrue((directory / 'scratch-storage.json').exists())
             self.assert_cleaned(directory)
+
+    def test_previous_reference_finding_set_is_rejected(self):
+        self.reference_findings = {v for v in self.reference_findings
+                                   if v[0] not in {'CVE-2026-78661', 'CVE-2026-95839'}}
+        with self.assertRaisesRegex(ValueError, 'differs from the reviewed blocking findings'):
+            COMPAT.collect(self.build, self.root / 'previous-reference-set')
+
+    def test_unreviewed_reference_finding_is_rejected_even_at_the_expected_count(self):
+        unexpected = ('CVE-2026-00000', 'example/module', 'v1.0.0', 'HIGH')
+        removed_finding = ('CVE-2026-95839', 'github.com/containerd/containerd/v2', 'v2.4.1', 'HIGH')
+        for label, removed in [('additional', set()), ('replacement', {removed_finding})]:
+            with self.subTest(label=label):
+                self.reference_findings = (self.REFERENCE_FINDINGS - removed) | {unexpected}
+                with self.assertRaisesRegex(ValueError, 'differs from the reviewed blocking findings'):
+                    COMPAT.collect(self.build, self.root / label)
+
+    def test_candidate_rootfs_and_image_still_reject_blocking_findings(self):
+        for name, severity in [('candidate-rootfs', 'HIGH'), ('candidate-image', 'CRITICAL')]:
+            with self.subTest(name=name, severity=severity):
+                self.candidate_findings = {name: {('CVE-2026-00000', 'example/module', 'v1.0.0', severity)}}
+                with self.assertRaisesRegex(ValueError, 'Actual candidate still has HIGH/CRITICAL findings'):
+                    COMPAT.collect(self.build, self.root / name)
 
     def test_download_exhaustion_is_secret_free_and_the_next_run_has_fresh_state(self):
         directory = self.root / 'failed'

@@ -1,5 +1,7 @@
 # Build-tool advisory coverage audit
 
+This document retains the historical #458 evidence and its original toolchain/counts. The current Maven distribution review is [Apache Maven 3.10.1 qualification](maven-3.10.1-qualification.md); the maintained inventory contract and fresh execution receipts govern current component identities and ownership.
+
 PR #458 on `codex/build-tool-advisory-inventory` is the single continuation of this work. Its protected-master base is `bcba8c7f7b9bcae2fda58a6025ce4eb0f3b6eb00`; its starting PR HEAD was `2175900fecd95e665e2b015cb4f032e61b46ba96`. PR #457 remains merged and untouched. Its resulting base completed CI #1131 (run 37568924499), CodeQL #623 (run 37568924421, including successful actual `Analyze with CodeQL`), and JaCoCo ratchet #441 (run 37569227214, `ratchet=false`).
 
 The unavailable local handoff commit `2d91c31fd9cbe481d320663d2632ec600f6c500a` never reached GitHub. The starting provenance commit established the existing draft without claiming SHA identity. Every implementation and repair belongs to this PR; no replacement branch/PR, merge, or auto-merge is authorized.
