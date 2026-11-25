@@ -1,41 +1,41 @@
 {
   "upstream_source_sha": "591e9799316a602e703f0b484f6c6d7b234ec8f3",
   "upstream_archive_sha256": "4a5bb1c16ccc55368843eb95ee9a25519a0bfef26609a8b4295f2060af43077e",
-  "patch_sha256": "6ce5f40dce24471fb5525afd9562c356db5eb8106081a12df28e3f7c432bf79f",
-  "go_mod_sha256": "86340f7b248b405423130c2267f65c4e24c26738d56b26238da6bda102d45aae",
-  "go_sum_sha256": "af01ecb05cf0a88e792cc65c41051c92df96c1ae12299e747654d50606b4d64f",
-  "builder": "docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd",
-  "builder_image_id": "sha256:2101eb697fc5b5b7f64252fe6bf7a21c4a06a51852c71c3424d44e3f824cbb52",
-  "builder_manifest": "sha256:cd410a5c6686417875bc4815688e96ae9769f8562debc545d29fe58e73d174f0",
-  "builder_binary_sha256": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b",
-  "go_version": "1.27.3",
+  "patch_sha256": "234a3d8328faa736ecdba89edbbc43f5c4d2c618e0bd232d6d3573779d792b79",
+  "go_mod_sha256": "e3b2c287be402416c0ec42d188b90b7f076e724422c25cdf6d573163d08e60be",
+  "go_sum_sha256": "bf7aff8a0b6c8f0154d0d74a0d0508747714318ae782329303a48af556d476e6",
+  "builder": "docker.io/library/golang:1.27.4-alpine3.24@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280",
+  "builder_image_id": "sha256:3f9f7b68d2300deb4acba48650f28dec9098ead84cd167a56c0e2bf361f24592",
+  "builder_manifest": "sha256:ea30e25680a5470bac02b08bb0e0a735fb75bd0ab7d431b9b95ee0abef362586",
+  "builder_binary_sha256": "de0ae3e082ce7599eae4fb69fa2ef1e43b8f31ffd3fce62cdf81930aa9005050",
+  "go_version": "1.27.4",
   "flags": "-p=2 -mod=readonly -buildvcs=false -trimpath -ldflags=\"-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=0.75.0\"",
-  "sdk_sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40",
+  "sdk_sha256": "7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840",
   "sdk_tools": {
-    "bin/go": "5f5eb6d0b2fb6aa0bb5d5f8c5f1c944e0de955c925f0111af92a9d8f79680b5b",
-    "bin/gofmt": "fd464d1c9098a6714d06bd3fcd2a1fedcdd291e710241160ebb663bf99adf2f8",
-    "pkg/tool/linux_amd64/compile": "c331d8fc6c4ae9dbe20e8198435db0455f2a5ca55d2d02fc6d7337c906be8283",
-    "pkg/tool/linux_amd64/link": "c9990b939ed48a77ca9a29b33d408d44b56fc4950a28e3d3533025a8dc08b2fe"
+    "bin/go": "de0ae3e082ce7599eae4fb69fa2ef1e43b8f31ffd3fce62cdf81930aa9005050",
+    "bin/gofmt": "96d48ae3c8754e4a10e8f5ec2472d1344767d276e0ba6e94948c00cf8558e378",
+    "pkg/tool/linux_amd64/compile": "40307e5f5c65a4b4220bbf35dbe014348780589ea2964003f0bf318fa14640e1",
+    "pkg/tool/linux_amd64/link": "e2248a29fbbf15dac1fe72c9d646776dbcd38c9813b78182fe01a4a47f3299c3"
   },
   "symbol_reader_sha256": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
   "cgo_enabled": "0",
   "upx": false,
   "independent_cold_caches": true,
-  "binary_sha256": "e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814",
-  "repeat_sha256": "e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814",
-  "image_reference": "local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7",
-  "image_id": "sha256:17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7",
-  "archive_sha256": "f3c4c900e714b12d9c3295aedc645698ac85f1028ecbbb1c9024b814393850f7",
-  "layer_sha256": "6ba0cc00a7e35892fd4da39a212cf766e24d6738136a0106ec4d9cecb6217f11",
+  "binary_sha256": "ee0a0368335910d708ba1797871abfb858d7c30144d72f58613e4b0c5ad613d1",
+  "repeat_sha256": "ee0a0368335910d708ba1797871abfb858d7c30144d72f58613e4b0c5ad613d1",
+  "image_reference": "local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb",
+  "image_id": "sha256:3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb",
+  "archive_sha256": "b7cbed6d379b3854714e24ed17411ec04304cb4a6b78ae5aa18ec3a0ef2d647d",
+  "layer_sha256": "52d87d7cfc237a9e15e25dca7c3f93869c16e3bdf2625c790d24c6493d07f55f",
   "filesystem": {
     "usr/local/bin/trivy": {
-      "sha256": "e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814",
-      "size": 172556448,
+      "sha256": "ee0a0368335910d708ba1797871abfb858d7c30144d72f58613e4b0c5ad613d1",
+      "size": 172699808,
       "mode": 493
     },
     "etc/ssl/certs/ca-certificates.crt": {
-      "sha256": "028fca5150ee1915c4474489985d55c54fceaa680c754cc8d1301734f01b2232",
-      "size": 181724,
+      "sha256": "5961c0a3c65459931c023e0075c09733f09aea4ca439cb85bc4a08bb4f3f568b",
+      "size": 178791,
       "mode": 420
     },
     "contrib/asff.tpl": {
@@ -70,10 +70,10 @@
   },
   "govulncheck_version": "v1.8.0",
   "govulncheck_sum": "h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U=",
-  "tool_sha256": "3a6bd4978d9e640dcd9e1f44df0f6125a298123a2129e35ec36e2119875a9f37",
+  "tool_sha256": "b61b0c4da18db7b3a3be298736cec60d005623251915addc89a36398ecf6c154",
   "schema_version": 1,
   "buildinfo": {
-    "go_version": "1.27.3",
+    "go_version": "1.27.4",
     "dependencies": {
       "cel.dev/expr": {
         "version": "v0.25.2",
@@ -416,8 +416,8 @@
         "sum": "h1:kuQm82SbDrCuO4n7hf2L8zsBtZLuympyq5X/VotfX2A="
       },
       "github.com/containerd/containerd/v2": {
-        "version": "v2.4.1",
-        "sum": "h1:DUx/ZJN7cEu0WuzHClDB+68H/bqMEH5pWoEjf0ae4hc="
+        "version": "v2.4.2",
+        "sum": "h1:p6Qg+xbEz8lvwdhHDx0U469xENvp4LgGBx+E7djXkGw="
       },
       "github.com/containerd/continuity": {
         "version": "v0.5.0",
@@ -828,8 +828,8 @@
         "sum": "h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4="
       },
       "github.com/klauspost/compress": {
-        "version": "v1.20.0",
-        "sum": "h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA="
+        "version": "v1.20.2",
+        "sum": "h1:v5tiZvm1KGLyg5d5oXdXe3lsSPrbEUiKoXGia//I7Qo="
       },
       "github.com/klauspost/cpuid/v2": {
         "version": "v2.3.0",
@@ -1336,8 +1336,8 @@
         "sum": "h1:3g7B90UzBltIDKq1/5mrTGxTnOFDV0ICOhLoxiZ8jlg="
       },
       "go.opentelemetry.io/otel": {
-        "version": "v1.46.0",
-        "sum": "h1:FHt5/CDyVxi/8IM1CH7VE/rRgq3kLHa2mSTVMO8AWyc="
+        "version": "v1.47.0",
+        "sum": "h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM="
       },
       "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc": {
         "version": "v1.46.0",
@@ -1351,21 +1351,25 @@
         "version": "v1.46.0",
         "sum": "h1:w53CDeOA/Kurp7yRsegSr6pbbr759dOvJ+yNmWM6Hxs="
       },
+      "go.opentelemetry.io/otel/log": {
+        "version": "v1.47.0",
+        "sum": "h1:cOTS1CcLbSQeZKanGJ+0JpF/+t4PELi3O3bbl2lqCcI="
+      },
       "go.opentelemetry.io/otel/metric": {
-        "version": "v1.46.0",
-        "sum": "h1:yBnkXvgV7AXFILZc5K6IZe/CBFF3OS7BJ8ov6/lj0K8="
+        "version": "v1.47.0",
+        "sum": "h1:4PptaldXx3Eat1XjMZ68pPJEs5wrhlemctZE9a3UdWY="
       },
       "go.opentelemetry.io/otel/sdk": {
-        "version": "v1.46.0",
-        "sum": "h1:h5CNQQjEbuQXY/JfZtgt3i7HVFV3aHPO2OAwO2eTYPI="
+        "version": "v1.47.0",
+        "sum": "h1:zWXEr4j2lFefG87TU6Yg8a7ngfohIKFZHKp0Hf5hC6I="
       },
       "go.opentelemetry.io/otel/sdk/metric": {
-        "version": "v1.46.0",
-        "sum": "h1:0piZ26EG4RBfebb2jhDH6ERCYHoVWduc3kLgPCwSnSE="
+        "version": "v1.47.0",
+        "sum": "h1:lfISg2j93VT6yqdk9OfUaZmw/GfcZqCCV3jdXtsPnKw="
       },
       "go.opentelemetry.io/otel/trace": {
-        "version": "v1.46.0",
-        "sum": "h1:OULy7ccdJnZtJ0UDYFOIGaCmiWzJ8Vi2G/Rsu60qs1c="
+        "version": "v1.47.0",
+        "sum": "h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM="
       },
       "go.opentelemetry.io/proto/otlp": {
         "version": "v1.11.0",
@@ -1601,14 +1605,44 @@
   "applicability": [],
   "trust_method": "verified-upstream-source-reproducible-build-and-independent-govulncheck",
   "source_packages": {
-    "count": 3145,
-    "imports_sha256": "c83a2a14985047af8e4cac1ad12e173ed3919b6ec3ce192dba953424b0a63ff3"
+    "count": 3148,
+    "imports_sha256": "b8517eb105d73a4b8d991bcd83301441b924aa121766c4fa29c84af67a142cca"
   },
   "binary_functions": {
-    "count": 203507,
-    "names_sha256": "2a2bc67710b80cddabcb3b14c3d73978600bbb2dfca76aff7ab08fcb4b038e03"
+    "count": 203686,
+    "names_sha256": "a5285322ab361d677ba5d0fba6058e0760a83d42c1bd38e651adbcdf6c0f3860"
   },
   "observed_module_notices": [
     "GO-2026-5932"
-  ]
+  ],
+  "selected_modules": {
+    "count": 991,
+    "versions_sha256": "0d97c071112698d1478a8729f20c6d802db90c7f75e67a635f8dc4e46655bbc5"
+  },
+  "proof": {
+    "kind": "historical-isolated-hosted-qualification",
+    "repository_head": "8663f7dfddaddd58d238727e7198538f8c651ecf",
+    "harness_commit": "a677ce1f6d2317f54840a2eb3d5c2096bb222be0",
+    "run_id": 45546055472,
+    "job_id": 138975842531,
+    "artifact_id": 14992246442,
+    "artifact_sha256": "b080b6f3985cc12d9dcc9e5bde7ae695a6298a538c0a60fa344d8812b8ffa329",
+    "build_receipt_sha256": "5a93fd8993c532c28ed0bf3b8543a421d99e56ddea4b9cc19971dc8667007373",
+    "retained_resources": "scripts/tests/fixtures/trivy-terminal-accounting/replay.tar.gz",
+    "resources": {
+      "accounting-late-fixture.json": "038d787371ca1b6ae15309f8314f2d52265f8a880f8a8265adb12f59281854a4",
+      "accounting-oom-fixture.json": "dc397da8b5b1d2cba4197603bf9205358b2468ac0174b138ff29c2a30805f68e",
+      "binding.json": "25371bab047e2e5d3a914a2c367eed81fda1a9cf06fb67f1e560d3f851453de8",
+      "runner-capabilities.json": "4ef0b4087457995e4c2e453a9f9c88b25f510866815866ea87755119d4204b34",
+      "swap-cleanup.json": "4adfd2e978b7a7073d7c0062b6d70ca5fffaa4379cd894fa15110b8b3c0bfd8b",
+      "swap-provisioning.json": "6fe678cb6802b7ca8a18a82f023c706b1d1ac20414fd343a8746513df91f1b45",
+      "first/source-go-acquisition.json": "5f7063a8143cea576dff7c88a88c0c959865917392ca88112f61ceb52710e272",
+      "first/source-termination.json": "fdaf4911d3e240e6e4901907223d75fce6df0ebfabcd861969cf5e045efbee38",
+      "first/terminal-accounting.json": "6cffc3198dd48701f959215e6ce7bd0c85bfa1016717d67bc4c769a8844836bc",
+      "independent-source/source-go-acquisition.json": "55600653d9e257798477fdb418d36f83611c6d74c6bafd5a8f273a80c220c1c9",
+      "independent-source/source-termination.json": "a84d4df3b4304165e8dc0067c4612145d2246c8997742e205f0c1a55d435fb96",
+      "independent-source/terminal-accounting.json": "94505dbd3e9927636e489f0d56a8b5e677acd081214e3eac42cdb48ca71f67c0"
+    },
+    "scope": "Historical isolated qualification. Production resource and compatibility evidence must match the current HEAD."
+  }
 }

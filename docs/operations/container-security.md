@@ -128,7 +128,8 @@ The authoritative [auxiliary inventory](../../.github/security/auxiliary-contain
 | Trivy 0.75.0 | Security authority with Docker-socket access in existing image scans and writable evidence/cache. Auxiliary scans use read-only exported archives without a socket. OS/Go-package self-scan is advisory visibility, not independent scanner integrity proof. |
 | Go 1.26.10 Alpine 3.24 | Rebuilds gosu from checksum-bound source and reviewed module locks; runs govulncheck v1.1.4 against patched source and installed binary. Analysis uses read-only inputs, per-process empty tmpfs cache, Go-service networking and no socket. OS/Go-toolchain package findings block at HIGH/CRITICAL. |
 | Alpine 3.20 fixture | Immutable target for Trivy ignorefile/configuration regression plus release-identity probe; no analysis authority or candidate-code execution. End-of-life, with no current audit findings. It is mechanically excluded from trusted execution evidence and supplies no exception authority. Its role does not require deliberate vulnerabilities. |
-| Rebuilt Ryuk 0.14.0 candidate | Runner-local scratch reaper, exact release source plus reviewed Moby client/API migration, Go 1.26.10 and unchanged cleanup algorithm. Content-addressed configuration, repeat executable builds, direct raw/SBOM, source/binary govulncheck, socket/execution/cleanup assertions. No CVE exceptions. |
+| Go 1.27.4 and Go 1.26.11 Alpine 3.24 | Build and analyze the reviewed Trivy and Ryuk candidates. Both compiler images retain full OS and Go binary evidence under HIGH/CRITICAL policy. |
+| Rebuilt Ryuk 0.14.0 candidate | Runner-local scratch reaper, exact release source plus reviewed Moby client/API migration, Go 1.26.11 and the reviewed cleanup algorithm. Content-addressed configuration, repeat executable builds, direct raw/SBOM, source/binary govulncheck, socket/execution/cleanup assertions. No CVE exceptions. |
 
 Ryuk's [0.14.0 release](https://github.com/testcontainers/moby-ryuk/releases/tag/0.14.0), source commit `b3726afd6cc2c36628abcc08e9cabac43f587384`, introduced UPX compression. Its exact Linux Dockerfile uses Go 1.23/Alpine 3.22, `CGO_ENABLED=0`, `go build -a -installsuffix cgo -ldflags="-w -s" -trimpath`, then `upx --best --lzma`; scratch contains only the executable and CA certificates. The 0.13.0 comparison changes Dockerfiles only and does not justify a downgrade. Recovery measures Go **1.23.12**, main module `github.com/testcontainers/moby-ryuk` at `(devel)` with no embedded VCS revision, and **19 embedded dependencies**. Their versions and h1 sums must match exact upstream go.mod/go.sum; source files corroborate binary metadata rather than replacing it.
 
@@ -150,9 +151,9 @@ Candidate validation selects upstream `Test_loadConfig` and all fourteen mocked 
 
 Upstream daemon-backed `Test_newReaper`, `TestReapContainer`, `TestReapNetwork`, `TestReapVolume` and `TestReapImage` are not ported: they require the removed legacy API, arbitrary Alpine pulls and Docker image-build/archive APIs outside Ryuk's execution contract. Abort/shutdown timing tests are outside this focused migration subset. The mocked scenarios and repository's actual PostgreSQL/Testcontainers/post-JVM cleanup checks remain complementary; complete upstream Docker-resource integration coverage is not claimed. Local preparation and validated reuse are documented in [local development](local-development.md#maven-and-testcontainers-verification).
 
-All starting Trivy advisory IDs, severities and published fixed versions are recorded in [comparison advisories](../../.github/security/ryuk/official-0.14.0-advisories.json); the separate binary govulncheck advisory inventory records module ranges. The 21 HIGH stdlib findings require at least Go 1.26.6; CRITICAL CVE-2025-68121 was already fixed on the 1.26 release line. The selected immutable `golang:1.26.10-alpine3.24` builder is governed for OS/compiler advisories. `CGO_ENABLED=0`, linux/amd64/v1, `-a -installsuffix cgo -ldflags="-w -s" -trimpath` remain; `-mod=readonly -buildvcs=false` prevents graph changes and location-dependent VCS metadata. Two builds must produce identical bytes.
+All starting Trivy advisory IDs, severities and published fixed versions are recorded in [comparison advisories](../../.github/security/ryuk/official-0.14.0-advisories.json); the separate binary govulncheck advisory inventory records module ranges. The 21 HIGH stdlib findings require at least Go 1.26.6; CRITICAL CVE-2025-68121 was already fixed on the 1.26 release line. The selected immutable `golang:1.26.11-alpine3.24` builder is governed for OS/compiler advisories. `CGO_ENABLED=0`, linux/amd64/v1, `-a -installsuffix cgo -ldflags="-w -s" -trimpath` remain; `-mod=readonly -buildvcs=false` prevents graph changes and location-dependent VCS metadata. Two builds must produce identical bytes.
 
-Protected-master verification after PR #460 encountered standard-library advisories from the Go database dated `2026-10-08T22:31:09Z`. The retained [Go 1.26.8 advisory evidence](../../.github/security/ryuk/go-1.26.8-advisories.json) records CI #1158's authenticated artifact, 13 distinct source IDs across 410 findings, and 12 binary IDs across 17,860 findings. Each affected range and CVE alias was independently checked against the official Go vulnerability records. [Go 1.26.9, released October 8, 2026](https://go.dev/doc/devel/release#go1.26.9), fixes that historical set. That upgrade changed the compiler and executable/image identities while retaining the reviewed Ryuk production source, Moby migration patch and module checksums. The patch's `go 1.26.8` directive remains the minimum source language/toolchain requirement; current compiler, analyzer and executable readback must match the reviewed 1.26.10 receipt. Package-level findings still block without a reachable-symbol exception.
+Protected-master verification after PR #460 encountered standard-library advisories from the Go database dated `2026-10-08T22:31:09Z`. The retained [Go 1.26.8 advisory evidence](../../.github/security/ryuk/go-1.26.8-advisories.json) records CI #1158's authenticated artifact, 13 distinct source IDs across 410 findings, and 12 binary IDs across 17,860 findings. Each affected range and CVE alias was independently checked against the official Go vulnerability records. [Go 1.26.9, released October 8, 2026](https://go.dev/doc/devel/release#go1.26.9), fixes that historical set. That upgrade changed the compiler and executable/image identities while retaining the reviewed Ryuk production source, Moby migration patch and module checksums. The patch's `go 1.26.8` directive remains the minimum source language/toolchain requirement; current compiler, analyzer and executable readback must match the reviewed 1.26.11 contract. Package-level findings still block without a reachable-symbol exception.
 
 [GO-2026-6809 / CVE-2026-111943](https://vuln.go.dev/ID/GO-2026-6809.json)
 was published at `2026-10-21T00:27:29Z`, after the earlier successful verification.
@@ -163,22 +164,23 @@ reaches `crypto/x509.Certificate.Verify` through TLS. The Go fix distrusts known
 compromised intermediate certificates. Earlier green results describe the
 database revision used then and cannot authorize this newly affected build.
 
-The coordinated compiler repair uses Go 1.26.10 for gosu, Ryuk and their analysis
-image, pinned to Alpine index
-`sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca`,
-and Go 1.27.3 for the rebuilt Trivy scanner. Reviewed gosu/Ryuk/Trivy program
-sources, existing dependency patches and module checksums remain unchanged by
-this compiler repair. New executable, image, SDK and analyzer identities require
-fresh repeat-build and advisory evidence. No exception, threshold reduction or
-weakened gate is introduced. Historical hosted artifacts remain historical;
-every compiler-patch HEAD requires its own successful hosted CI,
-CodeQL, scanner/SBOM/provenance and restore verification.
+Gosu and the official compressed Ryuk comparison use Go 1.26.10. The rebuilt
+Ryuk uses Go 1.26.11 from Alpine index `sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab`.
+Preparation checks the loaded builder configuration and independently compares
+its go, gofmt, compile and link bytes with the official Go 1.26.11 SDK. The
+historical Docker 29 run produced four matching binaries and four zero-finding
+advisory streams at `2026-11-24T15:56:00Z`. The Ryuk and BuildKit phases passed.
+The run failed overall on the earlier Trivy readonly lock. The retained Ryuk
+streams replay with the original acquisition receipts. Every reviewed HEAD
+requires fresh repeat-build, advisory, scanner/SBOM, provenance, Testcontainers,
+CodeQL and restore evidence.
+[Historical Ryuk artifact](https://github.com/Patrick1986Git/enterprise-shop/actions/runs/45471276927/artifacts/14958725226)
 
 Current public legacy versions end at Docker 28.5.2. Reviewed Go advisories [GO-2026-5746](https://pkg.go.dev/vuln/GO-2026-5746) / CVE-2026-41567 and [GO-2026-5617](https://pkg.go.dev/vuln/GO-2026-5617) / CVE-2026-42306 have no fixed legacy module version. Their daemon functions are `Daemon.containerExtractToDir` (archive upload/host execution) and `Daemon.openContainerFS` (docker-cp bind-mount redirection). The engine module `github.com/moby/moby/v2` is fixed from `v2.0.0-beta.14`, but Ryuk requires neither that engine nor its daemon. The supported split modules `github.com/moby/moby/client v0.6.1` and `github.com/moby/moby/api v1.56.1` replace the monolithic dependency; both require Go 1.24 or newer. These are current public module releases, not a private replacement of Docker.
 
-The migration preserves session-label filter JSON, list/remove routes, container force/volume removal, image prune-child options and error handling. List response wrappers expose Items; client option types replace API option types; negotiated Ping handles API negotiation. The supported client’s minimum API is 1.40, compatible with the repository’s maintained Docker runners. The exact 19 embedded module versions/h1 checksums are inventoried, including updated docker/go-connections, image-spec and OpenTelemetry dependencies. The source dependency graph must match every embedded dependency and must contain no legacy Docker or Moby daemon module/package. Current govulncheck v1.8.0 analyzes the exact patched production main in source mode and the resulting binary; both must have zero findings, correct Go/module identity, tool version/checksum and retained statuses. No non-applicability mechanism is installed: every HIGH/CRITICAL still blocks, and any attempt to add applicability decisions fails closed.
+The migration preserves session-label filter JSON, list/remove routes, container force/volume removal, image prune-child options and error handling. List response wrappers expose Items; client option types replace API option types; negotiated Ping handles API negotiation. The supported client’s minimum API is 1.40, compatible with the repository’s maintained Docker runners. The 21 embedded module versions and h1 checksums, 263 compiled packages and 61 selected dependencies are inventoried, including updated docker/go-connections, image-spec and OpenTelemetry dependencies. The source dependency graph must match every embedded dependency and must contain no legacy Docker or Moby daemon module/package. Current govulncheck v1.8.0 analyzes the exact patched production main in source mode and the resulting binary; both must have zero findings, correct Go/module identity, tool version/checksum and retained statuses. No non-applicability mechanism is installed: every HIGH/CRITICAL still blocks, and any attempt to add applicability decisions fails closed.
 
-The candidate omits UPX to reduce parser and evidence complexity. Its scratch layer contains only the executable and CA material copied from the immutable builder. No shell, package manager or runner proxy CA is introduced. Canonical configuration and tar headers bind all contents to a reproducible local reference: `local/enterprise-shop-ryuk:sha256-3c17d8d04c78734ed9d9bd42d26c193f7fecacada8e27fee84585dc72f017af9`. This suffix is the **image configuration** digest, not a registry manifest digest. Binary SHA-256 is `8eb1c9799d62504ae3b3b275287c71712667ce4eef08cb133d30fe3ba497f127`. No private image is published; each CI/CodeQL checkout builds and loads its own exact candidate. Missing local build or any source, dependency, executable, CA, archive/configuration drift fails. The official compressed image’s entire OCI/UPX/decompression/source/binary chain remains collected and validated under `official-ryuk-comparison`, with no execution authority.
+The candidate omits UPX to reduce parser and evidence complexity. Its scratch layer contains only the executable and CA material copied from the immutable builder. No shell, package manager or runner proxy CA is introduced. Canonical configuration and tar headers bind all contents to a reproducible local reference: `local/enterprise-shop-ryuk:sha256-058b8dd02c61538d32db02f54d91a147b15ef58e6be8b3867376e166615e229d`. This suffix is the **image configuration** digest, not a registry manifest digest. Binary SHA-256 is `cfcecb2b9583fd0ee162159e0483b9af4a364266c47a9b904a7618362ba6694b`. No private image is published; each CI/CodeQL checkout builds and loads its own exact candidate. Missing local build or any source, dependency, executable, CA, archive/configuration drift fails. The official compressed image’s entire OCI/UPX/decompression/source/binary chain remains collected and validated under `official-ryuk-comparison`, with no execution authority.
 
 Historical Go 1.26.9 [hosted proof at 8176b025](https://github.com/Patrick1986Git/enterprise-shop/actions/runs/37881363846/artifacts/11594881209) independently matched both local executable/packaging builds and returned zero source/binary findings against the Go service revision available then. Compressed offline fixtures retain those authentic reports and their artifact/hash provenance; tests wrap authentic analyzer bytes in explicitly synthetic acquisition envelopes. They do not authorize the current compiler or runtime retrieval. Every final-head hosted workflow repeats the full build and advisory validation. Earlier Go 1.26.8 [build proof at 48e91592](https://github.com/Patrick1986Git/enterprise-shop/actions/runs/37772549705/artifacts/11548487975) likewise matched local repeat executable/configuration/archive identities and returned zero findings at that time. The compiler repair retains upstream’s original test-only testify version; every final-head build rechecks the resulting exact source receipt. Testcontainers properties select only the fully identified candidate. RyukExecutionIT proves the running local reference, expected configuration ID and writable `/var/run/docker.sock` mount; after the Maven JVM exits, cleanup verification requires removal of the observed reaper and PostgreSQL resources. The socket remains a privileged execution boundary: this remediation does not patch or attest the external Docker daemon, and arbitrary socket access would still permit host-level Docker operations.
 
@@ -208,15 +210,15 @@ No patched official stable Trivy image was available on October 10, 2026. The la
 
 The [reviewed scanner contract](../../.github/security/trivy/candidate.json) selects upstream v0.75.0 source commit `591e9799316a602e703f0b484f6c6d7b234ec8f3`, archive SHA-256 `4a5bb1c16ccc55368843eb95ee9a25519a0bfef26609a8b4295f2060af43077e`. The [dependency patch](../../.github/security/trivy/x-net.patch) selects x/net v0.62.0, the authoritative fix for GO-2026-6860 and GO-2026-6866. Its selected requirements raise x/crypto to v0.58.0, x/sys to v0.49.0, x/term to v0.47.0 and x/text to v0.43.0; x/text selects x/tools v0.51.0 and x/sync v0.24.0, and x/tools selects x/telemetry `v0.0.0-20260924152758-ed294f943157`. The full selected graph remains 992 modules. Fresh official Trivy data independently identifies HIGH CVE-2026-116587 in the existing go-jose v4.1.5, so the patch also selects the upstream fixed v4.1.6. That release caps parsed RSA moduli at 4096 bits and rejects private JWK parameters in JOSE headers; no limit override is supplied. Only `go.mod` and `go.sum` differ from the original Trivy source. Source extraction, the two changed manifests, every source byte, embedded module checksums and the complete compiled package graph are verified. `GOSUMDB=sum.golang.org`, HTTPS proxy.golang.org, `-mod=readonly` and `GOTOOLCHAIN=local` remain enabled.
 
-`build-trivy-candidate.py` uses the reviewed Go 1.27.3 Alpine index `sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd`, checks its amd64 manifest and image configuration, and compares the actual go/gofmt/compile/link bytes with the independently downloaded official Go 1.27.3 SDK archive. Two builds use separate initially empty module and compiler caches, read-only source and rootfs, nonroot UID, dropped capabilities, no socket/secrets and resource limits. Both must produce binary SHA-256 `e9f53bf89b7a762bd7b08f9bf624c7005ba48137fd0c221c33cc19d5a3179814`.
+`build-trivy-candidate.py` uses Go 1.27.4 Alpine index `sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280`, checks its amd64 manifest and image configuration, and compares the actual go, gofmt, compile and link bytes with the independently downloaded official Go 1.27.4 SDK archive. The measured graph has 991 selected dependencies plus the root, 378 embedded dependencies, 3,148 compiled packages and 203,686 compiled functions. Two builds use separate initially empty module and compiler caches, read-only source and rootfs, nonroot UID, dropped capabilities, no socket/secrets and resource limits. Both must produce binary SHA-256 `ee0a0368335910d708ba1797871abfb858d7c30144d72f58613e4b0c5ad613d1`.
 
-Canonical scratch packaging contains that binary, the builder's CA bundle, unchanged upstream report templates and an empty mode-1777 temporary directory. The selected reference is `local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7`. Its suffix is the image **configuration** digest, not a published registry manifest. The exact layer and archive hashes, configuration and filesystem census are mandatory. No private image is published.
+Canonical scratch packaging contains that binary, the builder's CA bundle, unchanged upstream report templates and an empty mode-1777 temporary directory. The selected reference is `local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb`. Its suffix is the image **configuration** digest, not a published registry manifest. The exact layer and archive hashes, configuration and filesystem census are mandatory. No private image is published.
 
 The replacement integrity method is `verified-upstream-source-reproducible-build-and-independent-govulncheck`. Runner-provided gh verifies Aqua's original archive attestation, constrained to repository, v0.75.0 source ref, exact source commit, signer workflow and archive subject; the original image binary must match its published archive. This authenticates the upstream source/release binding. **Aqua's executable attestation does not cover the rebuilt binary.** The host token is supplied only to gh, never to a tool container. The repository build instead relies on reviewed source/compiler/checksum identities, repeated actual bytes, the current-HEAD hosted build and independent analysis.
 
-Pinned govulncheck v1.8.0 analyzes both the exact production command source and the rebuilt ELF against fresh https://vuln.go.dev data. Every embedded module must appear in each analyzer SBOM. The reviewed GO-2026-5932 OpenPGP notice remains visible in raw output. It is accepted only when its affected packages are absent from the complete compiled graph and its functions are absent from the independently decoded ELF/PCLN census. The analyzer falls back to module precision for stripped binaries and may name all known vulnerable symbols; those entries alone do not establish executable call paths. Complete source analysis and actual function readback remain mandatory. Legacy github.com/docker/docker is likewise absent from both the actual compiled graph and executable. A real callable finding, an affected compiled package, missing advisory body, unexpected notice, stale service evidence or incomplete readback fails. The independent analyzer's own checksum-pinned executable/build information are also retained.
+Pinned govulncheck v1.8.0 analyzes the exact production command source twice with independent caches and analyzes the rebuilt ELF against fresh official Go vulnerability data. Every embedded module must appear in each analyzer SBOM. The reviewed GO-2026-5932 OpenPGP notice remains visible in raw output. It is accepted only when its affected packages are absent from the complete compiled graph and its functions are absent from the independently decoded ELF/PCLN census. The analyzer falls back to module precision for stripped binaries and may name all known vulnerable symbols; those entries alone do not establish executable call paths. Complete source analysis and actual function readback remain mandatory. Legacy github.com/docker/docker is likewise absent from both the actual compiled graph and executable. A real callable finding, an affected compiled package, missing advisory body, unexpected notice, stale service evidence or incomplete readback fails. The independent analyzer's own checksum-pinned executable/build information are also retained.
 
-The governed scanner still requires zero unaccepted HIGH/CRITICAL findings and exact raw/CycloneDX readback for all 379 Go module/root/stdlib PURLs. Its UNKNOWN crypto notice remains visible. Self-scan records explicitly deny independent integrity authority. No scanner CVE exceptions or applicability waivers are allowed. Existing PostgreSQL/gosu vulnerability policies remain unchanged; Ryuk uses the coordinated Go 1.26.10 compiler repair described above.
+The governed scanner still requires zero unaccepted HIGH/CRITICAL findings and exact raw/CycloneDX readback for all 380 Go module, root and stdlib PURLs. Its UNKNOWN crypto notice remains visible. Self-scan records explicitly deny independent integrity authority. No scanner CVE exceptions or applicability waivers are allowed. The two rebuilt candidates and both compiler images have separate governed entries.
 
 The read-only `trivy-candidate` CI job verifies upstream provenance, repeats the builds, performs independent analysis and exercises pinned BeanUtils vulnerable/patched/malformed fixtures, original and rebuilt rootfs, image scans, raw JSON, conversion, package/PURL readback and missing-database/severity failures. All comparison scans run offline without a Docker socket after an authoritative database refresh. The known vulnerable upstream scanner is an isolated comparison fixture with no repository scan authority. The container-security job also compares both scanners against exports of the actual application, PostgreSQL and Docker builder images. Package identities, all findings and configured failure statuses must agree; the original scanner rootfs must produce exactly the six reviewed HIGH blockers, including CVE-2026-116587, while the patched candidate produces none. Empty package reports cannot establish a clean scan. A build identity or binary-only advisory result cannot admit a candidate with incomplete source analysis. Final-head hosted verification must independently complete these checks and the resource diagnostics before acceptance.
 
@@ -244,17 +246,20 @@ temporary root, checkout, socket or secrets are exposed through `/tmp`.
 
 Build and container-security depend on this job and download only artifacts from the same workflow run. Loaded source/SDK/binary evidence lives at `$RUNNER_TEMP/enterprise-shop-trivy` (locally, the system temporary directory), outside the checkout: upstream fixture symlinks remain intact without weakening the repository compiler-warning source-tree policy. The producer uses `.tmp/trivy-candidate` only in its dedicated job, which does not run Maven. `load-trivy-candidate.py` checks ordered payload chunks and their hashes, reconstructs original source and actual binary/image bytes, replays the independent trust and behavior evidence against the current checkout HEAD, and only then loads the local image. Raw evidence is uploaded even on failure and retained for fourteen days. Missing or changed source, manifest, builder, binary, image, package, function, advisory, provenance or behavior evidence blocks execution. Monday protected-master and exact-PR-head scans repeat this contract.
 
-To reproduce with normal authenticated upstream access, start from an exact clean checkout and run:
+Normal CI collects Trivy resource evidence on its dedicated disposable GitHub-hosted
+runner. To verify and use that evidence locally, download the current checkout’s
+successful CI artifacts into `.tmp/trivy-downloads/<artifact-name>/` and run:
 
 ```bash
-python scripts/verify-trivy-provenance.py --upstream-only
-python scripts/build-trivy-candidate.py
-python scripts/verify-trivy-candidate-compatibility.py
-python scripts/verify-trivy-provenance.py
-export TRIVY_IMAGE=local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7
+python scripts/load-trivy-candidate.py
+export TRIVY_IMAGE=local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb
 ```
 
-Hosted artifacts can instead be downloaded into `.tmp/trivy-downloads/<artifact-name>/` and verified with `python scripts/load-trivy-candidate.py`; evidence must match the current checkout HEAD. If local storage.googleapis.com module ZIPs or vuln.go.dev are blocked, use the reviewable hosted job. Never disable checksums/TLS, substitute an unreviewed mirror or interpret an unavailable service as zero findings. Updating source, SDK, module, analyzer or package identities requires a reviewed contract change, repeated build and full hosted verification. Prefer an officially patched stable image when available, after independent measurement and restoring its appropriate executable attestation contract.
+An unavailable official dependency or advisory service blocks collection. Updating
+source, SDK, module, analyzer or package identities requires a reviewed contract
+change, repeated build and complete hosted verification. An officially patched
+stable image would require independent measurement and its own executable
+attestation contract.
 
 Runner/gh/compiler publication compromise, defects in parsers/scanners and omitted upstream advisories remain trust limits. Reproducibility is linux/amd64 with two separate caches on the same hosted runner and pinned compiler, not diverse-compiler reproducibility. Scratch OS absence is explicit; Haskell/JDK/downloaded-tool coverage limits elsewhere in this document remain unchanged.
 
@@ -346,19 +351,12 @@ source analysis. Exit 137 and incomplete acquisition remain failures even when t
 termination diagnostics are complete. Diagnose the cause from retained state/events
 and resource counters; exit 137 alone does not establish OOM.
 
-The source analyzer explicitly receives `GOMEMLIMIT=7GiB` inside the existing
-10 GiB cgroup, retaining default Go concurrency. This is an interim setting,
-not an accepted headroom guarantee. It completed both memory-only hosted analyses;
-forcing `GOMAXPROCS=1` also completed twice but was slower, reached the same RAM
-ceiling and used approximately 1.5 GiB of owned cgroup swap. No demonstrated safety
-improvement justified retaining that override. The runtime target is soft and may
-be exceeded by live data. Actual cgroup and host headroom must be measured,
-including swap use, rather than inferred from the difference between the target
-and hard limit. Source arguments, full
-compiled graph, verified analyzer and SDK, two-CPU/512-PID limits, timeout and
-fresh advisory acquisition are unchanged.
-Binary analysis and scanner build settings are unaffected. Resource environment
-overrides and changed hard limits are rejected. Filtered runtime settings are
+The source analyzer receives `GOMEMLIMIT=7GiB` inside the 10 GiB cgroup
+with default Go concurrency. This target is soft. Earlier trials with
+`GOMAXPROCS=1` reached the same RAM ceiling more slowly and charged
+approximately 1.5 GiB of owned swap. The collector measures cgroup and
+host headroom against the reviewed thresholds. Resource environment overrides
+and changed hard limits are rejected. Filtered runtime settings are
 read back from the owned container and bound into its diagnostic evidence.
 Validation compares the exact reviewed key/value mapping without relying on
 Docker's entry order. Identical or conflicting duplicate keys, missing/extra
@@ -370,40 +368,48 @@ Accept this resource profile only with full valid source output, status zero,
 fresh authoritative acquisition, complete compiled-module evidence and no OOM;
 lower RSS alone does not establish completion or vulnerability acceptance.
 
-Resource acceptance remains unresolved. For this reviewed graph, the next
-assessment must demonstrate at least 1 GiB of resident reserve below the 10 GiB
-cap (total `memory.peak` at most 9 GiB), zero hard-limit reclaim events, and zero
-owned cgroup swap peak. The reserve is a conservative review budget of roughly
-four times the observed approximately 0.25 GiB kernel-accounted peak; file and
-anonymous memory remain included in the total peak. Sampled host availability
-must retain at least 3 GiB RAM and 2 GiB free swap, without treating nominal
-Docker swap limits as provisioned host capacity. Missing counters cannot prove
-these criteria. These budgets do not assert a universal memory requirement or
-change the automated advisory acceptance policy.
+Each of two independent complete source runs must finish below 900 seconds.
+The analyzer retains the 10 GiB hard limit, 2 CPUs and 512 PIDs. Acceptance
+requires a terminal RAM peak of at most 9 GiB, zero owned swap peak, zero
+hard-limit and OOM events, and sampled host headroom of at least 3 GiB available
+RAM and 2 GiB free swap. Both runs must complete with the full source graph,
+verified analyzer and fresh official advisory acquisition.
 
-Require at least two independently evidenced complete analyses of the same
-reviewed source/SDK/analyzer and full compiled graph, each below 900 seconds
-(half the unchanged 1,800-second timeout), without retries, timeout, OOM or
-incomplete output. Compare module coverage and findings as well as resource
-peaks; graph or dependency changes require reassessment. Earlier x/net 0.60.0
-measurements show that neither tested profile met the resident-reserve criterion.
-Do not repeat cold builds merely to reconfirm that limitation or make a blind
-memory-limit increase. A different resource strategy requires a separate measured
-decision, while complete source and binary advisory checks remain mandatory.
+The Docker task cgroup disappears on exit. Normal CI gives each source run a
+unique systemd parent slice on a disposable Docker 29, Linux cgroup v2 runner.
+The collector binds the running task to the exact container ID and its cgroup.
+After exit and exact-container cleanup, it reads the hierarchical parent’s
+kernel `memory.peak`, `memory.swap.peak` and `memory.events` twice before removing
+the slice. The parent must be empty with the same device and inode and stable
+counters. The terminal record is bound to the full analyzer exit, source output
+and acquisition evidence. A late-allocation fixture and a small, bounded OOM
+fixture demonstrate that the parent retains terminal peak and events after the
+child disappears. Unavailable, conflicting or stale evidence blocks admission.
 
-The independently verified CI #1287 and #1289 collections count as two complete
-analyses of identical repaired scanner source, SDK, analyzer and compiled graph.
-Their source analyses completed in 49.255 and 39.613 seconds, with highest retained
-RAM readings of 7,824,543,744 and 7,620,218,880 bytes respectively. Retained owned
-swap peaks and hard-limit/OOM counters are zero; both report exit zero, no collection
-errors and exact-container cleanup. Both full advisory modes retain only the
-GO-2026-5932 notice, whose affected packages/functions are absent from the compiled
-censuses. Sampled host headroom meets the budgets above. However, the last live
-cgroup reads precede exit by approximately 0.36 and 1.81 seconds; the stopped
-cgroup counters are absent. These readings cannot establish an exact final RAM
-or swap peak, so strict resource-profile acceptance remains unresolved. Preserve
-the immutable collections rather than rerunning builds to rediscover them;
-mandatory final-HEAD admission and advisory checks remain required.
+The job may provision one temporary 4 GiB swap file when free host swap is
+below 2 GiB. Production collection requires the dedicated GitHub-hosted job
+and passwordless sudo. Cleanup verifies the file’s identity, removes only that
+file and preserves existing devices. The receipt covers provision, activation
+and cleanup. The recovery step checks every provisioning journal, including when
+the first cleanup wrote a failure record. It writes a separate recovery receipt
+and preserves the original outcome. Host swap headroom and owned cgroup swap use
+are measured separately.
+
+The earlier CI #1287 and #1289 collections completed in 49.255 and 39.613 seconds.
+Their retained peaks of 7,824,543,744 and 7,620,218,880 bytes were live samples.
+The last observations preceded exit by about 0.36 and 1.81 seconds, and Docker
+removed both task cgroups. The isolated Docker 29 run recorded these terminal
+values at qualified source `8663f7dfddaddd58d238727e7198538f8c651ecf`:
+
+| Source run | Duration | Terminal RAM peak | Min. available host RAM | Min. free host swap |
+| --- | --- | --- | --- | --- |
+| First | 31.77047 s | 8,810,778,624 B | 11,239,178,240 B | 4,294,868,992 B |
+| Repeat | 31.470939 s | 8,637,120,512 B | 10,906,451,968 B | 4,294,868,992 B |
+
+Both isolated runs exited zero, recorded zero owned swap and hard-limit/OOM
+events, and cleaned the exact container and accounting slice. Normal CI must
+generate its own terminal and compatibility records for the exact production
+HEAD. [Historical Trivy artifact](https://github.com/Patrick1986Git/enterprise-shop/actions/runs/45546055472/artifacts/14992246442)
 
 ### Update authority and infrastructure boundaries
 
@@ -446,7 +452,7 @@ Scheduled CI also regenerates Maven build-tool evidence against protected `maste
 The external container tools and scan input are immutable while retaining readable source versions:
 
 - Docker Hub, Hadolint `v2.14.0` scratch: `docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e` (`linux/amd64`; resolved child retained in auxiliary evidence)
-- Reviewed source rebuild, Trivy `0.75.0`: `local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7` (`linux/amd64`)
+- Reviewed source rebuild, Trivy `0.75.0`: `local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb` (`linux/amd64`)
 - Docker Hub, Go `1.26.10-alpine3.24`: `docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca` (`linux/amd64`; resolved child retained in auxiliary evidence)
 - Docker Hub, Alpine `3.20`: `docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc` (`linux/amd64`)
 
@@ -628,7 +634,7 @@ docker run --rm \
   -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -w /workspace \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --scanners vuln --severity CRITICAL --exit-code 0 --format table --ignorefile .trivyignore.yaml docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 ```
 
 ## Vulnerability scanning policy
@@ -663,13 +669,13 @@ docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/reports:/reports" \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-app-trivy-raw.json enterprise-shop/app:ci
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-app-trivy-raw.json enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/reports:/reports" \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy-raw.json enterprise-shop/postgres:ci
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --format json --output /reports/enterprise-shop-postgres-trivy-raw.json enterprise-shop/postgres:ci
 ```
 
 Validate the unfiltered JSON evidence and run the final policy scans:
@@ -682,14 +688,14 @@ python scripts/validate-container-vulnerability-policy.py postgres .tmp/containe
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --format table enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.trivyignore.yaml:/workspace/.trivyignore.yaml:ro" \
   -w /workspace \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --scanners vuln --severity CRITICAL --exit-code 1 --format table --ignorefile .trivyignore.yaml --show-suppressed enterprise-shop/postgres:ci
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --scanners vuln --severity CRITICAL --exit-code 1 --format table --ignorefile .trivyignore.yaml --show-suppressed enterprise-shop/postgres:ci
 ```
 
 Use `--show-suppressed` on the PostgreSQL policy scan so reviewers can see when the scoped gosu exception was applied.
@@ -829,13 +835,13 @@ docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/sbom:/sbom" \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --format cyclonedx --output /sbom/enterprise-shop-app.cdx.json enterprise-shop/app:ci
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --format cyclonedx --output /sbom/enterprise-shop-app.cdx.json enterprise-shop/app:ci
 
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${PWD}/.tmp/container-security/trivy-cache:/root/.cache/trivy" \
   -v "${PWD}/.tmp/container-security/sbom:/sbom" \
-  local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7 image --format cyclonedx --output /sbom/enterprise-shop-postgres.cdx.json enterprise-shop/postgres:ci
+  local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb image --format cyclonedx --output /sbom/enterprise-shop-postgres.cdx.json enterprise-shop/postgres:ci
 
 python -m json.tool .tmp/container-security/sbom/enterprise-shop-app.cdx.json >/dev/null
 python -m json.tool .tmp/container-security/sbom/enterprise-shop-postgres.cdx.json >/dev/null

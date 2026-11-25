@@ -76,10 +76,10 @@ def prepare(source, directory):
     mock = mock.replace('c.Called(ctx)', 'c.Called(ctx, options)').replace('args.Get(0).(types.Ping)', 'args.Get(0).(client.PingResult)')
     (directory / 'mock_test.go').write_text(mock)
     shutil.copyfile(ROOT / 'scripts/ryuk-tests/client_contract_test.go', directory / 'client_contract_test.go')
-    # These test-only dependencies already have reviewed checksums in release go.sum.
+    # These test-only dependencies have checksums in the reviewed source locks.
     mod = (directory / 'go.mod').read_text() + '\nrequire (\n'
     for module, version in [('github.com/davecgh/go-spew', 'v1.1.1'), ('github.com/pmezard/go-difflib', 'v1.0.0'),
-                            ('github.com/stretchr/objx', 'v0.5.2'), ('gopkg.in/yaml.v3', 'v3.0.1')]:
+                            ('github.com/stretchr/objx', 'v0.5.3'), ('go.yaml.in/yaml/v3', 'v3.0.5')]:
         mod += f'\t{module} {version} // indirect\n'
     (directory / 'go.mod').write_text(mod + ')\n')
     return directory

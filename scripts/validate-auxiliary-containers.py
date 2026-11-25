@@ -75,6 +75,15 @@ def inventory(contract, root=ROOT):
     require(contract['scanner_independent_integrity'] == SCANNER.METHOD,
             'Self-scan cannot establish independent scanner integrity')
     require(contract['scanner_version'] == '0.75.0', 'Unreviewed scanner version')
+    require(images['ryuk'].get('candidate_build') is True, 'Only the reviewed Ryuk rebuild may execute')
+    for name, recipe in (('scanner-builder', SCANNER.BUILD), ('ryuk-builder', CANDIDATE.BUILD)):
+        builder = images.get(name, {})
+        require(builder.get('reference') == recipe.BUILDER and builder.get('go_version') == recipe.GO_VERSION
+                and builder.get('identity', {}).get('sha256') == recipe.SDK_TOOLS['bin/go']
+                and builder.get('package_mode') == 'os-and-gobinary'
+                and set(builder.get('required_gobinaries', [])) == {'usr/local/go/' + name for name in recipe.SDK_TOOLS}
+                and builder.get('governed') is True and builder.get('classification') == 'high-impact',
+                'Missing or unreviewed candidate compiler image: ' + name)
     tool = contract['tools']['upx']
     require(tool['version'] == '5.2.1' and tool['platform'] == 'linux/amd64'
             and tool['classification'] == 'isolated-evidence-transformer' and tool['exceptions'] == []

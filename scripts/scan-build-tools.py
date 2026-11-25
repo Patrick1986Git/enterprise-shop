@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TRIVY_IMAGE = 'local/enterprise-shop-trivy:sha256-17c17d15f3ae47ab5bc2b2136e68b52d43c3825280bc7d536b6ab341274091b7'
+TRIVY_IMAGE = 'local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb'
 
 
 def module(name, path):

@@ -74,7 +74,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
                 POLICY.inventory(self.contract, root)
 
     def test_complete_executed_image_inventory_includes_library_ryuk(self):
-        self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk', 'scanner-builder', 'scanner-reference-fixture'},
+        self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk', 'scanner-builder', 'ryuk-builder', 'scanner-reference-fixture'},
                          set(POLICY.inventory(self.contract)))
 
     def test_new_workflow_container_cannot_bypass_review(self):
@@ -113,7 +113,8 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_opaque_binary_cannot_borrow_empty_hadolint_boundary(self):
         self.contract['images']['ryuk']['package_mode'] = 'static-haskell'
-        with self.assertRaisesRegex(ValueError, 'Hadolint'): POLICY.inventory(self.contract)
+        with self.assertRaisesRegex(ValueError, 'Hadolint'):
+            POLICY.inventory(self.contract)
 
     def test_digest_required(self):
         self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.10-alpine3.24'
@@ -217,7 +218,8 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_new_classification_must_be_explicit(self):
         self.contract['images']['ryuk']['classification'] = 'CI-only'
-        with self.assertRaisesRegex(ValueError, 'classification'): POLICY.inventory(self.contract)
+        with self.assertRaisesRegex(ValueError, 'classification'):
+            POLICY.inventory(self.contract)
 
     def test_archive_scanner_has_no_docker_socket_and_no_exception_file(self):
         source = (ROOT / 'scripts/scan-auxiliary-containers.py').read_text()

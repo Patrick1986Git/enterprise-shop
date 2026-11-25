@@ -108,7 +108,7 @@ def export_actual_image(image, target, proof):
 def collect_isolated(build, directory, actual_images):
     receipt = read(build / 'build-receipt.json')
     ref = receipt['image_reference']
-    require(receipt['binary_sha256'] == receipt['repeat_sha256'] and receipt['go_version'] == '1.27.3'
+    require(receipt['binary_sha256'] == receipt['repeat_sha256'] and receipt['go_version'] == EVIDENCE.BUILD.GO_VERSION
             and receipt['repository_head'] == subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
             'Wrong build evidence before compatibility execution')
     inputs = directory / 'inputs'

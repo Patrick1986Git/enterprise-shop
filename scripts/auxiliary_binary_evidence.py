@@ -315,6 +315,57 @@ def source_match(metadata, mod, sums):
                 for name, dep in metadata['dependencies'].items()), 'Upstream source/module mismatch')
 
 
+def selected_modules(modules, metadata):
+    roots, selected = [], {}
+    for entry in modules:
+        name = entry['Path']
+        require(isinstance(name, str) and name and 'Replace' not in entry and 'Error' not in entry,
+                'Malformed or replaced selected Go module')
+        if entry.get('Main') is True:
+            roots.append(name)
+            continue
+        version = entry['Version']
+        require(name not in selected and isinstance(version, str) and version.startswith('v'),
+                'Malformed or duplicate selected Go module')
+        selected[name] = (version, entry.get('Sum'))
+    require(roots == [metadata['main_module']] and not set(roots).intersection(selected)
+            and all(selected.get(name) == (dep['version'], dep['sum'])
+                    for name, dep in metadata['dependencies'].items()), 'Selected and embedded Go modules differ')
+    versions = sorted((name, identity[0]) for name, identity in selected.items())
+    return {'count': len(versions), 'versions_sha256': sha(json.dumps(versions, separators=(',', ':')).encode())}
+
+
+def verify_sdk_archive(path, expected, tools):
+    require(path.stat().st_size <= 96 * 1024 ** 2 and sha(path.read_bytes()) == expected,
+            'Missing/wrong official Go compiler archive')
+    with tarfile.open(path) as archive:
+        for name, digest in tools.items():
+            member = archive.getmember('go/' + name)
+            require(member.isfile() and sha(archive.extractfile(member).read()) == digest,
+                    'Official compiler tool readback mismatch')
+
+
+def collect_go_sdk(path, builder, version, expected, tools):
+    uri = f'https://go.dev/dl/go{version}.linux-amd64.tar.gz'
+    with urllib.request.urlopen(uri, timeout=120) as response:
+        data = response.read(96 * 1024 ** 2 + 1)
+    require(len(data) <= 96 * 1024 ** 2 and sha(data) == expected, 'Official Go archive changed')
+    path.write_bytes(data)
+    verify_sdk_archive(path, expected, tools)
+    cid = subprocess.check_output(['docker', 'create', '--platform', 'linux/amd64', builder],
+                                  text=True, timeout=30).strip()
+    require(re.fullmatch('[0-9a-f]{64}', cid), 'Unrelated compiler readback container')
+    try:
+        with tempfile.TemporaryDirectory() as temporary:
+            for name, digest in tools.items():
+                tool = Path(temporary) / name.replace('/', '_')
+                subprocess.run(['docker', 'cp', cid + ':/usr/local/go/' + name, str(tool)], check=True, timeout=35)
+                require(sha(tool.read_bytes()) == digest, 'Builder compiler differs from official Go archive')
+    finally:
+        subprocess.run(['docker', 'rm', cid], check=True, timeout=30)
+    return uri
+
+
 def download(url, digest, destination):
     data = urllib.request.urlopen(url, timeout=60).read(32 * 1024 * 1024 + 1)
     require(len(data) <= 32 * 1024 * 1024 and sha(data) == digest, 'Downloaded evidence/tool digest mismatch')
