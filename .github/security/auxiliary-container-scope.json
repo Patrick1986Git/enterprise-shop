@@ -342,7 +342,7 @@
   ],
   "execution_sources": {
     ".github/security/trivy/inspect-symbols.go": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
-    ".github/workflows/ci.yml": "e1c6358aea8c34f143999f7c65dddf9677ce14fa0f22cf79eb3db0c658d95e01",
+    ".github/workflows/ci.yml": "e482407d8d95c7ca5e7e68f57568e96672ede9c46176069b2f7d22c9fb4732d1",
     ".github/workflows/codeql.yml": "af9a1135ca56e8b2bed821e99e6e14a91cb814c46e08e6b56fd49dcc79ff9cc4",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
@@ -371,7 +371,7 @@
     "scripts/trivy_candidate_evidence.py": "90d24e083ed66771c092d9923ad6942ab4a2b37d1af1d99c4364a7984c0e77de",
     "scripts/trivy_source_resources.py": "1fb631401fe1866c453f12920dde56466c9fe0f35c6c59fab26ec08bd16a96eb",
     "scripts/validate-auxiliary-containers.py": "42174c0ed1151d3e313e9218ca4aee371fec9dce5690f4b6e4da8ea2eefa6f11",
-    "scripts/validate-github-actions-policy.py": "5cfc82756021375523cec61968c6cbcc2ee66250db4a25ef72b576d1f630a367",
+    "scripts/validate-github-actions-policy.py": "b1121f50d806dc9fa8723defb8346381dd09c9115681e98006919ddad9368be7",
     "scripts/verify-runtime-append-only-integrity.sh": "2d8c3322c817a9d8d86eb37b0fad53b9b32d83b9bd53a4b9de8ec0f6b76a1447",
     "scripts/verify-trivy-candidate-compatibility.py": "84e130a7edd95e977f6ed9dd62b31f96ba1b10dd2e3c9c634259ebd8a4a96272",
     "scripts/verify-trivy-provenance.py": "accf66be7c8ed93f948b9a2309e65e18828e18a624f7d51bf522dbb3441b3d31",
