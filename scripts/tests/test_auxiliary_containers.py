@@ -15,6 +15,12 @@ SPEC.loader.exec_module(POLICY)
 
 
 class AuxiliaryPolicyTest(unittest.TestCase):
+    def test_github_policy_and_acquisition_source_changes_require_new_receipts(self):
+        for name in ('scripts/github_api.py', 'scripts/validate-master-protection.py'):
+            with self.subTest(name=name):
+                self.assertIn(name, self.contract['execution_sources'])
+                self.source_change(lambda root: (root / name).write_text('# source changed\n'))
+
     def test_certificate_probe_source_bytes_require_an_execution_receipt(self):
         name = 'scripts/jdk-certificate-evidence/CertificateEvidence.java.source'
         original = (ROOT / name).read_bytes()

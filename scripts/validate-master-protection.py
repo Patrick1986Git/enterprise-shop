@@ -3,12 +3,13 @@
 
 import argparse
 import json
+import os
+import re
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
-API_VERSION = "2022-11-28"
+from github_api import GitHubAPIError, fetch_json
+
 RULESET_ID = 20755388
 RULESET_NAME = "Protect master"
 TARGET_REF = "refs/heads/master"
@@ -34,7 +35,7 @@ def _object(value, location, errors):
 
 
 def _exact(value, expected, location, errors):
-    if value != expected:
+    if type(value) is not type(expected) or value != expected:
         errors.append(f"{location} must be {expected!r}, got {value!r}")
 
 
@@ -42,10 +43,12 @@ def validate_ruleset_collection(payload):
     errors = []
     if not isinstance(payload, list):
         return ["ruleset collection must be an array"]
+    if any(not isinstance(item, dict) or not isinstance(item.get("source_type"), str)
+           or not isinstance(item.get("enforcement"), str) for item in payload):
+        return ["ruleset collection entries must have a source type and enforcement"]
     active_repository_rulesets = [
         item for item in payload
-        if isinstance(item, dict)
-        and item.get("source_type") == "Repository"
+        if item.get("source_type") == "Repository"
         and item.get("enforcement") == "active"
     ]
     if len(active_repository_rulesets) != 1:
@@ -115,7 +118,8 @@ def validate_ruleset_detail(payload):
     methods = pull_request.get("allowed_merge_methods")
     if not isinstance(methods, list):
         errors.append("allowed merge methods must be an array")
-    elif set(methods) != ALLOWED_MERGE_METHODS or len(methods) != len(ALLOWED_MERGE_METHODS):
+    elif (any(not isinstance(method, str) for method in methods)
+          or set(methods) != ALLOWED_MERGE_METHODS or len(methods) != len(ALLOWED_MERGE_METHODS)):
         errors.append(f"allowed merge methods must be exactly {sorted(ALLOWED_MERGE_METHODS)!r}, got {methods!r}")
 
     status = _object(
@@ -148,14 +152,13 @@ def validate_ruleset_detail(payload):
                 f"got {sorted(observed)!r}"
             )
         for context, integration_id in observed.items():
-            if integration_id != GITHUB_ACTIONS_INTEGRATION_ID:
+            if type(integration_id) is not int or integration_id != GITHUB_ACTIONS_INTEGRATION_ID:
                 errors.append(
                     f"required check {context!r} integration_id must be "
                     f"{GITHUB_ACTIONS_INTEGRATION_ID}, got {integration_id!r}"
                 )
 
-    # GitHub omits bypass_actors from the safe public representation. Absence is
-    # deliberately not interpreted as an empty set. If present, it is evidence.
+    # GitHub can omit bypass_actors when the caller cannot manage the ruleset.
     if "bypass_actors" in ruleset:
         bypass_actors = ruleset["bypass_actors"]
         if not isinstance(bypass_actors, list):
@@ -163,21 +166,6 @@ def validate_ruleset_detail(payload):
         elif bypass_actors:
             errors.append(f"bypass_actors must be empty, got {bypass_actors!r}")
     return errors
-
-
-def fetch_json(url):
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": API_VERSION,
-            "User-Agent": "enterprise-shop-master-protection-validator",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=15) as response:
-        if response.status != 200:
-            raise RuntimeError(f"GitHub API returned HTTP {response.status} for {url}")
-        return json.load(response)
 
 
 def load_json(path):
@@ -188,33 +176,42 @@ def load_json(path):
 def main():
     parser = argparse.ArgumentParser()
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--repository", help="GitHub owner/repository to inspect without credentials")
+    source.add_argument("--repository", help="GitHub owner/repository to inspect, using GH_TOKEN if set")
     source.add_argument("--collection", type=Path, help="offline ruleset collection fixture")
     parser.add_argument("--detail", type=Path, help="offline ruleset detail fixture")
     args = parser.parse_args()
 
+    token = os.environ.get("GH_TOKEN")
     try:
         if args.repository:
+            if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9_.-]+", args.repository):
+                parser.error("--repository must be a GitHub owner/repository")
             base = f"https://api.github.com/repos/{args.repository}"
-            collection = fetch_json(f"{base}/rulesets")
-            detail = fetch_json(f"{base}/rulesets/{RULESET_ID}")
+            options = {"user_agent": "enterprise-shop-master-protection-validator", "token": token}
+            collection = fetch_json(f"{base}/rulesets", **options)
+            detail = fetch_json(f"{base}/rulesets/{RULESET_ID}", **options)
         else:
             if args.detail is None:
                 parser.error("--detail is required with --collection")
             collection = load_json(args.collection)
             detail = load_json(args.detail)
         errors = validate_ruleset_collection(collection) + validate_ruleset_detail(detail)
-    except (OSError, RuntimeError, ValueError, json.JSONDecodeError, urllib.error.URLError) as error:
+    except (GitHubAPIError, OSError, ValueError) as error:
         print(f"Master protection evidence could not be obtained: {error}", file=sys.stderr)
         return 1
 
     if errors:
         print("Master protection policy validation failed:", file=sys.stderr)
         for error in errors:
+            if token:
+                error = error.replace(token, "[redacted]")
             print(f"- {error}", file=sys.stderr)
         return 1
     print("Observable protected-master ruleset policy is valid.")
-    print("bypass_actors remains outside this safe API evidence unless explicitly present.")
+    if "bypass_actors" in detail:
+        print("The observed bypass_actors list is empty.")
+    else:
+        print("bypass_actors was omitted by GitHub and remains unverified.")
     return 0
 
 
