@@ -49,10 +49,10 @@ class AuxiliaryPolicyTest(unittest.TestCase):
                            {'Target': 'Alpine', 'Class': 'os-pkgs', 'Type': 'alpine', 'Packages': [
                                {'Name': 'musl', 'Version': '1.2.5-r12', 'Identifier': {'PURL': 'pkg:apk/alpine/musl@1.2.5-r12'}}]},
                            {'Target': 'usr/local/go/bin/go', 'Class': 'lang-pkgs', 'Type': 'gobinary', 'Packages': [
-                               {'Name': 'stdlib', 'Version': 'v1.26.10', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.10'}}]}]}
+                               {'Name': 'stdlib', 'Version': 'v1.26.11', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.11'}}]}]}
         self.bom = {'bomFormat': 'CycloneDX', 'specVersion': '1.7', 'metadata': {'component': {
             'name': '/input/govulncheck.tar', 'properties': [{'name': 'aquasecurity:trivy:ImageID', 'value': self.image_id}]}},
-            'components': [{'purl': 'pkg:apk/alpine/musl@1.2.5-r12'}, {'purl': 'pkg:golang/stdlib@v1.26.10'}]}
+            'components': [{'purl': 'pkg:apk/alpine/musl@1.2.5-r12'}, {'purl': 'pkg:golang/stdlib@v1.26.11'}]}
 
     def validate(self):
         return POLICY.validate(self.image, self.evidence, self.report, self.bom, '0.75.0')
@@ -117,7 +117,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
             POLICY.inventory(self.contract)
 
     def test_digest_required(self):
-        self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.10-alpine3.24'
+        self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.11-alpine3.24'
         with self.assertRaises(ValueError): POLICY.inventory(self.contract)
 
     def test_linux_amd64_required(self):
@@ -129,8 +129,12 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate()
 
     def test_expected_go_version_readback_required(self):
-        self.report['Results'][1]['Packages'][0]['Version'] = 'v1.25.7'
-        with self.assertRaises(ValueError): self.validate()
+        package = self.report['Results'][1]['Packages'][0]
+        package['Version'] = 'v1.26.10'
+        package['Identifier']['PURL'] = 'pkg:golang/stdlib@v1.26.10'
+        self.bom['components'][1]['purl'] = package['Identifier']['PURL']
+        with self.assertRaisesRegex(ValueError, 'Wrong observed Go toolchain'):
+            self.validate()
 
     def test_high_blocks(self):
         self.finding('HIGH')
@@ -182,7 +186,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         self.report['Results'][1]['Target'] = 'usr/local/bin/gosu'
         self.image['required_gobinaries'] = ['usr/local/bin/gosu']
         self.report['Results'][1]['Vulnerabilities'] = [{'VulnerabilityID': 'CVE-2025-68121',
-            'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.10', 'Severity': 'CRITICAL'}]
+            'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.11', 'Severity': 'CRITICAL'}]
         self.assertEqual(1, len(self.validate()['blocked']))
 
     def test_no_auxiliary_exception_authority_can_exempt_production(self):

@@ -94,10 +94,10 @@
       "update_authority": "Repository maintainers; manual upstream release/advisory review and normal PR verification. No workflow-env Dependabot coverage.",
       "secrets": false,
       "exceptions": [],
-      "reference": "docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca",
-      "version": "1.26.10-alpine3.24",
+      "reference": "docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab",
+      "version": "1.26.11-alpine3.24",
       "registry": "docker.io",
-      "digest": "sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca",
+      "digest": "sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab",
       "classification": "high-impact",
       "governed": true,
       "threshold": [
@@ -106,12 +106,12 @@
       ],
       "identity": {
         "binary": "/usr/local/go/bin/go",
-        "sha256": "9c2a37ae5b21ba1d5a004bb9ab4d0c64de6fc5778e9d30487adccea62678b8b5",
+        "sha256": "95499375c24b610cdc9e3684cec920174ec4c4f3f66d35b4332107f0f7d3d27d",
         "command": [
           "go",
           "version"
         ],
-        "output": "go version go1.26.10 linux/amd64"
+        "output": "go version go1.26.11 linux/amd64"
       },
       "environment": "GOSU_GOVULNCHECK_IMAGE",
       "package_mode": "os-and-gobinary",
@@ -121,7 +121,7 @@
         "usr/local/go/pkg/tool/linux_amd64/compile",
         "usr/local/go/pkg/tool/linux_amd64/link"
       ],
-      "go_version": "1.26.10",
+      "go_version": "1.26.11",
       "command": "Build gosu twice from checksum-bound release source and reviewed module locks; read installed ELF/hash/compiler/modules; pinned upstream source wrapper and binary govulncheck v1.1.4",
       "mounts": [
         "pinned gosu source and reviewed module locks:/wd:ro",
@@ -342,11 +342,11 @@
   ],
   "execution_sources": {
     ".github/security/trivy/inspect-symbols.go": "112c7abf3e6c02a9cede9fb753d315eedb30507bedfff94bcd9ee684d433596b",
-    ".github/workflows/ci.yml": "e482407d8d95c7ca5e7e68f57568e96672ede9c46176069b2f7d22c9fb4732d1",
+    ".github/workflows/ci.yml": "5058a4cf003e7c16400bcd70240208ff87caf6a9ab66c79564d3c54214f34564",
     ".github/workflows/codeql.yml": "af9a1135ca56e8b2bed821e99e6e14a91cb814c46e08e6b56fd49dcc79ff9cc4",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
-    "docker/postgres/Dockerfile": "25c0036bd9acacaa2bbe6f61b64c6e0284fdfc60d23ad3254d82645c0454728b",
+    "docker/postgres/Dockerfile": "339743c46c682980c6f0a848f45953b1e23c070c9066018564f479f21d642a5e",
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
     "scripts/auxiliary_binary_evidence.py": "cdda4351ba0731ea99bc0afde2288704ed39bec5362cf02ee48e1104a49ccf21",
     "scripts/build-ryuk-candidate.py": "beeeb47be36163031ae9ad2989807e64153d8ac02e009f5278611fe282f1cd66",
@@ -471,7 +471,7 @@
           "advisory_authority": "Maintainer review of official UPX NEWS/security issues for this pinned current release; Trivy does not inventory its static C++ libraries. Restricted parser boundary, no claim of complete native-library coverage.",
           "capabilities": "Existing governed Go image; offline nonroot read-only rootfs, no socket/secrets/repository, copied input RO and only temporary payload output RW; all capabilities dropped, no-new-privileges and resource limits."
         },
-        "analysis_image": "docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca",
+        "analysis_image": "docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab",
         "buildinfo": {
           "go_version": "1.23.12",
           "dependencies": {

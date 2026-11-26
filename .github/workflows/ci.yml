@@ -644,7 +644,7 @@ jobs:
       # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.4, x/net v0.62.0 and go-jose v4.1.6; immutable local configuration digest.
       TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb
       # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
-      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
+      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
       RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-058b8dd02c61538d32db02f54d91a147b15ef58e6be8b3867376e166615e229d
@@ -720,7 +720,7 @@ jobs:
 
           docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
           docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.75.0'
-          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.10 linux/amd64'
+          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.11 linux/amd64'
           docker run --rm --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}" cat /etc/alpine-release | grep -E '^3\.20\.'
 
       - name: Verify upstream Trivy executable provenance

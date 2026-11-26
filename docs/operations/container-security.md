@@ -126,7 +126,7 @@ The authoritative [auxiliary inventory](../../.github/security/auxiliary-contain
 | --- | --- |
 | Hadolint v2.14.0 scratch | Parses candidate Dockerfiles with repository read-only access and networking disabled. No OS packages. Its static Haskell executable/dependency graph is not represented by Trivy; upstream Hadolint/Haskell advisory review remains necessary. |
 | Trivy 0.75.0 | Security authority with Docker-socket access in existing image scans and writable evidence/cache. Auxiliary scans use read-only exported archives without a socket. OS/Go-package self-scan is advisory visibility, not independent scanner integrity proof. |
-| Go 1.26.10 Alpine 3.24 | Rebuilds gosu from checksum-bound source and reviewed module locks; runs govulncheck v1.1.4 against patched source and installed binary. Analysis uses read-only inputs, per-process empty tmpfs cache, Go-service networking and no socket. OS/Go-toolchain package findings block at HIGH/CRITICAL. |
+| Go 1.26.11 Alpine 3.24 | Rebuilds gosu from checksum-bound source and reviewed module locks; runs govulncheck v1.1.4 against patched source and installed binary. Analysis uses read-only inputs, per-process empty tmpfs cache, Go-service networking and no socket. OS/Go-toolchain package findings block at HIGH/CRITICAL. |
 | Alpine 3.20 fixture | Immutable target for Trivy ignorefile/configuration regression plus release-identity probe; no analysis authority or candidate-code execution. End-of-life, with no current audit findings. It is mechanically excluded from trusted execution evidence and supplies no exception authority. Its role does not require deliberate vulnerabilities. |
 | Go 1.27.4 and Go 1.26.11 Alpine 3.24 | Build and analyze the reviewed Trivy and Ryuk candidates. Both compiler images retain full OS and Go binary evidence under HIGH/CRITICAL policy. |
 | Rebuilt Ryuk 0.14.0 candidate | Runner-local scratch reaper, exact release source plus reviewed Moby client/API migration, Go 1.26.11 and the reviewed cleanup algorithm. Content-addressed configuration, repeat executable builds, direct raw/SBOM, source/binary govulncheck, socket/execution/cleanup assertions. No CVE exceptions. |
@@ -164,8 +164,8 @@ reaches `crypto/x509.Certificate.Verify` through TLS. The Go fix distrusts known
 compromised intermediate certificates. Earlier green results describe the
 database revision used then and cannot authorize this newly affected build.
 
-Gosu and the official compressed Ryuk comparison use Go 1.26.10. The rebuilt
-Ryuk uses Go 1.26.11 from Alpine index `sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab`.
+Gosu construction, gosu analysis and the official compressed Ryuk comparison use
+the same Go 1.26.11 image as the rebuilt Ryuk builder, from Alpine index `sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab`.
 Preparation checks the loaded builder configuration and independently compares
 its go, gofmt, compile and link bytes with the official Go 1.26.11 SDK. The
 historical Docker 29 run produced four matching binaries and four zero-finding
@@ -453,7 +453,7 @@ The external container tools and scan input are immutable while retaining readab
 
 - Docker Hub, Hadolint `v2.14.0` scratch: `docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e` (`linux/amd64`; resolved child retained in auxiliary evidence)
 - Reviewed source rebuild, Trivy `0.75.0`: `local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb` (`linux/amd64`)
-- Docker Hub, Go `1.26.10-alpine3.24`: `docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca` (`linux/amd64`; resolved child retained in auxiliary evidence)
+- Docker Hub, Go `1.26.11-alpine3.24`: `docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab` (`linux/amd64`; resolved child retained in auxiliary evidence)
 - Docker Hub, Alpine `3.20`: `docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc` (`linux/amd64`)
 
 The supplied Docker Hub references are multi-platform OCI index digests, and CI explicitly pulls and inspects their `linux/amd64` images. OCI digests are registry- and repository-scoped, so changing only the registry while reusing a digest does not produce a valid reference. Before linting or scanning, CI verifies manifest availability, the locally resolved platform, and each tool's version or release identity. For gosu source, tag `1.19` is the human-readable upstream release identity and full commit `6456aaa0f3c854d199d0f037f068eb97515b7513` (`Update to 1.19`) is the immutable security identity. CI shallow-clones the tag, verifies its peeled commit and `HEAD`, and fails before govulncheck and policy enforcement if either differs.
@@ -745,13 +745,20 @@ does not justify suppressing the finding.
 Until a suitable official release is reviewed, the Dockerfile rebuilds the exact
 gosu 1.19 commit with only `moby/sys/user` updated to v0.4.1. The
 [receipt](../../.github/security/gosu/candidate.json) binds the source archive
-checksum, immutable governed Go 1.26.10 image, module versions/checksums, patched
+checksum, immutable governed Go 1.26.11 image, module versions/checksums, patched
 lockfiles and executable digest. Two builds use independent empty compiler caches
 and must match each other and the reviewed digest. Builds retain symbols, disable
 CGO and automatic toolchain downloads, and require linux/amd64. The executable
 honestly records an unversioned `(devel)` main module; it is a repository rebuild.
-The compiler-patched executable SHA-256 is
+The Go 1.26.11 transition replaces the auxiliary Go 1.26.10 image after CI
+#1304 attempt 2 blocked CVE-2026-107891 in musl and musl-utils and
+CVE-2026-85091 in zlib. The reviewed Alpine 3.24.4 image contains the fixes
+in musl and musl-utils `1.2.6-r3` and zlib `1.3.2-r1`. The new executable
+SHA-256 is `2ffe72a22a20f896e744d6298cf7465911f83f26e8d9b00ccd66fc45beb04f4c`.
+The previous Go 1.26.10 build had SHA-256
 `077de39980df05ec3897fbadf39a3105ddbd430e8fb714e9eb97b5bc57a8f094`.
+[Alpine musl backport](https://github.com/alpinelinux/aports/commit/8f79d39391b46d6dbf1800fb68b8212a21d5ee2e) ·
+[Alpine zlib backport](https://github.com/alpinelinux/aports/commit/0afa2da0e8c8051c6f8f64a7a388e5a259904245)
 Only this executable enters the existing PostgreSQL 18 runtime stage. Optional
 `proxy_ca` BuildKit secret mounts support trusted build proxies without adding
 session certificates to the final image.
@@ -825,7 +832,7 @@ grep -F 'const Version = "1.19"' version.go
 
 cd ../..
 cp docker/postgres/gosu/go.mod docker/postgres/gosu/go.sum .tmp/gosu-source/
-GOSU_GOVULNCHECK_IMAGE=docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca bash scripts/run-gosu-govulncheck.sh
+GOSU_GOVULNCHECK_IMAGE=docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab bash scripts/run-gosu-govulncheck.sh
 ```
 
 ## SBOM artifacts
