@@ -3,12 +3,16 @@ import copy
 import io
 import json
 import os
+import shlex
+import shutil
 import subprocess
 import tarfile
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from test_go_advisory_acquisition import NOW, MODIFIED, fixture
 from unittest.mock import patch
 
@@ -48,6 +52,43 @@ class TrivyBuildTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'upstream source archive'):
                 BUILD.prepare(b'altered archive', source)
             self.assertFalse(source.exists())
+
+    @unittest.skipUnless(shutil.which('go'), 'Go is required for readonly package resolution')
+    def test_readonly_module_graph_can_pass_with_an_incomplete_package_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = {
+                'go.mod': ('module example.test/scanner\n\ngo 1.20\n\nrequire example.test/parent v1.0.0\n\n'
+                           'replace example.test/parent => ./parent\nreplace example.test/child => ./child\n'),
+                'parent/go.mod': 'module example.test/parent\n\ngo 1.20\n\nrequire example.test/child v1.0.0\n',
+                'parent/parent.go': 'package parent\nimport _ "example.test/child"\n',
+                'child/go.mod': 'module example.test/child\n\ngo 1.20\n',
+                'child/child.go': 'package child\n',
+                'cmd/trivy/main.go': 'package main\nimport _ "example.test/parent"\nfunc main() {}\n',
+            }
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            env = dict(os.environ, GOTOOLCHAIN='local', GOENV='off', GOWORK='off', GOFLAGS='', GOPROXY='off',
+                       GOSUMDB='off', GOCACHE=str(root / 'build-cache'), GOMODCACHE=str(root / 'module-cache'))
+            options = dict(cwd=root, env=env, capture_output=True, text=True, timeout=30)
+            graph = ['go', 'list', '-mod=readonly', '-m', 'all']
+            target = shlex.split(BUILD.READONLY_PACKAGES)
+            original = subprocess.run(graph, check=True, **options).stdout
+            self.assertIn('example.test/child v1.0.0', original)
+            failed = subprocess.run(target, **options)
+            self.assertNotEqual(0, failed.returncode)
+            self.assertIn('updates to go.mod needed, disabled by -mod=readonly', failed.stderr)
+            lock = root / 'go.mod'
+            self.assertEqual(files['go.mod'], lock.read_text())
+            repaired = files['go.mod'] + '\nrequire example.test/child v1.0.0 // indirect\n'
+            lock.write_text(repaired)
+            self.assertEqual(original, subprocess.run(graph, check=True, **options).stdout)
+            loaded = subprocess.run(target, check=True, **options).stdout
+            self.assertIn('"ImportPath": "example.test/child"', loaded)
+            self.assertEqual(repaired, lock.read_text())
+            self.assertFalse((root / 'go.sum').exists())
 
     def test_image_is_reproducible_and_contains_only_reviewed_runtime_inputs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -119,13 +160,329 @@ class TrivyBuildTest(unittest.TestCase):
         self.assertTrue(contract['images']['scanner']['governed'])
         self.assertTrue(contract['images']['scanner']['candidate_build'])
         builder = contract['images']['scanner-builder']
-        self.assertEqual(BUILD.BUILDER, builder['reference'])
-        self.assertEqual(BUILD.BUILDER_BINARY, builder['identity']['sha256'])
+        # Bind the retained runtime profile to its own reviewed manifest;
+        # prospective source inputs do not qualify a replacement runtime.
+        candidate = json.loads(EVIDENCE.CONTRACT.read_text())
+        self.assertEqual(candidate['builder'], builder['reference'])
+        self.assertEqual(candidate['builder_binary_sha256'], builder['identity']['sha256'])
         self.assertTrue(builder['governed'])
         self.assertEqual(['HIGH', 'CRITICAL'], builder['threshold'])
 
+    def test_new_builder_reference_cannot_relabel_historical_compiler_receipts(self):
+        contract = json.loads((ROOT / '.github/security/auxiliary-container-scope.json').read_text())
+        candidate = json.loads(EVIDENCE.CONTRACT.read_text())
+        candidate['sdk_sha256'] = '65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40'
+        with self.assertRaisesRegex(ValueError, 'Unexpected scanner builder/compiler'):
+            EVIDENCE.inventory(contract['images']['scanner'], candidate)
+
+
+class TrivyRuntimeEnvironmentTest(unittest.TestCase):
+    def test_reviewed_docker29_settings_are_accepted_in_either_order(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None],
+                       ['GOMAXPROCS=1', 'GOMEMLIMIT=7GiB', None]):
+            with self.subTest(values=values):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_duplicate_keys_are_rejected_even_when_values_agree(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=7GiB', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=off', None],
+                       ['GOMAXPROCS=1', 'GOMAXPROCS=1', None],
+                       ['GOMAXPROCS=1', 'GOMAXPROCS=2', None]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_missing_wrong_extra_and_malformed_settings_are_rejected(self):
+        reviewed = {'GOMEMLIMIT': '7GiB', 'GOMAXPROCS': '1'}
+        for values in (None, {}, (), [], [None], ['GOMEMLIMIT=7GiB', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1'],
+                       [None, 'GOMEMLIMIT=7GiB', 'GOMAXPROCS=1'],
+                       ['GOMEMLIMIT=off', 'GOMAXPROCS=1', None],
+                       ['GOMEMLIMIT=7GiB', 'GOGC=off', None],
+                       ['GOMEMLIMIT=7GiB', 'GODEBUG=x', None],
+                       ['GOMEMLIMIT=7GiB', 'GOFLAGS=-tags=exclude', None],
+                       ['GOMEMLIMIT=7GiB', 'PATH=/unreviewed', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', 'GOGC=off', None],
+                       ['GOMEMLIMIT=7GiB', None, None],
+                       ['GOMEMLIMIT=7GiB', {'GOMAXPROCS': '1'}, None],
+                       ['GOMEMLIMIT=7GiB', ' GOMAXPROCS=1', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1 ', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS', None],
+                       ['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1=2', None]):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(values, reviewed)
+
+    def test_interim_contract_rejects_any_concurrency_override(self):
+        reviewed = {'GOMEMLIMIT': '7GiB'}
+        BUILD.validate_runtime_environment(['GOMEMLIMIT=7GiB', None], reviewed)
+        for value in ('1', '2', '8'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                BUILD.validate_runtime_environment(['GOMEMLIMIT=7GiB', 'GOMAXPROCS=' + value, None], reviewed)
+
+
+class TrivyTerminationTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        (self.directory / 'cache-analysis').mkdir()
+        (self.directory / 'govulncheck').write_bytes(b'analyzer fixture')
+        self.head, self.identifier = 'a' * 40, 'b' * 64
+        self.name = 'enterprise-shop-trivy-analysis-' + 'c' * 32
+        self.status, self.oom, self.completed = 0, False, False
+        self.commands, self.observed = [], threading.Event()
+        self.fail_collect, self.fail_cleanup, self.wrong_container = False, False, False
+        self.analyzer = ['docker', 'run', '--rm', '--memory', '10g', '--cpus', '2', '--pids-limit', '512',
+                         '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+                         BUILD.BUILDER, '/evidence/govulncheck']
+        for target, side in [(patch.object(BUILD, 'diagnostic_command'), self.probe),
+                             (patch.object(BUILD.RYUK.ADVISORY, 'collect'), self.collect)]:
+            mocked = target.start()
+            self.addCleanup(target.stop)
+            mocked.side_effect = side
+        fixed = patch.object(BUILD.uuid, 'uuid4', return_value=SimpleNamespace(hex='c' * 32))
+        fixed.start()
+        self.addCleanup(fixed.stop)
+
+    def probe(self, command):
+        self.commands.append(command)
+        if command[0] == 'inspect':
+            self.observed.set()
+            return json.dumps({'id': self.identifier, 'name': '/' + self.name, 'head':
+                'd' * 40 if self.wrong_container else self.head, 'image': BUILD.BUILDER,
+                'memory': 10 * 1024 ** 3, 'swap': 20 * 1024 ** 3, 'cpus': 2 * 10 ** 9,
+                'pids': 512, 'readonly': True, 'runtime_env': ['GOMEMLIMIT=7GiB', None],
+                'state': {'status': 'exited' if self.completed else 'running', 'exit': self.status,
+                          'oom': self.oom, 'pid': 0, 'started': '', 'finished': ''}}).encode()
+        if command[0] == 'events':
+            return (json.dumps({'id': self.identifier, 'action': 'oom' if self.oom else 'die',
+                               'time': 1, 'signal': '', 'exit': str(self.status)}) + '\n').encode()
+        if self.fail_cleanup:
+            raise subprocess.CalledProcessError(1, ['docker', 'rm'])
+        self.assertEqual(['rm', '--force', self.identifier], command)
+        return b''
+
+    def collect(self, command, args, directory, mode, timeout):
+        Path(command[7]).write_text(self.identifier)
+        self.assertTrue(self.observed.wait(2))
+        self.assertNotIn('--rm', command)
+        self.assertEqual(BUILD.source_memory_command(self.analyzer)[3:], command[8:])
+        self.assertEqual(['-mode=source', '-json', './cmd/trivy'], args)
+        self.assertEqual(('source', 1800), (mode, timeout))
+        self.completed = True
+        if self.fail_collect:
+            raise subprocess.TimeoutExpired('fixture', 1800)
+        (directory / 'source-govulncheck.json').write_bytes(b'analysis fixture')
+        (directory / 'source-govulncheck.log').write_bytes(b'')
+        raw = json.dumps({'started_at': BUILD.RYUK.ADVISORY.utc_now(),
+                          'completed_at': BUILD.RYUK.ADVISORY.utc_now()}).encode()
+        (directory / 'source-go-acquisition.json').write_bytes(raw)
+        return {'status': self.status, 'sha256': BUILD.sha(b'analysis fixture'), 'acquisition_sha256': BUILD.sha(raw)}
+
+    def run_analysis(self):
+        value = BUILD.source_analysis(self.analyzer, ['-mode=source', '-json', './cmd/trivy'],
+                                      self.directory, self.head)
+        self.receipt = {'analysis': {'source': value}, 'tool_sha256': BUILD.sha(b'analyzer fixture')}
+        return value
+
+    def validate(self):
+        return BUILD.validate_source_diagnostics(self.directory, self.receipt, self.head)
+
+    def save(self, report):
+        raw = json.dumps(report).encode()
+        (self.directory / 'source-termination.json').write_bytes(raw)
+        self.receipt['analysis']['source']['diagnostics_sha256'] = BUILD.sha(raw)
+
+    def test_success_preserves_analyzer_command_and_cleans_exact_owned_container(self):
+        self.assertEqual(0, self.run_analysis()['status'])
+        report = self.validate()
+        self.assertTrue(report['cleanup'])
+        self.assertFalse(report['container']['state']['oom'])
+        self.assertIn(['rm', '--force', self.identifier], self.commands)
+
+    def test_interim_memory_profile_preserves_default_source_concurrency(self):
+        command = BUILD.source_memory_command(self.analyzer)
+        self.assertEqual(self.analyzer[:-2] + ['-e', 'GOMEMLIMIT=7GiB'] + self.analyzer[-2:], command)
+        self.assertEqual('7GiB', BUILD.SOURCE_GOMEMLIMIT)
+
+    def test_runtime_overrides_and_changed_hard_limits_are_rejected(self):
+        for extra in (['-e', 'GOMEMLIMIT=off'], ['--env', 'GOGC=off'], ['-e', 'GOMAXPROCS=8'],
+                      ['-e', 'GODEBUG=x'], ['-e', 'GOFLAGS=-tags=exclude'],
+                      ['--env=GOMEMLIMIT=off'], ['-eGOMEMLIMIT=off'], ['--env-file', '/tmp/env']):
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'runtime override|environment option'):
+                BUILD.source_memory_command(self.analyzer[:-2] + extra + self.analyzer[-2:])
+        for flag, value in [('--memory', '20g'), ('--cpus', '4'), ('--pids-limit', '1024')]:
+            command = self.analyzer.copy()
+            command[command.index(flag) + 1] = value
+            with self.assertRaisesRegex(ValueError, 'resource contract'):
+                BUILD.source_memory_command(command)
+        for extra in (['--memory=20g'], ['-m', '20g'], ['-m20g'], ['--cpus=4'], ['--pids-limit=1024']):
+            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, 'resource contract'):
+                BUILD.source_memory_command(self.analyzer[:-2] + extra + self.analyzer[-2:])
+
+    def test_137_diagnostics_distinguish_oom_from_non_oom_without_changing_status(self):
+        self.status = 137
+        for oom in (True, False):
+            with self.subTest(oom=oom):
+                self.oom = oom
+                self.assertEqual(137, self.run_analysis()['status'])
+                report = self.validate()
+                self.assertIs(report['container']['state']['oom'], oom)
+                self.assertEqual('oom' if oom else 'die', report['events'][0]['action'])
+
+    def test_timeout_removes_old_success_and_retains_cleanup_evidence(self):
+        self.run_analysis()
+        self.fail_collect = True
+        with self.assertRaises(subprocess.TimeoutExpired):
+            self.run_analysis()
+        self.assertFalse((self.directory / 'source-go-acquisition.json').exists())
+        report = json.loads((self.directory / 'source-termination.json').read_text())
+        self.assertIsNone(report['analysis'])
+        self.assertTrue(report['cleanup'])
+        with self.assertRaises((ValueError, KeyError)):
+            self.validate()
+
+    def test_cleanup_failure_cannot_be_successful_diagnostic_evidence(self):
+        self.fail_cleanup = True
+        self.run_analysis()
+        with self.assertRaisesRegex(ValueError, 'Incomplete'):
+            self.validate()
+
+    def test_oom_evidence_cannot_authorize_an_apparent_zero_exit(self):
+        self.oom = True
+        self.run_analysis()
+        with self.assertRaisesRegex(ValueError, 'Incomplete'):
+            self.validate()
+
+    def test_unrelated_container_is_rejected_and_never_removed(self):
+        self.wrong_container = True
+        self.run_analysis()
+        self.assertFalse(any(c[0] == 'rm' for c in self.commands))
+        with self.assertRaises(KeyError):
+            self.validate()
+
+    def test_missing_malformed_oversized_and_tampered_evidence_is_rejected(self):
+        self.run_analysis()
+        path = self.directory / 'source-termination.json'
+        original = path.read_bytes()
+        for payload in (None, b'{', original + b' ', b' ' * (1024 * 1024 + 1)):
+            with self.subTest(payload_size=None if payload is None else len(payload)):
+                if payload is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(payload)
+                with self.assertRaises((OSError, ValueError)):
+                    self.validate()
+        path.write_bytes(original)
+
+    def test_rebound_stale_unrelated_or_incomplete_diagnostics_are_rejected(self):
+        self.run_analysis()
+        original = json.loads((self.directory / 'source-termination.json').read_text())
+        for mutate in (lambda r: r.update(repository_head='d' * 40),
+                       lambda r: r.update(completed_at='2026-01-01T00:00:00Z'),
+                       lambda r: r['events'][0].update(id='d' * 64),
+                       lambda r: r.update(samples=[]),
+                       lambda r: r['samples'][0].update(cache={}),
+                       lambda r: r['container'].update(memory=20 * 1024 ** 3),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=off', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMEMLIMIT=7GiB', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=1', None]),
+                       lambda r: r['container'].update(runtime_env=['GOMEMLIMIT=7GiB', 'GOMAXPROCS=2', None]),
+                       lambda r: r['container']['state'].update(exit=137),
+                       lambda r: r.update(stdout_sha256='0' * 64)):
+            report = copy.deepcopy(original)
+            mutate(report)
+            self.save(report)
+            with self.assertRaises((ValueError, KeyError)):
+                self.validate()
+
+
+class TrivyActualImageIdentityTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.target = self.root / 'actual.tar'
+        self.proof = self.root / 'identity.tar'
+        self.fixture = ROOT / 'scripts/tests/fixtures/docker-identity/docker29-image.tar.gz'
+        self.config_id = 'sha256:5069b87377ce91b47890d84793e8f68efe42e927f0b423fe958b7c428ef30379'
+        self.descriptor_id = 'sha256:22a761becced308c3ef0e30f3a73ca236012b1f02a9109ddb2d2f418dd91a8ff'
+        self.observed = {'Id': self.descriptor_id, 'Os': 'linux', 'Architecture': 'amd64', 'Size': 65536}
+        self.corrupt = None
+        self.commands = []
+
+    def export(self, command, **kwargs):
+        self.commands.append(command)
+        output = Path(command[command.index('-o') + 1])
+        if command[1] != 'save' or self.corrupt is None:
+            output.write_bytes(self.fixture.read_bytes())
+            return subprocess.CompletedProcess(command, 0)
+        with tarfile.open(self.fixture) as source:
+            files = {m.name: source.extractfile(m).read() for m in source if m.isfile()}
+        name = ('blobs/sha256/' + self.config_id.split(':')[1] if self.corrupt == 'config'
+                else json.loads(files['manifest.json'])[0]['Layers'][0])
+        files[name] += b'changed'
+        with tarfile.open(output, 'w') as saved:
+            for path, data in files.items():
+                member = tarfile.TarInfo(path)
+                member.size = len(data)
+                saved.addfile(member, io.BytesIO(data))
+        return subprocess.CompletedProcess(command, 0)
+
+    def collect(self):
+        with patch.object(COMPAT.subprocess, 'check_output', return_value=json.dumps([self.observed]).encode()), \
+                patch.object(COMPAT.subprocess, 'run', side_effect=self.export):
+            return COMPAT.export_actual_image('mutable:tag', self.target, self.proof)
+
+    def test_docker29_descriptor_is_bound_to_original_configuration_and_scan_archive(self):
+        config, identity = self.collect()
+        self.assertEqual(self.config_id, config)
+        self.assertNotEqual(self.descriptor_id, config)
+        self.assertEqual({'docker_id': self.descriptor_id, 'proof': 'identity.tar'}, identity)
+        self.assertEqual(config, EVIDENCE.BINARY.configuration_evidence(self.proof, self.descriptor_id))
+        exports = [c for c in self.commands if c[1] == 'save']
+        self.assertEqual(1, len(exports))
+        self.assertEqual(self.descriptor_id, exports[0][-1])
+        self.assertNotIn('mutable:tag', exports[0])
+
+    def test_classic_configuration_identity_remains_accepted(self):
+        self.observed['Id'] = self.config_id
+        config, identity = self.collect()
+        self.assertEqual(self.config_id, config)
+        self.assertEqual(self.config_id, identity['docker_id'])
+
+    def test_unrelated_descriptor_cannot_authorize_the_archive(self):
+        self.observed['Id'] = 'sha256:' + '0' * 64
+        with self.assertRaisesRegex(ValueError, 'inspected immutable image'):
+            self.collect()
+        self.assertFalse(self.target.exists())
+
+    def test_changed_configuration_or_layer_in_actual_scan_export_is_rejected(self):
+        for corruption in ('config', 'layer'):
+            self.corrupt = corruption
+            with self.subTest(corruption=corruption), self.assertRaises((ValueError, OSError)):
+                self.collect()
+
+    def test_retained_metadata_cannot_authorize_a_different_descriptor(self):
+        self.collect()
+        with self.assertRaisesRegex(ValueError, 'inspected immutable image'):
+            EVIDENCE.BINARY.configuration_evidence(self.proof, 'sha256:' + '0' * 64)
+
 
 class TrivyCompatibilityStorageTest(unittest.TestCase):
+    # Exact blocking findings from the pinned reference executable in CI #1301.
+    REFERENCE_FINDINGS = {
+        ('CVE-2026-111943', 'stdlib', 'v1.27.1', 'HIGH'),
+        ('CVE-2026-116587', 'github.com/go-jose/go-jose/v4', 'v4.1.5', 'HIGH'),
+        ('CVE-2026-78661', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
+        ('CVE-2026-78667', 'stdlib', 'v1.27.1', 'HIGH'),
+        ('CVE-2026-78669', 'golang.org/x/net', 'v0.59.0', 'HIGH'),
+        ('CVE-2026-78669', 'stdlib', 'v1.27.1', 'HIGH'),
+        ('CVE-2026-95839', 'github.com/containerd/containerd/v2', 'v2.4.1', 'HIGH'),
+        ('CVE-2026-97031', 'stdlib', 'v1.27.1', 'HIGH'),
+    }
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -134,16 +491,19 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
         self.build.mkdir()
         self.candidate = b'candidate fixture'
         self.reference = b'reference fixture'
+        self.reference_findings = self.REFERENCE_FINDINGS.copy()
+        self.candidate_findings = {}
         self.failure = None
         self.commands = []
         self.runs = []
         source = self.root / 'source'
         source.mkdir()
         archive = BUILD.image_archive(self.candidate, b'CA', source)[4]
+        self.actual_image = BUILD.image_archive(b'actual fixture', b'CA', source)
         (self.build / 'image.tar').write_bytes(archive)
         COMPAT.write(self.build / 'build-receipt.json', {'image_reference': 'local/candidate:fixture',
             'binary_sha256': COMPAT.sha(self.candidate), 'repeat_sha256': COMPAT.sha(self.candidate),
-            'go_version': '1.27.3', 'repository_head': 'fixture-head'})
+            'go_version': BUILD.GO_VERSION, 'repository_head': 'fixture-head'})
         for target, replacement in ((patch.object(COMPAT.subprocess, 'run'), self.run_command),
                                     (patch.object(COMPAT.subprocess, 'check_output'), self.output),
                                     (patch.object(COMPAT, 'REFERENCE_BINARY', COMPAT.sha(self.reference)), None),
@@ -160,14 +520,15 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
             return 'fixture-head'
         if command[1] == 'create':
             return 'fixture-container'
-        return json.dumps([{'Id': 'sha256:actual-fixture'}]).encode()
+        return json.dumps([{'Id': self.actual_image[1], 'Os': 'linux', 'Architecture': 'amd64',
+                            'Size': len(self.actual_image[3])}]).encode()
 
     def run_command(self, command, **kwargs):
         self.commands.append(command)
         if command[1] == 'cp':
             Path(command[-1]).write_bytes(self.reference)
-        elif command[1] == 'save':
-            Path(command[command.index('-o') + 1]).write_bytes(b'actual image archive')
+        elif command[1] == 'save' or command[1:3] == ['image', 'save']:
+            Path(command[command.index('-o') + 1]).write_bytes(self.actual_image[4])
         elif command[1] == 'run':
             self.runs.append(command)
             mounts = {value.split(':')[1]: Path(value.split(':')[0])
@@ -197,11 +558,11 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
                         'components': [{'purl': 'pkg:generic/fixture@1'}]})
                 else:
                     name = output.name.removesuffix('.raw.json')
-                    findings = COMPAT.EXPECTED if name == 'reference-rootfs' else (
+                    findings = self.reference_findings if name == 'reference-rootfs' else (
                         {('CVE-2025-48734', 'commons-beanutils:commons-beanutils', '1.9.4', 'HIGH')}
-                        if name == 'vulnerable' else set())
+                        if name == 'vulnerable' else self.candidate_findings.get(name, set()))
                     COMPAT.write(output, {'SchemaVersion': 2, 'Trivy': {'Version': '0.75.0'},
-                        'Metadata': {'ImageID': 'sha256:actual-fixture'}, 'Results': [{
+                        'Metadata': {'ImageID': self.actual_image[1]}, 'Results': [{
                             'Packages': [{'Identifier': {'PURL': 'pkg:generic/fixture@1'}}],
                             'Vulnerabilities': [dict(zip(('VulnerabilityID', 'PkgName', 'InstalledVersion', 'Severity'), v))
                                                 for v in findings]}]})
@@ -251,6 +612,28 @@ class TrivyCompatibilityStorageTest(unittest.TestCase):
             self.assertTrue((directory / 'scratch-storage.json').exists())
             self.assert_cleaned(directory)
 
+    def test_previous_reference_finding_set_is_rejected(self):
+        self.reference_findings = {v for v in self.reference_findings
+                                   if v[0] not in {'CVE-2026-78661', 'CVE-2026-95839'}}
+        with self.assertRaisesRegex(ValueError, 'differs from the reviewed blocking findings'):
+            COMPAT.collect(self.build, self.root / 'previous-reference-set')
+
+    def test_unreviewed_reference_finding_is_rejected_even_at_the_expected_count(self):
+        unexpected = ('CVE-2026-00000', 'example/module', 'v1.0.0', 'HIGH')
+        removed_finding = ('CVE-2026-95839', 'github.com/containerd/containerd/v2', 'v2.4.1', 'HIGH')
+        for label, removed in [('additional', set()), ('replacement', {removed_finding})]:
+            with self.subTest(label=label):
+                self.reference_findings = (self.REFERENCE_FINDINGS - removed) | {unexpected}
+                with self.assertRaisesRegex(ValueError, 'differs from the reviewed blocking findings'):
+                    COMPAT.collect(self.build, self.root / label)
+
+    def test_candidate_rootfs_and_image_still_reject_blocking_findings(self):
+        for name, severity in [('candidate-rootfs', 'HIGH'), ('candidate-image', 'CRITICAL')]:
+            with self.subTest(name=name, severity=severity):
+                self.candidate_findings = {name: {('CVE-2026-00000', 'example/module', 'v1.0.0', severity)}}
+                with self.assertRaisesRegex(ValueError, 'Actual candidate still has HIGH/CRITICAL findings'):
+                    COMPAT.collect(self.build, self.root / name)
+
     def test_download_exhaustion_is_secret_free_and_the_next_run_has_fresh_state(self):
         directory = self.root / 'failed'
         self.failure = True
@@ -294,20 +677,23 @@ class TrivyTrustContractTest(unittest.TestCase):
     def setUp(self):
         self.candidate = {'image_id': 'sha256:' + 'a' * 64,
             'image_reference': 'local/enterprise-shop-trivy:sha256-' + 'a' * 64,
-            'binary_sha256': 'b' * 64, 'repeat_sha256': 'b' * 64, 'go_version': '1.27.3',
+            'binary_sha256': 'b' * 64, 'repeat_sha256': 'b' * 64, 'go_version': BUILD.GO_VERSION,
+            'observed_module_notices': ['GO-2026-5932'],
             'exceptions': [], 'applicability': [], 'builder': BUILD.BUILDER,
             'builder_image_id': BUILD.BUILDER_ID, 'builder_manifest': BUILD.BUILDER_MANIFEST,
             'builder_binary_sha256': BUILD.BUILDER_BINARY, 'sdk_sha256': BUILD.SDK_SHA, 'sdk_tools': BUILD.SDK_TOOLS,
             'upstream_source_sha': BUILD.SOURCE, 'upstream_archive_sha256': BUILD.ARCHIVE_SHA,
             'patch_sha256': BUILD.PATCH_SHA, 'go_mod_sha256': BUILD.GO_MOD_SHA, 'go_sum_sha256': BUILD.GO_SUM_SHA,
             'flags': BUILD.FLAGS, 'upx': False, 'independent_cold_caches': True,
-            'buildinfo': {'go_version': '1.27.3', 'path': 'github.com/aquasecurity/trivy/cmd/trivy',
+            'buildinfo': {'go_version': BUILD.GO_VERSION, 'path': 'github.com/aquasecurity/trivy/cmd/trivy',
                 'main_module': 'github.com/aquasecurity/trivy', 'main_version': '(devel)',
-                'dependencies': {'golang.org/x/net': {'version': 'v0.60.0',
-                    'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='}},
+                'dependencies': {'golang.org/x/net': {'version': 'v0.62.0',
+                    'sum': 'h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY='},
+                    'github.com/go-jose/go-jose/v4': {'version': 'v4.1.6',
+                    'sum': 'h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4='}},
                 'build': {'CGO_ENABLED': '0', 'GOARCH': 'amd64', 'GOOS': 'linux', 'GOAMD64': 'v1',
                           '-buildmode': 'exe', '-trimpath': 'true'}}}
-        self.image = {'reference': self.candidate['image_reference'], 'go_version': '1.27.3',
+        self.image = {'reference': self.candidate['image_reference'], 'go_version': BUILD.GO_VERSION,
                       'identity': {'sha256': self.candidate['binary_sha256']}, 'exceptions': [], 'applicability': []}
 
     def validate(self):
@@ -325,10 +711,23 @@ class TrivyTrustContractTest(unittest.TestCase):
     def test_vulnerable_compiler_or_net_module_is_rejected(self):
         for mutate in (lambda v: v['buildinfo'].update(go_version='1.27.1'),
                        lambda v: v['buildinfo'].update(go_version='1.27.2'),
-                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.59.0')):
+                       lambda v: v['buildinfo'].update(go_version='1.27.3'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.59.0'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.60.0'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(version='v0.61.0'),
+                       lambda v: v['buildinfo']['dependencies']['golang.org/x/net'].update(
+                           sum='h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=')):
             old = copy.deepcopy(self.candidate)
             mutate(self.candidate)
             with self.assertRaisesRegex(ValueError, 'vulnerable'):
+                self.validate()
+            self.candidate = old
+
+    def test_vulnerable_go_jose_or_unverified_module_sum_is_rejected(self):
+        for values in ({'version': 'v4.1.5'}, {'sum': 'h1:unverified'}):
+            old = copy.deepcopy(self.candidate)
+            self.candidate['buildinfo']['dependencies']['github.com/go-jose/go-jose/v4'].update(values)
+            with self.subTest(values=values), self.assertRaisesRegex(ValueError, 'vulnerable'):
                 self.validate()
             self.candidate = old
 
@@ -336,7 +735,8 @@ class TrivyTrustContractTest(unittest.TestCase):
         metadata = self.candidate['buildinfo']
         report = {'Results': [{'Target': 'usr/local/bin/trivy', 'Type': 'gobinary',
             'Packages': [{'Name': name, 'Version': version} for name, version in
-                [(metadata['main_module'], ''), ('stdlib', 'v1.27.3'), ('golang.org/x/net', 'v0.60.0')]]}]}
+                [(metadata['main_module'], ''), ('stdlib', 'v' + BUILD.GO_VERSION), ('golang.org/x/net', 'v0.62.0'),
+                 ('github.com/go-jose/go-jose/v4', 'v4.1.6')]]}]}
         proof = {'image_id': self.candidate['image_id'], 'resolved_digest': self.candidate['image_id'],
                  'identity_authority': 'local-configuration-and-archive'}
         with tempfile.TemporaryDirectory() as temporary:
@@ -400,13 +800,14 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
         self.directory = Path(self.temporary.name)
         self.metadata = {'path': 'github.com/aquasecurity/trivy/cmd/trivy',
                          'main_module': 'github.com/aquasecurity/trivy',
-                         'dependencies': {'golang.org/x/net': {'version': 'v0.60.0'}}}
+                         'dependencies': {'golang.org/x/net': {'version': 'v0.62.0'},
+                                          'golang.org/x/crypto': {'version': 'v0.58.0'}}}
         self.packages = [{'ImportPath': 'net/http'}, {'ImportPath': 'golang.org/x/net/http2',
                          'Module': {'Path': 'golang.org/x/net'}}]
         functions = sorted(['net/http.F' + str(i) for i in range(10001)])
-        self.symbols = {'binary_sha256': 'b' * 64, 'reader_go_version': 'go1.27.3',
+        self.symbols = {'binary_sha256': 'b' * 64, 'reader_go_version': 'go' + BUILD.GO_VERSION,
                         'function_count': len(functions), 'functions': functions}
-        self.candidate = {'binary_sha256': 'b' * 64, 'observed_module_notices': ['GO-FIXTURE'],
+        self.candidate = {'binary_sha256': 'b' * 64, 'observed_module_notices': ['GO-2026-5932'],
                           'binary_functions': {'count': len(functions), 'names_sha256':
                               EVIDENCE.sha(json.dumps(functions, separators=(',', ':')).encode())}}
         self.streams = {}
@@ -421,11 +822,14 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
                 {'config': {'scan_mode': mode, 'scan_level': 'symbol', 'scanner_name': 'govulncheck',
                             'scanner_version': BUILD.TOOL, 'db': 'https://vuln.go.dev',
                             'db_last_modified': MODIFIED}},
-                {'SBOM': {'go_version': 'go1.27.3', 'roots': [self.metadata['path' if mode == 'source' else 'main_module']],
-                          'modules': [{'path': 'golang.org/x/net', 'version': 'v0.60.0'}]}},
-                {'osv': {'id': 'GO-FIXTURE', 'affected': [{'package': {'name': 'golang.org/x/crypto'},
+                {'SBOM': {'go_version': 'go' + BUILD.GO_VERSION,
+                          'roots': [self.metadata['path' if mode == 'source' else 'main_module']],
+                          'modules': [{'path': name, 'version': identity['version']}
+                                      for name, identity in self.metadata['dependencies'].items()]}},
+                {'osv': {'id': 'GO-2026-5932', 'affected': [{'package': {'name': 'golang.org/x/crypto'},
                          'ecosystem_specific': {'imports': [{'path': 'golang.org/x/crypto/openpgp'}]}}]}},
-                {'finding': {'osv': 'GO-FIXTURE', 'trace': [{'module': 'golang.org/x/crypto'}]}}]
+                {'finding': {'osv': 'GO-2026-5932',
+                             'trace': [{'module': 'golang.org/x/crypto', 'version': 'v0.58.0'}]}}]
 
     def validate(self):
         (self.directory / 'binary-symbols.json').write_text(json.dumps(self.symbols))
@@ -439,13 +843,14 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
 
     def test_module_notice_remains_visible_only_when_all_affected_code_is_absent(self):
         result = self.validate()
-        self.assertEqual(['GO-FIXTURE'], result['source']['module_notices'])
+        self.assertEqual(['GO-2026-5932'], result['source']['module_notices'])
         self.assertEqual(0, result['binary']['callable_findings'])
 
     def test_advisory_service_error_cannot_be_zero_findings(self):
-        self.receipt['analysis']['source'] = {'status': 2}
-        with self.assertRaisesRegex(ValueError, 'failed independent'):
-            self.validate()
+        for status in (2, 137):
+            self.receipt['analysis']['source'] = {'status': status, 'diagnostics_sha256': '0' * 64}
+            with self.assertRaisesRegex(ValueError, 'failed independent'):
+                self.validate()
 
     def test_self_scan_cannot_substitute_for_independent_authority(self):
         self.streams['binary'][0]['config']['scanner_name'] = 'trivy'
@@ -481,6 +886,21 @@ class IndependentTrivyAnalysisTest(unittest.TestCase):
     def test_affected_compiled_package_cannot_borrow_module_only_notice(self):
         self.packages.append({'ImportPath': 'golang.org/x/crypto/openpgp', 'Module': {'Path': 'golang.org/x/crypto'}})
         with self.assertRaisesRegex(ValueError, 'compiled scanner'):
+            self.validate()
+
+    def test_affected_executable_function_cannot_borrow_module_only_notice(self):
+        functions = self.symbols['functions']
+        functions.append('golang.org/x/crypto/openpgp/packet.Read')
+        functions.sort()
+        self.symbols['function_count'] = self.candidate['binary_functions']['count'] = len(functions)
+        self.candidate['binary_functions']['names_sha256'] = EVIDENCE.sha(
+            json.dumps(functions, separators=(',', ':')).encode())
+        with self.assertRaisesRegex(ValueError, 'actual executable function'):
+            self.validate()
+
+    def test_openpgp_notice_cannot_describe_another_module_version(self):
+        self.streams['binary'][-1]['finding']['trace'][0]['version'] = 'v0.57.0'
+        with self.assertRaisesRegex(ValueError, 'Wrong legacy OpenPGP module'):
             self.validate()
 
     def test_new_advisory_requires_review(self):
@@ -524,8 +944,16 @@ class TrivyCiTrustTest(unittest.TestCase):
             self.policy.inventory(self.contract)
 
     def test_scanner_threshold_cannot_be_lowered(self):
-        self.contract['images']['scanner']['threshold'] = ['CRITICAL']
-        with self.assertRaisesRegex(ValueError, 'threshold'):
+        self.assertIn('scanner', self.policy.inventory(self.contract))
+        for threshold in (['CRITICAL'], ['HIGH'], []):
+            contract = copy.deepcopy(self.contract)
+            contract['images']['scanner']['threshold'] = threshold
+            with self.subTest(threshold=threshold), self.assertRaisesRegex(ValueError, '^Wrong threshold$'):
+                self.policy.inventory(contract)
+
+    def test_stale_builder_is_rejected_by_unmocked_inventory(self):
+        self.contract['images']['scanner-builder']['go_version'] = '1.27.3'
+        with self.assertRaisesRegex(ValueError, 'unreviewed candidate compiler image: scanner-builder'):
             self.policy.inventory(self.contract)
 
     def test_missing_reproducible_build_receipt_is_rejected(self):

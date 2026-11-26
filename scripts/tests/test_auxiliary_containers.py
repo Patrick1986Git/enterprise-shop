@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -14,6 +15,20 @@ SPEC.loader.exec_module(POLICY)
 
 
 class AuxiliaryPolicyTest(unittest.TestCase):
+    def test_certificate_probe_source_bytes_require_an_execution_receipt(self):
+        name = 'scripts/jdk-certificate-evidence/CertificateEvidence.java.source'
+        original = (ROOT / name).read_bytes()
+        contract = POLICY.read(POLICY.CONTRACT)
+        self.assertEqual(hashlib.sha256(original).hexdigest(), contract['execution_sources'][name])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / name
+            path.parent.mkdir(parents=True)
+            path.write_bytes(original)
+            self.assertEqual(contract['execution_sources'][name], POLICY.execution_sources(root)[name])
+            path.write_bytes(original + b'\n')
+            self.assertNotEqual(contract['execution_sources'][name], POLICY.execution_sources(root)[name])
+
     def setUp(self):
         self.contract = POLICY.read(POLICY.CONTRACT)
         self.image = copy.deepcopy(self.contract['images']['govulncheck'])
@@ -34,10 +49,10 @@ class AuxiliaryPolicyTest(unittest.TestCase):
                            {'Target': 'Alpine', 'Class': 'os-pkgs', 'Type': 'alpine', 'Packages': [
                                {'Name': 'musl', 'Version': '1.2.5-r12', 'Identifier': {'PURL': 'pkg:apk/alpine/musl@1.2.5-r12'}}]},
                            {'Target': 'usr/local/go/bin/go', 'Class': 'lang-pkgs', 'Type': 'gobinary', 'Packages': [
-                               {'Name': 'stdlib', 'Version': 'v1.26.10', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.10'}}]}]}
+                               {'Name': 'stdlib', 'Version': 'v1.26.11', 'Identifier': {'PURL': 'pkg:golang/stdlib@v1.26.11'}}]}]}
         self.bom = {'bomFormat': 'CycloneDX', 'specVersion': '1.7', 'metadata': {'component': {
             'name': '/input/govulncheck.tar', 'properties': [{'name': 'aquasecurity:trivy:ImageID', 'value': self.image_id}]}},
-            'components': [{'purl': 'pkg:apk/alpine/musl@1.2.5-r12'}, {'purl': 'pkg:golang/stdlib@v1.26.10'}]}
+            'components': [{'purl': 'pkg:apk/alpine/musl@1.2.5-r12'}, {'purl': 'pkg:golang/stdlib@v1.26.11'}]}
 
     def validate(self):
         return POLICY.validate(self.image, self.evidence, self.report, self.bom, '0.75.0')
@@ -59,7 +74,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
                 POLICY.inventory(self.contract, root)
 
     def test_complete_executed_image_inventory_includes_library_ryuk(self):
-        self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk', 'scanner-builder', 'scanner-reference-fixture'},
+        self.assertEqual({'hadolint', 'scanner', 'govulncheck', 'fixture', 'ryuk', 'scanner-builder', 'ryuk-builder', 'scanner-reference-fixture'},
                          set(POLICY.inventory(self.contract)))
 
     def test_new_workflow_container_cannot_bypass_review(self):
@@ -98,10 +113,11 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_opaque_binary_cannot_borrow_empty_hadolint_boundary(self):
         self.contract['images']['ryuk']['package_mode'] = 'static-haskell'
-        with self.assertRaisesRegex(ValueError, 'Hadolint'): POLICY.inventory(self.contract)
+        with self.assertRaisesRegex(ValueError, 'Hadolint'):
+            POLICY.inventory(self.contract)
 
     def test_digest_required(self):
-        self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.10-alpine3.24'
+        self.contract['images']['govulncheck']['reference'] = 'docker.io/library/golang:1.26.11-alpine3.24'
         with self.assertRaises(ValueError): POLICY.inventory(self.contract)
 
     def test_linux_amd64_required(self):
@@ -113,8 +129,12 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate()
 
     def test_expected_go_version_readback_required(self):
-        self.report['Results'][1]['Packages'][0]['Version'] = 'v1.25.7'
-        with self.assertRaises(ValueError): self.validate()
+        package = self.report['Results'][1]['Packages'][0]
+        package['Version'] = 'v1.26.10'
+        package['Identifier']['PURL'] = 'pkg:golang/stdlib@v1.26.10'
+        self.bom['components'][1]['purl'] = package['Identifier']['PURL']
+        with self.assertRaisesRegex(ValueError, 'Wrong observed Go toolchain'):
+            self.validate()
 
     def test_high_blocks(self):
         self.finding('HIGH')
@@ -166,7 +186,7 @@ class AuxiliaryPolicyTest(unittest.TestCase):
         self.report['Results'][1]['Target'] = 'usr/local/bin/gosu'
         self.image['required_gobinaries'] = ['usr/local/bin/gosu']
         self.report['Results'][1]['Vulnerabilities'] = [{'VulnerabilityID': 'CVE-2025-68121',
-            'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.10', 'Severity': 'CRITICAL'}]
+            'PkgName': 'stdlib', 'InstalledVersion': 'v1.26.11', 'Severity': 'CRITICAL'}]
         self.assertEqual(1, len(self.validate()['blocked']))
 
     def test_no_auxiliary_exception_authority_can_exempt_production(self):
@@ -202,7 +222,8 @@ class AuxiliaryPolicyTest(unittest.TestCase):
 
     def test_new_classification_must_be_explicit(self):
         self.contract['images']['ryuk']['classification'] = 'CI-only'
-        with self.assertRaisesRegex(ValueError, 'classification'): POLICY.inventory(self.contract)
+        with self.assertRaisesRegex(ValueError, 'classification'):
+            POLICY.inventory(self.contract)
 
     def test_archive_scanner_has_no_docker_socket_and_no_exception_file(self):
         source = (ROOT / 'scripts/scan-auxiliary-containers.py').read_text()

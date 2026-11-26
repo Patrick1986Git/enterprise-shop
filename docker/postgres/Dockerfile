@@ -1,4 +1,4 @@
-FROM docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS gosu-builder
+FROM docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS gosu-builder
 
 ENV CGO_ENABLED=0 \
     GOOS=linux \
@@ -23,14 +23,14 @@ COPY gosu/go.mod gosu/go.sum ./
 RUN --mount=type=secret,id=proxy_ca \
     set -eu; \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
-    test "$(go env GOVERSION)" = go1.26.10; \
+    test "$(go env GOVERSION)" = go1.26.11; \
     go mod download; \
     go mod verify; \
     mkdir /out; \
     GOCACHE=/tmp/gosu-cache-first go build -mod=readonly -trimpath -buildvcs=false -ldflags='-d -w' -o /out/gosu .; \
     GOCACHE=/tmp/gosu-cache-repeat go build -mod=readonly -trimpath -buildvcs=false -ldflags='-d -w' -o /out/gosu.repeat .; \
     cmp /out/gosu /out/gosu.repeat; \
-    printf '%s\n' '077de39980df05ec3897fbadf39a3105ddbd430e8fb714e9eb97b5bc57a8f094  /out/gosu' > /out/gosu.sha256; \
+    printf '%s\n' '2ffe72a22a20f896e744d6298cf7465911f83f26e8d9b00ccd66fc45beb04f4c  /out/gosu' > /out/gosu.sha256; \
     sha256sum -c /out/gosu.sha256; \
     go version -m /out/gosu
 
@@ -43,7 +43,9 @@ LABEL org.opencontainers.image.title="Enterprise Shop PostgreSQL" \
 ARG TSEARCH_DIR=/usr/local/share/postgresql/tsearch_data
 
 RUN --mount=type=secret,id=proxy_ca,target=/etc/ssl/certs/ca-certificates.crt \
-    apk upgrade --no-cache c-ares libcrypto3 libssl3 libuuid
+    apk upgrade --no-cache brotli-libs c-ares libcrypto3 libcurl libssl3 libuuid libxml2 \
+    && apk list --installed libxml2 \
+    && apk info --exists 'libxml2>=2.13.9-r3'
 
 COPY --from=gosu-builder --chmod=0755 /out/gosu /usr/local/bin/gosu
 

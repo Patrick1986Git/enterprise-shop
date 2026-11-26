@@ -1,0 +1,10 @@
+{
+  "repository": "adoptium/temurin-vdr-generator",
+  "tag": "temurin-vdr-24-11-2026-45390304790",
+  "release_id": 456724257,
+  "asset_id": 787080638,
+  "url": "https://github.com/adoptium/temurin-vdr-generator/releases/download/temurin-vdr-24-11-2026-45390304790/temurin-vdr-24-11-2026-45390304790.json",
+  "published_at": "2026-11-24T12:20:23Z",
+  "sha256": "7029638014454d0362ff5524da94bbf62bd68b540f84c91cc0e5704b582c8b8c",
+  "upstream_immutable": false
+}
