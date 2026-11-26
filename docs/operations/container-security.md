@@ -714,6 +714,17 @@ Protected-master CI run #1075 found HIGH `CVE-2026-84782` in `libssl3` and `open
 
 CI run #496 found HIGH `CVE-2026-33630` in `c-ares 1.34.5-r0`, inherited by the PostgreSQL 18 Alpine image. Because Alpine provided the fixed `1.34.6-r0` package, the PostgreSQL Dockerfile applies a targeted `apk upgrade --no-cache c-ares` to the final image. No policy exception was added; CI rebuilds and rescans the final image through the existing raw-report, SBOM, and blocking-policy workflow.
 
+## PostgreSQL libxml2 CVE-2026-86144 remediation
+
+CI #1303 attempt 2 reported HIGH `CVE-2026-86144` in `libxml2 2.13.9-r2` in the
+PostgreSQL 18 image based on Alpine 3.24.4. The signed Alpine v3.24 main
+repository publishes the stable-branch security backport as `2.13.9-r3` for
+x86-64. The final Docker stage adds `libxml2` to the existing selective upgrade.
+It logs the installed version and uses Alpine's installed-package check to require
+`2.13.9-r3` or later. The version check allows subsequent Alpine security
+updates. The existing raw-report, SBOM, and vulnerability policy gates verify the
+rebuilt image. [Alpine backport](https://github.com/alpinelinux/aports/commit/c7ab030c13f6ad20df0913a5f24c00734f214de8)
+
 ## gosu GO-2026-6686 remediation
 
 [GO-2026-6686](https://vuln.go.dev/ID/GO-2026-6686.json), also

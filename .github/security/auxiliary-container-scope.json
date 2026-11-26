@@ -346,7 +346,7 @@
     ".github/workflows/codeql.yml": "af9a1135ca56e8b2bed821e99e6e14a91cb814c46e08e6b56fd49dcc79ff9cc4",
     ".github/workflows/jacoco-ratchet.yml": "4008da286391b4bebdbbc2728c65bc7f8af39bdbad9f6d62b68a5afce963289a",
     "Dockerfile": "41f3d1b55741e9633f4ae33b0d75420d38539e1156f404cc3635af13e00a85fd",
-    "docker/postgres/Dockerfile": "c56dd7e086bb3bb3c50aa6c03a5a90fab957ae443153abbefd54a88426821684",
+    "docker/postgres/Dockerfile": "25c0036bd9acacaa2bbe6f61b64c6e0284fdfc60d23ad3254d82645c0454728b",
     "docker-compose.yml": "2e2e197bc191c3db743583693bba20854eb75c0fc958970501f602f1c5d88adf",
     "scripts/auxiliary_binary_evidence.py": "cdda4351ba0731ea99bc0afde2288704ed39bec5362cf02ee48e1104a49ccf21",
     "scripts/build-ryuk-candidate.py": "beeeb47be36163031ae9ad2989807e64153d8ac02e009f5278611fe282f1cd66",
