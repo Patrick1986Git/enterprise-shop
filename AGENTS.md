@@ -57,6 +57,10 @@ Before writing or modifying code:
 4. Avoid touching unrelated files, tests, or modules.
 5. If the requested change touches security, persistence, transactions, migrations, or public API behavior, treat it as high risk and validate carefully.
 
+### Task-oriented navigation
+
+Use the [task guide in the documentation index](docs/README.md#task-oriented-navigation) to find the owning module or shared component, relevant tests, and applicable guidance. Verify those starting points against current source and tests. Expand the investigation to affected callers, consumers, policies, and tests when security, API behavior, persistence, migrations, transactions, concurrency, or operations cross those boundaries. Apply the existing architecture, security, operational safety, and verification requirements throughout.
+
 ### Capability preflight and handoff
 
 Before work that depends on the execution environment or a hosted service, check only the capabilities required by that task. Depending on scope, these may include Java 21, Docker/Testcontainers, hosted GitHub read access, authenticated push/PR access, or Actions artifact download access. Do not preflight unrelated capabilities.
