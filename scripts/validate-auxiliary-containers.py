@@ -57,7 +57,8 @@ def execution_sources(root):
             and not any(part in {'.git', '.tmp', 'target', '__pycache__'} for part in p.relative_to(root).parts) and
             ('.github/' in p.relative_to(root).as_posix() or p.name == 'Dockerfile'
              or 'compose' in p.name or p.name in {'ryuk_candidate_evidence.py', 'trivy_candidate_evidence.py',
-                                                 'go_advisory_acquisition.py'}
+                                                 'go_advisory_acquisition.py', 'github_api.py',
+                                                 'validate-master-protection.py'}
              or p == probe or SURFACE.search(p.read_text()))}
 
 
