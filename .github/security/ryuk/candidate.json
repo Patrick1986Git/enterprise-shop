@@ -1,7 +1,7 @@
 {
   "upstream_source_sha": "b3726afd6cc2c36628abcc08e9cabac43f587384",
   "upstream_archive_sha256": "7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d",
-  "patch_sha256": "f7b18f12fbaa2d8568c1e31a0a2a54b4a969abdfd223425fcd2cd9abc9914074",
+  "patch_sha256": "bcb9dea3f3446a100e21ae64050a9f1d56a5f2d7c62047a39ec15733ed1c16af",
   "source_files": {
     ".dockerignore": "25df7daad66c30594d3150c0fa61244ef8013651a236f3cc1a5c1923094a2e1b",
     ".github/CODEOWNERS": "b62c7cc3a2161394cba2f03b681fbb7dd1746cd3e2409b7a7696f5020c52cdfc",
@@ -20,8 +20,8 @@
     "config.go": "69f4a20e6d0e5f7b82a2f8ddb22be9cfeac5f9582f501e735d604c95d10e7e21",
     "config_test.go": "549d1399f7a6d9818e8e92e2a3bb08e269ae9e4796b42435013dd38b9404c7ba",
     "consts.go": "0cad75fdaebd2d12368e06b285a0dfd4bc885eda98f94f83d38b4c3269f45dc7",
-    "go.mod": "22d9477a17e18daa6ba1691e37e24b41eed8307d1e52ed2ad7d2f305b4b78f34",
-    "go.sum": "2c9b89db6d4900ce0fee50bd5fb065c833bd4e578787a8006d16367f0b63bb3c",
+    "go.mod": "6a9ef38c60b489e67dc1e0c72f4487b5ef09b270e73846f96ab8b7b5ba106894",
+    "go.sum": "ca3d5bb81cddb4a9ae9014a21f6c2849c61e1d2ee253243425cbf9e8f701492b",
     "interfaces.go": "05b65382a62aadf1377ac68b648fce9be6430151f3d5946fa0e3ecbe6a22f8c0",
     "linux/Dockerfile": "314508b7cf1237e7742a53a15f95602f1d2d8e6d51df85bf0bd4e1b10a8d0124",
     "main.go": "f1bfac94dc379e237e805d1bfc469dd6dd9a9bf2cd9113a45fcf05e31ff62938",
@@ -33,35 +33,39 @@
     "testresources/Dockerfile": "4a5f89e506d8128cdff30836b21ff05c6124803232f5f8bb290e7349003d95d2",
     "windows/Dockerfile": "cfd3ef9d5850369f71e7808ffaa72bf2b1b28e62a37b35745aef0d0713bb652a"
   },
-  "builder": "docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca",
-  "builder_image_id": "sha256:f39e1942eacc14c92d0b22d052ba647f64a7c08e2c2fd7332250e33f5271aeb5",
-  "go_version": "1.26.10",
+  "builder": "docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab",
+  "builder_image_id": "sha256:c759fe8ff9acf53c9179cb435419f2e673e121fa5432c1e945c12e509a99a5cc",
+  "go_version": "1.26.11",
   "flags": "-mod=readonly -buildvcs=false -a -installsuffix cgo -ldflags=\"-w -s\" -trimpath",
   "cgo_enabled": "0",
   "upx": false,
-  "binary_sha256": "8eb1c9799d62504ae3b3b275287c71712667ce4eef08cb133d30fe3ba497f127",
-  "repeat_sha256": "8eb1c9799d62504ae3b3b275287c71712667ce4eef08cb133d30fe3ba497f127",
-  "image_reference": "local/enterprise-shop-ryuk:sha256-3c17d8d04c78734ed9d9bd42d26c193f7fecacada8e27fee84585dc72f017af9",
-  "image_id": "sha256:3c17d8d04c78734ed9d9bd42d26c193f7fecacada8e27fee84585dc72f017af9",
-  "archive_sha256": "81dc308d2fb8e8e7f9c6bc046b2a6eeced41280ab2f968d8314089bbb69211d0",
-  "layer_sha256": "93e18a97863539c6b553dc6ec8768d1c9d427d854189e8db42c99c7780b3f9a6",
+  "binary_sha256": "cfcecb2b9583fd0ee162159e0483b9af4a364266c47a9b904a7618362ba6694b",
+  "repeat_sha256": "cfcecb2b9583fd0ee162159e0483b9af4a364266c47a9b904a7618362ba6694b",
+  "image_reference": "local/enterprise-shop-ryuk:sha256-058b8dd02c61538d32db02f54d91a147b15ef58e6be8b3867376e166615e229d",
+  "image_id": "sha256:058b8dd02c61538d32db02f54d91a147b15ef58e6be8b3867376e166615e229d",
+  "archive_sha256": "41c86dd8e9cd56b4f4d0a2292360c32ec75c01ce561f207e8e01062ea08e3dd3",
+  "layer_sha256": "23e3bfdc41a97505b1832c6e164de9e68ee496c0c2ce79a402886125c3f794bc",
   "filesystem": {
     "bin/ryuk": {
-      "sha256": "8eb1c9799d62504ae3b3b275287c71712667ce4eef08cb133d30fe3ba497f127",
-      "size": 7516322
+      "sha256": "cfcecb2b9583fd0ee162159e0483b9af4a364266c47a9b904a7618362ba6694b",
+      "size": 7639202
     },
     "etc/ssl/certs/ca-certificates.crt": {
-      "sha256": "028fca5150ee1915c4474489985d55c54fceaa680c754cc8d1301734f01b2232",
-      "size": 181724
+      "sha256": "5961c0a3c65459931c023e0075c09733f09aea4ca439cb85bc4a08bb4f3f568b",
+      "size": 178791
     }
   },
   "govulncheck_version": "v1.8.0",
   "buildinfo": {
-    "go_version": "1.26.10",
+    "go_version": "1.26.11",
     "dependencies": {
       "github.com/caarlos0/env/v11": {
         "version": "v11.3.1",
         "sum": "h1:cArPWC15hWmEt+gWk7YBi7lEXTXCvpaSdCiZE2X5mCA="
+      },
+      "github.com/cespare/xxhash/v2": {
+        "version": "v2.3.0",
+        "sum": "h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs="
       },
       "github.com/containerd/errdefs": {
         "version": "v1.0.0",
@@ -88,8 +92,8 @@
         "sum": "h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg="
       },
       "github.com/go-logr/logr": {
-        "version": "v1.4.2",
-        "sum": "h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY="
+        "version": "v1.4.4",
+        "sum": "h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8="
       },
       "github.com/go-logr/stdr": {
         "version": "v1.2.2",
@@ -116,24 +120,28 @@
         "sum": "h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040="
       },
       "go.opentelemetry.io/auto/sdk": {
-        "version": "v1.1.0",
-        "sum": "h1:cH53jehLUN6UFLY71z+NDOiNJqDdPRaXzTel0sJySYA="
+        "version": "v1.2.1",
+        "sum": "h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64="
       },
       "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp": {
         "version": "v0.60.0",
         "sum": "h1:sbiXRNDSWJOTobXh5HyQKjq6wUC5tNybqjIqDpAY4CU="
       },
       "go.opentelemetry.io/otel": {
-        "version": "v1.35.0",
-        "sum": "h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ="
+        "version": "v1.47.0",
+        "sum": "h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM="
+      },
+      "go.opentelemetry.io/otel/log": {
+        "version": "v1.47.0",
+        "sum": "h1:cOTS1CcLbSQeZKanGJ+0JpF/+t4PELi3O3bbl2lqCcI="
       },
       "go.opentelemetry.io/otel/metric": {
-        "version": "v1.35.0",
-        "sum": "h1:0znxYu2SNyuMSQT4Y9WDWej0VpcsxkuklLa4/siN90M="
+        "version": "v1.47.0",
+        "sum": "h1:4PptaldXx3Eat1XjMZ68pPJEs5wrhlemctZE9a3UdWY="
       },
       "go.opentelemetry.io/otel/trace": {
-        "version": "v1.35.0",
-        "sum": "h1:dPpEfJu1sDIqruz7BHFG3c7528f6ddfSWfFDVt/xgMs="
+        "version": "v1.47.0",
+        "sum": "h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM="
       }
     },
     "build": {
@@ -150,34 +158,72 @@
     "main_version": "(devel)"
   },
   "proof": {
-    "kind": "local-final-recipe-validation",
-    "repository_head": "5193d8315b933965d349e2dd96af27cfe8d5e67f",
-    "observed_at": "2026-10-21T03:59:32.555574Z",
-    "build_receipt_sha256": "188bc37ef17a9cc05c8484a4655e65b12252bebad89137c1735dea47a854941e",
+    "kind": "historical-isolated-hosted-qualification",
+    "repository_head": "04fb23f2b25c607c37c63cffc8bc245e894823f7",
+    "harness_commit": "73f8e10d32a83aab127e0fc352e14cab429e124c",
+    "run_id": 45471276927,
+    "job_id": 138719570468,
+    "artifact_id": 14958725226,
+    "artifact_sha256": "b0d6b3172db1bcdad783c0765b34baf86ef6309d62698008cea5a146135a4638",
     "upstream_source_sha": "b3726afd6cc2c36628abcc08e9cabac43f587384",
-    "patch_sha256": "f7b18f12fbaa2d8568c1e31a0a2a54b4a969abdfd223425fcd2cd9abc9914074",
-    "builder": "docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca",
-    "builder_image_id": "sha256:f39e1942eacc14c92d0b22d052ba647f64a7c08e2c2fd7332250e33f5271aeb5",
-    "go_version": "1.26.10",
-    "binary_sha256": "8eb1c9799d62504ae3b3b275287c71712667ce4eef08cb133d30fe3ba497f127",
-    "image_id": "sha256:3c17d8d04c78734ed9d9bd42d26c193f7fecacada8e27fee84585dc72f017af9",
-    "analysis": {
-      "source": {
-        "status": 0,
-        "sha256": "0ef9abb13c8687863c6985b8799f9a4e424921341162a55b95e8cd57e059e443",
-        "acquisition_sha256": "c50008a0fa7dc050d7b8e35cbd70aa7c6c7bf081a277238e8fd34b8495495380"
+    "patch_sha256": "bcb9dea3f3446a100e21ae64050a9f1d56a5f2d7c62047a39ec15733ed1c16af",
+    "builder": "docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab",
+    "builder_image_id": "sha256:c759fe8ff9acf53c9179cb435419f2e673e121fa5432c1e945c12e509a99a5cc",
+    "go_version": "1.26.11",
+    "binary_sha256": "cfcecb2b9583fd0ee162159e0483b9af4a364266c47a9b904a7618362ba6694b",
+    "image_id": "sha256:058b8dd02c61538d32db02f54d91a147b15ef58e6be8b3867376e166615e229d",
+    "retained_reports": "scripts/tests/fixtures/ryuk-go-1.26.11/replay.tar.gz",
+    "scope": "Historical isolated qualification of the exact output identities. Every consumer requires fresh same-HEAD evidence.",
+    "builds": {
+      "first": {
+        "build_receipt_sha256": "9fb84bbca5f4caf4aad6d951688101b687e775bea46fa3976aa10064ef217296",
+        "analysis": {
+          "source": {
+            "status": 0,
+            "sha256": "fae79251b8348ee73afb1d62023a57d8fbeb34d7dec905adc5ccb6026fe074d5",
+            "acquisition_sha256": "ad263ddd12d5a6b611cdd05752a26a972976348ab2d8d6f91332620ee88883f6"
+          },
+          "binary": {
+            "status": 0,
+            "sha256": "fe2f6f97005f402ce44d0ba3fd012f1c170bd51a33a78610fd983d9f68c82e45",
+            "acquisition_sha256": "b46d801413316d973722fbcecade2bb686d084cb9ca8ed0627779abe18a394b0"
+          }
+        }
       },
-      "binary": {
-        "status": 0,
-        "sha256": "7c7ad06e84d4f3447129fb98986f961bd51ab572250f8d237bf9c022fbba8955",
-        "acquisition_sha256": "5504a54df5fc10d4c0a5a8351e1fa13b519d5250db9e16f3627111ec81a7e333"
+      "repeat": {
+        "build_receipt_sha256": "67ac58222c06609c7a3e5d5d73dd32d54a00342ed49ec9feea8f54d2633c743b",
+        "analysis": {
+          "source": {
+            "status": 0,
+            "sha256": "fae79251b8348ee73afb1d62023a57d8fbeb34d7dec905adc5ccb6026fe074d5",
+            "acquisition_sha256": "485c876cd35be51d491f676ea15e404dbddc3d6c3dfcc1d28ec0e22304597190"
+          },
+          "binary": {
+            "status": 0,
+            "sha256": "fe2f6f97005f402ce44d0ba3fd012f1c170bd51a33a78610fd983d9f68c82e45",
+            "acquisition_sha256": "8deb1249fded8be0960e5eb3cf7de74f8046452c64b85fffc5f84eb8e2238518"
+          }
+        }
       }
-    },
-    "reuse_verified": true,
-    "scope": "Authentic zero-finding Go 1.26.10 source and exact-binary reports from the successful full final-recipe local build, followed by the unchanged mandatory reuse validator. Checkout HEAD identifies the base of unpublished compiler and receipt changes; reviewed upstream source, patch, modules, repeated executable and image bytes were validated. These compressed offline reports do not authorize runtime retrieval or substitute for final-head hosted verification; tests use explicitly synthetic acquisition envelopes.",
-    "retained_reports": "scripts/tests/fixtures/ryuk-go-1.26.10"
+    }
   },
   "source_authority": "Official release 0.14.0 at exact commit plus repository-reviewed migration patch; no post-release upstream commits included",
   "applicability": [],
-  "govulncheck_sum": "h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U="
+  "govulncheck_sum": "h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U=",
+  "source_packages": {
+    "count": 263,
+    "imports_sha256": "cb0818a252e9aa43d08c66d2773aae304a87f68bf44a59202b8cbd08ff58a15a"
+  },
+  "selected_modules": {
+    "count": 61,
+    "versions_sha256": "eb6933848b670fba08098fb2025ca1e5405a45ef322cf82ab4d97896547b6238"
+  },
+  "sdk_sha256": "9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec",
+  "sdk_tools": {
+    "bin/go": "95499375c24b610cdc9e3684cec920174ec4c4f3f66d35b4332107f0f7d3d27d",
+    "bin/gofmt": "cae643e8d7891e50a4088102d84e157010d789b5292b89e87be488ccbcc0f2e5",
+    "pkg/tool/linux_amd64/compile": "896a17923b901c9581505c08e8ed1c5a2a6b1b519beb457ceb106f1b59373329",
+    "pkg/tool/linux_amd64/link": "f2e750ca33de93eae493abef851eec050e368c6840f18d1fb03a73b7a696e928"
+  },
+  "tool_sha256": "f0ac87f989aff7f0b60b903a5594e2447fef867f308637d57e2fef5629f544a9"
 }

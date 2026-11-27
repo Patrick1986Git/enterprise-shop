@@ -18,6 +18,9 @@ CONTRACT = ROOT / '.github/security/ryuk/candidate.json'
 spec = importlib.util.spec_from_file_location('binary_evidence', ROOT / 'scripts/auxiliary_binary_evidence.py')
 BINARY = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(BINARY)
+spec = importlib.util.spec_from_file_location('ryuk_build', ROOT / 'scripts/build-ryuk-candidate.py')
+BUILD = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(BUILD)
 
 
 def require(condition, message):
@@ -46,7 +49,10 @@ def inventory(image, candidate):
     require(image['reference'] == candidate['image_reference']
             == 'local/enterprise-shop-ryuk:sha256-' + candidate['image_id'].removeprefix('sha256:')
             and image['identity']['sha256'] == candidate['binary_sha256']
-            and image['go_version'] == candidate['go_version'] == '1.26.10', 'Wrong candidate identity')
+            and image['go_version'] == candidate['go_version'] == BUILD.GO_VERSION, 'Wrong candidate identity')
+    require(candidate['builder'] == BUILD.BUILDER and candidate['builder_image_id'] == BUILD.BUILDER_ID
+            and candidate['sdk_sha256'] == BUILD.SDK_SHA and candidate['sdk_tools'] == BUILD.SDK_TOOLS,
+            'Wrong reviewed Ryuk builder or SDK')
     require(candidate['buildinfo']['go_version'] == candidate['go_version']
             and candidate['buildinfo']['build']['CGO_ENABLED'] == '0' and candidate['upx'] is False,
             'Wrong reviewed candidate build')
@@ -65,6 +71,10 @@ def validate_build(candidate, directory, head, analysis=True):
     require(all(receipt[k] == candidate[k] for k in keys) and receipt['repository_head'] == head,
             'Candidate source/build/image identity drift')
     require(candidate.get('applicability') == [], 'No candidate applicability is authorized')
+    sdk = json.loads((directory / 'compiler-proof.json').read_text())
+    require(sdk == {'compiler': 'go' + BUILD.GO_VERSION, 'builder': BUILD.BUILDER,
+                    'sdk_sha256': BUILD.SDK_SHA, 'tools': BUILD.SDK_TOOLS}, 'Ryuk compiler proof mismatch')
+    BINARY.verify_sdk_archive(directory / BUILD.SDK_ARCHIVE, BUILD.SDK_SHA, BUILD.SDK_TOOLS)
     for name in ['buildinfo.txt', 'source-packages.json', 'source-modules.json']:
         require(receipt['evidence_hashes'][name] == sha((directory / name).read_bytes()), 'Candidate evidence file drift')
     require(sha((directory / 'upstream.tar.gz').read_bytes()) == candidate['upstream_archive_sha256'],
@@ -99,9 +109,13 @@ def validate_build(candidate, directory, head, analysis=True):
             require(member.isfile() and member.name not in census, 'Unexpected candidate filesystem member')
             data = filesystem.extractfile(member).read()
             census[member.name] = {'sha256': sha(data), 'size': len(data)}
-    require(census == candidate['filesystem']
+    require(census == candidate['filesystem'] and census['bin/ryuk']['sha256'] == sha(binary)
             and set(census) == {'bin/ryuk', 'etc/ssl/certs/ca-certificates.crt'}, 'Candidate scratch census drift')
     packages = messages((directory / 'source-packages.json').read_bytes())
+    names = sorted(p['ImportPath'] for p in packages)
+    require(len(names) == len(set(names)) == candidate['source_packages']['count']
+            and sha(json.dumps(names, separators=(',', ':')).encode()) == candidate['source_packages']['imports_sha256'],
+            'Incomplete compiled Ryuk package readback')
     require(any(p['ImportPath'] == metadata['main_module'] and p['Name'] == 'main' for p in packages),
             'Missing candidate main source package')
     require(not any(p['ImportPath'].startswith(('github.com/docker/docker/', 'github.com/moby/moby/v2/',
@@ -111,29 +125,12 @@ def validate_build(candidate, directory, head, analysis=True):
                 for p in packages if p.get('Module') and not p['Module'].get('Main')}
     expected = {(m, d['version'], d['sum']) for m, d in metadata['dependencies'].items()}
     require(observed == expected, 'Source/binary dependency mismatch')
+    selected = messages((directory / 'source-modules.json').read_bytes())
+    require(BINARY.selected_modules(selected, metadata) == candidate['selected_modules'], 'Selected Ryuk module graph changed')
     if analysis:
-        for mode in ['source', 'binary']:
-            evidence = receipt['analysis'][mode]
-            data = (directory / f'{mode}-govulncheck.json').read_bytes()
-            require(type(evidence['status']) is int and evidence['status'] == 0
-                    and sha(data) == evidence['sha256'], 'Missing/failed source or binary govulncheck evidence')
-            stream = messages(data)
-            configs = [m['config'] for m in stream if 'config' in m]
-            require(len(configs) == 1 and configs[0]['scan_mode'] == mode and configs[0]['scan_level'] == 'symbol'
-                    and configs[0]['scanner_name'] == 'govulncheck'
-                    and configs[0]['scanner_version'] == candidate['govulncheck_version']
-                    and configs[0]['db'] == 'https://vuln.go.dev', 'Wrong candidate govulncheck authority')
-            ADVISORY.validate(directory, mode, evidence, configs[0])
-            require(not any('error' in m for m in stream), 'Go advisory service failure cannot be clean')
-            sboms = [m['SBOM'] for m in stream if 'SBOM' in m]
-            require(len(sboms) == 1 and sboms[0]['go_version'] == 'go' + candidate['go_version']
-                    and sboms[0]['roots'] == [metadata['main_module']], 'Wrong source/binary Go identity')
-            modules = {(m['path'], m.get('version', '')) for m in sboms[0]['modules']}
-            require(all((m, d['version']) in modules for m, d in metadata['dependencies'].items())
-                    and not any(m in {'github.com/docker/docker', 'github.com/moby/moby', 'github.com/moby/moby/v2'}
-                                for m, _ in modules), 'Wrong source/binary govulncheck dependency graph')
-            require(not any('finding' in m for m in stream), 'Candidate has Go advisory findings')
-        require(receipt['tool_sha256'] == sha((directory / 'govulncheck').read_bytes()), 'Analyzer binary identity mismatch')
+        validate_advisory_analysis(candidate, receipt, directory, metadata)
+        require(receipt['tool_sha256'] == sha((directory / 'govulncheck').read_bytes()) == candidate['tool_sha256'],
+                'Analyzer binary identity mismatch')
         require(receipt['evidence_hashes']['govulncheck-buildinfo.txt']
                 == sha((directory / 'govulncheck-buildinfo.txt').read_bytes()), 'Analyzer metadata drift')
         tool_metadata = (directory / 'govulncheck-buildinfo.txt').read_text()
@@ -142,6 +139,30 @@ def validate_build(candidate, directory, head, analysis=True):
                 and re.search(r'\tmod\tgolang.org/x/vuln\t' + re.escape(candidate['govulncheck_version'])
                               + r'\t' + re.escape(candidate['govulncheck_sum']), tool_metadata), 'Wrong installed analyzer')
     return metadata, receipt
+
+
+def validate_advisory_analysis(candidate, receipt, directory, metadata):
+    for mode in ['source', 'binary']:
+        evidence = receipt['analysis'][mode]
+        data = (directory / f'{mode}-govulncheck.json').read_bytes()
+        require(type(evidence['status']) is int and evidence['status'] == 0
+                and sha(data) == evidence['sha256'], 'Missing/failed source or binary govulncheck evidence')
+        stream = messages(data)
+        configs = [m['config'] for m in stream if 'config' in m]
+        require(len(configs) == 1 and configs[0]['scan_mode'] == mode and configs[0]['scan_level'] == 'symbol'
+                and configs[0]['scanner_name'] == 'govulncheck'
+                and configs[0]['scanner_version'] == candidate['govulncheck_version']
+                and configs[0]['db'] == 'https://vuln.go.dev', 'Wrong candidate govulncheck authority')
+        ADVISORY.validate(directory, mode, evidence, configs[0])
+        require(not any('error' in m for m in stream), 'Go advisory service failure cannot be clean')
+        sboms = [m['SBOM'] for m in stream if 'SBOM' in m]
+        require(len(sboms) == 1 and sboms[0]['go_version'] == 'go' + candidate['go_version']
+                and sboms[0]['roots'] == [metadata['main_module']], 'Wrong source/binary Go identity')
+        modules = {(m['path'], m.get('version', '')) for m in sboms[0]['modules']}
+        require(all((m, d['version']) in modules for m, d in metadata['dependencies'].items())
+                and not any(m in {'github.com/docker/docker', 'github.com/moby/moby', 'github.com/moby/moby/v2'}
+                            for m, _ in modules), 'Wrong source/binary govulncheck dependency graph')
+        require(not any('finding' in m for m in stream), 'Candidate has Go advisory findings')
 
 
 def validate(image, evidence, report, directory, head):

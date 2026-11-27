@@ -19,7 +19,7 @@ from urllib.parse import quote, unquote, urlparse
 ROOT = Path(__file__).resolve().parent.parent
 CONTRACT = ROOT / '.github/security/build-tool-inventory.json'
 IDENTITY = 'enterprise-shop-build-tools'
-DISTRIBUTION_PACKAGE = 'org.apache.maven:apache-maven:pom::3.10.0'
+DISTRIBUTION_PACKAGE = 'org.apache.maven:apache-maven:pom::3.10.1'
 REQUIRED_PROCESSORS = {'org.mapstruct:mapstruct-processor:jar::1.6.3',
                        'org.hibernate.orm:hibernate-processor:jar::7.4.13.Final'}
 TOKEN = re.compile(r'^[A-Za-z0-9_.+\-]+$')
@@ -397,7 +397,7 @@ def collect(directory, contract):
     distribution = bootstrap((directory / 'maven-home.txt').read_text().strip(), contract['distribution'])
     require(contract['distribution_package']['coordinate'] == DISTRIBUTION_PACKAGE
             and contract['distribution_package']['source'] ==
-            'https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0.pom'
+            'https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.1/apache-maven-3.10.1.pom'
             and SHA256.fullmatch(contract['distribution_package']['sha256']),
             'Unreviewed Maven distribution package authority')
     distribution_ga = {':'.join(x.split(':')[:2]) for x in distribution}
@@ -489,7 +489,7 @@ def prepare(directory):
     for name in ('extensions.xml', 'maven.config', 'jvm.config'):
         require(not (ROOT / '.mvn' / name).exists(), 'Unreviewed Maven bootstrap configuration')
     text = (directory / 'maven-version.txt').read_text()
-    require(re.search(r'^Apache Maven 3\.10\.0 ', text, re.M), 'Unreviewed Maven version')
+    require(re.search(r'^Apache Maven 3\.10\.1 ', text, re.M), 'Unreviewed Maven version')
     require(re.search(r'^Java version: 21\.', text, re.M), 'Java 21 is required')
     match = re.search(r'^Maven home: (.+)$', text, re.M)
     require(match, 'Maven Wrapper did not provide distribution location')

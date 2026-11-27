@@ -47,6 +47,8 @@ def execution_sources(root):
     paths = set(root.glob('.github/workflows/*')) | set(root.glob('.github/actions/**/action.y*ml'))
     paths |= set(root.glob('scripts/*.sh')) | set(root.glob('scripts/*.py'))
     paths |= set(root.glob('src/test/**/*.java'))
+    probe = root / 'scripts/jdk-certificate-evidence/CertificateEvidence.java.source'
+    paths.add(probe)
     paths |= set(root.glob('**/Dockerfile')) - set(root.glob('target/**/Dockerfile'))
     paths |= set(root.glob('*compose*.y*ml'))
     paths |= set(root.glob('.github/security/trivy/*.go'))
@@ -55,8 +57,9 @@ def execution_sources(root):
             and not any(part in {'.git', '.tmp', 'target', '__pycache__'} for part in p.relative_to(root).parts) and
             ('.github/' in p.relative_to(root).as_posix() or p.name == 'Dockerfile'
              or 'compose' in p.name or p.name in {'ryuk_candidate_evidence.py', 'trivy_candidate_evidence.py',
-                                                 'go_advisory_acquisition.py'}
-             or SURFACE.search(p.read_text()))}
+                                                 'go_advisory_acquisition.py', 'github_api.py',
+                                                 'validate-master-protection.py'}
+             or p == probe or SURFACE.search(p.read_text()))}
 
 
 def inventory(contract, root=ROOT):
@@ -73,6 +76,15 @@ def inventory(contract, root=ROOT):
     require(contract['scanner_independent_integrity'] == SCANNER.METHOD,
             'Self-scan cannot establish independent scanner integrity')
     require(contract['scanner_version'] == '0.75.0', 'Unreviewed scanner version')
+    require(images['ryuk'].get('candidate_build') is True, 'Only the reviewed Ryuk rebuild may execute')
+    for name, recipe in (('scanner-builder', SCANNER.BUILD), ('ryuk-builder', CANDIDATE.BUILD)):
+        builder = images.get(name, {})
+        require(builder.get('reference') == recipe.BUILDER and builder.get('go_version') == recipe.GO_VERSION
+                and builder.get('identity', {}).get('sha256') == recipe.SDK_TOOLS['bin/go']
+                and builder.get('package_mode') == 'os-and-gobinary'
+                and set(builder.get('required_gobinaries', [])) == {'usr/local/go/' + name for name in recipe.SDK_TOOLS}
+                and builder.get('governed') is True and builder.get('classification') == 'high-impact',
+                'Missing or unreviewed candidate compiler image: ' + name)
     tool = contract['tools']['upx']
     require(tool['version'] == '5.2.1' and tool['platform'] == 'linux/amd64'
             and tool['classification'] == 'isolated-evidence-transformer' and tool['exceptions'] == []

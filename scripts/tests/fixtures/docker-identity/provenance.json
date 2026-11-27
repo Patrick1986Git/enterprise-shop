@@ -1,0 +1,11 @@
+{
+  "origin": "Actual Docker 29.9.2 containerd image-store export, inert fixture never executed",
+  "engine": "29.9.2",
+  "snapshotter": "overlayfs",
+  "input": "build-ryuk-candidate.py image_archive(b\"identity fixture, never executed\", b\"CA fixture\")",
+  "input_config_sha256": "5069b87377ce91b47890d84793e8f68efe42e927f0b423fe958b7c428ef30379",
+  "inspected_id": "sha256:22a761becced308c3ef0e30f3a73ca236012b1f02a9109ddb2d2f418dd91a8ff",
+  "configuration_bytes_unchanged": true,
+  "export_sha256": "34c540e4ae3b866302734c7b8893763c6945a879bc398f28482c3228cefce2fd",
+  "fixture_sha256": "f928f98340f87c9399ba62b4994beb2d8701df8123c89c6b860bf259cb449d4d"
+}

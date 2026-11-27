@@ -4,6 +4,7 @@ import gzip
 import importlib.util
 import json
 import struct
+import tarfile
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -61,10 +62,12 @@ class CandidateEvidenceTest(unittest.TestCase):
         mod = 'module ' + metadata['main_module'] + '\nrequire (\n'
         sums = ''
         modules, packages = [], [{'ImportPath': metadata['main_module'], 'Name': 'main'}]
+        selected = [{'Path': metadata['main_module'], 'Main': True}]
         for name, dep in metadata['dependencies'].items():
             mod += '\t' + name + ' ' + dep['version'] + '\n'
             sums += name + ' ' + dep['version'] + ' ' + dep['sum'] + '\n'
             modules.append({'path': name, 'version': dep['version']})
+            selected.append({'Path': name, 'Version': dep['version'], 'Sum': dep['sum']})
             packages.append({'ImportPath': name + '/fixture', 'Module': {
                 'Path': name, 'Version': dep['version'], 'Sum': dep['sum']}})
         mod += ')\n'
@@ -73,8 +76,21 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.candidate['source_files'] = {name: CANDIDATE.sha((self.directory / 'source' / name).read_bytes())
                                          for name in ['go.mod', 'go.sum']}
         self.put('source-packages.json', '\n'.join(json.dumps(p) for p in packages).encode())
-        self.put('source-modules.json', json.dumps(modules).encode())
+        self.put('source-modules.json', '\n'.join(json.dumps(m) for m in selected).encode())
+        compiled = sorted(p['ImportPath'] for p in packages)
+        self.candidate['source_packages'] = {'count': len(compiled), 'imports_sha256':
+            CANDIDATE.sha(json.dumps(compiled, separators=(',', ':')).encode())}
+        self.candidate['selected_modules'] = CANDIDATE.BINARY.selected_modules(selected, metadata)
+        tools = {name: name.encode() for name in BUILD.SDK_TOOLS}
+        sdk = gzip.compress(BUILD.tar_bytes({'go/' + name: (data, 0o755) for name, data in tools.items()}), mtime=0)
+        self.candidate['sdk_sha256'] = CANDIDATE.sha(sdk)
+        self.candidate['sdk_tools'] = {name: CANDIDATE.sha(data) for name, data in tools.items()}
+        self.sdk_sha, self.sdk_tools = self.candidate['sdk_sha256'], self.candidate['sdk_tools'].copy()
+        self.put(BUILD.SDK_ARCHIVE, sdk)
+        self.put('compiler-proof.json', json.dumps({'compiler': 'go' + BUILD.GO_VERSION,
+            'builder': BUILD.BUILDER, 'sdk_sha256': self.sdk_sha, 'tools': self.sdk_tools}).encode())
         self.put('govulncheck', b'tool fixture')
+        self.candidate['tool_sha256'] = CANDIDATE.sha(b'tool fixture')
         self.put('govulncheck-buildinfo.txt', ('/evidence/govulncheck: go' + metadata['go_version'] + '\n'
             '\tpath\tgolang.org/x/vuln/cmd/govulncheck\n\tmod\tgolang.org/x/vuln\tv1.8.0\t'
             + self.candidate['govulncheck_sum'] + '\n').encode())
@@ -129,6 +145,7 @@ class CandidateEvidenceTest(unittest.TestCase):
     def validate(self):
         self.save()
         with patch.object(CANDIDATE, 'CONTRACT', self.directory / 'candidate.json'), \
+                patch.multiple(CANDIDATE.BUILD, SDK_SHA=self.sdk_sha, SDK_TOOLS=self.sdk_tools), \
                 patch.object(CANDIDATE.CLIENT_TESTS, 'CONTRACT', self.test_contract), \
                 patch.object(POLICY.subprocess, 'check_output', return_value='head fixture'):
             return POLICY.validate(self.image, self.evidence, self.report, self.bom, '0.75.0', self.directory)
@@ -152,7 +169,7 @@ class CandidateEvidenceTest(unittest.TestCase):
             self.put(mode + '-govulncheck.json', clean)
             self.receipt['analysis'][mode] = fixture(self.directory, mode)
 
-    def test_authentic_current_go_1_26_10_source_and_binary_reports_clear_gate(self):
+    def test_authentic_go_1_26_10_reports_cannot_authorize_current_candidate(self):
         retained = ROOT / 'scripts/tests/fixtures/ryuk-go-1.26.10'
         proof = json.loads((retained / 'provenance.json').read_text())
         observed = datetime.fromisoformat(proof['observed_at'].replace('Z', '+00:00'))
@@ -164,8 +181,34 @@ class CandidateEvidenceTest(unittest.TestCase):
             stream = CANDIDATE.messages(data)
             self.receipt['analysis'][mode] = fixture(self.directory, mode,
                 modified=stream[0]['config']['db_last_modified'], now=observed)
-        # Authentic analyzer bytes inside a synthetic acquisition envelope, not hosted retrieval proof.
-        self.assertEqual([], self.validate()['blocked'])
+        with self.assertRaisesRegex(ValueError, 'Wrong source/binary Go identity'):
+            self.validate()
+
+    def test_retained_go_1_26_11_streams_and_original_acquisitions_replay(self):
+        candidate = json.loads(CANDIDATE.CONTRACT.read_text())
+        retained = ROOT / candidate['proof']['retained_reports']
+        with tarfile.open(retained) as archive:
+            binding = json.load(archive.extractfile('binding.json'))
+            self.assertEqual(candidate['proof']['harness_commit'], binding['harness_commit'])
+            self.assertEqual(candidate['proof']['repository_head'], binding['candidate_commit'])
+            for run in ('first', 'repeat'):
+                directory = self.directory / run
+                directory.mkdir()
+                names = ['build-receipt.json']
+                names += [f'{mode}-{kind}.json' for mode in ('source', 'binary')
+                          for kind in ('govulncheck', 'go-acquisition', 'db-before', 'db-after')]
+                for name in names:
+                    (directory / name).write_bytes(archive.extractfile(f'{run}/{name}').read())
+                receipt_data = (directory / 'build-receipt.json').read_bytes()
+                receipt = json.loads(receipt_data)
+                original = candidate['proof']['builds'][run]
+                self.assertEqual(binding['candidate_commit'], receipt['repository_head'])
+                self.assertEqual(original['build_receipt_sha256'], CANDIDATE.sha(receipt_data))
+                self.assertEqual(original['analysis'], receipt['analysis'])
+                acquisition = json.loads((directory / 'binary-go-acquisition.json').read_bytes())
+                checked_at = CANDIDATE.ADVISORY.timestamp(acquisition['completed_at']) + timedelta(seconds=1)
+                CANDIDATE.ADVISORY.datetime.now.return_value = checked_at
+                CANDIDATE.validate_advisory_analysis(candidate, receipt, directory, candidate['buildinfo'])
 
     def test_vulnerable_go_standard_library_cannot_be_a_clean_candidate(self):
         current = ('go' + self.candidate['go_version']).encode()
@@ -173,7 +216,7 @@ class CandidateEvidenceTest(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate()
 
     def test_previous_go_candidates_cannot_reauthorize_themselves(self):
-        for version in ['1.26.8', '1.26.9']:
+        for version in ['1.26.8', '1.26.9', '1.26.10']:
             with self.subTest(version=version):
                 self.candidate['go_version'] = self.image['go_version'] = version
                 self.candidate['buildinfo']['go_version'] = version
@@ -287,6 +330,31 @@ class CandidateEvidenceTest(unittest.TestCase):
         self.put('image-config.json', b'{}')
         with self.assertRaises(ValueError): self.validate()
 
+    def test_rehashed_image_archive_with_altered_layer_is_rejected(self):
+        path = self.directory / 'image.tar'
+        with tarfile.open(path) as saved:
+            layers = json.load(saved.extractfile('manifest.json'))[0]['Layers']
+            files = {m.name: (saved.extractfile(m).read(), m.mode) for m in saved.getmembers()}
+        layer, mode = files[layers[0]]
+        files[layers[0]] = (layer + b'drift', mode)
+        archive = BUILD.tar_bytes(files)
+        self.put(path.name, archive)
+        self.candidate['archive_sha256'] = self.receipt['archive_sha256'] = CANDIDATE.sha(archive)
+        with self.assertRaisesRegex(ValueError, 'layer drift'):
+            self.validate()
+
+    def test_actual_sdk_bytes_are_required_even_with_the_original_receipt(self):
+        path = self.directory / BUILD.SDK_ARCHIVE
+        self.put(path.name, path.read_bytes() + b'changed SDK')
+        with self.assertRaisesRegex(ValueError, 'official Go compiler archive'):
+            self.validate()
+
+    def test_stale_compiler_proof_is_rejected_with_an_unchanged_sdk(self):
+        path = self.directory / 'compiler-proof.json'
+        self.put(path.name, path.read_bytes().replace(b'go1.26.11', b'go1.26.10'))
+        with self.assertRaisesRegex(ValueError, 'compiler proof mismatch'):
+            self.validate()
+
     def test_module_version_drift_invalidates_evidence(self):
         self.receipt['source_files']['go.mod'] = 'a' * 64
         with self.assertRaises(ValueError): self.validate()
@@ -301,7 +369,14 @@ class CandidateEvidenceTest(unittest.TestCase):
         path = self.directory / 'source-packages.json'
         self.put(path.name, path.read_bytes() + b'\n{"ImportPath":"github.com/moby/moby/v2/daemon"}')
         self.receipt['evidence_hashes'][path.name] = CANDIDATE.sha(path.read_bytes())
-        with self.assertRaisesRegex(ValueError, 'reachable'): self.validate()
+        with self.assertRaisesRegex(ValueError, 'compiled Ryuk package'): self.validate()
+
+    def test_uncompiled_selected_module_cannot_drift_after_rehashing(self):
+        path = self.directory / 'source-modules.json'
+        self.put(path.name, path.read_bytes() + b'\n{"Path":"example.invalid/extra","Version":"v1.2.3"}')
+        self.receipt['evidence_hashes'][path.name] = CANDIDATE.sha(path.read_bytes())
+        with self.assertRaisesRegex(ValueError, 'Selected Ryuk module graph changed'):
+            self.validate()
 
     def test_missing_source_mode_evidence_invalidates_evidence(self):
         (self.directory / 'source-govulncheck.json').unlink()
