@@ -58,8 +58,7 @@ def load(downloads, directory):
     EVIDENCE.validate_compatibility(core / 'trivy-compatibility', candidate, head)
     shutil.copytree(core / 'trivy-compatibility', directory / 'compatibility')
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
-    observed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', candidate['image_reference']]))[0]
-    require(observed['Id'] == candidate['image_id'], 'Loaded scanner image identity drift')
+    EVIDENCE.BINARY.inspect_configuration(candidate['image_reference'], candidate['image_id'])
     print('Verified current-HEAD upstream source, independent compiler, repeat binaries, advisory analysis, package and behavior evidence.')
 
 

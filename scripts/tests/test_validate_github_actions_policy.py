@@ -158,6 +158,20 @@ class GitHubActionsPolicyTest(unittest.TestCase):
     def workflow(self, reference, extra=""):
         return f"jobs:\n  test:\n    steps:\n      - uses: {reference}\n{extra}"
 
+    def java21_steps(self, suite_name, *, maven_cache):
+        setup = (
+            "      - name: Set up Java 21\n"
+            "        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1\n"
+            "        with:\n"
+            "          distribution: temurin\n"
+            "          java-version: '21'\n"
+        )
+        if maven_cache:
+            setup += "          cache: maven\n"
+        suite = f"      - name: {suite_name}\n        shell: bash\n        run: |\n"
+        suite += "".join(f"          {line}\n" for line in (*POLICY.JAVA21_CHECKS, POLICY.FULL_POLICY_SUITE))
+        return setup + "\n", suite + "\n"
+
     def ci_workflow(self, ref, container_ref="${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}"):
         dependency_review = (
             "  dependency-review:\n"
@@ -192,12 +206,15 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          license-check: false\n"
             "          show-openssf-scorecard: false\n"
         )
+        build_java = "".join(self.java21_steps("Test CI policy tooling", maven_cache=True))
+        container_java = "".join(self.java21_steps("Test component-aware vulnerability policy", maven_cache=False))
         build = self.workflow(
             f"actions/checkout@{SHA}",
             "        with:\n"
             "          persist-credentials: false\n"
             "      - name: Validate live protected-master policy\n"
             "        run: python scripts/validate-master-protection.py --repository \"${{ github.repository }}\"\n"
+            f"{build_java}"
             "  container-security:\n"
             "    steps:\n"
             "      - name: Checkout\n"
@@ -205,6 +222,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "        with:\n"
             "          persist-credentials: false\n"
             f"          ref: {container_ref}\n"
+            f"{container_java}"
             "      - name: Checkout protected-master OpenAPI baseline source\n"
             "        if: github.event_name == 'pull_request'\n"
             f"        uses: actions/checkout@{SHA}\n"
@@ -267,6 +285,53 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "      - name: Run historical-forward PostgreSQL restore rehearsal\n"
             "        run: ./scripts/historical-forward-restore-rehearsal.sh\n"
         )
+
+    def assert_rejects_java21_prerequisite(self, replace):
+        contents = (SCRIPT.parents[1] / ".github/workflows/ci.yml").read_text()
+        for job_id, suite_name in (("build", "Test CI policy tooling"),
+                                   ("container-security", "Test component-aware vulnerability policy")):
+            with self.subTest(job=job_id):
+                setup, suite = self.java21_steps(suite_name, maven_cache=job_id == "build")
+                self.assertIn(setup + suite, contents)
+                changed = replace(setup, suite)
+                self.assertNotEqual(setup + suite, changed)
+                errors = self.validate(contents.replace(setup + suite, changed, 1), "ci.yml")
+                self.assertTrue(any(f"{job_id} requires reviewed unconditional Temurin Java 21 setup"
+                                    in error for error in errors), errors)
+
+    def test_reviewed_ci_configures_java21_before_both_policy_suites(self):
+        contents = (SCRIPT.parents[1] / ".github/workflows/ci.yml").read_text()
+        self.assertEqual([], self.validate(contents, "ci.yml"))
+
+    def test_rejects_missing_java_setup(self):
+        self.assert_rejects_java21_prerequisite(lambda setup, suite: suite)
+
+    def test_rejects_java_setup_after_policy_suite(self):
+        self.assert_rejects_java21_prerequisite(lambda setup, suite: suite + setup)
+
+    def test_rejects_wrong_java_feature_version(self):
+        self.assert_rejects_java21_prerequisite(
+            lambda setup, suite: setup.replace("java-version: '21'", "java-version: '25'") + suite)
+
+    def test_rejects_unreviewed_distribution_or_setup_action(self):
+        for before, after in (("distribution: temurin", "distribution: zulu"),
+                              ("de7274f081f381c8f8158605e0321c36c376e2e6", SHA)):
+            with self.subTest(setting=before):
+                self.assert_rejects_java21_prerequisite(
+                    lambda setup, suite: setup.replace(before, after) + suite)
+
+    def test_rejects_conditional_or_ineffective_java_setup(self):
+        for before, after in (("        with:\n", "        if: false\n        with:\n"),
+                              ("        with:\n", "        continue-on-error: true\n        with:\n"),
+                              ("          distribution: temurin\n",
+                               "          distribution: temurin\n          java-package: jre\n")):
+            with self.subTest(setting=after.strip()):
+                self.assert_rejects_java21_prerequisite(
+                    lambda setup, suite: setup.replace(before, after) + suite)
+
+    def test_rejects_missing_compiler_readback(self):
+        self.assert_rejects_java21_prerequisite(
+            lambda setup, suite: setup + suite.replace("          compiler=$(javac -version 2>&1)\n", ""))
 
     def test_accepts_external_action_pinned_to_full_sha(self):
         self.assertEqual([], self.validate(self.workflow(f"owner/action@{SHA}")))
