@@ -34,7 +34,7 @@ RUN --mount=type=secret,id=proxy_ca \
     sha256sum -c /out/gosu.sha256; \
     go version -m /out/gosu
 
-FROM postgres:18-alpine
+FROM postgres:19-alpine
 
 LABEL org.opencontainers.image.title="Enterprise Shop PostgreSQL" \
       org.opencontainers.image.description="PostgreSQL 18 image with Polish full-text search dictionary files" \
