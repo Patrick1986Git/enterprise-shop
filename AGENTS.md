@@ -59,7 +59,7 @@ Before writing or modifying code:
 
 ### Task-oriented navigation
 
-Use the [task guide in the documentation index](docs/README.md#task-oriented-navigation) to locate relevant code, tests, architecture guidance, scripts, and verification paths. Read the guidance relevant to the task; narrow changes do not require reading every document or scanning the entire repository. Verify the guide against live source and tests before editing, follow affected dependencies, and expand investigation for cross-cutting security, API, persistence/migration, transaction/concurrency, or operational risks. All existing architecture, security, operational safety, and verification requirements still apply.
+Use the [task guide in the documentation index](docs/README.md#task-oriented-navigation) to find the owning module or shared component, relevant tests, and applicable guidance. Verify those starting points against current source and tests. Expand the investigation to affected callers, consumers, policies, and tests when security, API behavior, persistence, migrations, transactions, concurrency, or operations cross those boundaries. Apply the existing architecture, security, operational safety, and verification requirements throughout.
 
 ### Capability preflight and handoff
 
