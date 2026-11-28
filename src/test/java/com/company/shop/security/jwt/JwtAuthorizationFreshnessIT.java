@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -102,6 +103,26 @@ class JwtAuthorizationFreshnessIT extends PostgresContainerSupport {
         mockMvc.perform(get("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + login(ordinaryUser.getEmail())))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCategoryCreation_shouldRejectMissingMalformedAndNonAdminBearerWithoutPersistingCategory() throws Exception {
+        User user = createUser("jwt-category-user-" + UUID.randomUUID() + "@example.com", ROLE_USER);
+        String token = login(user.getEmail());
+        String name = "JWT boundary " + UUID.randomUUID();
+        String body = objectMapper.writeValueAsString(Map.of("name", name));
+
+        mockMvc.perform(post("/api/v1/admin/categories").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/categories").contentType(MediaType.APPLICATION_JSON).content(body)
+                        .header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/categories").contentType(MediaType.APPLICATION_JSON).content(body)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM categories WHERE name = ?", Long.class, name)).isZero();
     }
 
     @Test
