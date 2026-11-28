@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
+
 ROOT = Path(__file__).parents[2]
 SPEC = importlib.util.spec_from_file_location('policy', ROOT / 'scripts/validate-auxiliary-containers.py')
 POLICY = importlib.util.module_from_spec(SPEC)
@@ -252,7 +253,8 @@ class CompressedGoEvidenceTest(unittest.TestCase):
     def test_fixture_cannot_enter_compressed_binary_trust_path(self):
         contract = POLICY.read(POLICY.CONTRACT)
         contract['images']['fixture']['evidence_transform'] = contract['comparisons']['official_ryuk']['evidence_transform']
-        with self.assertRaisesRegex(ValueError, 'fixture compressed'): POLICY.inventory(contract)
+        with self.assertRaisesRegex(ValueError, 'fixture compressed'):
+            POLICY.inventory(contract)
 
     def test_decompressor_integrity_change_blocks(self):
         self.put('tools/upx', b'tampered')

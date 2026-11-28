@@ -6,8 +6,10 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import urllib.request
 from pathlib import Path
@@ -16,12 +18,24 @@ ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('go_advisory_acquisition', ROOT / 'scripts/go_advisory_acquisition.py')
 ADVISORY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ADVISORY)
+SPEC = importlib.util.spec_from_file_location('image_identity', ROOT / 'scripts/auxiliary_binary_evidence.py')
+BINARY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(BINARY)
 TEST_SPEC = importlib.util.spec_from_file_location('ryuk_client_tests', ROOT / 'scripts/ryuk_client_tests.py')
 ryuk_client_tests = importlib.util.module_from_spec(TEST_SPEC)
 TEST_SPEC.loader.exec_module(ryuk_client_tests)
 SOURCE = 'b3726afd6cc2c36628abcc08e9cabac43f587384'
 ARCHIVE_SHA = '7754e8598010a543c015c5d14b10372e15a5a00c68e5e5b81300c2cde4d2f01d'
-BUILDER = 'docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca'
+GO_VERSION = '1.26.11'
+BUILDER = 'docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab'
+BUILDER_ID = 'sha256:c759fe8ff9acf53c9179cb435419f2e673e121fa5432c1e945c12e509a99a5cc'
+SDK_SHA = '9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec'
+SDK_TOOLS = {
+    'bin/go': '95499375c24b610cdc9e3684cec920174ec4c4f3f66d35b4332107f0f7d3d27d',
+    'bin/gofmt': 'cae643e8d7891e50a4088102d84e157010d789b5292b89e87be488ccbcc0f2e5',
+    'pkg/tool/linux_amd64/compile': '896a17923b901c9581505c08e8ed1c5a2a6b1b519beb457ceb106f1b59373329',
+    'pkg/tool/linux_amd64/link': 'f2e750ca33de93eae493abef851eec050e368c6840f18d1fb03a73b7a696e928'}
+SDK_ARCHIVE = f'go{GO_VERSION}.linux-amd64.tar.gz'
 TOOL = 'v1.8.0'
 TOOL_SUM = 'h1:clG4qBU6zH5VKjti8n5j8BBuYzoSha392xXMkXS351U='
 
@@ -37,6 +51,15 @@ def require(condition, message):
 
 def write(path, value):
     path.write_text(json.dumps(value, indent=2) + '\n')
+
+
+def interpreter_identity(image_id):
+    executable = Path(sys.executable)
+    require(executable.is_absolute(), 'Preparation requires an absolute Python interpreter')
+    executable = executable.resolve(strict=True)
+    require(executable.is_file() and os.access(executable, os.X_OK), 'Preparation interpreter is not executable')
+    return {'executable': str(executable), 'sha256': sha(executable.read_bytes()),
+            'image_config': image_id, 'verifier_source_sha256': sha(Path(__file__).read_bytes())}
 
 
 def canonical(value):
@@ -100,9 +123,13 @@ def build(directory, analyze=True):
     source_hashes = {p.relative_to(source).as_posix(): sha(p.read_bytes())
                      for p in sorted(source.rglob('*')) if p.is_file()}
     subprocess.run(['docker', 'pull', '--platform', 'linux/amd64', BUILDER], check=True)
-    inspect = json.loads(subprocess.check_output(['docker', 'image', 'inspect', BUILDER]))[0]
+    inspect, builder_config_id = BINARY.inspect_configuration(BUILDER, BUILDER_ID)
+    write(directory / 'builder-docker-image.json', inspect)
     require(inspect['Os'] == 'linux' and inspect['Architecture'] == 'amd64'
             and BUILDER.split('@')[1] in [r.split('@')[1] for r in inspect['RepoDigests']], 'Wrong builder')
+    BINARY.collect_go_sdk(directory / SDK_ARCHIVE, BUILDER, GO_VERSION, SDK_SHA, SDK_TOOLS)
+    write(directory / 'compiler-proof.json', {'compiler': 'go' + GO_VERSION, 'builder': BUILDER,
+                                              'sdk_sha256': SDK_SHA, 'tools': SDK_TOOLS})
     command = ['docker', 'run', '--rm', '--platform', 'linux/amd64', '--user', f'{os.getuid()}:{os.getgid()}',
                '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
                '-v', f'{source.resolve()}:/source:ro', '-v', f'{directory.resolve()}:/evidence',
@@ -131,7 +158,7 @@ def build(directory, analyze=True):
     test_files = {p.name: sha(p.read_bytes()) for p in tests.iterdir() if p.is_file()}
     require(test_files == json.loads(ryuk_client_tests.CONTRACT.read_text())['source_files'], 'Unreviewed Ryuk test overlay')
     subprocess.run(test_command + ['go mod download github.com/stretchr/testify github.com/davecgh/go-spew '
-        'github.com/pmezard/go-difflib github.com/stretchr/objx gopkg.in/yaml.v3; go mod verify'], check=True)
+        'github.com/pmezard/go-difflib github.com/stretchr/objx go.yaml.in/yaml/v3; go mod verify'], check=True)
     with (directory / 'client-tests.jsonl').open('w') as out, (directory / 'client-tests.log').open('w') as err:
         status = subprocess.run(test_command[:3] + ['--network', 'none'] + test_command[3:] +
             ['go test -mod=readonly -count=1 -timeout=90s -json .'], stdout=out, stderr=err, timeout=120).returncode
@@ -148,7 +175,7 @@ def build(directory, analyze=True):
     write(directory / 'filesystem-census.json', census)
     receipt = {'upstream_source_sha': SOURCE, 'upstream_archive_sha256': ARCHIVE_SHA,
         'patch_sha256': sha(patch.read_bytes()), 'source_files': source_hashes,
-        'builder': BUILDER, 'builder_image_id': inspect['Id'], 'go_version': '1.26.10',
+        'builder': BUILDER, 'builder_image_id': builder_config_id, 'go_version': GO_VERSION,
         'flags': flags, 'cgo_enabled': '0', 'upx': False, 'binary_sha256': sha(binary),
         'repeat_sha256': sha((directory / 'ryuk.repeat').read_bytes()),
         'image_reference': reference, 'image_id': image_id, 'archive_sha256': sha(archive),
@@ -159,8 +186,7 @@ def build(directory, analyze=True):
         for name in ['buildinfo.txt', 'source-packages.json', 'source-modules.json']}
     write(directory / 'build-receipt.json', receipt)
     subprocess.run(['docker', 'load', '-i', str(directory / 'image.tar')], check=True)
-    require(json.loads(subprocess.check_output(['docker', 'image', 'inspect', reference]))[0]['Id'] == image_id,
-            'Loaded candidate configuration differs')
+    BINARY.inspect_configuration(reference, image_id)
     if analyze:
         analyzer = ADVISORY.isolated_analyzer(command, 'ryuk-candidate-build:/tmp')
         subprocess.run(analyzer + [f'go install golang.org/x/vuln/cmd/govulncheck@{TOOL}; '
@@ -187,8 +213,7 @@ def reuse(directory, analyze=True):
     candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     _, receipt = ryuk_candidate_evidence.validate_build(candidate, directory, head, analyze)
-    observed = json.loads(subprocess.check_output(['docker', 'image', 'inspect', candidate['image_reference']]))[0]
-    require(observed['Id'] == candidate['image_id'], 'Local candidate configuration drift; rebuild before Maven')
+    BINARY.inspect_configuration(candidate['image_reference'], candidate['image_id'])
     print('Verified existing local Ryuk source, repeat binaries, tests, archive and loaded image: ' + candidate['image_id'])
     return receipt
 
@@ -198,8 +223,19 @@ if __name__ == '__main__':
     parser.add_argument('--directory', type=Path, default=ROOT / '.tmp/ryuk-candidate')
     parser.add_argument('--no-analysis', action='store_true')
     parser.add_argument('--reuse', action='store_true', help='Revalidate existing current-HEAD evidence and loaded image')
+    parser.add_argument('--verify-image', help='Verify an immutable running Ryuk image ID against the reviewed configuration')
     args = parser.parse_args()
     try:
-        (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
+        if args.verify_image:
+            require(re.fullmatch(r'sha256:[0-9a-f]{64}', args.verify_image), 'Missing immutable Ryuk image ID')
+            candidate = json.loads((ROOT / '.github/security/ryuk/candidate.json').read_text())
+            _, config_id = BINARY.inspect_configuration(args.verify_image, candidate['image_id'])
+            print(config_id)
+        else:
+            identity = ROOT / '.tmp/ryuk-python-identity.json'
+            identity.unlink(missing_ok=True)
+            receipt = (reuse if args.reuse else build)(args.directory.resolve(), not args.no_analysis)
+            identity.parent.mkdir(parents=True, exist_ok=True)
+            write(identity, interpreter_identity(receipt['image_id']))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, 'Ryuk preparation failed: ' + str(error) + '\n')

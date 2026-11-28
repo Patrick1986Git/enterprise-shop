@@ -9,6 +9,9 @@ SPEC = importlib.util.spec_from_file_location("github_actions_policy", SCRIPT)
 POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
 SHA = "0123456789abcdef0123456789abcdef01234567"
+DEPENDENCY_REVIEW_SHA = "bbc44d14a204704ccc493733616cd1e93a0321ec"
+SETUP_JAVA_SHA = "b843ebf9b913146b38da2eaa7aeddf76074ae1ad"
+PREVIOUS_SETUP_JAVA_SHA = "de7274f081f381c8f8158605e0321c36c376e2e6"
 
 
 class CodeQLWorkflowPolicyTest(unittest.TestCase):
@@ -27,7 +30,7 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
         self.assertTrue(any(diagnostic in error for error in errors), errors)
 
     def test_reviewed_dual_language_workflow_passes(self):
-        reviewed_sha = "24c54180a607b1449ed407dd24f251e4e9147c8d"
+        reviewed_sha = "6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee"
         self.assertEqual(reviewed_sha, POLICY.CODEQL_SHA)
         references = [reference for _, reference, _, _ in POLICY.action_references(
             SCRIPT.parents[1] / ".github/workflows/codeql.yml"
@@ -36,12 +39,29 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
                           for action in ("init", "analyze", "init", "analyze")], references)
         self.assertEqual([], self.validate(self.workflow))
 
-    def test_previous_codeql_release_is_no_longer_reviewed(self):
-        previous_sha = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
-        for action in ("init", "analyze"):
-            with self.subTest(action=action):
-                self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
-                            f"github/codeql-action/{action}@{previous_sha}", "reviewed action")
+    def test_previous_codeql_releases_are_no_longer_reviewed(self):
+        for previous_sha in (
+            "24c54180a607b1449ed407dd24f251e4e9147c8d",
+            "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+        ):
+            for action in ("init", "analyze"):
+                reviewed = f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}"
+                revoked = f"github/codeql-action/{action}@{previous_sha}"
+                for language, workflow in (
+                    ("java-kotlin", self.workflow.replace(reviewed, revoked, 1)),
+                    ("python", revoked.join(self.workflow.rsplit(reviewed, 1))),
+                ):
+                    with self.subTest(previous_sha=previous_sha, action=action, language=language):
+                        errors = self.validate(workflow)
+                        self.assertTrue(any(f"CodeQL {language} must retain reviewed action" in error
+                                            for error in errors), errors)
+
+    def test_mutable_and_short_codeql_references_are_rejected(self):
+        for revision in ("v4", "v4.39.0", "main", POLICY.CODEQL_SHA[:7]):
+            for action in ("init", "analyze"):
+                with self.subTest(revision=revision, action=action):
+                    self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
+                                f"github/codeql-action/{action}@{revision}", "full 40-character")
 
     def test_unreviewed_full_codeql_shas_are_rejected(self):
         for revision in (SHA, "f" * 40):
@@ -83,10 +103,53 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
                 self.reject(before, after, "mode, queries")
 
     def test_java_jdk_build_and_ryuk_procedure_remain_required(self):
-        for before in ("java-version: '21'", "run: ./mvnw -B clean verify",
+        for before in ("run: ./mvnw -B clean verify",
                        "run: python scripts/build-ryuk-candidate.py", "SPRING_PROFILES_ACTIVE: test"):
             with self.subTest(before=before):
                 self.reject(before, "removed: true", "full Java 21 Maven verification")
+
+    def test_java_setup_rejects_unreviewed_references(self):
+        for revision in (PREVIOUS_SETUP_JAVA_SHA, SHA, "v6.1.0", "main", SETUP_JAVA_SHA[:7]):
+            with self.subTest(revision=revision):
+                self.reject(f"actions/setup-java@{SETUP_JAVA_SHA}",
+                            f"actions/setup-java@{revision}", "reviewed unconditional Temurin Java 21 setup")
+
+    def test_java_setup_rejects_unreviewed_inputs(self):
+        for before, after in (
+            ("distribution: temurin", "distribution: zulu"),
+            ("java-version: '21'", "java-version: '25'"),
+            ("          cache: maven", "          java-package: jre"),
+            ("          cache: maven\n", ""),
+            ("          cache: maven\n", "          cache: maven\n          mvn-plugin-repositories: custom\n"),
+            ("        with:\n", "        if: false\n        with:\n"),
+            ("        with:\n", "        continue-on-error: true\n        with:\n"),
+        ):
+            with self.subTest(setting=after):
+                self.reject(before, after, "reviewed unconditional Temurin Java 21 setup")
+
+    def test_java_setup_and_readback_precede_codeql_initialization(self):
+        setup = self.workflow.index("      - name: Set up Java 21\n")
+        readback = self.workflow.index("      - name: Verify Java 21 runtime and compiler\n")
+        init = self.workflow.index("      - name: Initialize CodeQL\n")
+        ryuk = self.workflow.index("      - name: Build reviewed unpublished Ryuk candidate\n")
+        for missing, workflow in (
+            ("setup", self.workflow[:setup] + self.workflow[readback:]),
+            ("readback", self.workflow[:readback] + self.workflow[init:]),
+        ):
+            with self.subTest(missing=missing):
+                errors = self.validate(workflow)
+                self.assertTrue(any("reviewed unconditional Temurin Java 21 setup" in error
+                                    for error in errors), errors)
+        workflow = (self.workflow[:setup] + self.workflow[init:ryuk]
+                    + self.workflow[setup:init] + self.workflow[ryuk:])
+        errors = self.validate(workflow)
+        self.assertTrue(any("between initialization and analysis" in error for error in errors), errors)
+
+    def test_java_readback_and_single_setup_are_required(self):
+        self.reject("          compiler=$(javac -version 2>&1)\n", "", "runtime and compiler readback")
+        self.reject("      - name: Initialize CodeQL\n",
+                    f"      - uses: 'actions/setup-java@{SETUP_JAVA_SHA}'\n"
+                    "      - name: Initialize CodeQL\n", "reviewed unconditional Temurin Java 21 setup")
 
     def test_pull_request_target_cannot_be_introduced(self):
         self.reject("  pull_request:", "  pull_request_target:", "triggers")
@@ -96,9 +159,8 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
             with self.subTest(before=before):
                 self.reject(before, "  removed:", "triggers")
 
-    def test_persisted_credentials_and_mutable_action_references_fail(self):
+    def test_persisted_checkout_credentials_fail(self):
         self.reject("persist-credentials: false", "persist-credentials: true", "persist-credentials")
-        self.reject(POLICY.CODEQL_SHA, "v4", "full 40-character")
 
     def test_permissions_cannot_be_broadened_or_sarif_disabled(self):
         for before, after in (("contents: read", "contents: write"),
@@ -158,6 +220,20 @@ class GitHubActionsPolicyTest(unittest.TestCase):
     def workflow(self, reference, extra=""):
         return f"jobs:\n  test:\n    steps:\n      - uses: {reference}\n{extra}"
 
+    def java21_steps(self, suite_name, *, maven_cache):
+        setup = (
+            "      - name: Set up Java 21\n"
+            f"        uses: actions/setup-java@{SETUP_JAVA_SHA} # v6.1.0\n"
+            "        with:\n"
+            "          distribution: temurin\n"
+            "          java-version: '21'\n"
+        )
+        if maven_cache:
+            setup += "          cache: maven\n"
+        suite = f"      - name: {suite_name}\n        shell: bash\n        run: |\n"
+        suite += "".join(f"          {line}\n" for line in (*POLICY.JAVA21_CHECKS, POLICY.FULL_POLICY_SUITE))
+        return setup + "\n", suite + "\n"
+
     def ci_workflow(self, ref, container_ref="${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}"):
         dependency_review = (
             "  dependency-review:\n"
@@ -185,19 +261,22 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          test \"$(git -C target/dependency-review-base rev-parse HEAD)\" = \"$BASE_SHA\"\n"
             "          test \"$(git rev-parse HEAD)\" = \"$HEAD_SHA\"\n"
             "      - name: Review dependency changes\n"
-            "        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294\n"
+            f"        uses: actions/dependency-review-action@{DEPENDENCY_REVIEW_SHA}\n"
             "        with:\n"
             "          fail-on-severity: high\n"
             "          fail-on-scopes: runtime, development, unknown\n"
             "          license-check: false\n"
             "          show-openssf-scorecard: false\n"
         )
+        build_java = "".join(self.java21_steps("Test CI policy tooling", maven_cache=True))
+        container_java = "".join(self.java21_steps("Test component-aware vulnerability policy", maven_cache=False))
         build = self.workflow(
             f"actions/checkout@{SHA}",
             "        with:\n"
             "          persist-credentials: false\n"
             "      - name: Validate live protected-master policy\n"
             "        run: python scripts/validate-master-protection.py --repository \"${{ github.repository }}\"\n"
+            f"{build_java}"
             "  container-security:\n"
             "    steps:\n"
             "      - name: Checkout\n"
@@ -205,6 +284,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "        with:\n"
             "          persist-credentials: false\n"
             f"          ref: {container_ref}\n"
+            f"{container_java}"
             "      - name: Checkout protected-master OpenAPI baseline source\n"
             "        if: github.event_name == 'pull_request'\n"
             f"        uses: actions/checkout@{SHA}\n"
@@ -267,6 +347,72 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "      - name: Run historical-forward PostgreSQL restore rehearsal\n"
             "        run: ./scripts/historical-forward-restore-rehearsal.sh\n"
         )
+
+    def assert_rejects_java21_prerequisite(self, replace):
+        contents = (SCRIPT.parents[1] / ".github/workflows/ci.yml").read_text()
+        for job_id, suite_name in (("build", "Test CI policy tooling"),
+                                   ("container-security", "Test component-aware vulnerability policy")):
+            with self.subTest(job=job_id):
+                setup, suite = self.java21_steps(suite_name, maven_cache=job_id == "build")
+                self.assertIn(setup + suite, contents)
+                changed = replace(setup, suite)
+                self.assertNotEqual(setup + suite, changed)
+                errors = self.validate(contents.replace(setup + suite, changed, 1), "ci.yml")
+                self.assertTrue(any(f"{job_id} requires reviewed unconditional Temurin Java 21 setup"
+                                    in error for error in errors), errors)
+
+    def test_reviewed_ci_configures_java21_before_both_policy_suites(self):
+        self.assertEqual(f"actions/setup-java@{SETUP_JAVA_SHA}", POLICY.JAVA21_SETUP)
+        contents = (SCRIPT.parents[1] / ".github/workflows/ci.yml").read_text()
+        self.assertEqual([], self.validate(contents, "ci.yml"))
+
+    def test_rejects_missing_java_setup(self):
+        self.assert_rejects_java21_prerequisite(lambda setup, suite: suite)
+
+    def test_rejects_java_setup_after_policy_suite(self):
+        self.assert_rejects_java21_prerequisite(lambda setup, suite: suite + setup)
+
+    def test_rejects_wrong_java_feature_version(self):
+        self.assert_rejects_java21_prerequisite(
+            lambda setup, suite: setup.replace("java-version: '21'", "java-version: '25'") + suite)
+
+    def test_rejects_unreviewed_distribution_or_setup_action(self):
+        self.assert_rejects_java21_prerequisite(
+            lambda setup, suite: setup.replace("distribution: temurin", "distribution: zulu") + suite)
+        for revision in (PREVIOUS_SETUP_JAVA_SHA, SHA, "v6.1.0", "main", SETUP_JAVA_SHA[:7]):
+            with self.subTest(revision=revision):
+                self.assert_rejects_java21_prerequisite(
+                    lambda setup, suite: setup.replace(SETUP_JAVA_SHA, revision) + suite)
+
+    def test_rejects_conditional_or_ineffective_java_setup(self):
+        for before, after in (("        with:\n", "        if: false\n        with:\n"),
+                              ("        with:\n", "        continue-on-error: true\n        with:\n"),
+                              ("          distribution: temurin\n",
+                               "          distribution: temurin\n          java-package: jre\n"),
+                              ("          distribution: temurin\n",
+                               "          distribution: temurin\n          set-default: false\n")):
+            with self.subTest(setting=after.strip()):
+                self.assert_rejects_java21_prerequisite(
+                    lambda setup, suite: setup.replace(before, after) + suite)
+
+    def test_rejects_changed_java_cache_or_new_maven_settings(self):
+        def change_cache(setup, suite):
+            cache = "          cache: maven\n"
+            if cache in setup:
+                return setup.replace(cache, "") + suite
+            return setup.rstrip() + "\n" + cache + "\n" + suite
+
+        self.assert_rejects_java21_prerequisite(change_cache)
+        for setting in ("mvn-server-repository-origins", "mvn-plugin-repositories"):
+            with self.subTest(setting=setting):
+                self.assert_rejects_java21_prerequisite(
+                    lambda setup, suite: setup.rstrip() + f"\n          {setting}: custom\n\n" + suite)
+
+    def test_rejects_missing_java_home_runtime_or_compiler_readback(self):
+        for readback in POLICY.JAVA21_CHECKS[1:]:
+            with self.subTest(readback=readback):
+                self.assert_rejects_java21_prerequisite(
+                    lambda setup, suite: setup + suite.replace(f"          {readback}\n", ""))
 
     def test_accepts_external_action_pinned_to_full_sha(self):
         self.assertEqual([], self.validate(self.workflow(f"owner/action@{SHA}")))
@@ -404,24 +550,40 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("live protected-master policy" in violation for violation in violations))
 
-    def test_rejects_dependency_review_without_exact_base_repository(self):
+    def test_dependency_review_requires_exact_release_identity(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
-        workflow = self.ci_workflow(expression).replace(
-            "repository: ${{ github.event.pull_request.base.repo.full_name }}",
-            "repository: ${{ github.repository }}",
-            1,
-        )
-        violations = self.validate(workflow, "ci.yml")
-        self.assertTrue(any("dependency review" in violation for violation in violations))
+        workflow = self.ci_workflow(expression)
+        self.assertEqual([], self.validate(workflow, "ci.yml"))
+        for rejected_ref in ("a1d282b36b6f3519aa1f3fc636f609c47dddb294", "v5", "v5.0.1",
+                             DEPENDENCY_REVIEW_SHA[:7], SHA):
+            with self.subTest(ref=rejected_ref):
+                violations = self.validate(workflow.replace(DEPENDENCY_REVIEW_SHA, rejected_ref), "ci.yml")
+                self.assertTrue(any("dependency review" in violation for violation in violations))
 
-    def test_rejects_dependency_review_that_omits_development_scope(self):
+    def test_rejects_dependency_review_without_exact_base_and_head_provenance(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
-        workflow = self.ci_workflow(expression).replace(
-            "fail-on-scopes: runtime, development, unknown",
-            "fail-on-scopes: runtime",
-        )
-        violations = self.validate(workflow, "ci.yml")
-        self.assertTrue(any("dependency review" in violation for violation in violations))
+        workflow = self.ci_workflow(expression)
+        for before, after in (
+            ("repository: ${{ github.event.pull_request.base.repo.full_name }}", "repository: ${{ github.repository }}"),
+            ("ref: ${{ github.event.pull_request.base.sha }}", "ref: ${{ github.base_ref }}"),
+            ("ref: ${{ github.event.pull_request.head.sha }}", "ref: ${{ github.head_ref }}"),
+            ('          test "$(git -C target/dependency-review-base rev-parse HEAD)" = "$BASE_SHA"\n', ""),
+            ('          test "$(git rev-parse HEAD)" = "$HEAD_SHA"\n', ""),
+        ):
+            with self.subTest(setting=before):
+                violations = self.validate(workflow.replace(before, after, 1), "ci.yml")
+                self.assertTrue(any("dependency review" in violation for violation in violations))
+
+    def test_rejects_weakened_dependency_review_severity_or_scopes(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression)
+        for before, after in (
+            ("fail-on-severity: high", "fail-on-severity: critical"),
+            ("fail-on-scopes: runtime, development, unknown", "fail-on-scopes: runtime, unknown"),
+        ):
+            with self.subTest(setting=after):
+                violations = self.validate(workflow.replace(before, after), "ci.yml")
+                self.assertTrue(any("dependency review" in violation for violation in violations))
 
     def test_rejects_dependency_review_license_policy(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"

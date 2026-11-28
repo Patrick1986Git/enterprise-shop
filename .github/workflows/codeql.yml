@@ -41,8 +41,19 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Verify Java 21 runtime and compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(command -v java)" -ef "$JAVA_HOME/bin/java"
+          test "$(command -v javac)" -ef "$JAVA_HOME/bin/javac"
+          runtime=$(java -version 2>&1)
+          compiler=$(javac -version 2>&1)
+          printf '%s\n' "$runtime" "$compiler"
+          [[ "$runtime" == 'openjdk version "21.'* && "$compiler" == 'javac 21.'* ]]
+
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: java-kotlin
           build-mode: manual
@@ -58,7 +69,17 @@ jobs:
         run: ./mvnw -B clean verify
 
       - name: Analyze with CodeQL
-        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          output: ${{ runner.temp }}/java-codeql-sarif
+
+      - name: Retain Java CodeQL review evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: java-codeql-evidence
+          path: ${{ runner.temp }}/java-codeql-sarif/java.sarif
+          if-no-files-found: error
+          retention-days: 14
 
   analyze-python:
     name: Analyze Python
@@ -77,7 +98,7 @@ jobs:
 
       - name: Initialize Python CodeQL
         id: init-python
-        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: python
           build-mode: none
@@ -86,7 +107,7 @@ jobs:
 
       - name: Analyze Python with CodeQL
         id: analyze-python
-        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           category: /language:python
           output: ${{ runner.temp }}/python-codeql-sarif

@@ -2,7 +2,6 @@
 import importlib.util
 import json
 import re
-import tarfile
 import tempfile
 from pathlib import Path
 
@@ -64,10 +63,11 @@ def inventory(image, candidate):
     require(image['reference'] == candidate['image_reference']
             == 'local/enterprise-shop-trivy:sha256-' + candidate['image_id'].removeprefix('sha256:')
             and image['identity']['sha256'] == candidate['binary_sha256']
-            and image['go_version'] == candidate['go_version'] == '1.27.3', 'Unreviewed scanner executable')
+            and image['go_version'] == candidate['go_version'] == BUILD.GO_VERSION, 'Unreviewed scanner executable')
     require(candidate.get('exceptions') == [] and candidate.get('applicability') == []
             and image.get('exceptions', []) == [] and image.get('applicability', []) == [],
             'No scanner advisory exception or applicability waiver is authorized')
+    require(candidate['observed_module_notices'] == ['GO-2026-5932'], 'Wrong reviewed scanner module notice')
     require(candidate['builder'] == BUILD.BUILDER and candidate['builder_image_id'] == BUILD.BUILDER_ID
             and candidate['builder_manifest'] == BUILD.BUILDER_MANIFEST
             and candidate['builder_binary_sha256'] == BUILD.BUILDER_BINARY
@@ -78,10 +78,12 @@ def inventory(image, candidate):
             and candidate['go_mod_sha256'] == BUILD.GO_MOD_SHA and candidate['go_sum_sha256'] == BUILD.GO_SUM_SHA,
             'Unreviewed source or Go manifest patch')
     metadata = candidate['buildinfo']
-    require(metadata['go_version'] == '1.27.3' and metadata['path'] == 'github.com/aquasecurity/trivy/cmd/trivy'
+    require(metadata['go_version'] == BUILD.GO_VERSION and metadata['path'] == 'github.com/aquasecurity/trivy/cmd/trivy'
             and metadata['main_module'] == 'github.com/aquasecurity/trivy' and metadata['main_version'] == '(devel)'
             and metadata['dependencies']['golang.org/x/net'] == {
-                'version': 'v0.60.0', 'sum': 'h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU='},
+                'version': 'v0.62.0', 'sum': 'h1:18ELalfM5+XNRwzM2nYqXsZQ9ByS1uhj2O/U7+5jqRY='}
+            and metadata['dependencies']['github.com/go-jose/go-jose/v4'] == {
+                'version': 'v4.1.6', 'sum': 'h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4='},
             'Known vulnerable or wrong scanner module/compiler identity')
     require(not any(name == 'github.com/docker/docker' or name.startswith('github.com/docker/docker/')
                     for name in metadata['dependencies']), 'Legacy Docker module embedded in scanner')
@@ -91,20 +93,22 @@ def inventory(image, candidate):
             and candidate['independent_cold_caches'] is True, 'Unreviewed scanner build settings')
 
 
-def advisory_analysis(candidate, receipt, directory, metadata, source_packages):
+def advisory_analysis(candidate, receipt, directory, metadata, source_packages, *, independent=False):
     imported = {p['ImportPath'] for p in source_packages}
-    compiled_modules = {p['Module']['Path'] for p in source_packages if p.get('Module')}
     symbols = json.loads((directory / 'binary-symbols.json').read_text())
-    require(symbols['binary_sha256'] == candidate['binary_sha256'] and symbols['reader_go_version'] == 'go1.27.3'
+    require(symbols['binary_sha256'] == candidate['binary_sha256'] and symbols['reader_go_version'] == 'go' + BUILD.GO_VERSION
             and symbols['function_count'] == len(symbols['functions']) > 10000
             and symbols['functions'] == sorted(symbols['functions']), 'Missing/incomplete actual executable function readback')
     require(symbols['function_count'] == candidate['binary_functions']['count']
             and sha(json.dumps(symbols['functions'], separators=(',', ':')).encode())
             == candidate['binary_functions']['names_sha256'], 'Incomplete executable function census')
     summaries = {}
-    for mode in ('source', 'binary'):
-        evidence = receipt['analysis'][mode]
-        payload = (directory / f'{mode}-govulncheck.json').read_bytes()
+    analyses = [('source', directory, 'source'), ('binary', directory, 'binary')]
+    if independent:
+        analyses.append(('source-repeat', directory / 'independent-source', 'source'))
+    for key, location, mode in analyses:
+        evidence = receipt['analysis'][key]
+        payload = (location / f'{mode}-govulncheck.json').read_bytes()
         require(type(evidence['status']) is int and evidence['status'] == 0 and sha(payload) == evidence['sha256'],
                 'Missing/failed independent advisory analysis')
         stream = messages(payload)
@@ -112,9 +116,9 @@ def advisory_analysis(candidate, receipt, directory, metadata, source_packages):
         require(len(configs) == 1 and configs[0]['scan_mode'] == mode and configs[0]['scan_level'] == 'symbol'
                 and configs[0]['scanner_name'] == 'govulncheck' and configs[0]['scanner_version'] == BUILD.TOOL
                 and configs[0]['db'] == 'https://vuln.go.dev', 'Self-scan/wrong advisory authority')
-        BUILD.RYUK.ADVISORY.validate(directory, mode, evidence, configs[0])
+        BUILD.RYUK.ADVISORY.validate(location, mode, evidence, configs[0])
         sboms = [m['SBOM'] for m in stream if 'SBOM' in m]
-        require(len(sboms) == 1 and sboms[0]['go_version'] == 'go1.27.3'
+        require(len(sboms) == 1 and sboms[0]['go_version'] == 'go' + BUILD.GO_VERSION
                 and sboms[0]['roots'] == [metadata['path'] if mode == 'source' else metadata['main_module']],
                 'Incomplete source/binary advisory readback')
         observed = {(m['path'], m.get('version', '')) for m in sboms[0]['modules']}
@@ -134,19 +138,24 @@ def advisory_analysis(candidate, receipt, directory, metadata, source_packages):
                             'Unexpected callable Go advisory finding')
             require(finding['osv'] in osv, 'Finding missing authoritative advisory body')
             module = trace[0]['module']
+            if finding['osv'] == 'GO-2026-5932':
+                require(module == 'golang.org/x/crypto'
+                        and trace[0].get('version') == metadata['dependencies'].get(module, {}).get('version'),
+                        'Wrong legacy OpenPGP module identity')
             affected = [a for a in osv[finding['osv']]['affected'] if a['package']['name'] == module]
             require(affected, 'Wrong advisory module identity')
             scoped = {p['path'] for a in affected for p in a.get('ecosystem_specific', {}).get('imports', [])}
             # A source-graph/module notice is not an executable waiver: accept only
             # packages absent from the complete compiled graph, with no symbol finding.
-            require((scoped and not imported.intersection(scoped)) or module not in compiled_modules,
+            require(scoped and not any(name == package or name.startswith(package + '/')
+                                       for name in imported for package in scoped),
                     'Advisory affects a compiled scanner package')
             require(scoped and not any(any(name.startswith(package + '.') or name.startswith(package + '/')
                                           for name in symbols['functions']) for package in scoped),
                     'Advisory affects an actual executable function')
         require(not any('error' in m for m in stream), 'Advisory service failure cannot be clean')
-        summaries[mode] = {'module_notices': [f['osv'] for f in findings], 'callable_findings': 0,
-                           'complete_compiled_module_readback': True}
+        summaries[key] = {'module_notices': [f['osv'] for f in findings], 'callable_findings': 0,
+                          'complete_compiled_module_readback': True}
     return summaries
 
 
@@ -177,25 +186,12 @@ def validate_build(candidate, directory, head, analysis=True):
     require(metadata == candidate['buildinfo'] == buildinfo((directory / 'repeat-buildinfo.txt').read_text()),
             'Scanner compiler/module identity changed')
     BINARY.source_match(metadata, (directory / 'source/go.mod').read_text(), (directory / 'source/go.sum').read_text())
-    source_packages = messages((directory / 'first-source-packages.json').read_bytes())
-    names = sorted(p['ImportPath'] for p in source_packages)
-    require(len(names) == len(set(names)) == candidate['source_packages']['count']
-            and sha(json.dumps(names, separators=(',', ':')).encode()) == candidate['source_packages']['imports_sha256'],
-            'Incomplete compiled Go package readback')
-    require(any(p['ImportPath'] == metadata['path'] and p['Name'] == 'main' for p in source_packages), 'Missing scanner main package')
-    observed = {(p['Module']['Path'], p['Module'].get('Version', ''), p['Module'].get('Sum', ''))
-                for p in source_packages if p.get('Module') and not p['Module'].get('Main')}
-    require(observed == {(m, d['version'], d['sum']) for m, d in metadata['dependencies'].items()},
-            'Source/actual executable module graph disagreement')
-    require(not any(p['ImportPath'].startswith('github.com/docker/docker/') for p in source_packages),
-            'Legacy Docker code compiled into scanner')
-    require(sha((directory / 'sdk.tar.gz').read_bytes()) == BUILD.SDK_SHA, 'Missing/wrong official Go compiler archive')
+    source_packages = package_graph(candidate, directory, 'first', metadata)
+    package_graph(candidate, directory, 'repeat', metadata)
+    BINARY.verify_sdk_archive(directory / 'sdk.tar.gz', BUILD.SDK_SHA, BUILD.SDK_TOOLS)
     sdk = json.loads((directory / 'compiler-sdk-receipt.json').read_text())
     require(sdk['archive_sha256'] == BUILD.SDK_SHA and sdk['byte_matches'] == BUILD.SDK_TOOLS
             and sdk['builder'] == BUILD.BUILDER, 'Compiler archive/builder byte mismatch')
-    with tarfile.open(directory / 'sdk.tar.gz') as archive:
-        require(all(sha(archive.extractfile('go/' + p).read()) == digest for p, digest in BUILD.SDK_TOOLS.items()),
-                'Official compiler tool readback mismatch')
     for name in ('index', 'manifest'):
         raw = (directory / ('builder-' + name + '.json')).read_bytes()
         require('sha256:' + sha(raw) == (BUILD.BUILDER.split('@')[1] if name == 'index' else BUILD.BUILDER_MANIFEST),
@@ -207,17 +203,63 @@ def validate_build(candidate, directory, head, analysis=True):
     ref, image_id, config, layer, archive, census = first_image
     require(ref == candidate['image_reference'] and image_id == candidate['image_id'] and census == candidate['filesystem']
             and config == (directory / 'image-config.json').read_bytes() and layer == (directory / 'layer.tar').read_bytes()
-            and archive == (directory / 'image.tar').read_bytes(), 'Unexpected scratch image configuration/filesystem')
-    summaries = advisory_analysis(candidate, receipt, directory, metadata, source_packages) if analysis else {}
+            and archive == (directory / 'image.tar').read_bytes()
+            and sha(layer) == candidate['layer_sha256'] and sha(archive) == candidate['archive_sha256'],
+            'Unexpected scratch image configuration/filesystem')
+    summaries = {}
     if analysis:
+        validate_source_resources(directory, receipt, head)
+        summaries = advisory_analysis(candidate, receipt, directory, metadata, source_packages, independent=True)
         require(sha((directory / 'govulncheck').read_bytes()) == receipt['tool_sha256'] == candidate['tool_sha256'],
                 'Independent analyzer executable changed')
         tool = buildinfo((directory / 'govulncheck-buildinfo.txt').read_text())
-        require(tool['go_version'] == '1.27.3' and tool['path'] == 'golang.org/x/vuln/cmd/govulncheck'
+        require(tool['go_version'] == BUILD.GO_VERSION and tool['path'] == 'golang.org/x/vuln/cmd/govulncheck'
                 and tool['main_module'] == 'golang.org/x/vuln' and tool['main_version'] == BUILD.TOOL
                 and re.search(r'\tmod\tgolang.org/x/vuln\t' + re.escape(BUILD.TOOL) + r'\t' + re.escape(BUILD.TOOL_SUM),
                               (directory / 'govulncheck-buildinfo.txt').read_text()), 'Wrong independent analyzer authority')
     return metadata, receipt, summaries
+
+
+def validate_source_resources(directory, receipt, head):
+    require(set(receipt['analysis']) == {'source', 'source-repeat', 'binary'},
+            'Two complete source analyses and binary analysis required')
+    BUILD.RESOURCES.validate_preflight(directory)
+    verified = []
+    stamp = BUILD.RYUK.ADVISORY.timestamp
+    for name, location in [('source', directory), ('source-repeat', directory / 'independent-source')]:
+        analysis = receipt['analysis'][name]
+        report = BUILD.validate_source_diagnostics(location, {'tool_sha256': receipt['tool_sha256'],
+                                                               'analysis': {'source': analysis}}, head)
+        terminal = location / 'terminal-accounting.json'
+        resources = BUILD.RESOURCES.read_evidence(terminal)
+        require(sha(terminal.read_bytes()) == analysis['terminal_sha256'], 'Terminal accounting evidence drift')
+        acquisition = json.loads((location / 'source-go-acquisition.json').read_text())
+        original = {k: v for k, v in analysis.items() if k != 'terminal_sha256'}
+        verified.append(BUILD.RESOURCES.validate_terminal(resources, report, acquisition, original, stamp))
+    first, repeat = verified
+    require(first['container_id'] != repeat['container_id']
+            and first['accounting_unit'] != repeat['accounting_unit']
+            and first['terminal']['device_inode'] != repeat['terminal']['device_inode']
+            and stamp(first['completed_at']) <= stamp(repeat['started_at']),
+            'Source resource evidence is not independent')
+
+
+def package_graph(candidate, directory, build, metadata):
+    source_packages = messages((directory / f'{build}-source-packages.json').read_bytes())
+    names = sorted(p['ImportPath'] for p in source_packages)
+    require(len(names) == len(set(names)) == candidate['source_packages']['count']
+            and sha(json.dumps(names, separators=(',', ':')).encode()) == candidate['source_packages']['imports_sha256'],
+            'Incomplete compiled Go package readback')
+    require(any(p['ImportPath'] == metadata['path'] and p['Name'] == 'main' for p in source_packages), 'Missing scanner main package')
+    observed = {(p['Module']['Path'], p['Module'].get('Version', ''), p['Module'].get('Sum', ''))
+                for p in source_packages if p.get('Module') and not p['Module'].get('Main')}
+    require(observed == {(m, d['version'], d['sum']) for m, d in metadata['dependencies'].items()},
+            'Source/actual executable module graph disagreement')
+    require(not any(p['ImportPath'].startswith('github.com/docker/docker/') for p in source_packages),
+            'Legacy Docker code compiled into scanner')
+    selected = messages((directory / f'{build}-source-modules.json').read_bytes())
+    require(BINARY.selected_modules(selected, metadata) == candidate['selected_modules'], 'Selected scanner module graph changed')
+    return source_packages
 
 
 def validate_upstream(directory):
@@ -271,6 +313,15 @@ def validate_compatibility(directory, candidate, head, actual_images=False):
     required = {'vulnerable', 'patched', 'reference-rootfs', 'candidate-rootfs', 'candidate-image'}
     if actual_images:
         require(len(result['actual_images']) == 3, 'Missing application/PostgreSQL/builder compatibility')
+    identities = result.get('actual_image_identities', {})
+    require(set(identities) == set(result['actual_images']), 'Missing actual image identity proofs')
+    for name, config_id in result['actual_images'].items():
+        identity = identities[name]
+        proof = identity['proof']
+        require(Path(proof).name == proof and proof in result['evidence_hashes']
+                and name in result['byte_inputs'], 'Missing actual image archive/metadata receipt')
+        require(BINARY.configuration_evidence(directory / proof, identity['docker_id']) == config_id,
+                'Actual image descriptor/configuration proof drift')
     require(result['outputs']['candidate'] == result['outputs']['reference'], 'Scanner command behavior disagreement')
     for scanner in ('reference', 'candidate'):
         outputs = result['outputs'][scanner]
@@ -310,7 +361,7 @@ def validate(image, evidence, report, directory, head):
     require(len(results) == 1 and results[0]['Target'] == 'usr/local/bin/trivy' and results[0]['Type'] == 'gobinary',
             'Missing actual scanner executable package inventory')
     expected = {(name, dep['version']) for name, dep in metadata['dependencies'].items()}
-    expected |= {(metadata['main_module'], ''), ('stdlib', 'v1.27.3')}
+    expected |= {(metadata['main_module'], ''), ('stdlib', 'v' + BUILD.GO_VERSION)}
     require({(p['Name'], p.get('Version', '')) for p in results[0]['Packages']} == expected,
             'Incomplete scanner source/executable/raw package readback')
     receipt['independent_advisory_evaluation'] = summaries
