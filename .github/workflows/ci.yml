@@ -49,7 +49,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
 
       - name: Review dependency changes
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
         with:
           fail-on-severity: high
           fail-on-scopes: runtime, development, unknown
@@ -59,6 +59,8 @@ jobs:
   trivy-candidate:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      DOCKER_HOST: unix:///var/run/docker.sock
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,12 +69,18 @@ jobs:
           ref: ${{ github.event_name == 'schedule' && 'master' || github.event.pull_request.head.sha || github.ref }}
 
       - name: Verify original upstream Trivy executable provenance
+        id: verify-upstream-trivy
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/verify-trivy-provenance.py --upstream-only
 
       - name: Collect independent Trivy candidate build evidence
         run: python scripts/build-trivy-candidate.py --directory .tmp/trivy-candidate
+
+      - name: Verify or recover Trivy host swap cleanup
+        if: always() && hashFiles('.tmp/trivy-candidate/swap-provisioning.json') != ''
+        timeout-minutes: 2
+        run: python scripts/trivy_source_resources.py .tmp/trivy-candidate
 
       - name: Collect isolated Trivy candidate functional compatibility
         run: python scripts/verify-trivy-candidate-compatibility.py --build .tmp/trivy-candidate
@@ -83,13 +91,15 @@ jobs:
         run: python scripts/verify-trivy-provenance.py --build .tmp/trivy-candidate
 
       - name: Upload Trivy candidate collection evidence
-        if: always()
+        if: always() && (steps.verify-upstream-trivy.outcome != 'failure' || hashFiles('.tmp/container-security/auxiliary/scanner-provenance/**') != '')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trivy-candidate-collection
           path: |
             .tmp/trivy-candidate/**
             !.tmp/trivy-candidate/cache-*/**
+            !.tmp/trivy-candidate/independent-source/cache-*/**
+            !.tmp/trivy-candidate/independent-source/govulncheck
             !.tmp/trivy-candidate/source/**
             !.tmp/trivy-candidate/trivy.*
             !.tmp/trivy-candidate/govulncheck
@@ -238,16 +248,9 @@ jobs:
         run: python scripts/load-trivy-candidate.py
 
       - name: Validate live protected-master policy
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python scripts/validate-master-protection.py --repository "${{ github.repository }}"
-
-      - name: Test CI policy tooling
-        run: python -m unittest discover -s scripts/tests -p 'test_*.py'
-
-      - name: Validate GitHub Actions policy
-        run: python scripts/validate-github-actions-policy.py
-
-      - name: Validate Maven Wrapper integrity policy
-        run: python scripts/validate-maven-wrapper.py
 
       - name: Set up Java 21
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -255,6 +258,24 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+
+      - name: Test CI policy tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(command -v java)" -ef "$JAVA_HOME/bin/java"
+          test "$(command -v javac)" -ef "$JAVA_HOME/bin/javac"
+          runtime=$(java -version 2>&1)
+          compiler=$(javac -version 2>&1)
+          printf '%s\n' "$runtime" "$compiler"
+          [[ "$runtime" == 'openjdk version "21.'* && "$compiler" == 'javac 21.'* ]]
+          python -m unittest discover -s scripts/tests -p 'test_*.py'
+
+      - name: Validate GitHub Actions policy
+        run: python scripts/validate-github-actions-policy.py
+
+      - name: Validate Maven Wrapper integrity policy
+        run: python scripts/validate-maven-wrapper.py
 
       - name: Build reviewed unpublished Ryuk candidate
         run: python scripts/build-ryuk-candidate.py
@@ -623,13 +644,13 @@ jobs:
     env:
       # Same reviewed Hadolint executable in the upstream scratch variant; removes vulnerable Alpine packages.
       HADOLINT_IMAGE: docker.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e
-      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.3 and x/net v0.60.0; immutable local configuration digest.
-      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-ca7b035c7a1f8e0419150bdb70939f97dd0c6955f322d520004510cbb11548c7
+      # Verified upstream 0.75.0 source rebuilt twice with Go 1.27.4, x/net v0.62.0 and go-jose v4.1.6; immutable local configuration digest.
+      TRIVY_IMAGE: local/enterprise-shop-trivy:sha256-3bfc5ae49d785032c0fd6f2adcbb1317b53487e13760fb029ed124f3f0ad81bb
       # Supported patched analysis toolchain; gosu applicability remains bound to the installed binary Go version.
-      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.10-alpine3.24@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
+      GOSU_GOVULNCHECK_IMAGE: docker.io/library/golang:1.26.11-alpine3.24@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab
       # Official Docker Hub Alpine 3.20 multi-platform OCI index.
       TRIVY_POLICY_TEST_IMAGE: docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
-      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-3c17d8d04c78734ed9d9bd42d26c193f7fecacada8e27fee84585dc72f017af9
+      RYUK_IMAGE: local/enterprise-shop-ryuk:sha256-058b8dd02c61538d32db02f54d91a147b15ef58e6be8b3867376e166615e229d
       # Human-readable gosu release tag; CI verifies that it resolves to the pinned immutable commit before govulncheck.
       GOSU_SOURCE_TAG: "1.19"
       GOSU_SOURCE_COMMIT: 6456aaa0f3c854d199d0f037f068eb97515b7513
@@ -695,14 +716,14 @@ jobs:
           validate_linux_amd64_image "${HADOLINT_IMAGE}"
           docker image inspect "${TRIVY_IMAGE}" >/dev/null
           validate_linux_amd64_image "${GOSU_GOVULNCHECK_IMAGE}"
-          validate_linux_amd64_image "docker.io/library/golang:1.27.3-alpine3.24@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd"
+          validate_linux_amd64_image "docker.io/library/golang:1.27.4-alpine3.24@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280"
           validate_linux_amd64_image "${TRIVY_POLICY_TEST_IMAGE}"
           docker image inspect "${RYUK_IMAGE}" >/dev/null
           validate_linux_amd64_image "docker.io/testcontainers/ryuk:0.14.0@sha256:7c1a8a9a47c780ed0f983770a662f80deb115d95cce3e2daa3d12115b8cd28f0"
 
           docker run --rm --platform linux/amd64 "${HADOLINT_IMAGE}" hadolint --version | grep -F '2.14.0'
           docker run --rm --platform linux/amd64 "${TRIVY_IMAGE}" version | grep -F 'Version: 0.75.0'
-          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.10 linux/amd64'
+          docker run --rm --platform linux/amd64 "${GOSU_GOVULNCHECK_IMAGE}" go version | grep -F 'go1.26.11 linux/amd64'
           docker run --rm --platform linux/amd64 "${TRIVY_POLICY_TEST_IMAGE}" cat /etc/alpine-release | grep -E '^3\.20\.'
 
       - name: Verify upstream Trivy executable provenance
@@ -923,8 +944,23 @@ jobs:
       - name: Verify patched gosu privilege transition and PostgreSQL runtime
         run: python scripts/test-gosu-runtime.py --image enterprise-shop/postgres:ci --output .tmp/container-security/gosu/runtime.json
 
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Test component-aware vulnerability policy
-        run: python -m unittest discover -s scripts/tests -p 'test_*.py'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(command -v java)" -ef "$JAVA_HOME/bin/java"
+          test "$(command -v javac)" -ef "$JAVA_HOME/bin/javac"
+          runtime=$(java -version 2>&1)
+          compiler=$(javac -version 2>&1)
+          printf '%s\n' "$runtime" "$compiler"
+          [[ "$runtime" == 'openjdk version "21.'* && "$compiler" == 'javac 21.'* ]]
+          python -m unittest discover -s scripts/tests -p 'test_*.py'
 
       - name: Validate raw reports against component-aware HIGH policy
         run: |

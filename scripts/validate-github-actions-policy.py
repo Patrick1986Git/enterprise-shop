@@ -54,6 +54,17 @@ DEPENDENCY_REVIEW_JOB = re.compile(
 BUILD_JOB = re.compile(
     r"(?ms)^  build:\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
 )
+JAVA21_SETUP = "actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6"
+FULL_POLICY_SUITE = "python -m unittest discover -s scripts/tests -p 'test_*.py'"
+JAVA21_CHECKS = (
+    "set -euo pipefail",
+    'test "$(command -v java)" -ef "$JAVA_HOME/bin/java"',
+    'test "$(command -v javac)" -ef "$JAVA_HOME/bin/javac"',
+    "runtime=$(java -version 2>&1)",
+    "compiler=$(javac -version 2>&1)",
+    "printf '%s\\n' \"$runtime\" \"$compiler\"",
+    """[[ "$runtime" == 'openjdk version "21.'* && "$compiler" == 'javac 21.'* ]]""",
+)
 CODEQL_SHA = "6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee"
 CODEQL_JOB = re.compile(
     r"(?ms)^  (?P<id>analyze(?:-python)?):\s*$\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)"
@@ -229,6 +240,33 @@ def resolve_restore_checkout_ref(expression, event_name, github_ref, github_sha)
     return github_ref
 
 
+def java21_precedes_policy_suite(body, suite_name, *, maven_cache):
+    steps = [step.strip() for step in re.split(r"(?m)^      - ", body)[1:]]
+    setup = re.compile(
+        r"name: Set up Java 21\n"
+        rf"        uses: {re.escape(JAVA21_SETUP)}(?:[ \t]+#[^\n]*)?\n"
+        r"        with:\n"
+        r"          distribution: temurin\n"
+        r"          java-version: '21'"
+        + (r"\n          cache: maven" if maven_cache else "")
+    )
+    suite = [
+        f"name: {suite_name}",
+        "        shell: bash",
+        "        run: |",
+        *(f"          {line}" for line in (*JAVA21_CHECKS, FULL_POLICY_SUITE)),
+    ]
+    setup_steps = [i for i, step in enumerate(steps)
+                   if step.startswith("name: Set up Java 21\n")
+                   or re.search(r"(?m)^        uses: actions/setup-java@", step)]
+    suite_steps = [i for i, step in enumerate(steps)
+                   if step.startswith(f"name: {suite_name}\n") or FULL_POLICY_SUITE in step]
+    return (len(setup_steps) == len(suite_steps) == 1
+            and setup_steps[0] == suite_steps[0] - 1
+            and setup.fullmatch(steps[setup_steps[0]]) is not None
+            and steps[suite_steps[0]].splitlines() == suite)
+
+
 def validate_workflows(workflows_dir, require_codeql=False):
     violations = []
     if require_codeql and not (workflows_dir / "codeql.yml").is_file():
@@ -264,6 +302,17 @@ def validate_workflows(workflows_dir, require_codeql=False):
                 violations.append(
                     f"{path}: required build job must validate the live protected-master policy"
                 )
+            for job_id, job, suite_name in (
+                ("build", build, "Test CI policy tooling"),
+                ("container-security", CONTAINER_SECURITY_JOB.search(contents),
+                 "Test component-aware vulnerability policy"),
+            ):
+                if not job or not java21_precedes_policy_suite(
+                        job.group("body"), suite_name, maven_cache=job_id == "build"):
+                    violations.append(
+                        f"{path}: {job_id} requires reviewed unconditional Temurin Java 21 setup "
+                        f"immediately before {suite_name}"
+                    )
             dependency_review = DEPENDENCY_REVIEW_JOB.search(contents)
             dependency_review_requirements = (
                 "if: github.event_name == 'pull_request'",
@@ -278,7 +327,7 @@ def validate_workflows(workflows_dir, require_codeql=False):
                 'test "$BASE_REPOSITORY" = "${{ github.repository }}"',
                 "git -C target/dependency-review-base rev-parse HEAD",
                 'test "$(git rev-parse HEAD)" = "$HEAD_SHA"',
-                "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+                "actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec",
                 "fail-on-severity: high",
                 "fail-on-scopes: runtime, development, unknown",
                 "license-check: false",

@@ -14,7 +14,7 @@ SPEC = importlib.util.spec_from_file_location("gosu_provenance", SCRIPT)
 POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
 
-BUILDINFO = """/evidence/gosu: go1.26.10
+BUILDINFO = """/evidence/gosu: go1.26.11
 \tpath\tgithub.com/tianon/gosu
 \tmod\tgithub.com/tianon/gosu\t(devel)\t
 \tdep\tgithub.com/moby/sys/user\tv0.4.1\th1:RgjRlaDKi/Xmyrz4t8lyzXT6v2ooFeO/7xtchmhVWE0=
@@ -54,6 +54,18 @@ class GosuRepositoryReceiptTest(unittest.TestCase):
         self.assertIn("'" + candidate["binary"]["sha256"] + "  /out/gosu'", dockerfile)
         self.assertIn("sha256sum -c /out/gosu.sha256", dockerfile)
         self.assertIn("COPY --from=gosu-builder --chmod=0755 /out/gosu /usr/local/bin/gosu", dockerfile)
+
+    def test_gosu_builder_matches_the_go_image_used_for_analysis(self):
+        builder = json.loads(POLICY.CANDIDATE.read_text())["builder"]
+        auxiliary = json.loads((POLICY.CANDIDATE.parents[1] / "auxiliary-container-scope.json").read_text())
+        analysis = auxiliary["images"]["govulncheck"]
+        comparison = auxiliary["comparisons"]["official_ryuk"]["evidence_transform"]
+        workflow = (POLICY.ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertEqual(builder["image"], analysis["reference"])
+        self.assertEqual(builder["image"], comparison["analysis_image"])
+        self.assertEqual(builder["go_version"].removeprefix("go"), analysis["go_version"])
+        self.assertIn(f'      GOSU_GOVULNCHECK_IMAGE: {builder["image"]}\n', workflow)
+        self.assertIn(f"grep -F '{builder['go_version']} linux/amd64'", workflow)
 
 
 class GosuProvenanceTest(unittest.TestCase):
@@ -159,7 +171,7 @@ class GosuProvenanceTest(unittest.TestCase):
                     self.validate()
 
     def test_compiler_main_module_and_build_flag_changes_fail(self):
-        for old, new in (("go1.26.10", "go1.24.6"), ("go1.26.10", "go1.26.9"), ("(devel)", "v1.19.0"),
+        for old, new in (("go1.26.11", "go1.24.6"), ("go1.26.11", "go1.26.10"), ("(devel)", "v1.19.0"),
                          ("CGO_ENABLED=0", "CGO_ENABLED=1"), ("GOARCH=amd64", "GOARCH=arm64"),
                          ("-compiler=gc", "-compiler=gccgo"), ("-trimpath=true", "-trimpath=false")):
             with self.subTest(old=old):

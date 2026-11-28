@@ -3,10 +3,12 @@ package com.company.shop.persistence.support;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +34,19 @@ class RyukExecutionIT extends PostgresContainerSupport {
         assertThat(actual.getConfig().getImage()).isEqualTo(expected);
         assertThat(actual.getState().getRunning()).isTrue();
         assertThat(actual.getImageId()).isEqualTo(docker.inspectImageCmd(expected).exec().getId());
-        assertThat(actual.getImageId()).isEqualTo(expectedImageId);
+        Path verifier = Path.of("scripts/build-ryuk-candidate.py").toRealPath();
+        Path python = VerifiedPythonInterpreter.resolve(Path.of(".tmp/ryuk-python-identity.json"), verifier, expectedImageId);
+        var verification = new ProcessBuilder(python.toString(), "-I", verifier.toString(),
+                "--verify-image", actual.getImageId()).redirectError(ProcessBuilder.Redirect.INHERIT).start();
+        String configurationId;
+        try {
+            assertThat(verification.waitFor(120, TimeUnit.SECONDS)).isTrue();
+            assertThat(verification.exitValue()).isZero();
+            configurationId = new String(verification.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        } finally {
+            if (verification.isAlive()) verification.destroyForcibly();
+        }
+        assertThat(configurationId).isEqualTo(expectedImageId);
         assertThat(actual.getMounts()).anySatisfy(mount -> {
             assertThat(mount.getSource()).isEqualTo("/var/run/docker.sock");
             assertThat(mount.getDestination().getPath()).isEqualTo("/var/run/docker.sock");
@@ -45,7 +59,8 @@ class RyukExecutionIT extends PostgresContainerSupport {
 
         Properties evidence = new Properties();
         evidence.setProperty("reference", expected);
-        evidence.setProperty("image_id", actual.getImageId());
+        evidence.setProperty("image_id", configurationId);
+        evidence.setProperty("docker_image_id", actual.getImageId());
         evidence.setProperty("socket_verified", "true");
         evidence.setProperty("ryuk_container_id", actual.getId());
         evidence.setProperty("cleanup_container_ids", resources.stream()
