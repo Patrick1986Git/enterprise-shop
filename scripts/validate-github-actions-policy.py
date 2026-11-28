@@ -327,7 +327,7 @@ def validate_workflows(workflows_dir, require_codeql=False):
                 'test "$BASE_REPOSITORY" = "${{ github.repository }}"',
                 "git -C target/dependency-review-base rev-parse HEAD",
                 'test "$(git rev-parse HEAD)" = "$HEAD_SHA"',
-                "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+                "actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec",
                 "fail-on-severity: high",
                 "fail-on-scopes: runtime, development, unknown",
                 "license-check: false",
