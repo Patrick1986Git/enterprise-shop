@@ -28,7 +28,7 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
         self.assertTrue(any(diagnostic in error for error in errors), errors)
 
     def test_reviewed_dual_language_workflow_passes(self):
-        reviewed_sha = "24c54180a607b1449ed407dd24f251e4e9147c8d"
+        reviewed_sha = "6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee"
         self.assertEqual(reviewed_sha, POLICY.CODEQL_SHA)
         references = [reference for _, reference, _, _ in POLICY.action_references(
             SCRIPT.parents[1] / ".github/workflows/codeql.yml"
@@ -37,12 +37,29 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
                           for action in ("init", "analyze", "init", "analyze")], references)
         self.assertEqual([], self.validate(self.workflow))
 
-    def test_previous_codeql_release_is_no_longer_reviewed(self):
-        previous_sha = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
-        for action in ("init", "analyze"):
-            with self.subTest(action=action):
-                self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
-                            f"github/codeql-action/{action}@{previous_sha}", "reviewed action")
+    def test_previous_codeql_releases_are_no_longer_reviewed(self):
+        for previous_sha in (
+            "24c54180a607b1449ed407dd24f251e4e9147c8d",
+            "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+        ):
+            for action in ("init", "analyze"):
+                reviewed = f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}"
+                revoked = f"github/codeql-action/{action}@{previous_sha}"
+                for language, workflow in (
+                    ("java-kotlin", self.workflow.replace(reviewed, revoked, 1)),
+                    ("python", revoked.join(self.workflow.rsplit(reviewed, 1))),
+                ):
+                    with self.subTest(previous_sha=previous_sha, action=action, language=language):
+                        errors = self.validate(workflow)
+                        self.assertTrue(any(f"CodeQL {language} must retain reviewed action" in error
+                                            for error in errors), errors)
+
+    def test_mutable_and_short_codeql_references_are_rejected(self):
+        for revision in ("v4", "v4.39.0", "main", POLICY.CODEQL_SHA[:7]):
+            for action in ("init", "analyze"):
+                with self.subTest(revision=revision, action=action):
+                    self.reject(f"github/codeql-action/{action}@{POLICY.CODEQL_SHA}",
+                                f"github/codeql-action/{action}@{revision}", "full 40-character")
 
     def test_unreviewed_full_codeql_shas_are_rejected(self):
         for revision in (SHA, "f" * 40):
@@ -97,9 +114,8 @@ class CodeQLWorkflowPolicyTest(unittest.TestCase):
             with self.subTest(before=before):
                 self.reject(before, "  removed:", "triggers")
 
-    def test_persisted_credentials_and_mutable_action_references_fail(self):
+    def test_persisted_checkout_credentials_fail(self):
         self.reject("persist-credentials: false", "persist-credentials: true", "persist-credentials")
-        self.reject(POLICY.CODEQL_SHA, "v4", "full 40-character")
 
     def test_permissions_cannot_be_broadened_or_sarif_disabled(self):
         for before, after in (("contents: read", "contents: write"),
