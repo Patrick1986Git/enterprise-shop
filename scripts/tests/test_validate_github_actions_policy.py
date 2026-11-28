@@ -9,6 +9,7 @@ SPEC = importlib.util.spec_from_file_location("github_actions_policy", SCRIPT)
 POLICY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POLICY)
 SHA = "0123456789abcdef0123456789abcdef01234567"
+DEPENDENCY_REVIEW_SHA = "bbc44d14a204704ccc493733616cd1e93a0321ec"
 
 
 class CodeQLWorkflowPolicyTest(unittest.TestCase):
@@ -199,7 +200,7 @@ class GitHubActionsPolicyTest(unittest.TestCase):
             "          test \"$(git -C target/dependency-review-base rev-parse HEAD)\" = \"$BASE_SHA\"\n"
             "          test \"$(git rev-parse HEAD)\" = \"$HEAD_SHA\"\n"
             "      - name: Review dependency changes\n"
-            "        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294\n"
+            f"        uses: actions/dependency-review-action@{DEPENDENCY_REVIEW_SHA}\n"
             "        with:\n"
             "          fail-on-severity: high\n"
             "          fail-on-scopes: runtime, development, unknown\n"
@@ -469,24 +470,40 @@ class GitHubActionsPolicyTest(unittest.TestCase):
         violations = self.validate(workflow, "ci.yml")
         self.assertTrue(any("live protected-master policy" in violation for violation in violations))
 
-    def test_rejects_dependency_review_without_exact_base_repository(self):
+    def test_dependency_review_requires_exact_release_identity(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
-        workflow = self.ci_workflow(expression).replace(
-            "repository: ${{ github.event.pull_request.base.repo.full_name }}",
-            "repository: ${{ github.repository }}",
-            1,
-        )
-        violations = self.validate(workflow, "ci.yml")
-        self.assertTrue(any("dependency review" in violation for violation in violations))
+        workflow = self.ci_workflow(expression)
+        self.assertEqual([], self.validate(workflow, "ci.yml"))
+        for rejected_ref in ("a1d282b36b6f3519aa1f3fc636f609c47dddb294", "v5", "v5.0.1",
+                             DEPENDENCY_REVIEW_SHA[:7], SHA):
+            with self.subTest(ref=rejected_ref):
+                violations = self.validate(workflow.replace(DEPENDENCY_REVIEW_SHA, rejected_ref), "ci.yml")
+                self.assertTrue(any("dependency review" in violation for violation in violations))
 
-    def test_rejects_dependency_review_that_omits_development_scope(self):
+    def test_rejects_dependency_review_without_exact_base_and_head_provenance(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
-        workflow = self.ci_workflow(expression).replace(
-            "fail-on-scopes: runtime, development, unknown",
-            "fail-on-scopes: runtime",
-        )
-        violations = self.validate(workflow, "ci.yml")
-        self.assertTrue(any("dependency review" in violation for violation in violations))
+        workflow = self.ci_workflow(expression)
+        for before, after in (
+            ("repository: ${{ github.event.pull_request.base.repo.full_name }}", "repository: ${{ github.repository }}"),
+            ("ref: ${{ github.event.pull_request.base.sha }}", "ref: ${{ github.base_ref }}"),
+            ("ref: ${{ github.event.pull_request.head.sha }}", "ref: ${{ github.head_ref }}"),
+            ('          test "$(git -C target/dependency-review-base rev-parse HEAD)" = "$BASE_SHA"\n', ""),
+            ('          test "$(git rev-parse HEAD)" = "$HEAD_SHA"\n', ""),
+        ):
+            with self.subTest(setting=before):
+                violations = self.validate(workflow.replace(before, after, 1), "ci.yml")
+                self.assertTrue(any("dependency review" in violation for violation in violations))
+
+    def test_rejects_weakened_dependency_review_severity_or_scopes(self):
+        expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
+        workflow = self.ci_workflow(expression)
+        for before, after in (
+            ("fail-on-severity: high", "fail-on-severity: critical"),
+            ("fail-on-scopes: runtime, development, unknown", "fail-on-scopes: runtime, unknown"),
+        ):
+            with self.subTest(setting=after):
+                violations = self.validate(workflow.replace(before, after), "ci.yml")
+                self.assertTrue(any("dependency review" in violation for violation in violations))
 
     def test_rejects_dependency_review_license_policy(self):
         expression = "${{ github.event_name == 'schedule' && 'master' || github.event_name == 'pull_request' && github.sha || github.ref }}"
